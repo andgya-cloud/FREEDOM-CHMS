@@ -1,0 +1,291 @@
+import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../../state/AuthContext';
+import { useOrg } from '../../state/OrgContext';
+import { usePeople, type Person } from '../../state/PeopleContext';
+import { useCustomFields, type CustomField } from '../../state/useSettingsDoc';
+import { useToast } from '../../state/ToastContext';
+import { addPerson, updatePerson } from '../../lib/peopleWrites';
+import { friendlyError } from '../../lib/errors';
+import { useSavedMessage } from '../../lib/useSavedMessage';
+import { PersonPicker } from '../../components/PersonPicker';
+import { DuplicateNotice } from '../../components/DuplicateNotice';
+import { OrgPicker } from '../../components/OrgPicker';
+import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUSES, PERSON_STATUS_LABELS, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
+import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
+import { localDateKey } from '../../../functions/src/shared/datetime';
+
+interface FormState {
+  fullName: string;
+  phone: string;
+  sameWhatsApp: boolean;
+  whatsapp: string;
+  consent: boolean;
+  email: string;
+  status: PersonStatus;
+  firstVisitDate: string;
+  gender: string;
+  household: { id: string | null; name: string };
+  guardian: { id: string | null; name: string };
+  howHeard: string;
+  invitedBy: { id: string | null; name: string };
+  serviceAttended: string;
+  customFields: Record<string, unknown>;
+}
+
+function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormState {
+  const householdPeer = p.householdId ? byId(p.householdId === p.id ? '' : p.householdId) : undefined;
+  return {
+    fullName: p.fullName,
+    phone: formatPhone(p.phone),
+    sameWhatsApp: !!p.phone && p.whatsapp === p.phone,
+    whatsapp: p.whatsapp && p.whatsapp !== p.phone ? formatPhone(p.whatsapp) : '',
+    consent: !!p.whatsappConsent?.given,
+    email: p.email ?? '',
+    status: p.status,
+    firstVisitDate: p.firstVisitDate ?? '',
+    gender: p.gender ?? '',
+    household: { id: householdPeer?.id ?? null, name: householdPeer?.fullName ?? '' },
+    guardian: { id: p.guardianId ?? null, name: p.guardianId ? byId(p.guardianId)?.fullName ?? '' : '' },
+    howHeard: p.howHeard ?? '',
+    invitedBy: { id: p.invitedById ?? null, name: p.invitedBy ?? '' },
+    serviceAttended: p.serviceAttended ?? '',
+    customFields: p.customFields ?? {},
+  };
+}
+
+const EMPTY: FormState = {
+  fullName: '', phone: '', sameWhatsApp: true, whatsapp: '', consent: false, email: '', status: 'regular',
+  firstVisitDate: '', gender: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
+  howHeard: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
+};
+
+/** Add or edit a person with every field. The quick visitor form is VisitorFormPage. */
+export function PersonFormPage() {
+  const { orgId: routeOrgId, personId } = useParams();
+  const isNew = !personId;
+  const { profile } = useAuth();
+  const { current, isCombined, organizations } = useOrg();
+  const { people, byId } = usePeople();
+  const customFields = useCustomFields().filter((f) => f.active);
+  const toast = useToast();
+  const saved = useSavedMessage();
+  const navigate = useNavigate();
+  const existing = personId ? byId(personId) : undefined;
+  // Organizations load after the page on a fresh start, so derive this rather than freeze it.
+  const [chosenOrgId, setOrgId] = useState('');
+  const orgId = routeOrgId ?? (isCombined ? chosenOrgId : current?.id ?? '');
+  const org = organizations.find((o) => o.id === orgId);
+  const [form, setForm] = useState<FormState>(EMPTY);
+  const [loaded, setLoaded] = useState(isNew);
+  const [errors, setErrors] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (existing && !loaded) {
+      setForm(fromPerson(existing, byId));
+      setLoaded(true);
+    }
+  }, [existing, loaded, byId]);
+
+  const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+  const normalized = normalizePhone(form.phone);
+  const duplicates = useMemo(
+    () => (normalized ? findDuplicatesByPhone(normalized, people.filter((p) => p.orgId === orgId), personId) : []),
+    [normalized, people, orgId, personId],
+  );
+
+  if (!isNew && !existing) return <div className="page"><p><Link to="/people">← People</Link></p><p>Loading…</p></div>;
+
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const problems: string[] = [];
+    if (!orgId) problems.push('Choose the organization.');
+    if (!form.fullName.trim()) problems.push('Enter their name.');
+    if (form.phone.trim() && !normalized) problems.push('The phone number does not look right.');
+    if (form.status === 'visitor' && !normalized) problems.push('A visitor needs a phone number so we can follow up.');
+    const wa = form.sameWhatsApp ? normalized : normalizePhone(form.whatsapp);
+    if (!form.sameWhatsApp && form.whatsapp.trim() && !wa) problems.push('The WhatsApp number does not look right.');
+    if (form.email.trim() && !/^\S+@\S+\.\S+$/.test(form.email.trim())) problems.push('The email does not look right.');
+    setErrors(problems);
+    if (problems.length) return;
+
+    // Household: join the picked person's household, starting one if they have none.
+    let householdId: string | null = existing?.householdId ?? null;
+    const peer = form.household.id ? byId(form.household.id) : undefined;
+    if (peer) {
+      householdId = peer.householdId ?? peer.id;
+      if (!peer.householdId) updatePerson(peer.orgId, peer.id, { householdId }).catch((err) => toast.show(friendlyError(err)));
+    } else if (!form.household.name.trim()) {
+      householdId = existing?.householdId === existing?.id ? existing?.householdId ?? null : null;
+    }
+
+    const prevConsent = existing?.whatsappConsent;
+    const consentChanged = !prevConsent || prevConsent.given !== form.consent;
+    const data = {
+      fullName: tidyName(form.fullName),
+      phone: normalized,
+      whatsapp: wa ?? null,
+      whatsappConsent: consentChanged
+        ? { given: form.consent, date: localDateKey(new Date(), org?.timeZone), recordedBy: profile?.uid ?? null, stoppedAt: form.consent ? null : prevConsent?.stoppedAt ?? null }
+        : prevConsent,
+      email: form.email.trim() || null,
+      status: form.status,
+      firstVisitDate: form.firstVisitDate || null,
+      gender: form.gender || null,
+      householdId,
+      guardianId: form.guardian.id,
+      howHeard: form.howHeard || null,
+      invitedBy: form.invitedBy.name.trim() || null,
+      invitedById: form.invitedBy.id,
+      serviceAttended: form.serviceAttended || null,
+      customFields: form.customFields,
+    };
+
+    try {
+      if (existing) {
+        const previous = Object.fromEntries(Object.keys(data).map((k) => [k, (existing as unknown as Record<string, unknown>)[k] ?? null]));
+        updatePerson(orgId, existing.id, data).catch((err) => toast.show(friendlyError(err)));
+        toast.show(saved(`${data.fullName} saved`), {
+          label: 'Undo',
+          onAction: () => { updatePerson(orgId, existing.id, previous).catch((err) => toast.show(friendlyError(err))); },
+        });
+        navigate(`/people/${orgId}/${existing.id}`);
+      } else {
+        const { ref, synced } = addPerson(orgId, data, { recordVisitorStage: data.status === 'visitor' && org?.type === 'church_campus' });
+        synced.catch((err) => toast.show(friendlyError(err)));
+        toast.show(saved(`${data.fullName} added`));
+        navigate(`/people/${orgId}/${ref.id}`, { replace: true });
+      }
+    } catch (err) {
+      setErrors([friendlyError(err)]);
+    }
+  }
+
+  return (
+    <div className="page narrow">
+      <p><Link to={existing ? `/people/${orgId}/${existing.id}` : '/people'}>← {existing ? existing.fullName : 'People'}</Link></p>
+      <h1>{existing ? 'Edit details' : 'Add person'}</h1>
+      <form className="form" onSubmit={submit} noValidate>
+        {isNew && isCombined && <OrgPicker value={orgId} onChange={setOrgId} />}
+        <label className="field">
+          <span>Name</span>
+          <input autoCapitalize="words" autoFocus={isNew} value={form.fullName} onChange={(e) => set('fullName', e.target.value)} />
+        </label>
+        <label className="field">
+          <span>Phone</span>
+          <input type="tel" inputMode="tel" placeholder="0712 345 678" value={form.phone} onChange={(e) => set('phone', e.target.value)} />
+        </label>
+        <DuplicateNotice matches={duplicates} />
+        <label className="check">
+          <input type="checkbox" checked={form.sameWhatsApp} onChange={(e) => set('sameWhatsApp', e.target.checked)} />
+          <span>This number is on WhatsApp</span>
+        </label>
+        {!form.sameWhatsApp && (
+          <label className="field">
+            <span>WhatsApp number (optional)</span>
+            <input type="tel" inputMode="tel" value={form.whatsapp} onChange={(e) => set('whatsapp', e.target.value)} />
+          </label>
+        )}
+        <label className="check consent">
+          <input type="checkbox" checked={form.consent} onChange={(e) => set('consent', e.target.checked)} />
+          <span><strong>They agreed</strong> to receive WhatsApp messages from us</span>
+        </label>
+        <fieldset className="field">
+          <legend>Status</legend>
+          <div className="chips">
+            {PERSON_STATUSES.map((s) => (
+              <button key={s} type="button" className={`chip ${form.status === s ? 'chip-on' : ''}`} aria-pressed={form.status === s} onClick={() => set('status', s)}>{PERSON_STATUS_LABELS[s]}</button>
+            ))}
+          </div>
+        </fieldset>
+        {(form.status === 'child' || form.status === 'student') && (
+          <PersonPicker label="Parent or guardian" value={form.guardian} onChange={(v) => set('guardian', v)} excludeId={personId} hint="Messages go to the guardian, never to a child." />
+        )}
+
+        <details className="more" open={!isNew}>
+          <summary>More details</summary>
+          <div className="form">
+            <label className="field">
+              <span>Email</span>
+              <input type="email" inputMode="email" value={form.email} onChange={(e) => set('email', e.target.value)} />
+            </label>
+            <div className="field-row">
+              <label className="field">
+                <span>First visit</span>
+                <input type="date" value={form.firstVisitDate} onChange={(e) => set('firstVisitDate', e.target.value)} />
+              </label>
+              <label className="field">
+                <span>Gender</span>
+                <select value={form.gender} onChange={(e) => set('gender', e.target.value)}>
+                  <option value="">Not recorded</option>
+                  <option>Female</option>
+                  <option>Male</option>
+                </select>
+              </label>
+            </div>
+            <PersonPicker label="Same household as" value={form.household} onChange={(v) => set('household', v)} excludeId={personId} hint="Pick a family member already in the system." />
+            <label className="field">
+              <span>How they heard about us</span>
+              <select value={form.howHeard} onChange={(e) => set('howHeard', e.target.value)}>
+                <option value="">Not recorded</option>
+                {HOW_HEARD_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </label>
+            <PersonPicker label="Invited by" value={form.invitedBy} onChange={(v) => set('invitedBy', v)} allowFreeText excludeId={personId} />
+            {(org?.serviceTimes?.length ?? 0) > 0 && (
+              <label className="field">
+                <span>Service attended</span>
+                <select value={form.serviceAttended} onChange={(e) => set('serviceAttended', e.target.value)}>
+                  <option value="">Not recorded</option>
+                  {org!.serviceTimes!.map((s) => <option key={s}>{s}</option>)}
+                </select>
+              </label>
+            )}
+            {customFields.map((f) => (
+              <CustomFieldInput key={f.id} field={f} value={form.customFields[f.id]} onChange={(v) => set('customFields', { ...form.customFields, [f.id]: v })} />
+            ))}
+          </div>
+        </details>
+
+        {errors.length > 0 && <ul className="error" role="alert">{errors.map((p) => <li key={p}>{p}</li>)}</ul>}
+        <button type="submit" className="btn btn-primary btn-block btn-lg">Save</button>
+      </form>
+    </div>
+  );
+}
+
+function CustomFieldInput({ field, value, onChange }: { field: CustomField; value: unknown; onChange: (v: unknown) => void }) {
+  switch (field.type) {
+    case 'yesno':
+      return (
+        <label className="check">
+          <input type="checkbox" checked={value === true} onChange={(e) => onChange(e.target.checked)} />
+          <span>{field.label}</span>
+        </label>
+      );
+    case 'date':
+      return (
+        <label className="field">
+          <span>{field.label}</span>
+          <input type="date" value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)} />
+        </label>
+      );
+    case 'choice':
+      return (
+        <label className="field">
+          <span>{field.label}</span>
+          <select value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)}>
+            <option value="">Not recorded</option>
+            {(field.options ?? []).map((o) => <option key={o}>{o}</option>)}
+          </select>
+        </label>
+      );
+    default:
+      return (
+        <label className="field">
+          <span>{field.label}</span>
+          <input value={String(value ?? '')} onChange={(e) => onChange(e.target.value || null)} />
+        </label>
+      );
+  }
+}

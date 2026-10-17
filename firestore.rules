@@ -82,8 +82,14 @@ service cloud.firestore {
 
     match /settings/{settingId} {
       allow read: if isActive();
-      allow create: if has('settings.manage') && stampedCreate();
-      allow update: if has('settings.manage') && stampedUpdate();
+      allow create: if has('settings.manage') && stampedCreate()
+        && (settingId != 'pipeline'
+            || request.resource.data.sensitiveStageIds.hasAll(['salvation', 'baptism']));
+      allow update: if has('settings.manage') && stampedUpdate()
+        // A stage marked sensitive stays sensitive, so salvation and baptism
+        // records can never be exposed to admins by editing the stage list.
+        && (settingId != 'pipeline'
+            || request.resource.data.sensitiveStageIds.hasAll(resource.data.sensitiveStageIds));
       allow delete: if false;
     }
 
@@ -92,14 +98,47 @@ service cloud.firestore {
     function validOrganization() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'type', 'parentId', 'timeZone', 'currency', 'receiptPrefix',
-               'active', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'serviceTimes', 'active', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 120
         && d.type in ['church_campus', 'college', 'ministry']
         && (d.parentId == null || d.parentId is string)
         && d.timeZone is string
         && d.currency is string && d.currency.matches('^[A-Z]{3}$')
         && d.receiptPrefix is string && d.receiptPrefix.matches('^[A-Z]{2,6}$')
-        && d.active is bool;
+        && d.active is bool
+        && (!('serviceTimes' in d) || (d.serviceTimes is list && d.serviceTimes.size() <= 20));
+    }
+
+    function stampedWrite() {
+      return resource == null ? stampedCreate() : stampedUpdate();
+    }
+    function freshRecord() {
+      return request.resource.data.deletedAt == null && request.resource.data.deletedBy == null;
+    }
+    function orgWrite(orgId, permission) {
+      return canAccessOrg(orgId) && has(permission)
+        && request.resource.data.orgId == orgId
+        && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+    }
+
+    // ---- People -----------------------------------------------------------
+
+    function validPerson() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['orgId', 'fullName', 'firstName', 'phone', 'whatsapp', 'whatsappConsent',
+               'email', 'status', 'firstVisitDate', 'gender', 'householdId', 'guardianId', 'howHeard',
+               'invitedBy', 'invitedById', 'serviceAttended', 'customFields', 'possibleDuplicateIds',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+        && d.fullName is string && d.fullName.size() >= 1 && d.fullName.size() <= 120
+        && d.status in ['visitor', 'regular', 'member', 'student', 'child', 'inactive']
+        && (d.phone == null || (d.phone is string && d.phone.matches('^[+][0-9]{8,15}$')))
+        && (d.whatsapp == null || (d.whatsapp is string && d.whatsapp.matches('^[+][0-9]{8,15}$')))
+        && d.whatsappConsent is map
+        && (!('customFields' in d) || d.customFields is map);
+    }
+
+    function sensitiveStages() {
+      return get(/databases/$(database)/documents/settings/pipeline).data.sensitiveStageIds;
     }
 
     match /organizations/{orgId} {
@@ -114,8 +153,63 @@ service cloud.firestore {
         && validOrganization() && stampedUpdate() && validSoftDelete();
       allow delete: if false;
 
-      // Organization data (people, attendance, gifts ...) is added stage by
-      // stage below. Anything not matched is denied.
+      // Organization data. Anything not matched here is denied.
+
+      match /people/{personId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create, update: if orgWrite(orgId, 'people.write') && validPerson();
+        allow delete: if false;
+      }
+
+      // One entry per person per pipeline stage. Salvation and baptism entries
+      // are "sensitive": only staff with pastoral access can read or write them,
+      // and the flag must match the stage list in settings/pipeline.
+      match /pipeline/{entryId} {
+        allow read: if canAccessOrg(orgId) && has('people.read')
+          && (resource.data.sensitive == false || has('pastoral.read'));
+        allow create, update: if orgWrite(orgId, 'people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'personId', 'stageId', 'sensitive', 'status', 'date',
+               'notes', 'details', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && entryId == request.resource.data.personId + '_' + request.resource.data.stageId
+          && request.resource.data.status in ['not_started', 'in_progress', 'completed', 'dropped']
+          && request.resource.data.sensitive == (request.resource.data.stageId in sensitiveStages())
+          && (request.resource.data.sensitive == false || has('pastoral.read'))
+          && (resource == null || resource.data.sensitive == false || has('pastoral.read'));
+        allow delete: if false;
+      }
+
+      // Prayer needs can be written down by any staff member taking a visitor's
+      // details, but only staff with pastoral access can read them.
+      match /prayerRequests/{requestId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create: if orgWrite(orgId, 'people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'personId', 'text', 'status',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.text is string && request.resource.data.text.size() <= 2000;
+        allow update: if orgWrite(orgId, 'pastoral.read');
+        allow delete: if false;
+      }
+
+      match /pastoralNotes/{noteId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create, update: if orgWrite(orgId, 'pastoral.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'personId', 'text',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.text is string && request.resource.data.text.size() <= 5000;
+        allow delete: if false;
+      }
+
+      // Created by Cloud Functions (for example when a visitor is added).
+      // Staff work through them in the Follow-ups queue (Stage 6).
+      match /followUps/{taskId} {
+        allow read: if canAccessOrg(orgId) && has('followups.manage');
+        allow write: if false;
+      }
+    }
+
+    // Combined view across every organization, for users who can see them all.
+    match /{path=**}/people/{personId} {
+      allow read: if hasAllOrgs() && has('people.read');
     }
 
     // ---- Audit log --------------------------------------------------------

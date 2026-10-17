@@ -50,11 +50,38 @@ function passwordProblems(pw, email) {
   return out;
 }
 
+// Reads a line without echoing it. Raw mode instead of readline, whose redraws
+// include the typed text on newer Node versions.
 function askHidden(question) {
+  if (!process.stdin.isTTY) {
+    return new Promise((resolve) => {
+      const rl = createInterface({ input: process.stdin });
+      rl.question(question, (answer) => { rl.close(); resolve(answer); });
+    });
+  }
   return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl._writeToOutput = (s) => { if (s.includes(question)) rl.output.write(s); };
-    rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer); });
+    const stdin = process.stdin;
+    let answer = '';
+    process.stdout.write(question);
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.off('data', onData);
+          process.stdout.write('\n');
+          resolve(answer);
+          return;
+        }
+        if (ch === '\u0003') { process.stdout.write('\n'); process.exit(130); }
+        if (ch === '\u007f' || ch === '\b') answer = answer.slice(0, -1);
+        else answer += ch;
+      }
+    };
+    stdin.on('data', onData);
   });
 }
 
@@ -70,10 +97,38 @@ initializeApp({ projectId: values.project });
 const auth = getAuth();
 const db = getFirestore();
 
+const PIPELINE_SETTINGS = {
+  // Kept in step with DEFAULT_PIPELINE in functions/src/shared/people.ts.
+  stages: [
+    { id: 'visitor', name: 'Visitor', sensitive: false, active: true },
+    { id: 'salvation', name: 'Salvation', sensitive: true, active: true },
+    { id: 'baptism', name: 'Baptism', sensitive: true, active: true },
+    { id: 'growth_track', name: 'Growth Track', sensitive: false, active: true },
+    { id: 'dream_team', name: 'Dream Team', sensitive: false, active: true },
+    { id: 'freedom_252', name: 'Freedom 252', sensitive: false, active: true },
+    { id: 'freedom_groups', name: 'Freedom Groups', sensitive: false, active: true },
+    { id: 'communication_master_class', name: 'Communication Master Class', sensitive: false, active: true },
+  ],
+  sensitiveStageIds: ['salvation', 'baptism'],
+};
+const CUSTOM_FIELD_SETTINGS = { fields: [] };
+
 const existingOwners = await db.collection('users').where('roleId', '==', 'pastor').limit(1).get();
 if (!existingOwners.empty) {
-  console.error('A pastor account already exists. Use the app to add or reset accounts.');
-  process.exit(1);
+  // Already set up: only add settings that later stages introduced, never overwrite.
+  const ownerUid = existingOwners.docs[0].id;
+  const stamp = { createdAt: FieldValue.serverTimestamp(), createdBy: ownerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: ownerUid };
+  const added = [];
+  for (const [path, data] of [['settings/pipeline', PIPELINE_SETTINGS], ['settings/customFields', CUSTOM_FIELD_SETTINGS]]) {
+    try {
+      await db.doc(path).create({ ...data, ...stamp });
+      added.push(path);
+    } catch (err) {
+      if (err.code !== 6) throw err; // 6 = already exists
+    }
+  }
+  console.log(added.length ? `A pastor account already exists. Added missing settings: ${added.join(', ')}.` : 'A pastor account already exists and settings are up to date. Use the app to add or reset accounts.');
+  process.exit(0);
 }
 
 const user = await auth.createUser({ email, password, displayName: values.name });
@@ -90,6 +145,8 @@ batch.set(db.doc('settings/app'), {
   currency: 'KES',
   ...stamp,
 });
+batch.set(db.doc('settings/pipeline'), { ...PIPELINE_SETTINGS, ...stamp });
+batch.set(db.doc('settings/customFields'), { ...CUSTOM_FIELD_SETTINGS, ...stamp });
 batch.set(db.doc(`users/${uid}`), {
   email,
   displayName: values.name,

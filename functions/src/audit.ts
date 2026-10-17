@@ -25,10 +25,12 @@ async function record(
   const action = classifyWrite(before, after);
   const fields = changedFields(before, after);
   if (action === 'update' && fields.length === 0) return;
-  const actorUid = action === 'purge' ? null : ((after?.updatedBy as string | undefined) ?? null);
+  const stampedBy = (after?.updatedBy as string | undefined) ?? null;
+  const bySystem = action === 'purge' || stampedBy === 'system';
+  const actorUid = bySystem ? null : stampedBy;
   await writeAudit({
     actorUid,
-    actorEmail: action === 'purge' ? 'system' : await emailFor(actorUid),
+    actorEmail: bySystem ? 'system' : await emailFor(actorUid),
     action,
     path: event.document,
     collection,

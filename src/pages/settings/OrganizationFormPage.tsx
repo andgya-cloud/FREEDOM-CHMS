@@ -17,16 +17,18 @@ import {
 } from '../../../functions/src/shared/organizations';
 
 /** The three organizations named in the brief, offered as one-tap starting points. */
-const STARTERS: OrganizationInput[] = [
-  { name: 'Freedom Church Nairobi', type: 'church_campus', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'FCN' },
+type OrgForm = OrganizationInput & { active: boolean; serviceTimes: string[] };
+
+const STARTERS: (OrganizationInput & { serviceTimes?: string[] })[] = [
+  { name: 'Freedom Church Nairobi', type: 'church_campus', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'FCN', serviceTimes: ['Sunday 10:00'] },
   { name: 'ADIA Training Centre', type: 'college', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'ADIA' },
   { name: 'Freedom Hope Center', type: 'ministry', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'FHC' },
 ];
 
 const TIME_ZONES = ['Africa/Nairobi', 'Africa/Kampala', 'Africa/Dar_es_Salaam', 'Africa/Kigali', 'Africa/Johannesburg', 'Africa/Lagos', 'Europe/London'];
 
-const EMPTY: OrganizationInput & { active: boolean } = {
-  name: '', type: 'church_campus', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: '', active: true,
+const EMPTY: OrgForm = {
+  name: '', type: 'church_campus', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: '', active: true, serviceTimes: [],
 };
 
 export function OrganizationFormPage() {
@@ -36,7 +38,8 @@ export function OrganizationFormPage() {
   const toast = useToast();
   const saved = useSavedMessage();
   const existing = orgId ? allIncludingDeleted.find((o) => o.id === orgId) : undefined;
-  const [form, setForm] = useState(EMPTY);
+  const [form, setForm] = useState<OrgForm>(EMPTY);
+  const [serviceText, setServiceText] = useState('');
   const [prefixTouched, setPrefixTouched] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
 
@@ -45,7 +48,9 @@ export function OrganizationFormPage() {
       setForm({
         name: existing.name, type: existing.type, parentId: existing.parentId ?? null, timeZone: existing.timeZone,
         currency: existing.currency, receiptPrefix: existing.receiptPrefix, active: existing.active,
+        serviceTimes: existing.serviceTimes ?? [],
       });
+      setServiceText((existing.serviceTimes ?? []).join('\n'));
       setPrefixTouched(true);
     }
   }, [existing?.id]);
@@ -60,7 +65,8 @@ export function OrganizationFormPage() {
 
   function submit(e: FormEvent) {
     e.preventDefault();
-    const input = { ...form, name: form.name.trim(), receiptPrefix: form.receiptPrefix.trim().toUpperCase() };
+    const serviceTimes = serviceText.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 20);
+    const input = { ...form, name: form.name.trim(), receiptPrefix: form.receiptPrefix.trim().toUpperCase(), serviceTimes };
     const found = organizationProblems(input);
     if (prefixTaken) found.push('Another organization already uses that receipt prefix.');
     setProblems(found);
@@ -87,7 +93,7 @@ export function OrganizationFormPage() {
         <div className="starters">
           <p className="muted small">Start from one of yours:</p>
           {unusedStarters.map((s) => (
-            <button key={s.name} type="button" className="chip" onClick={() => { setForm({ ...s, active: true }); setPrefixTouched(true); }}>
+            <button key={s.name} type="button" className="chip" onClick={() => { setForm({ ...s, active: true, serviceTimes: s.serviceTimes ?? [] }); setServiceText((s.serviceTimes ?? []).join('\n')); setPrefixTouched(true); }}>
               {s.name}
             </button>
           ))}
@@ -141,6 +147,11 @@ export function OrganizationFormPage() {
             <input value={form.currency} maxLength={3} onChange={(e) => set('currency', e.target.value.toUpperCase())} />
           </label>
         </div>
+        <label className="field">
+          <span>{form.type === 'church_campus' ? 'Service times' : 'Session times'} (one per line, optional)</span>
+          <textarea rows={2} value={serviceText} placeholder="Sunday 10:00" onChange={(e) => setServiceText(e.target.value)} />
+          <small className="hint">Used on the visitor form and in WhatsApp messages.</small>
+        </label>
         {existing && (
           <label className="check">
             <input type="checkbox" checked={form.active} onChange={(e) => set('active', e.target.checked)} />

@@ -43,3 +43,12 @@ describe('Nairobi dates', () => {
     expect(parseDate('2026-11-05')).toBeNull();
   });
 });
+
+describe('calendar date keys', () => {
+  it('uses the Nairobi date and shows it as DD/MM/YYYY', async () => {
+    const { localDateKey, formatDateKey } = await import('./datetime');
+    expect(localDateKey(new Date('2026-10-17T22:30:00Z'))).toBe('2026-10-18');
+    expect(formatDateKey('2026-10-18')).toBe('18/10/2026');
+    expect(formatDateKey('bad')).toBe('');
+  });
+});

@@ -6,6 +6,7 @@ import { App } from './App';
 import { AuthProvider } from './state/AuthContext';
 import { OrgProvider } from './state/OrgContext';
 import { ToastProvider } from './state/ToastContext';
+import { PeopleProvider } from './state/PeopleContext';
 import { startSyncMonitor } from './lib/sync';
 import { applyTheme } from './lib/theme';
 import './styles.css';
@@ -20,7 +21,9 @@ createRoot(document.getElementById('root')!).render(
       <ToastProvider>
         <AuthProvider>
           <OrgProvider>
-            <App />
+            <PeopleProvider>
+              <App />
+            </PeopleProvider>
           </OrgProvider>
         </AuthProvider>
       </ToastProvider>

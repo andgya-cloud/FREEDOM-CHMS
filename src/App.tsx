@@ -16,6 +16,12 @@ import { UsersPage } from './pages/settings/UsersPage';
 import { UserFormPage } from './pages/settings/UserFormPage';
 import { AuditLogPage } from './pages/settings/AuditLogPage';
 import { DevicePage } from './pages/settings/DevicePage';
+import { PipelineSettingsPage } from './pages/settings/PipelineSettingsPage';
+import { CustomFieldsPage } from './pages/settings/CustomFieldsPage';
+import { PeoplePage } from './pages/people/PeoplePage';
+import { PersonPage } from './pages/people/PersonPage';
+import { PersonFormPage } from './pages/people/PersonFormPage';
+import { VisitorFormPage } from './pages/people/VisitorFormPage';
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -42,7 +48,14 @@ export function App() {
     <AppShell>
       <Routes>
         <Route path="/" element={<TodayPage />} />
+        <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
+        <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
+        <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
+        <Route path="/people/:orgId/:personId" element={<RequirePermission permission="people.read"><PersonPage /></RequirePermission>} />
+        <Route path="/people/:orgId/:personId/edit" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
+        <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
         <Route path="/settings/device" element={<DevicePage />} />
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
