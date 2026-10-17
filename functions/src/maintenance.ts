@@ -1,0 +1,36 @@
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { logger } from 'firebase-functions/v2';
+import { Timestamp } from 'firebase-admin/firestore';
+import { db } from './common.js';
+
+export const SOFT_DELETE_RETENTION_DAYS = 30;
+
+/**
+ * Every night, permanently removes records that were deleted more than 30 days ago.
+ * Organization data collections are added to PURGE_COLLECTIONS as each stage adds them.
+ */
+export const PURGE_COLLECTIONS: string[] = [];
+
+export const purgeDeletedRecords = onSchedule(
+  { schedule: 'every day 02:30', timeZone: 'Africa/Nairobi' },
+  async () => {
+    const cutoff = Timestamp.fromMillis(Date.now() - SOFT_DELETE_RETENTION_DAYS * 86_400_000);
+    let purged = 0;
+
+    for (const name of PURGE_COLLECTIONS) {
+      const old = await db.collectionGroup(name).where('deletedAt', '<', cutoff).limit(400).get();
+      const batch = db.batch();
+      old.docs.forEach((d) => batch.delete(d.ref));
+      if (old.size) await batch.commit();
+      purged += old.size;
+    }
+
+    const orgs = await db.collection('organizations').where('deletedAt', '<', cutoff).get();
+    for (const org of orgs.docs) {
+      // The audit trigger records each removed document as a "purge" by the system.
+      await db.recursiveDelete(org.ref);
+      purged += 1;
+    }
+    logger.info(`Purged ${purged} records deleted before ${cutoff.toDate().toISOString()}`);
+  },
+);

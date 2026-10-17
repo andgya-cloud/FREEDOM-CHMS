@@ -1,0 +1,128 @@
+rules_version = '2';
+
+// Freedom ChMS access rules.
+// Every request is checked here, on the server. Hiding a button in the app is
+// only a convenience; these rules are what actually protect the data.
+//
+// - A user's role and permissions live on users/{uid}. Only Cloud Functions
+//   (Admin SDK) write that document, so a user cannot raise their own access.
+// - Organization data is separated by organization id. A user reaches an
+//   organization only if it is in their orgIds or they have allOrgs.
+// - Nothing is hard-deleted from the app. "Delete" sets deletedAt; a scheduled
+//   function purges soft-deleted records after 30 days.
+// - Every write must carry who made it and the server time, so the audit
+//   trigger can record the actor.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+    function profilePath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+    function me() {
+      return get(profilePath()).data;
+    }
+    function isActive() {
+      return signedIn() && exists(profilePath()) && me().active == true;
+    }
+    function has(permission) {
+      return isActive() && permission in me().permissions;
+    }
+    function hasAllOrgs() {
+      return isActive() && me().allOrgs == true;
+    }
+    function canAccessOrg(orgId) {
+      return isActive() && (me().allOrgs == true || orgId in me().orgIds);
+    }
+
+    function stampedCreate() {
+      let d = request.resource.data;
+      return d.createdBy == request.auth.uid
+        && d.createdAt == request.time
+        && d.updatedBy == request.auth.uid
+        && d.updatedAt == request.time;
+    }
+    function stampedUpdate() {
+      let d = request.resource.data;
+      return d.createdBy == resource.data.createdBy
+        && d.createdAt == resource.data.createdAt
+        && d.updatedBy == request.auth.uid
+        && d.updatedAt == request.time;
+    }
+    function validSoftDelete() {
+      let d = request.resource.data;
+      return (d.deletedAt == null && d.deletedBy == null)
+        || (d.deletedAt == request.time && d.deletedBy == request.auth.uid)
+        || (d.deletedAt == resource.data.deletedAt && d.deletedBy == resource.data.deletedBy);
+    }
+
+    // ---- Users and roles --------------------------------------------------
+
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || has('users.manage'));
+      allow list: if has('users.manage');
+      allow write: if false; // Cloud Functions only
+    }
+
+    match /roles/{roleId} {
+      allow read: if isActive();
+      // Changing a role triggers a function that recomputes everyone's permissions.
+      allow create, update: if has('users.manage')
+        && request.resource.data.keys().hasOnly(['name', 'isOwner', 'permissions', 'system',
+             'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+        && request.resource.data.name is string
+        && request.resource.data.permissions is list
+        && (resource == null ? stampedCreate() : stampedUpdate())
+        // The built-in pastor role cannot be weakened or renamed into a non-owner.
+        && (roleId != 'pastor' || request.resource.data.isOwner == true);
+      allow delete: if false;
+    }
+
+    match /settings/{settingId} {
+      allow read: if isActive();
+      allow create: if has('settings.manage') && stampedCreate();
+      allow update: if has('settings.manage') && stampedUpdate();
+      allow delete: if false;
+    }
+
+    // ---- Organizations ----------------------------------------------------
+
+    function validOrganization() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'type', 'parentId', 'timeZone', 'currency', 'receiptPrefix',
+               'active', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 120
+        && d.type in ['church_campus', 'college', 'ministry']
+        && (d.parentId == null || d.parentId is string)
+        && d.timeZone is string
+        && d.currency is string && d.currency.matches('^[A-Z]{3}$')
+        && d.receiptPrefix is string && d.receiptPrefix.matches('^[A-Z]{2,6}$')
+        && d.active is bool;
+    }
+
+    match /organizations/{orgId} {
+      allow get: if canAccessOrg(orgId);
+      allow list: if hasAllOrgs();
+      // Only someone who sees every organization can add one, so a new campus
+      // is never created by a user who would then be locked out of it.
+      allow create: if has('settings.manage') && hasAllOrgs()
+        && validOrganization() && stampedCreate()
+        && request.resource.data.deletedAt == null && request.resource.data.deletedBy == null;
+      allow update: if has('settings.manage') && canAccessOrg(orgId)
+        && validOrganization() && stampedUpdate() && validSoftDelete();
+      allow delete: if false;
+
+      // Organization data (people, attendance, gifts ...) is added stage by
+      // stage below. Anything not matched is denied.
+    }
+
+    // ---- Audit log --------------------------------------------------------
+
+    match /auditLog/{entryId} {
+      allow read: if has('audit.read');
+      allow write: if false; // written only by Cloud Functions
+    }
+  }
+}
