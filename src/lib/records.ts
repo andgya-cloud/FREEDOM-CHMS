@@ -26,6 +26,24 @@ function uid(): string {
   return u.uid;
 }
 
+/** The stamps every new record carries. */
+export function createStamps(): DocumentData {
+  const me = uid();
+  return {
+    deletedAt: null,
+    deletedBy: null,
+    createdAt: serverTimestamp(),
+    createdBy: me,
+    updatedAt: serverTimestamp(),
+    updatedBy: me,
+  };
+}
+
+/** The stamps every change carries. */
+export function updateStamps(): DocumentData {
+  return { updatedAt: serverTimestamp(), updatedBy: uid() };
+}
+
 export function createRecord(path: string | CollectionReference, data: DocumentData): { ref: DocumentReference; synced: Promise<unknown> } {
   const me = uid();
   const col = typeof path === 'string' ? collection(db, path) : path;

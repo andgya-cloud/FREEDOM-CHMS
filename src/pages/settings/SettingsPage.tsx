@@ -4,6 +4,8 @@ import type { Permission } from '../../../functions/src/shared/permissions';
 
 const ITEMS: { to: string; label: string; detail: string; permission?: Permission }[] = [
   { to: '/settings/organizations', label: 'Organizations', detail: 'Campuses, the college and ministries', permission: 'settings.manage' },
+  { to: '/settings/pipeline', label: 'Journey stages', detail: 'Visitor, Salvation, Baptism, Growth Track…', permission: 'settings.manage' },
+  { to: '/settings/custom-fields', label: 'Extra fields', detail: 'Your own fields on every person', permission: 'settings.manage' },
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', permission: 'users.manage' },
   { to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },
   { to: '/settings/device', label: 'This device', detail: 'Install, sync, theme and sign-out' },

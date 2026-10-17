@@ -6,8 +6,8 @@ Built in stages. This README grows with each stage.
 
 | Stage | What | Status |
 |---|---|---|
-| 1 | Foundation: sign-in, roles, organization switcher, installable app, offline sync, server access rules, audit log | Built, awaiting approval |
-| 2 | People and visitors | Not started |
+| 1 | Foundation: sign-in, roles, organization switcher, installable app, offline sync, server access rules, audit log | Approved |
+| 2 | People and visitors: quick visitor form, search, profiles, duplicate check, pipeline timeline, pastoral notes | Built, awaiting approval |
 | 3 | Services and attendance | Not started |
 | 4 | Programs and groups | Not started |
 | 5 | Giving and receipts | Not started |

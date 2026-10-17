@@ -43,8 +43,32 @@ export async function seed(env: RulesTestEnvironment) {
         deletedAt: null, deletedBy: null, createdAt: old, createdBy: 'pastor', updatedAt: old, updatedBy: 'pastor',
       });
     }
+    await setDoc(doc(db, 'settings/pipeline'), {
+      stages: [], sensitiveStageIds: ['salvation', 'baptism'], createdAt: old, createdBy: 'pastor', updatedAt: old, updatedBy: 'pastor',
+    });
+    const stamps = { deletedAt: null, deletedBy: null, createdAt: old, createdBy: 'pastor', updatedAt: old, updatedBy: 'pastor' };
+    await setDoc(doc(db, 'organizations/fcn/people/p1'), { ...person('fcn'), ...stamps });
+    await setDoc(doc(db, 'organizations/adia/people/s1'), { ...person('adia'), fullName: 'Student One', ...stamps });
+    await setDoc(doc(db, 'organizations/fcn/pipeline/p1_salvation'), { orgId: 'fcn', personId: 'p1', stageId: 'salvation', sensitive: true, status: 'completed', date: '2026-10-11', notes: '', details: {}, ...stamps });
+    await setDoc(doc(db, 'organizations/fcn/pipeline/p1_visitor'), { orgId: 'fcn', personId: 'p1', stageId: 'visitor', sensitive: false, status: 'completed', date: '2026-10-04', notes: '', details: {}, ...stamps });
+    await setDoc(doc(db, 'organizations/fcn/prayerRequests/r1'), { orgId: 'fcn', personId: 'p1', text: 'Healing for my mother', status: 'open', ...stamps });
+    await setDoc(doc(db, 'organizations/fcn/pastoralNotes/n1'), { orgId: 'fcn', personId: 'p1', text: 'Private note', ...stamps });
+    await setDoc(doc(db, 'organizations/fcn/followUps/p1_first_visit'), { orgId: 'fcn', personId: 'p1', reason: 'first_visit', status: 'open', ...stamps });
     await setDoc(doc(db, 'auditLog/one'), { action: 'create', at: old, actorUid: 'pastor', orgId: 'fcn' });
   });
+}
+
+export function person(orgId: string, overrides: Record<string, unknown> = {}) {
+  return {
+    orgId, fullName: 'Grace Wanjiku', firstName: 'Grace', phone: '+254712345678', whatsapp: '+254712345678',
+    whatsappConsent: { given: true, date: '2026-10-17', recordedBy: 'admin', stoppedAt: null },
+    status: 'visitor', firstVisitDate: '2026-10-17', possibleDuplicateIds: [], customFields: {},
+    ...overrides,
+  };
+}
+
+export function created(uid: string) {
+  return { deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: uid, updatedAt: serverTimestamp(), updatedBy: uid };
 }
 
 export function newOrg(uid: string, overrides: Record<string, unknown> = {}) {

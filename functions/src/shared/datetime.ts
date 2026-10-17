@@ -110,3 +110,15 @@ export function parseDate(text: string, timeZone = DEFAULT_TIME_ZONE): Date | nu
   if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
   return zonedMidnight(year, month, day, timeZone);
 }
+
+/** Today's local date as YYYY-MM-DD (the format stored for calendar dates such as a first visit). */
+export function localDateKey(date: Date = new Date(), timeZone = DEFAULT_TIME_ZONE): string {
+  const p = zonedParts(date, timeZone);
+  return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
+}
+
+/** YYYY-MM-DD -> DD/MM/YYYY; empty for anything else. */
+export function formatDateKey(key: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key ?? '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+}

@@ -13,6 +13,7 @@ export interface Organization {
   timeZone: string;
   currency: string;
   receiptPrefix: string;
+  serviceTimes?: string[];
   active: boolean;
   deletedAt: Timestamp | null;
   createdAt?: Timestamp;
