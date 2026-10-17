@@ -1,10 +1,11 @@
 #!/bin/bash
 # Freedom ChMS: first deploy to the freedom-chms Firebase project. Run on Andy's Mac.
 set -e
-cd ~/Documents/"Claude folder"
-[ -d freedom-chms ] || git clone https://github.com/andgya-cloud/freedom-chms.git
+mkdir -p ~/Documents/"Claude folder" && cd ~/Documents/"Claude folder"
+command -v node >/dev/null || { echo "Node.js is not installed. Install it from https://nodejs.org (LTS), then run this again."; exit 1; }
+rm -rf freedom-chms && tar -xzf ~/Downloads/freedom-chms.tar.gz
 cd freedom-chms
-git fetch origin && git checkout stage-2-people && git pull origin stage-2-people
+echo "Installing (this takes a few minutes)..."
 npm ci && npm --prefix functions ci
 cat > .env.production.local <<'EOF'
 VITE_FIREBASE_API_KEY=AIzaSyBvb5Dc-XzhGUYZ5LaH4q_fX9vg50LPqAM
@@ -19,6 +20,7 @@ cp functions/.env.example functions/.env
 npx firebase firestore:databases:create "(default)" --location=africa-south1 --project freedom-chms || echo "(database already exists)"
 npm run build
 npx firebase deploy --project freedom-chms
-KEY=$(ls -t ~/Downloads/freedom-chms-*.json | head -1)
+KEY=$(ls -t ~/Downloads/freedom-chms-*.json 2>/dev/null | head -1)
+[ -n "$KEY" ] || { echo "No key file found in Downloads. Generate the private key in the Firebase console, then run this again."; exit 1; }
 GOOGLE_APPLICATION_CREDENTIALS="$KEY" npm run bootstrap -- --project freedom-chms --email andgya@gmail.com --name "Andy"
 rm "$KEY" && echo "Deleted the key file. All done: https://freedom-chms.web.app"
