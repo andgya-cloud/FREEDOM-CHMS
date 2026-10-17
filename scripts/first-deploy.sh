@@ -19,7 +19,13 @@ EOF
 cp functions/.env.example functions/.env
 npx firebase firestore:databases:create "(default)" --location=africa-south1 --project freedom-chms || echo "(database already exists)"
 npm run build
-npx firebase deploy --project freedom-chms
+# A brand-new project needs a few minutes before Google lets functions use its event service,
+# so if the first attempt fails, wait and try once more.
+npx firebase deploy --project freedom-chms || {
+  echo "Deploy hit first-time set-up delays. Waiting 3 minutes, then trying again..."
+  sleep 180
+  npx firebase deploy --project freedom-chms
+}
 KEY=$(ls -t ~/Downloads/freedom-chms-*.json 2>/dev/null | head -1)
 [ -n "$KEY" ] || { echo "No key file found in Downloads. Generate the private key in the Firebase console, then run this again."; exit 1; }
 GOOGLE_APPLICATION_CREDENTIALS="$KEY" npm run bootstrap -- --project freedom-chms --email andgya@gmail.com --name "Andy"

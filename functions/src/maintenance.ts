@@ -12,7 +12,8 @@ export const SOFT_DELETE_RETENTION_DAYS = 30;
 export const PURGE_COLLECTIONS: string[] = ['people', 'pipeline', 'prayerRequests', 'pastoralNotes', 'followUps'];
 
 export const purgeDeletedRecords = onSchedule(
-  { schedule: 'every day 02:30', timeZone: 'Africa/Nairobi' },
+  // Cloud Scheduler isn't offered in africa-south1, so this job runs from Europe.
+  { schedule: 'every day 02:30', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1' },
   async () => {
     const cutoff = Timestamp.fromMillis(Date.now() - SOFT_DELETE_RETENTION_DAYS * 86_400_000);
     let purged = 0;
