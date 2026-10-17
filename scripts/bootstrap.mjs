@@ -50,11 +50,38 @@ function passwordProblems(pw, email) {
   return out;
 }
 
+// Reads a line without echoing it. Raw mode instead of readline, whose redraws
+// include the typed text on newer Node versions.
 function askHidden(question) {
+  if (!process.stdin.isTTY) {
+    return new Promise((resolve) => {
+      const rl = createInterface({ input: process.stdin });
+      rl.question(question, (answer) => { rl.close(); resolve(answer); });
+    });
+  }
   return new Promise((resolve) => {
-    const rl = createInterface({ input: process.stdin, output: process.stdout, terminal: true });
-    rl._writeToOutput = (s) => { if (s.includes(question)) rl.output.write(s); };
-    rl.question(question, (answer) => { rl.close(); process.stdout.write('\n'); resolve(answer); });
+    const stdin = process.stdin;
+    let answer = '';
+    process.stdout.write(question);
+    stdin.setRawMode(true);
+    stdin.resume();
+    stdin.setEncoding('utf8');
+    const onData = (chunk) => {
+      for (const ch of chunk) {
+        if (ch === '\r' || ch === '\n') {
+          stdin.setRawMode(false);
+          stdin.pause();
+          stdin.off('data', onData);
+          process.stdout.write('\n');
+          resolve(answer);
+          return;
+        }
+        if (ch === '\u0003') { process.stdout.write('\n'); process.exit(130); }
+        if (ch === '\u007f' || ch === '\b') answer = answer.slice(0, -1);
+        else answer += ch;
+      }
+    };
+    stdin.on('data', onData);
   });
 }
 
