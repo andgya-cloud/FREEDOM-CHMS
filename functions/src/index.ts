@@ -10,3 +10,4 @@ export { purgeDeletedRecords } from './maintenance.js';
 export { syncStaffDirectory, onPipelineWritten, dailyFollowUps } from './followups.js';
 export { onReportRequested, scheduledReports } from './reports.js';
 export { onDataRequested, weeklyBackup } from './data.js';
+export { onStudentCreated, onInvoiceWritten, onFeePaymentWritten, onCertificateCreated, onSchoolReportRequested, scheduledSchoolReports } from './school.js';

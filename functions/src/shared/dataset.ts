@@ -6,6 +6,8 @@ export const ORG_COLLECTIONS = [
   'events', 'attendance', 'programs', 'cohorts', 'enrollments', 'teams', 'teamMembers', 'groups', 'groupMembers',
   'funds', 'gifts', 'mpesaCodes', 'giftReviews', 'statementLines', 'giftImports', 'receipts', 'ledger', 'counters',
   'reports',
+  'courses', 'intakes', 'schoolSettings', 'students', 'studentPrivate', 'assessments', 'marks', 'feeStructures', 'invoices',
+  'feeBalances', 'certificates', 'outcomes', 'schoolReports',
 ] as const;
 
 /** Collections whose records belong to one person (they carry a personId). */
@@ -13,6 +15,11 @@ export const PERSON_COLLECTIONS = [
   'pipeline', 'prayerRequests', 'pastoralNotes', 'followUps', 'messages', 'attendance',
   'enrollments', 'teamMembers', 'groupMembers',
 ] as const;
+
+/** ADIA records keyed by the student's id (the person's id), removed with the person. */
+export const STUDENT_DOCS = ['students', 'studentPrivate', 'feeBalances', 'certificates'] as const;
+/** ADIA records that carry a studentId field: results and employment follow-ups are removed, invoices are kept for the accounts. */
+export const STUDENT_FIELD_COLLECTIONS = ['marks', 'outcomes'] as const;
 
 /** Money records are kept for the accounts, but stop naming the person when they are erased. */
 export const FINANCIAL_PERSON_COLLECTIONS = ['gifts', 'receipts', 'giftReviews'] as const;

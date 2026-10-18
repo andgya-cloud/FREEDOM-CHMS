@@ -746,6 +746,199 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ---- ADIA Training Centre ------------------------------------------
+      // Courses, students, results, fees and certificates. Fee balances and
+      // certificate serial numbers are written by Cloud Functions only.
+
+      function schoolRead() {
+        return canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
+      }
+      function feesRead() {
+        return canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports') || has('giving.person.read'));
+      }
+      function listOf(v, max) {
+        return v is list && v.size() <= max;
+      }
+
+      match /courses/{courseId} {
+        allow read: if schoolRead();
+        allow create, update: if orgWrite(orgId, 'settings.manage')
+          && courseId.matches('^[a-z0-9_]{2,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'levels', 'units', 'timetable', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 2
+          && listOf(request.resource.data.levels, 12)
+          && listOf(request.resource.data.units, 60)
+          && listOf(request.resource.data.timetable, 40)
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      match /intakes/{intakeId} {
+        allow read: if schoolRead();
+        allow create, update: if orgWrite(orgId, 'settings.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'name', 'startDate', 'capacity', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('courses', request.resource.data.courseId)
+          && shortText(request.resource.data.name, 80) && request.resource.data.name.size() >= 1
+          && isDate(request.resource.data.startDate)
+          && (request.resource.data.capacity == null || (request.resource.data.capacity is int && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 5000))
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      // Grading scale, pass mark, weights and the attendance alert threshold.
+      match /schoolSettings/{settingId} {
+        allow read: if schoolRead();
+        allow create, update: if orgWrite(orgId, 'settings.manage')
+          && settingId == 'main'
+          && request.resource.data.keys().hasOnly(['orgId', 'gradingScale', 'passMark', 'attendanceThreshold', 'weights', 'director',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && listOf(request.resource.data.gradingScale, 12)
+          && request.resource.data.passMark is number && request.resource.data.passMark >= 0 && request.resource.data.passMark <= 100
+          && request.resource.data.attendanceThreshold is number && request.resource.data.attendanceThreshold >= 0 && request.resource.data.attendanceThreshold <= 100
+          && request.resource.data.weights is map;
+        allow delete: if false;
+      }
+
+      // One record per student, with the person's id as its id. The admission
+      // number is added by a Cloud Function, and "graduated" only by issuing a certificate.
+      match /students/{studentId} {
+        allow read: if schoolRead();
+        allow create, update: if orgWrite(orgId, 'people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'intakeId', 'level', 'status', 'admissionNo', 'sponsors',
+               'enrolledOn', 'withdrawnOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('people', studentId)
+          && existsInOrg('courses', request.resource.data.courseId)
+          && existsInOrg('intakes', request.resource.data.intakeId)
+          && shortText(request.resource.data.level, 60)
+          && request.resource.data.status in ['applicant', 'enrolled', 'deferred', 'graduated', 'withdrawn']
+          && (request.resource.data.status != 'graduated' || (resource != null && resource.data.status == 'graduated'))
+          && (resource == null ? request.resource.data.get('admissionNo', null) == null
+                               : request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null))
+          && listOf(request.resource.data.sponsors, 4);
+        allow delete: if false;
+      }
+
+      // Identity numbers some regulators ask for. Pastor only.
+      match /studentPrivate/{studentId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create, update: if orgWrite(orgId, 'pastoral.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'idNumber', 'notes',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('students', studentId)
+          && shortText(request.resource.data.idNumber, 40) && shortText(request.resource.data.notes, 2000);
+        allow delete: if false;
+      }
+
+      match /assessments/{assessmentId} {
+        allow read: if schoolRead();
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'unitId', 'type', 'name', 'maxMarks', 'date',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('courses', request.resource.data.courseId)
+          && shortText(request.resource.data.unitId, 40)
+          && request.resource.data.type in ['continuous', 'practical', 'exam']
+          && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 1
+          && request.resource.data.maxMarks is number && request.resource.data.maxMarks > 0 && request.resource.data.maxMarks <= 1000
+          && isDate(request.resource.data.date);
+        allow delete: if false;
+      }
+
+      match /marks/{markId} {
+        allow read: if schoolRead();
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'assessmentId', 'studentId', 'marks',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && markId == request.resource.data.assessmentId + '_' + request.resource.data.studentId
+          && existsInOrg('students', request.resource.data.studentId)
+          && existsInOrg('assessments', request.resource.data.assessmentId)
+          && request.resource.data.marks is number && request.resource.data.marks >= 0
+          && request.resource.data.marks <= getAfter(/databases/$(database)/documents/organizations/$(orgId)/assessments/$(request.resource.data.assessmentId)).data.maxMarks
+          && (resource == null || (request.resource.data.assessmentId == resource.data.assessmentId && request.resource.data.studentId == resource.data.studentId));
+        allow delete: if false;
+      }
+
+      match /feeStructures/{structureId} {
+        allow read: if feesRead() || schoolRead();
+        allow create, update: if orgWrite(orgId, 'settings.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'intakeId', 'items',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && structureId == request.resource.data.courseId + '_' + request.resource.data.intakeId
+          && existsInOrg('courses', request.resource.data.courseId)
+          && existsInOrg('intakes', request.resource.data.intakeId)
+          && listOf(request.resource.data.items, 20);
+        allow delete: if false;
+      }
+
+      match /invoices/{invoiceId} {
+        allow read: if feesRead();
+        allow create, update: if orgWrite(orgId, 'gifts.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'studentId', 'items', 'totalCents', 'dueDate', 'label', 'status',
+               'voidReason', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('students', request.resource.data.studentId)
+          && listOf(request.resource.data.items, 20)
+          && request.resource.data.totalCents is int && request.resource.data.totalCents >= 0 && request.resource.data.totalCents <= 10000000000
+          && (request.resource.data.dueDate == null || isDate(request.resource.data.dueDate))
+          && shortText(request.resource.data.label, 80)
+          && request.resource.data.status in ['open', 'void']
+          && (resource == null
+              ? request.resource.data.status == 'open'
+              : (request.resource.data.studentId == resource.data.studentId
+                 && request.resource.data.totalCents == resource.data.totalCents));
+        allow delete: if false;
+      }
+
+      // What each student has been billed and has paid. Cloud Functions write it.
+      match /feeBalances/{studentId} {
+        allow read: if feesRead();
+        allow write: if false;
+      }
+
+      // The certificate register. The serial number and the "graduated" status
+      // are added by a Cloud Function when a certificate is issued.
+      match /certificates/{certificateId} {
+        allow read: if schoolRead();
+        allow create: if orgWrite(orgId, 'settings.manage')
+          && certificateId == request.resource.data.studentId
+          && request.resource.data.keys().hasOnly(['orgId', 'studentId', 'courseId', 'issuedOn',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('students', request.resource.data.studentId)
+          && existsInOrg('courses', request.resource.data.courseId)
+          && isDate(request.resource.data.issuedOn);
+        allow update, delete: if false;
+      }
+
+      // Employment follow-up at 3, 6 and 12 months. A Cloud Function creates each
+      // one when a certificate is issued; staff record what the graduate is doing.
+      match /outcomes/{outcomeId} {
+        allow read: if schoolRead();
+        allow update: if orgWrite(orgId, 'people.write')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'note', 'recordedOn', 'updatedAt', 'updatedBy'])
+          && request.resource.data.status in ['employed', 'self_employed', 'studying', 'seeking', 'unreachable']
+          && shortText(request.resource.data.note, 500)
+          && isDate(request.resource.data.recordedOn);
+        allow create, delete: if false;
+      }
+
+      // Weekly and monthly school reports (made by a Cloud Function). The director's copy has fees in it.
+      match /schoolReports/{reportId} {
+        allow read: if canAccessOrg(orgId) && (has('finance.reports') || has('settings.manage'));
+        allow write: if false;
+      }
+      match /schoolReportRequests/{requestId} {
+        allow read: if canAccessOrg(orgId) && (has('finance.reports') || has('settings.manage'));
+        allow create: if canAccessOrg(orgId) && (has('finance.reports') || has('settings.manage'))
+          && request.resource.data.keys().hasOnly(['orgId', 'type', 'from', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.type in ['weekly', 'monthly']
+          && isDate(request.resource.data.from)
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
       // "Download everything", one person's export and erasing one person. A Cloud
       // Function checks the pastor again, does the erasing, logs it and marks it done.
       match /dataRequests/{requestId} {

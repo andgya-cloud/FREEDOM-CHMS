@@ -15,6 +15,8 @@ import {
   FINANCIAL_PERSON_COLLECTIONS,
   ORG_COLLECTIONS,
   PERSON_COLLECTIONS,
+  STUDENT_DOCS,
+  STUDENT_FIELD_COLLECTIONS,
   toPlain,
 } from './shared/dataset.js';
 
@@ -47,6 +49,18 @@ export async function erasePerson(orgId: string, personId: string): Promise<Reco
       await batch.commit();
     }
   }
+  // ADIA: the student record, results, certificate and employment follow-ups go; invoices stay for the accounts.
+  for (const name of STUDENT_DOCS) {
+    const ref = base.collection(name).doc(personId);
+    if ((await ref.get()).exists) { await ref.delete(); counts[name] = 1; }
+  }
+  for (const name of STUDENT_FIELD_COLLECTIONS) {
+    const found = await base.collection(name).where('studentId', '==', personId).get();
+    counts[name] = found.size;
+    await deleteAll(found.docs.map((d) => d.ref));
+  }
+  const billed = await base.collection('invoices').where('studentId', '==', personId).get();
+  for (const d of billed.docs) await d.ref.update({ studentId: 'erased', updatedAt: FieldValue.serverTimestamp(), updatedBy: SYSTEM });
   // Other people's links to them (a child's guardian, who invited whom) are cleared, not deleted.
   for (const field of ['guardianId', 'invitedById']) {
     const linked = await base.collection('people').where(field, '==', personId).get();
