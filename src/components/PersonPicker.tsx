@@ -39,6 +39,7 @@ export function PersonPicker({ label, value, onChange, allowFreeText, excludeId,
         onFocus={() => setOpen(true)}
         onBlur={() => window.setTimeout(() => setOpen(false), 150)}
         onChange={(e) => { onChange({ id: null, name: e.target.value }); setOpen(true); }}
+        onKeyDown={(e) => { if (e.key === 'Escape') setOpen(false); }}
         aria-expanded={open && matches.length > 0}
         aria-controls={`${id}-list`}
       />

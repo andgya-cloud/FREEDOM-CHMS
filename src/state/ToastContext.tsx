@@ -21,7 +21,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const show = useCallback<ToastValue['show']>((message, action) => {
     const id = nextId.current++;
-    setToasts((t) => [...t, { id, message, actionLabel: action?.label, onAction: action?.onAction }]);
+    // Keep the newest few, so quick work doesn't stack a wall of messages.
+    setToasts((t) => [...t.slice(-2), { id, message, actionLabel: action?.label, onAction: action?.onAction }]);
     window.setTimeout(() => dismiss(id), action ? 8000 : 4000);
   }, [dismiss]);
 

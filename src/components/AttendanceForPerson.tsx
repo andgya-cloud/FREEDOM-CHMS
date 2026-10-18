@@ -6,7 +6,9 @@ import { formatDateKey } from '../../functions/src/shared/datetime';
 
 /** On a person's record: how often they come, and their last few check-ins. */
 export function AttendanceForPerson({ org, personId }: { org: Organization; personId: string }) {
-  const { marks, loading } = usePersonAttendance(org.id, personId);
+  const { marks: everything, loading } = usePersonAttendance(org.id, personId);
+  // Programme classes and group meetings show under Programmes and groups; this counts services and sessions.
+  const marks = everything.filter((m) => !m.programId && !m.groupId);
   if (loading && marks.length === 0) return null;
   const isCollege = org.type === 'college';
   const rate = attendanceRate(marks);

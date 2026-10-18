@@ -211,17 +211,40 @@ service cloud.firestore {
         let d = request.resource.data;
         let h = d.headcounts;
         return d.keys().hasOnly(['orgId', 'date', 'type', 'name', 'activity', 'headcounts', 'notes',
+                 'programId', 'cohortId', 'topicIds', 'mentor', 'mentorId', 'groupId',
                  'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-          && eventId.matches('^' + d.date + '_[a-z0-9_]+$')
-          && d.type in ['service', 'class', 'session', 'meal']
+          && eventId.matches('^' + d.date + '_[A-Za-z0-9_]+$')
+          && d.type in ['service', 'class', 'session', 'meal', 'group']
           && d.name is string && d.name.size() >= 1 && d.name.size() <= 120
           && (!('activity' in d) || d.activity == null || (d.activity is string && d.activity.size() <= 120))
           && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
           && h is map
           && h.keys().hasOnly(['adults', 'teens', 'children', 'new', 'returning', 'total'])
           && validCount(h, 'adults') && validCount(h, 'teens') && validCount(h, 'children')
-          && validCount(h, 'new') && validCount(h, 'returning') && validCount(h, 'total');
+          && validCount(h, 'new') && validCount(h, 'returning') && validCount(h, 'total')
+          && validProgramSession(eventId, d)
+          && validGroupMeeting(eventId, d);
+      }
+      // A programme class: belongs to a real programme, covers up to ten of its
+      // topics, and records who taught it. Its id says which programme and cohort.
+      function validProgramSession(eventId, d) {
+        return d.get('programId', null) == null
+          ? !('cohortId' in d) && !('topicIds' in d) && !('mentor' in d) && !('mentorId' in d)
+          : d.type == 'class'
+            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/programs/$(d.programId))
+            && (d.cohortId == null || d.cohortId is string)
+            && eventId == d.date + '_' + d.programId + '_' + (d.cohortId == null ? 'makeup' : d.cohortId)
+            && d.topicIds is list && d.topicIds.size() <= 10
+            && (d.mentor == null || (d.mentor is string && d.mentor.size() <= 120))
+            && (d.mentorId == null || d.mentorId is string);
+      }
+      function validGroupMeeting(eventId, d) {
+        return d.get('groupId', null) == null
+          ? d.type != 'group'
+          : d.type == 'group'
+            && eventId == d.date + '_group_' + d.groupId
+            && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/groups/$(d.groupId));
       }
 
       match /events/{eventId} {
@@ -232,19 +255,168 @@ service cloud.firestore {
 
       // One record per person per gathering. It must point at a real gathering
       // and a real person in this organization, on the gathering's date.
+      // A check-in carries its gathering's date, programme and group, so a
+      // person's programme progress can be counted without reading every class.
+      function attendanceMatchesEvent(e) {
+        let d = request.resource.data;
+        return e.date == d.date
+          && d.get('programId', null) == e.get('programId', null)
+          && d.get('groupId', null) == e.get('groupId', null);
+      }
+
       match /attendance/{recordId} {
         allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
         allow create, update: if orgWrite(orgId, 'attendance.write')
           && request.resource.data.keys().hasOnly(['orgId', 'eventId', 'personId', 'date', 'status', 'method', 'checkedInAt',
-               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'programId', 'groupId', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && recordId == request.resource.data.eventId + '_' + request.resource.data.personId
           && request.resource.data.status in ['present', 'late', 'absent', 'excused']
           && request.resource.data.method in ['staff', 'door', 'register']
           && request.resource.data.checkedInAt is timestamp
           && (resource == null || (request.resource.data.eventId == resource.data.eventId
                                    && request.resource.data.personId == resource.data.personId))
-          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data.date == request.resource.data.date
+          && attendanceMatchesEvent(getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data)
           && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/people/$(request.resource.data.personId));
+        allow delete: if false;
+      }
+
+      // ---- Programmes, Dream Team and Freedom Groups ----------------------
+
+      function isDate(v) {
+        return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      }
+      function optionalDate(v) {
+        return v == null || isDate(v);
+      }
+      function shortText(v, max) {
+        return v is string && v.size() <= max;
+      }
+      function existsInOrg(collection, id) {
+        return existsAfter(/databases/$(database)/documents/organizations/$(orgId)/$(collection)/$(id));
+      }
+      function programsRead() {
+        return canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
+      }
+
+      // A programme's topics and completion rule are configuration: the pastor
+      // (or staff with settings access) changes them. Ids are readable words,
+      // so a class's id can name its programme.
+      match /programs/{programId} {
+        allow read: if programsRead();
+        allow create, update: if orgWrite(orgId, 'settings.manage')
+          && programId.matches('^[a-z0-9_]{2,60}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'description', 'topics', 'completionRule',
+               'pipelineStageId', 'completedLabel', 'schedule', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
+          && shortText(request.resource.data.description, 500)
+          && request.resource.data.topics is list && request.resource.data.topics.size() <= 60
+          && request.resource.data.completionRule is map
+          && request.resource.data.completionRule.type in ['all_topics', 'topic_count']
+          && (request.resource.data.completionRule.type == 'all_topics'
+              || (request.resource.data.completionRule.count is int && request.resource.data.completionRule.count >= 1))
+          && (request.resource.data.pipelineStageId == null || request.resource.data.pipelineStageId is string)
+          && shortText(request.resource.data.completedLabel, 30)
+          && shortText(request.resource.data.schedule, 80)
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      match /cohorts/{cohortId} {
+        allow read: if programsRead();
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && cohortId.matches('^[A-Za-z0-9]{4,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'programId', 'name', 'startDate', 'endDate', 'schedule', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('programs', request.resource.data.programId)
+          && (resource == null || request.resource.data.programId == resource.data.programId)
+          && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 80
+          && isDate(request.resource.data.startDate)
+          && optionalDate(request.resource.data.endDate)
+          && shortText(request.resource.data.schedule, 80)
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      // One enrolment per person per programme. Progress (topicsCovered) is
+      // recounted by a Cloud Function from class attendance.
+      match /enrollments/{enrollmentId} {
+        allow read: if programsRead();
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'programId', 'personId', 'cohortId', 'status', 'enrolledDate',
+               'completedDate', 'completedAuto', 'topicsCovered', 'notes',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && enrollmentId == request.resource.data.programId + '_' + request.resource.data.personId
+          && existsInOrg('programs', request.resource.data.programId)
+          && existsInOrg('people', request.resource.data.personId)
+          && (request.resource.data.cohortId == null || existsInOrg('cohorts', request.resource.data.cohortId))
+          && request.resource.data.status in ['active', 'completed', 'dropped']
+          && isDate(request.resource.data.enrolledDate)
+          && optionalDate(request.resource.data.completedDate)
+          && request.resource.data.completedAuto is bool
+          && request.resource.data.topicsCovered is list && request.resource.data.topicsCovered.size() <= 60
+          && shortText(request.resource.data.notes, 1000);
+        allow delete: if false;
+      }
+
+      // Dream Team departments and who serves in them.
+      match /teams/{teamId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'leaderId', 'leaderName', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 80
+          && (request.resource.data.leaderId == null || request.resource.data.leaderId is string)
+          && shortText(request.resource.data.leaderName, 120)
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      match /teamMembers/{memberId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'teamId', 'personId', 'role', 'startDate', 'endDate', 'status',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && memberId == request.resource.data.teamId + '_' + request.resource.data.personId
+          && existsInOrg('teams', request.resource.data.teamId)
+          && existsInOrg('people', request.resource.data.personId)
+          && shortText(request.resource.data.role, 80)
+          && isDate(request.resource.data.startDate)
+          && optionalDate(request.resource.data.endDate)
+          && request.resource.data.status in ['active', 'inactive'];
+        allow delete: if false;
+      }
+
+      // Freedom Groups (small groups) and their members. Weekly meetings are
+      // gatherings in /events with the group's id.
+      match /groups/{groupId} {
+        allow read: if programsRead();
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && groupId.matches('^[A-Za-z0-9]{4,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'leaderId', 'leaderName', 'meetingDay', 'meetingTime',
+               'place', 'startDate', 'active', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 80
+          && (request.resource.data.leaderId == null || request.resource.data.leaderId is string)
+          && shortText(request.resource.data.leaderName, 120)
+          && request.resource.data.meetingDay in ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+          && shortText(request.resource.data.meetingTime, 20)
+          && shortText(request.resource.data.place, 120)
+          && isDate(request.resource.data.startDate)
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      match /groupMembers/{memberId} {
+        allow read: if programsRead();
+        allow create, update: if orgWrite(orgId, 'programs.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'groupId', 'personId', 'joinedDate', 'leftDate', 'status',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && memberId == request.resource.data.groupId + '_' + request.resource.data.personId
+          && existsInOrg('groups', request.resource.data.groupId)
+          && existsInOrg('people', request.resource.data.personId)
+          && isDate(request.resource.data.joinedDate)
+          && optionalDate(request.resource.data.leftDate)
+          && request.resource.data.status in ['active', 'left'];
         allow delete: if false;
       }
 

@@ -95,7 +95,7 @@ h2 { font-size: 1.15rem; margin: 0 0 0.5rem; }
   background: var(--surface); border-top: 1px solid var(--border);
   padding: 4px 8px calc(4px + env(safe-area-inset-bottom));
 }
-.tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px; min-height: var(--tap); color: var(--muted); text-decoration: none; font-size: 0.8rem; border-radius: 10px; }
+.tab { flex: 1; max-width: 160px; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 0; padding: 6px 2px; min-height: var(--tap); color: var(--muted); text-decoration: none; font-size: 0.7rem; letter-spacing: -0.01em; white-space: nowrap; border-radius: 10px; }
 .tab svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
 .tab.active { color: var(--primary); font-weight: 700; }
 
@@ -318,3 +318,24 @@ dl.details dd { margin: 0; overflow-wrap: anywhere; }
 .door-welcome .success-tick { width: 96px; height: 96px; font-size: 3rem; }
 .door-form { max-width: 520px; width: 100%; margin: 0 auto; }
 .door-form input:not([type='checkbox']) { font-size: 1.2rem; min-height: 60px; }
+
+/* Stage 4: programmes, Dream Team and Freedom Groups */
+.stack { display: flex; flex-direction: column; gap: 8px; }
+.stack h2, .stack p { margin: 0; }
+.row-button { width: 100%; border: 0; background: none; color: var(--text); font: inherit; text-align: left; cursor: pointer; min-height: var(--tap); }
+.row-button:hover:not(:disabled) { background: var(--surface-2); }
+.row-button:disabled { cursor: default; }
+.progress { display: block; height: 6px; margin-top: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; max-width: 260px; }
+.progress span { display: block; height: 100%; background: var(--ok); border-radius: 999px; }
+.topic-chips .chip { min-height: 36px; }
+.topic-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.topic-list li { display: flex; align-items: center; gap: 10px; min-height: 40px; border-top: 1px solid var(--border); }
+.topic-list li:first-child { border-top: 0; }
+.topic-name { flex: 1; }
+.topic-list li:not(.covered) .topic-name { color: var(--muted); }
+.topic-tick { flex: none; width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--border); display: grid; place-content: center; font-size: 0.75rem; color: #fff; }
+.topic-list .covered .topic-tick { background: var(--ok); border-color: var(--ok); }
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.enrol-form { border-top: 1px solid var(--border); padding-top: 12px; gap: 10px; }
+.inline-number { width: 72px; min-height: 40px; }
+.badge + .badge, .row-title .badge, .link-title .badge { margin-left: 2px; }

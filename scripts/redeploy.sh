@@ -10,7 +10,7 @@ cd freedom-chms
 echo "Installing (only changes are downloaded)..."
 npm install --no-audit --no-fund && npm --prefix functions install --no-audit --no-fund
 npm run build
-# Only the nightly clean-up job changed on the server side in this update. Naming it
-# also avoids the question about the old africa-south1 copy of that job.
-npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting,functions:purgeDeletedRecords
+# Name the server jobs this update changes or adds. Naming them also avoids the
+# question about the old africa-south1 copy of the clean-up job.
+npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting,functions:purgeDeletedRecords,functions:syncProgrammes,functions:createUser,functions:updateUser,functions:resetUserPassword,functions:changeMyPassword,functions:recordSignIn
 echo "Done: https://freedom-chms.web.app"

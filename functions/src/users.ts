@@ -3,6 +3,11 @@ import { db, auth, FieldValue, requireCaller, requireString, requireStringArray,
 import { effectivePermissions, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 
+// The browser calls these directly, so anyone may reach them; each one checks
+// the caller's sign-in and permissions itself. Without this, a deploy can leave
+// them closed and every call fails.
+const CALLABLE = { invoker: 'public' } as const;
+
 async function loadRole(roleId: string): Promise<RoleDefinition> {
   const snap = await db.doc(`roles/${roleId}`).get();
   if (!snap.exists) throw new HttpsError('invalid-argument', 'That role does not exist.');
@@ -25,7 +30,7 @@ async function countActiveOwners(): Promise<number> {
 }
 
 /** Pastor creates a staff account with a temporary password. */
-export const createUser = onCall(async (request) => {
+export const createUser = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request, 'users.manage');
   const data = (request.data ?? {}) as Record<string, unknown>;
   const email = requireString(data.email, 'the email', { min: 3 }).toLowerCase();
@@ -71,7 +76,7 @@ export const createUser = onCall(async (request) => {
 });
 
 /** Pastor changes a user's role, organizations, granted permissions or active state. */
-export const updateUser = onCall(async (request) => {
+export const updateUser = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request, 'users.manage');
   const data = (request.data ?? {}) as Record<string, unknown>;
   const uid = requireString(data.uid, 'the user');
@@ -126,7 +131,7 @@ export const updateUser = onCall(async (request) => {
 });
 
 /** Pastor sets a new temporary password; the user must change it at next sign-in. */
-export const resetUserPassword = onCall(async (request) => {
+export const resetUserPassword = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request, 'users.manage');
   const data = (request.data ?? {}) as Record<string, unknown>;
   const uid = requireString(data.uid, 'the user');
@@ -145,7 +150,7 @@ export const resetUserPassword = onCall(async (request) => {
 });
 
 /** A user replaces their temporary password. Requires a sign-in within the last 10 minutes. */
-export const changeMyPassword = onCall(async (request) => {
+export const changeMyPassword = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const authTime = Number(request.auth?.token.auth_time ?? 0);
   if (Date.now() / 1000 - authTime > 600) {
@@ -162,7 +167,7 @@ export const changeMyPassword = onCall(async (request) => {
 });
 
 /** Records a sign-in in the audit log. Called by the app right after a successful sign-in. */
-export const recordSignIn = onCall(async (request) => {
+export const recordSignIn = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   await db.doc(`users/${caller.uid}`).update({ lastSignInAt: FieldValue.serverTimestamp() });
   await writeAudit({

@@ -9,7 +9,7 @@ Built in stages. This README grows with each stage.
 | 1 | Foundation: sign-in, roles, organization switcher, installable app, offline sync, server access rules, audit log | Approved |
 | 2 | People and visitors: quick visitor form, search, profiles, duplicate check, pipeline timeline, pastoral notes | Built, awaiting approval |
 | 3 | Services and attendance: headcounts, check-in by name, door tablet mode, ADIA class register, Hope Center sessions and meals | Built, awaiting approval |
-| 4 | Programs and groups | Not started |
+| 4 | Programmes and groups: programme engine (Growth Track, Freedom 252, Communication Master Class), cohorts, class topics and mentors, automatic completion, Dream Team, Freedom Groups with missed-meeting flags | Built, awaiting approval |
 | 5 | Giving and receipts | Not started |
 | 6 | Follow-up and WhatsApp | Not started |
 | 7 | Dashboard and automatic reports | Not started |
@@ -108,6 +108,16 @@ Settings → Staff accounts → **Add**. Choose the role and organizations, and 
 ## Taking attendance
 
 Today → **Check in** (or the Attendance tab) and tap the service, class or session. Church services come from the organization's service times, and ADIA and Freedom Hope Center programmes come from its programme list (Settings → Organizations). For the entrance, open the service and tap **Door mode**: the tablet then shows only first names with an initial. Hand it back to staff to leave door mode. Full details are in [docs/stage-3.md](docs/stage-3.md).
+
+## Programmes and groups
+
+The **Programmes** tab (church campuses) has three parts:
+
+- **Discipleship programmes.** The first time, the pastor taps **Add Growth Track, Freedom 252 and Communication Master Class**. Each programme has a list of topics and a rule for finishing (every topic, or at least a set number), both editable under **Edit** with no code. A new programme is just a name and its topics. To run a class, open the programme, choose the cohort (or **Make-up class**), the topic and the mentor, and tap **Start class**; then mark the register. Progress counts every class a person attended in that programme, whatever the cohort. When the rule is met the person is marked completed (or graduated) automatically, and their journey moves on.
+- **Dream Team.** Departments with who serves, their role and start date.
+- **Freedom Groups.** Leader, meeting day, place and members. Record each week's meeting from the group page. A group with two or more meeting days in a row with nothing recorded is flagged.
+
+Full details are in [docs/stage-4.md](docs/stage-4.md).
 
 ## Using it offline
 
