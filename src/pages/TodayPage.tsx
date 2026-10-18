@@ -10,13 +10,12 @@ import { PersonRow } from '../components/PersonRow';
 
 /**
  * The home screen: search first, then the four big actions.
- * Record gift (Stage 5) and Follow-ups (Stage 6) say when they arrive
- * instead of opening an empty screen.
+ * Follow-ups (Stage 6) says when it arrives instead of opening an empty screen.
  */
 const ACTIONS = [
   { label: 'Check in', to: '/attendance', stage: 3, icon: 'M9 12l2 2 4-4M4 12a8 8 0 1 0 16 0 8 8 0 0 0-16 0' },
   { label: 'Add visitor', to: '/visitors/new', stage: 2, icon: 'M15 19a6 6 0 0 0-12 0M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M19 8v6M22 11h-6' },
-  { label: 'Record gift', to: null, stage: 5, icon: 'M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6' },
+  { label: 'Record gift', to: '/giving/new', stage: 5, icon: 'M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6' },
   { label: 'Follow-ups', to: null, stage: 6, icon: 'M21 12a8 8 0 0 1-11.8 7L3 21l2-6A8 8 0 1 1 21 12Z' },
 ] as const;
 
@@ -58,7 +57,10 @@ export function TodayPage() {
 
       <div className="big-actions">
         {ACTIONS.map((a) => {
-          const allowed = a.to === '/visitors/new' ? can('people.write') : a.to === '/attendance' ? can('attendance.write') || can('people.read') : true;
+          const allowed = a.to === '/visitors/new' ? can('people.write')
+            : a.to === '/attendance' ? can('attendance.write') || can('people.read')
+            : a.to === '/giving/new' ? can('gifts.write')
+            : true;
           const ready = a.to && organizations.length > 0 && allowed;
           return ready ? (
             <Link key={a.label} to={a.to!} className="big-action">
@@ -69,11 +71,22 @@ export function TodayPage() {
             <button key={a.label} type="button" className="big-action" disabled aria-describedby={`soon-${a.stage}`}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg>
               <span className="big-action-label">{a.label}</span>
-              <span id={`soon-${a.stage}`} className="big-action-soon">{a.to ? 'Add an organization first' : `Arrives in Stage ${a.stage}`}</span>
+              <span id={`soon-${a.stage}`} className="big-action-soon">{!a.to ? `Arrives in Stage ${a.stage}` : organizations.length === 0 ? 'Add an organization first' : 'Not part of your access'}</span>
             </button>
           );
         })}
       </div>
+
+      {organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
+        <ul className="link-list">
+          <li>
+            <Link to="/giving">
+              <span className="link-title">Giving</span>
+              <span className="link-detail">Import the M-Pesa statement, Unassigned payments, receipts and reports</span>
+            </Link>
+          </li>
+        </ul>
+      )}
 
       {!loading && organizations.length === 0 && (
         <div className="notice">

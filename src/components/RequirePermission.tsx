@@ -2,10 +2,13 @@ import type { ReactNode } from 'react';
 import { useAuth } from '../state/AuthContext';
 import type { Permission } from '../../functions/src/shared/permissions';
 
-/** Hides a screen from users without the permission. The server rules enforce the same thing. */
-export function RequirePermission({ permission, children }: { permission: Permission; children: ReactNode }) {
+type Props = { children: ReactNode } & ({ permission: Permission; anyOf?: never } | { anyOf: Permission[]; permission?: never });
+
+/** Hides a screen from users without the permission (or any of several). The server rules enforce the same thing. */
+export function RequirePermission({ permission, anyOf, children }: Props) {
   const { can } = useAuth();
-  if (!can(permission)) {
+  const allowed = permission ? can(permission) : anyOf.some((p) => can(p));
+  if (!allowed) {
     return (
       <div className="page">
         <h1>Not available</h1>

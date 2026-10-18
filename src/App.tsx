@@ -31,6 +31,14 @@ import { ProgramFormPage } from './pages/programs/ProgramFormPage';
 import { TeamPage } from './pages/programs/TeamPage';
 import { GroupPage } from './pages/programs/GroupPage';
 import { GroupFormPage } from './pages/programs/GroupFormPage';
+import { GivingPage } from './pages/giving/GivingPage';
+import { RecordGiftPage } from './pages/giving/RecordGiftPage';
+import { GiftPage } from './pages/giving/GiftPage';
+import { UnassignedPage } from './pages/giving/UnassignedPage';
+import { ImportPage } from './pages/giving/ImportPage';
+import { GivingSummaryPage } from './pages/giving/GivingSummaryPage';
+import { StatementsPage } from './pages/giving/StatementsPage';
+import { FundsPage } from './pages/settings/FundsPage';
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -77,6 +85,13 @@ function AppRoutes() {
         <Route path="/groups/:orgId/new" element={<RequirePermission permission="programs.write"><GroupFormPage /></RequirePermission>} />
         <Route path="/groups/:orgId/:groupId" element={<RequirePermission permission="people.read"><GroupPage /></RequirePermission>} />
         <Route path="/groups/:orgId/:groupId/edit" element={<RequirePermission permission="programs.write"><GroupFormPage /></RequirePermission>} />
+        <Route path="/giving" element={<RequirePermission anyOf={['gifts.write', 'finance.reports', 'giving.person.read']}><GivingPage /></RequirePermission>} />
+        <Route path="/giving/new" element={<RequirePermission permission="gifts.write"><RecordGiftPage /></RequirePermission>} />
+        <Route path="/giving/unassigned" element={<RequirePermission permission="gifts.write"><UnassignedPage /></RequirePermission>} />
+        <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
+        <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
+        <Route path="/giving/statements" element={<RequirePermission permission="giving.person.read"><StatementsPage /></RequirePermission>} />
+        <Route path="/giving/:orgId/:giftId" element={<RequirePermission anyOf={['gifts.write', 'giving.person.read']}><GiftPage /></RequirePermission>} />
         <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
         <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
@@ -85,6 +100,7 @@ function AppRoutes() {
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
+        <Route path="/settings/funds" element={<RequirePermission permission="settings.manage"><FundsPage /></RequirePermission>} />
         <Route path="/settings/device" element={<DevicePage />} />
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
