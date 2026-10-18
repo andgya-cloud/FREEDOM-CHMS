@@ -78,3 +78,8 @@ Same as Stage 3: download the new **freedom-chms.tar.gz** and **redeploy.sh**, t
 - "Missed a meeting" means no meeting was recorded in that Monday-to-Sunday week. Today's meeting doesn't count as missed until the day is over. Weeks before the group's start date are ignored.
 - Programme classes and group meetings don't count towards "Came in X of the last 8 weeks" on a person's record, which counts services only. They show on the programme and group pages instead.
 - Group meetings record who came, not a separate headcount. Guests can be added to a meeting without joining the group.
+
+## Fix after the Stage 4 deploy: signed out straight after signing in
+
+- **Cause:** on a device marked as shared, each open tab of the app timed out on its own. A tab left open and untouched signed out every tab, including the one in use, so signing in again was undone within seconds. The shared-device box was also ticked by default, so every phone and computer counted as shared.
+- **Fix:** taps and key presses in any tab now count for all tabs. The shared-device box now starts unticked, so a personal phone stays signed in. Tick it on a church computer or the door tablet. A device that already had it ticked keeps it until you untick it at sign-in or in **Settings → This device**.
