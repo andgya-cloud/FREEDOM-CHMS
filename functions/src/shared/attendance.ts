@@ -6,7 +6,7 @@ import { weekContaining, zonedMidnight } from './datetime.js';
  * (check-in screens) and later by the reports, so both count the same way.
  */
 
-export const EVENT_TYPES = ['service', 'class', 'session', 'meal'] as const;
+export const EVENT_TYPES = ['service', 'class', 'session', 'meal', 'group'] as const;
 export type EventType = (typeof EVENT_TYPES)[number];
 
 export const EVENT_TYPE_LABELS: Record<EventType, string> = {
@@ -14,6 +14,7 @@ export const EVENT_TYPE_LABELS: Record<EventType, string> = {
   class: 'Class',
   session: 'Session',
   meal: 'Meal',
+  group: 'Group meeting',
 };
 
 /** present and late count as attended; absent and excused do not. */
@@ -50,6 +51,7 @@ export const HEADCOUNT_FIELDS: Record<EventType, HeadcountKey[]> = {
   meal: ['new', 'returning'],
   session: ['total'],
   class: [],
+  group: [],
 };
 
 /**

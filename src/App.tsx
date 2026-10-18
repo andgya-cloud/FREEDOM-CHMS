@@ -25,6 +25,12 @@ import { VisitorFormPage } from './pages/people/VisitorFormPage';
 import { AttendancePage } from './pages/attendance/AttendancePage';
 import { EventPage } from './pages/attendance/EventPage';
 import { DoorModePage } from './pages/attendance/DoorModePage';
+import { ProgramsPage } from './pages/programs/ProgramsPage';
+import { ProgramPage } from './pages/programs/ProgramPage';
+import { ProgramFormPage } from './pages/programs/ProgramFormPage';
+import { TeamPage } from './pages/programs/TeamPage';
+import { GroupPage } from './pages/programs/GroupPage';
+import { GroupFormPage } from './pages/programs/GroupFormPage';
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -63,6 +69,14 @@ function AppRoutes() {
         <Route path="/" element={<TodayPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/attendance/:orgId/:eventId" element={<EventPage />} />
+        <Route path="/programs" element={<RequirePermission permission="people.read"><ProgramsPage /></RequirePermission>} />
+        <Route path="/programs/:orgId/new" element={<RequirePermission permission="settings.manage"><ProgramFormPage /></RequirePermission>} />
+        <Route path="/programs/:orgId/:programId" element={<RequirePermission permission="people.read"><ProgramPage /></RequirePermission>} />
+        <Route path="/programs/:orgId/:programId/edit" element={<RequirePermission permission="settings.manage"><ProgramFormPage /></RequirePermission>} />
+        <Route path="/teams/:orgId/:teamId" element={<RequirePermission permission="people.read"><TeamPage /></RequirePermission>} />
+        <Route path="/groups/:orgId/new" element={<RequirePermission permission="programs.write"><GroupFormPage /></RequirePermission>} />
+        <Route path="/groups/:orgId/:groupId" element={<RequirePermission permission="people.read"><GroupPage /></RequirePermission>} />
+        <Route path="/groups/:orgId/:groupId/edit" element={<RequirePermission permission="programs.write"><GroupFormPage /></RequirePermission>} />
         <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
         <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />

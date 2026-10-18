@@ -3,16 +3,21 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
-import { useEvent, useEventAttendance } from '../../state/useAttendance';
+import { useEvent, useEventAttendance, type ChurchEvent } from '../../state/useAttendance';
 import { deleteEvent, eventRef, saveEventNotes } from '../../lib/attendanceWrites';
 import { restoreRecord } from '../../lib/records';
 import { friendlyError } from '../../lib/errors';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { HeadcountEditor } from '../../components/HeadcountEditor';
 import { CheckInPanel } from '../../components/CheckInPanel';
-import { ClassRegister } from '../../components/ClassRegister';
+import { ClassRegister, type RosterSpec } from '../../components/ClassRegister';
+import { ProgramSessionPanel } from '../../components/ProgramSessionPanel';
+import { useEnrollments, useGroupMembers, useGroups, usePrograms } from '../../state/usePrograms';
+import { enrol } from '../../lib/programWrites';
 import { EVENT_TYPE_LABELS } from '../../../functions/src/shared/attendance';
-import { formatDateKey } from '../../../functions/src/shared/datetime';
+import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
+import type { Person } from '../../state/PeopleContext';
+import type { Program } from '../../state/usePrograms';
 
 /** One service, class or session: the headcount, who came, and the door tablet. */
 export function EventPage() {
@@ -27,6 +32,7 @@ export function EventPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const org = organizations.find((o) => o.id === orgId);
   const canRecord = can('attendance.write');
+  const linked = useLinkedRoster(orgId, event);
 
   useEffect(() => { setNotes(event?.notes ?? ''); }, [event?.id, event?.notes]);
 
@@ -56,13 +62,13 @@ export function EventPage() {
     const ref = eventRef(orgId, eventId);
     deleteEvent(orgId, eventId).catch((err) => toast.show(friendlyError(err)));
     toast.show(`${event!.name} deleted.`, { label: 'Undo', onAction: () => { restoreRecord(ref).catch((err) => toast.show(friendlyError(err))); } });
-    navigate('/attendance');
+    navigate(linked.back.to);
   }
 
-  const isClass = event.type === 'class';
+  const isClass = event.type === 'class' || event.type === 'group';
   return (
     <div className="page narrow">
-      <p><Link to="/attendance">← Attendance</Link></p>
+      <p><Link to={linked.back.to}>← {linked.back.label}</Link></p>
       <div className="person-head">
         <div>
           <h1>{event.name}</h1>
@@ -73,9 +79,10 @@ export function EventPage() {
         )}
       </div>
 
+      {linked.program && <ProgramSessionPanel key={event.id} orgId={orgId} event={event} program={linked.program} canEdit={canRecord} />}
       <HeadcountEditor event={event} canEdit={canRecord} />
       {isClass
-        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} />
+        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} />
         : <CheckInPanel org={org} event={event} byPerson={byPerson} canRecord={canRecord} />}
 
       <section className="card">
@@ -106,4 +113,62 @@ export function EventPage() {
       />
     </div>
   );
+}
+
+/**
+ * For a programme class or a group meeting: who belongs on the register,
+ * and where "back" goes. Ordinary services and ADIA classes get nothing extra.
+ */
+function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: RosterSpec; program?: Program; back: { to: string; label: string } } {
+  const { can } = useAuth();
+  const { organizations } = useOrg();
+  const toast = useToast();
+  const programId = event?.programId ?? '';
+  const groupId = event?.groupId ?? '';
+  const { programs } = usePrograms(programId ? orgId : '');
+  const { enrollments, all } = useEnrollments(programId ? orgId : '', { programId });
+  const { groups } = useGroups(groupId ? orgId : '');
+  const { members } = useGroupMembers(groupId ? orgId : '', { groupId });
+  const program = programs.find((p) => p.id === programId);
+  const group = groups.find((g) => g.id === groupId);
+  const tz = organizations.find((o) => o.id === orgId)?.timeZone;
+
+  if (event && program) {
+    const isMakeUp = !event.cohortId;
+    const active = enrollments.filter((e) => e.status === 'active' && (isMakeUp || e.cohortId === event.cohortId || !e.cohortId));
+    const topics = event.topicIds ?? [];
+    return {
+      program,
+      back: { to: `/programs/${orgId}/${program.id}`, label: program.name },
+      roster: {
+        ids: new Set(active.map((e) => e.personId)),
+        title: isMakeUp ? 'Make-up class register' : 'Class register',
+        empty: `Nobody is enrolled${isMakeUp ? '' : ' in this cohort'} yet. Search above to enrol someone.`,
+        // At a make-up class, show who is missing today's topic (as last counted by the server).
+        note: isMakeUp && topics.length ? (personId) => {
+          const has = new Set(enrollments.find((e) => e.personId === personId)?.topicsCovered ?? []);
+          return topics.some((t) => !has.has(t)) ? 'Needs this topic' : null;
+        } : undefined,
+        addLabel: can('programs.write') ? 'Enrol' : 'Add',
+        onAddOther: can('programs.write') ? (p: Person) => {
+          const existing = all.find((e) => e.personId === p.id);
+          if (existing && !existing.deletedAt && existing.status !== 'dropped') return;
+          enrol(orgId, program.id, p.id, event.cohortId ?? null, localDateKey(new Date(), tz), existing).catch((err) => toast.show(friendlyError(err)));
+          toast.show(`${p.fullName} enrolled in ${program.name}.`);
+        } : undefined,
+      },
+    };
+  }
+  if (event && group) {
+    return {
+      back: { to: `/groups/${orgId}/${group.id}`, label: group.name },
+      roster: {
+        ids: new Set(members.filter((m) => m.status === 'active').map((m) => m.personId)),
+        title: 'Who came',
+        empty: 'This group has no members yet. Search above to add a guest, or add members on the group page.',
+        addLabel: 'Add guest',
+      },
+    };
+  }
+  return { back: { to: '/attendance', label: 'Attendance' } };
 }

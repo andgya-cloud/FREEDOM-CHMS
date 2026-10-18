@@ -18,6 +18,17 @@ export interface NewEvent {
   activity: string | null;
 }
 
+/** A programme class or group meeting carries these too; its id comes from them. */
+export interface EventLinks {
+  id: string;
+  programId?: string;
+  cohortId?: string | null;
+  topicIds?: string[];
+  mentor?: string | null;
+  mentorId?: string | null;
+  groupId?: string;
+}
+
 export const eventRef = (orgId: string, eventId: string) => doc(db, 'organizations', orgId, 'events', eventId);
 export const attendanceRef = (orgId: string, eventId: string, personId: string) =>
   doc(db, 'organizations', orgId, 'attendance', attendanceIdFor(eventId, personId));
@@ -27,11 +38,13 @@ export const attendanceRef = (orgId: string, eventId: string, personId: string) 
  * service twice just returns the one already there.
  * Saved on the device straight away; synced when online.
  */
-export function createEvent(orgId: string, input: NewEvent): { id: string; synced: Promise<unknown> } {
-  const id = eventIdFor(input.date, input.name);
+export function createEvent(orgId: string, input: NewEvent, links?: EventLinks): { id: string; synced: Promise<unknown> } {
+  const { id: linkedId, ...linkFields } = links ?? { id: '' };
+  const id = linkedId || eventIdFor(input.date, input.name);
   const synced = trackWrite(setDoc(eventRef(orgId, id), {
     orgId,
     ...input,
+    ...linkFields,
     headcounts: {},
     notes: '',
     ...createStamps(),
@@ -55,6 +68,13 @@ export function deleteEvent(orgId: string, eventId: string) {
   return softDelete(eventRef(orgId, eventId));
 }
 
+/** A check-in carries its gathering's programme or group, so progress can be counted. */
+type Gathering = { id: string; date: string; programId?: string | null; groupId?: string | null };
+const linksOf = (event: Gathering) => ({
+  ...(event.programId ? { programId: event.programId } : {}),
+  ...(event.groupId ? { groupId: event.groupId } : {}),
+});
+
 export interface ExistingMark {
   status: AttendanceStatus;
   deletedAt: unknown;
@@ -67,7 +87,7 @@ export interface ExistingMark {
  */
 export function markAttendance(
   orgId: string,
-  event: { id: string; date: string },
+  event: Gathering,
   personId: string,
   status: AttendanceStatus,
   method: CheckInMethod,
@@ -83,6 +103,7 @@ export function markAttendance(
     eventId: event.id,
     personId,
     date: event.date,
+    ...linksOf(event),
     status,
     method,
     // The device's clock, so a check-in made offline keeps the time it happened.
@@ -99,7 +120,7 @@ export function undoAttendance(orgId: string, eventId: string, personId: string)
 /** Marks several people in one save, for "everyone else present" on a class register. */
 export function markMany(
   orgId: string,
-  event: { id: string; date: string },
+  event: Gathering,
   people: { personId: string; existing: ExistingMark | undefined }[],
   status: AttendanceStatus,
 ): Promise<unknown> {
@@ -113,7 +134,7 @@ export function markMany(
         batch.update(ref, { status, method: 'register', deletedAt: null, deletedBy: null, ...updateStamps() });
       } else {
         batch.set(ref, {
-          orgId, eventId: event.id, personId, date: event.date, status, method: 'register',
+          orgId, eventId: event.id, personId, date: event.date, ...linksOf(event), status, method: 'register',
           checkedInAt: Timestamp.now(), ...createStamps(),
         });
       }

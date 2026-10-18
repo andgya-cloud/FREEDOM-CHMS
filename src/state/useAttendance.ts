@@ -14,6 +14,14 @@ export interface ChurchEvent {
   activity: string | null;
   headcounts: Headcounts;
   notes: string;
+  /** Set on a programme class (Stage 4). */
+  programId?: string | null;
+  cohortId?: string | null;
+  topicIds?: string[];
+  mentor?: string | null;
+  mentorId?: string | null;
+  /** Set on a Freedom Group meeting. */
+  groupId?: string | null;
   deletedAt: Timestamp | null;
 }
 
@@ -26,16 +34,22 @@ export interface AttendanceMark {
   status: AttendanceStatus;
   method: CheckInMethod;
   checkedInAt: Timestamp | null;
+  programId?: string;
+  groupId?: string;
   deletedAt: Timestamp | null;
 }
 
-/** Gatherings on or after `since` (YYYY-MM-DD), newest first. Served from the device when offline. */
+/**
+ * Services, classes and sessions on or after `since` (YYYY-MM-DD), newest
+ * first. Programme classes and group meetings live on their own pages.
+ * Served from the device when offline.
+ */
 export function useEvents(orgId: string, since: string) {
   const { rows, loading } = useLiveQuery<ChurchEvent>(
     () => (orgId ? query(collection(db, 'organizations', orgId, 'events'), where('date', '>=', since)) : null),
     [orgId, since],
   );
-  const live = rows.filter((e) => !e.deletedAt).sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
+  const live = rows.filter((e) => !e.deletedAt && !e.programId && !e.groupId).sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
   return { events: live, loading };
 }
 
