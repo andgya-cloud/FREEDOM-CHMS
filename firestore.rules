@@ -807,7 +807,7 @@ service cloud.firestore {
         allow read: if schoolRead();
         allow create, update: if orgWrite(orgId, 'people.write')
           && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'intakeId', 'level', 'status', 'admissionNo', 'sponsors',
-               'enrolledOn', 'withdrawnOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'enrolledOn', 'withdrawnOn', 'graduatedOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', studentId)
           && existsInOrg('courses', request.resource.data.courseId)
           && existsInOrg('intakes', request.resource.data.intakeId)

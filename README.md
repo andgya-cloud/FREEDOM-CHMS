@@ -99,7 +99,7 @@ GOOGLE_APPLICATION_CREDENTIALS=./service-account.json \
 
 ## Add a campus
 
-Settings → Organizations → **Add**. Fill in the name, type and receipt prefix and save. No code change is needed. Only accounts that can see every organization (the pastor) can add one, so nobody creates a campus they can't open.
+Settings → Organizations → **Add**. Fill in the name, type and receipt prefix and save. A type of College gets the School screens. No code change is needed. Only accounts that can see every organization (the pastor) can add one, so nobody creates a campus they can't open.
 
 ## Add staff
 
@@ -150,6 +150,18 @@ Staff can add their own from a person's record. Give each one to a staff member.
 - Salvation and baptism follow-ups are for the pastor and staff with pastoral access only.
 
 Full details are in [docs/stage-6.md](docs/stage-6.md).
+
+## ADIA Training Centre
+
+Pick the ADIA college at the top, then open **School** (it replaces the Programmes tab for a college).
+
+- **Set up** (overview page, pastor): adds the four programmes from the brief (Food and Beverage Production, Dressmaking & Tailoring, ICT, Beauty Therapy & Cosmetology), the grading settings and a *School fees* fund. Levels, units, trainers, timetables and intakes (with places) are entered by the school under **Courses**.
+- **Students**: enrol (existing person or new), with programme, intake, level, status and up to four sponsors or guardians. The admission number (for example `ADIA/2026/0042`) is made by the server. ID or passport numbers are pastor-only.
+- **Attendance**: Attendance → tap the programme name. The register lists that programme's enrolled students (works offline). Attendance % per student, and an alert list below the threshold (75% until changed in School settings).
+- **Results**: add assessments (continuous, practical, exam) per unit, enter marks, grades follow the editable scale. Report card and transcript PDFs on the student page. The exam candidate list is a spreadsheet until the exam body's template is supplied.
+- **Fees**: fee structure per programme and intake, bill the intake (safe to repeat), record a payment from the student page (it is a gift in the *School fees* fund with the next ADIA receipt number), arrears list, fee statement PDF, WhatsApp reminder to a sponsor who agreed to WhatsApp (otherwise a Call button).
+- **Graduation**: issue a certificate (serial `ADIA-CERT-2026-0007`), certificate register, and follow-ups at 3, 6 and 12 months.
+- **Reports** (pastor and finance staff): weekly attendance and alerts report and monthly enrolment, results and fee report, made on schedule (Monday and the 1st, 07:00) and on request, with PDF.
 
 ## Dashboard and reports
 

@@ -9,16 +9,16 @@ import type { Gift } from '../state/useGiving';
  * work offline. They can be shared to WhatsApp from a phone or printed.
  */
 
-async function newPdf(format: 'a5' | 'a4'): Promise<JsPdf> {
+export async function newPdf(format: 'a5' | 'a4'): Promise<JsPdf> {
   const { jsPDF } = await import('jspdf');
   return new jsPDF({ unit: 'mm', format });
 }
 
-const GOLD: [number, number, number] = [176, 137, 52];
-const INK: [number, number, number] = [30, 30, 30];
-const GREY: [number, number, number] = [110, 110, 110];
+export const GOLD: [number, number, number] = [176, 137, 52];
+export const INK: [number, number, number] = [30, 30, 30];
+export const GREY: [number, number, number] = [110, 110, 110];
 
-function header(pdf: JsPdf, org: Organization, title: string) {
+export function header(pdf: JsPdf, org: Organization, title: string) {
   const w = pdf.internal.pageSize.getWidth();
   pdf.setFillColor(...GOLD);
   pdf.rect(0, 0, w, 4, 'F');

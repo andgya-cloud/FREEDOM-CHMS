@@ -102,3 +102,23 @@ export function saveTemplates(templates: MessageTemplate[], exists: boolean) {
     : trackWrite(setDoc(ref, { templates: clean, ...createStamps() }));
 }
 
+
+/** Records a message to a student's sponsor or guardian (who has no record of their own). */
+export function logSponsorMessage(input: { orgId: string; studentId: string; sponsorName: string; template: MessageTemplate; senderName: string }) {
+  return trackWrite(setDoc(doc(collection(db, 'organizations', input.orgId, 'messages')), {
+    orgId: input.orgId,
+    personId: input.studentId,
+    toPersonId: input.studentId,
+    toName: input.sponsorName.slice(0, 80),
+    viaGuardian: true,
+    channel: 'whatsapp',
+    templateId: input.template.id,
+    templateName: input.template.name.slice(0, 80),
+    followUpId: null,
+    giftId: null,
+    sensitive: false,
+    senderName: input.senderName.slice(0, 80),
+    createdAt: serverTimestamp(),
+    createdBy: me(),
+  }));
+}

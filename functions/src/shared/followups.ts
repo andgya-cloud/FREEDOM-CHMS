@@ -86,6 +86,9 @@ export const MERGE_FIELDS: { key: string; meaning: string }[] = [
   { key: 'amount', meaning: 'the amount, for example KES 1,000' },
   { key: 'fund', meaning: 'the fund, for example Tithes' },
   { key: 'date', meaning: 'the date of the gift' },
+  { key: 'student_name', meaning: "the student's first name, when writing to a sponsor or guardian" },
+  { key: 'paybill', meaning: 'the M-Pesa Paybill number' },
+  { key: 'account', meaning: 'the account to type when paying, for example ADIA#Fees' },
 ];
 
 /** The starting templates. The pastor can edit them in Settings; these are used until then. */
@@ -124,6 +127,11 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     id: 'giving_receipt',
     name: 'Giving receipt',
     body: 'Hi {first_name}, thank you for your giving to {campus}. We received {amount} for {fund} on {date}. Receipt number {receipt_number}. God bless you.',
+  },
+  {
+    id: 'fee_reminder',
+    name: 'School fee reminder',
+    body: 'Hello {first_name}, this is {staff_name} from {campus}. A gentle reminder that {student_name} has a school fee balance of {amount}. You can pay by M-Pesa Paybill {paybill}, account {account}. Thank you, and God bless you.',
   },
 ];
 

@@ -47,6 +47,16 @@ const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => (
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
 const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
+const SchoolHome = lazy(() => import('./pages/school/SchoolHome').then((m) => ({ default: m.SchoolHome })));
+const StudentsPage = lazy(() => import('./pages/school/StudentsPage').then((m) => ({ default: m.StudentsPage })));
+const EnrolPage = lazy(() => import('./pages/school/EnrolPage').then((m) => ({ default: m.EnrolPage })));
+const StudentPage = lazy(() => import('./pages/school/StudentPage').then((m) => ({ default: m.StudentPage })));
+const CoursesPage = lazy(() => import('./pages/school/CoursesPage').then((m) => ({ default: m.CoursesPage })));
+const ResultsPage = lazy(() => import('./pages/school/ResultsPage').then((m) => ({ default: m.ResultsPage })));
+const FeesPage = lazy(() => import('./pages/school/FeesPage').then((m) => ({ default: m.FeesPage })));
+const GraduationPage = lazy(() => import('./pages/school/GraduationPage').then((m) => ({ default: m.GraduationPage })));
+const SchoolReportsPage = lazy(() => import('./pages/school/SchoolReportsPage').then((m) => ({ default: m.SchoolReportsPage })));
+const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage').then((m) => ({ default: m.SchoolSettingsPage })));
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -112,6 +122,16 @@ function AppRoutes() {
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId" element={<RequirePermission permission="people.read"><PersonPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId/edit" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
+        <Route path="/school" element={<RequirePermission permission="people.read"><SchoolHome /></RequirePermission>} />
+        <Route path="/school/students" element={<RequirePermission permission="people.read"><StudentsPage /></RequirePermission>} />
+        <Route path="/school/students/new" element={<RequirePermission permission="people.write"><EnrolPage /></RequirePermission>} />
+        <Route path="/school/students/:studentId" element={<RequirePermission permission="people.read"><StudentPage /></RequirePermission>} />
+        <Route path="/school/courses" element={<RequirePermission permission="people.read"><CoursesPage /></RequirePermission>} />
+        <Route path="/school/results" element={<RequirePermission permission="people.read"><ResultsPage /></RequirePermission>} />
+        <Route path="/school/fees" element={<RequirePermission anyOf={['gifts.write', 'finance.reports', 'giving.person.read']}><FeesPage /></RequirePermission>} />
+        <Route path="/school/graduation" element={<RequirePermission permission="people.read"><GraduationPage /></RequirePermission>} />
+        <Route path="/school/reports" element={<RequirePermission anyOf={['finance.reports', 'settings.manage']}><SchoolReportsPage /></RequirePermission>} />
+        <Route path="/school/settings" element={<RequirePermission permission="settings.manage"><SchoolSettingsPage /></RequirePermission>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />

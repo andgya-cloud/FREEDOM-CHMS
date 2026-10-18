@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveQuery } from '../lib/useQuery';
 import { ESTIMATE } from '../lib/firestoreOptions';
-import { withDefaults, type Assessment, type ClassEvent, type ClassRecord, type Course, type Intake, type Invoice, type Mark, type OutcomeStatus, type SchoolSettings, type Student } from '../../functions/src/shared/school';
+import { withDefaults, type FeeItem, type Assessment, type ClassEvent, type ClassRecord, type Course, type Intake, type Invoice, type Mark, type OutcomeStatus, type SchoolSettings, type Student } from '../../functions/src/shared/school';
 
 export interface StudentRow extends Student {
   orgId: string;
@@ -19,6 +19,7 @@ export interface CourseRow extends Course { orgId: string }
 export interface IntakeRow extends Intake { orgId: string }
 export interface InvoiceRow extends Invoice { orgId: string; voidReason?: string; createdAt?: Timestamp }
 export interface BalanceRow { id: string; studentId: string; billedCents: number; paidCents: number; balanceCents: number; oldestDue: string | null }
+export interface FeeStructureRow { id: string; courseId: string; intakeId: string; items: FeeItem[]; deletedAt?: unknown }
 export interface CertificateRow { id: string; studentId: string; courseId: string; issuedOn: string; serial?: string }
 export interface OutcomeRow { id: string; studentId: string; months: number; due: string; status: OutcomeStatus | null; note: string; recordedOn: string | null }
 
@@ -43,6 +44,7 @@ export function useSchool(orgId: string) {
   const marks = useLiveQuery<Mark & { id: string }>(() => (on ? col(orgId, 'marks') : null), [orgId, on]);
   const invoices = useLiveQuery<InvoiceRow>(() => (on && feesAllowed ? col(orgId, 'invoices') : null), [orgId, on, feesAllowed]);
   const balances = useLiveQuery<BalanceRow>(() => (on && feesAllowed ? col(orgId, 'feeBalances') : null), [orgId, on, feesAllowed]);
+  const structures = useLiveQuery<FeeStructureRow>(() => (on && feesAllowed ? col(orgId, 'feeStructures') : null), [orgId, on, feesAllowed]);
   const certificates = useLiveQuery<CertificateRow>(() => (on ? col(orgId, 'certificates') : null), [orgId, on]);
   const outcomes = useLiveQuery<OutcomeRow & { deletedAt?: unknown }>(() => (on ? col(orgId, 'outcomes') : null), [orgId, on]);
   const events = useLiveQuery<ClassEvent>(() => (on ? query(col(orgId, 'events'), where('type', '==', 'class')) : null), [orgId, on]);
@@ -67,6 +69,7 @@ export function useSchool(orgId: string) {
     marks: live(marks.rows),
     invoices: live(invoices.rows),
     balances: balances.rows,
+    structures: live(structures.rows),
     certificates: certificates.rows,
     outcomes: live(outcomes.rows),
     events: live(events.rows),
