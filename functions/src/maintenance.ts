@@ -2,8 +2,9 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from './common.js';
+import { DEFAULT_RETENTION_DAYS, retentionDays } from './shared/dataset.js';
 
-export const SOFT_DELETE_RETENTION_DAYS = 30;
+export const SOFT_DELETE_RETENTION_DAYS = DEFAULT_RETENTION_DAYS;
 
 /**
  * Every night, permanently removes records that were deleted more than 30 days ago.
@@ -16,7 +17,8 @@ export const purgeDeletedRecords = onSchedule(
   // Cloud Scheduler isn't offered in africa-south1, so this job runs from Europe.
   { schedule: 'every day 02:30', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1' },
   async () => {
-    const cutoff = Timestamp.fromMillis(Date.now() - SOFT_DELETE_RETENTION_DAYS * 86_400_000);
+    const days = retentionDays((await db.doc('settings/retention').get()).get('deletedDays'));
+    const cutoff = Timestamp.fromMillis(Date.now() - days * 86_400_000);
     let purged = 0;
 
     for (const name of PURGE_COLLECTIONS) {

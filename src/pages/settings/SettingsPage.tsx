@@ -10,7 +10,9 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { to: '/settings/templates', label: 'WhatsApp messages', detail: 'The words for welcomes, check-ins, care and receipts', permission: 'settings.manage' },
   { to: '/settings/reports', label: 'Reports', detail: 'Regular attenders, who gets reports by email, giving budget', permission: 'settings.manage' },
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', permission: 'users.manage' },
+  { to: '/settings/data', label: 'Data and backups', detail: 'Weekly backup, download everything, one person’s data, practice mode', permission: 'data.export' },
   { to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },
+  { to: '/help', label: 'Help', detail: 'How to do the everyday jobs' },
   { to: '/settings/device', label: 'This device', detail: 'Install, sync, theme and sign-out' },
 ];
 

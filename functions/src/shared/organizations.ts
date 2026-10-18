@@ -39,3 +39,9 @@ export function suggestReceiptPrefix(name: string): string {
     .join('');
   return letters.slice(0, 6);
 }
+
+/** The practice organization holds sample data only. It is left out of reports, backups, exports and combined views. */
+export const TRAINING_ORG_ID = 'training';
+export function isTraining(org: { id?: string; training?: boolean | null }): boolean {
+  return org.training === true || org.id === TRAINING_ORG_ID;
+}

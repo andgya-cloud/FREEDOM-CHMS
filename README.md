@@ -172,9 +172,31 @@ The numbers are worked out in `functions/src/shared/metrics.ts` (tested in `metr
 - **iPhone and iPad**: add the app to the Home Screen (Share → Add to Home Screen) and open it online regularly. Safari can clear offline data for sites that are not on the Home Screen.
 - Staff accounts, password resets and the audit log need internet.
 
-## Backups
+## Backups, exports and erasing
 
-Automatic weekly export to Google Drive and a "download everything" button arrive in Stage 8. Until then, use Firestore's managed export (`gcloud firestore export`) if you put real data in.
+**Weekly backup.** Every Sunday at 23:00 Nairobi time the `weeklyBackup` function saves every record (people, attendance, giving, notes, follow-ups, settings, staff accounts, the audit log) as one compressed JSON file, `backups/freedom-chms-YYYY-MM-DD.json.gz`, in the project's Firebase Storage bucket. The last 12 are kept. The result shows in **Settings → Data and backups**. The practice organization is left out. Nobody can reach the bucket from the app (`storage.rules` denies everything); only the pastor, through the Firebase console, can download a file.
+
+*One-time setup:* Firebase console → Build → Storage → Get started (choose the same location as the database). Then run `npx firebase deploy --only storage` so `storage.rules` replaces the starting rules. `scripts/redeploy.sh` does this for you and carries on if Storage is not switched on yet.
+
+**To restore:** download the latest file from Storage, unzip it, and ask your developer to load the records back (or the pastor can use Firestore's own backups as well; see below). A restore is never automatic.
+
+**Also switch on Firestore's own daily backups (recommended).** Firebase console → Firestore → Disaster recovery → Backups → schedule a daily backup (7 days) and weekly (14 weeks).
+
+**Download everything.** Settings → Data and backups → Download everything. One JSON file with every organization's records (pastor only; each download is logged in the audit log, and the file is made only after the server has logged it).
+
+**One person's data.** The same page can download everything held about one person, or erase them. Erasing removes their record, attendance, notes, prayer requests, follow-ups, messages, journey, programme, team and group records for good. Gifts and receipts stay in the accounts, but lose the person's name, phone and link. Others' links to them (a child's guardian, who invited whom) are cleared. A backup may still hold them until it ages out after 12 weeks.
+
+**Keeping deleted records.** Deleted records are kept 30 days, then removed every night at 02:30. The pastor can change this between 7 and 365 days on the same page.
+
+**Training (practice) mode.** *Set up practice mode* creates an organization called "Practice Church (training)" with made-up people, four Sunday services and check-ins. *Reset the practice data* wipes it and fills it again. It is skipped by reports, backups, downloads and the combined "All organizations" view, so it never mixes with real records. Give a staff member access to it in Staff accounts to let them practise.
+
+## Help
+
+The built-in **Help** page (Settings → Help) explains the everyday jobs in plain words. Edit the topics in `src/pages/HelpPage.tsx`.
+
+## Two-step sign-in
+
+Not built in yet. Firebase's two-step sign-in needs the project upgraded to Identity Platform (which adds a monthly cost after 50,000 users, none for a church) and an authenticator app or SMS. Ask for it when you want it.
 
 ## Before going live
 

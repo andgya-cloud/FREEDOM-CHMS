@@ -10,13 +10,16 @@ cd freedom-chms
 echo "Installing (only changes are downloaded)..."
 npm install --no-audit --no-fund && npm --prefix functions install --no-audit --no-fund
 npm run build
-# Stage 7: the report jobs. Each new one goes on its own (a new job named in a
-# longer list was once skipped without a message), so they are ready before
-# the new screens arrive.
-npx firebase deploy --project freedom-chms --only functions:onReportRequested
-npx firebase deploy --project freedom-chms --only functions:scheduledReports
-# The morning follow-ups job now uses the regular-attender setting.
-npx firebase deploy --project freedom-chms --only functions:dailyFollowUps
-# Then the rules that protect reports, the new index, and the app itself.
+# Stage 8: the data jobs (download/erase/practice requests, and the weekly backup).
+# Each new one goes on its own (a new job named in a longer list was once skipped without a message).
+npx firebase deploy --project freedom-chms --only functions:onDataRequested
+npx firebase deploy --project freedom-chms --only functions:weeklyBackup
+# The nightly clean-up now follows the "keep deleted records" setting. It runs in Europe because
+# Cloud Scheduler is not offered in Africa, so deploy it by name.
+npx firebase deploy --project freedom-chms --only functions:purgeDeletedRecords || echo "(The nightly clean-up was not updated. Tell Claude.)"
+# Then the rules, and the app itself.
 npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting
+# Backups need Firebase Storage. If you have switched it on, lock its rules now. If not, this
+# only prints a note; switch Storage on later and run this script again.
+npx firebase deploy --project freedom-chms --only storage || echo "(Storage is not switched on yet, so there is no backup place. See README: Backups.)"
 echo "Done: https://freedom-chms.web.app"

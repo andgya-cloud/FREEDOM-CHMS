@@ -13,6 +13,7 @@ import {
   type MetricsInput,
   type ReportType,
 } from './shared/metrics.js';
+import { isTraining } from './shared/organizations.js';
 import { buildReport, reportFileName, reportPdf, reportsDue, type GivingPart, type PastoralPart, type ReportDoc } from './shared/reports.js';
 
 const SYSTEM = 'system';
@@ -214,7 +215,7 @@ export async function runScheduledReports(now = new Date()): Promise<string[]> {
   const made: string[] = [];
   const orgs = await db.collection('organizations').where('type', '==', 'church_campus').get();
   for (const org of orgs.docs) {
-    if (org.get('deletedAt') != null || org.get('active') === false) continue;
+    if (org.get('deletedAt') != null || org.get('active') === false || isTraining({ id: org.id, training: org.get('training') })) continue;
     const today = todayIn((org.get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE, now);
     for (const { type, period } of reportsDue(today)) {
       const id = reportId(type, period.from);
