@@ -1,0 +1,11 @@
+rules_version = '2';
+
+// Nothing in Storage is reachable from the app. Weekly backups are written and
+// cleaned up by a Cloud Function (the Admin SDK ignores these rules).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

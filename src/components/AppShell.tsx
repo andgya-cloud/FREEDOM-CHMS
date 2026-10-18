@@ -4,10 +4,12 @@ import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
 import { InstallBanner } from './InstallBanner';
 import { usingEmulators } from '../firebase';
+import { useOrg } from '../state/OrgContext';
 import { useTemplates } from '../state/useFollowUps';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
+  const { current } = useOrg();
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
   useTemplates();
   return (
@@ -21,6 +23,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <SyncBadge />
       </header>
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}
+      {current?.training && <div className="dev-ribbon" role="status">Practice mode. Everything here is made up and is never mixed with real records.</div>}
       <InstallBanner />
       <main className="main">{children}</main>
       <nav className="tabbar" aria-label="Main">

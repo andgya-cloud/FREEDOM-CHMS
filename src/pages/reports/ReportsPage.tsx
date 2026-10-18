@@ -120,7 +120,7 @@ function MakeReport({ org }: { org: Organization }) {
 function CampusComparison() {
   const { profile } = useAuth();
   const { organizations } = useOrg();
-  const campuses = organizations.filter((o) => o.type === 'church_campus' && o.active !== false);
+  const campuses = organizations.filter((o) => o.type === 'church_campus' && o.active !== false && !o.training);
   const [latest, setLatest] = useState<Record<string, StoredReport | null>>({});
   const onReport = useCallback((orgId: string, r: StoredReport | null) => setLatest((m) => (m[orgId] === r ? m : { ...m, [orgId]: r })), []);
   if (!profile?.allOrgs || campuses.length < 2) return null;

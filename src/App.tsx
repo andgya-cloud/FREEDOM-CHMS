@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { Suspense, lazy, useCallback } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './state/AuthContext';
 import { useAppSettings } from './state/useAppSettings';
@@ -9,42 +9,44 @@ import { SignInPage } from './pages/SignInPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { TodayPage } from './pages/TodayPage';
 import { NotFoundPage } from './pages/NotFoundPage';
-import { SettingsPage } from './pages/settings/SettingsPage';
-import { OrganizationsPage } from './pages/settings/OrganizationsPage';
-import { OrganizationFormPage } from './pages/settings/OrganizationFormPage';
-import { UsersPage } from './pages/settings/UsersPage';
-import { UserFormPage } from './pages/settings/UserFormPage';
-import { AuditLogPage } from './pages/settings/AuditLogPage';
-import { DevicePage } from './pages/settings/DevicePage';
-import { PipelineSettingsPage } from './pages/settings/PipelineSettingsPage';
-import { CustomFieldsPage } from './pages/settings/CustomFieldsPage';
-import { PeoplePage } from './pages/people/PeoplePage';
-import { PersonPage } from './pages/people/PersonPage';
-import { PersonFormPage } from './pages/people/PersonFormPage';
-import { VisitorFormPage } from './pages/people/VisitorFormPage';
-import { AttendancePage } from './pages/attendance/AttendancePage';
-import { EventPage } from './pages/attendance/EventPage';
-import { DoorModePage } from './pages/attendance/DoorModePage';
-import { ProgramsPage } from './pages/programs/ProgramsPage';
-import { ProgramPage } from './pages/programs/ProgramPage';
-import { ProgramFormPage } from './pages/programs/ProgramFormPage';
-import { TeamPage } from './pages/programs/TeamPage';
-import { GroupPage } from './pages/programs/GroupPage';
-import { GroupFormPage } from './pages/programs/GroupFormPage';
-import { GivingPage } from './pages/giving/GivingPage';
-import { RecordGiftPage } from './pages/giving/RecordGiftPage';
-import { GiftPage } from './pages/giving/GiftPage';
-import { UnassignedPage } from './pages/giving/UnassignedPage';
-import { ImportPage } from './pages/giving/ImportPage';
-import { GivingSummaryPage } from './pages/giving/GivingSummaryPage';
-import { StatementsPage } from './pages/giving/StatementsPage';
-import { FundsPage } from './pages/settings/FundsPage';
-import { TemplatesPage } from './pages/settings/TemplatesPage';
-import { FollowUpsPage } from './pages/followups/FollowUpsPage';
-import { RemindersPage } from './pages/followups/RemindersPage';
-import { ReportsPage } from './pages/reports/ReportsPage';
-import { ReportPage } from './pages/reports/ReportPage';
-import { ReportSettingsPage } from './pages/settings/ReportSettingsPage';
+const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const OrganizationsPage = lazy(() => import('./pages/settings/OrganizationsPage').then((m) => ({ default: m.OrganizationsPage })));
+const OrganizationFormPage = lazy(() => import('./pages/settings/OrganizationFormPage').then((m) => ({ default: m.OrganizationFormPage })));
+const UsersPage = lazy(() => import('./pages/settings/UsersPage').then((m) => ({ default: m.UsersPage })));
+const UserFormPage = lazy(() => import('./pages/settings/UserFormPage').then((m) => ({ default: m.UserFormPage })));
+const AuditLogPage = lazy(() => import('./pages/settings/AuditLogPage').then((m) => ({ default: m.AuditLogPage })));
+const DevicePage = lazy(() => import('./pages/settings/DevicePage').then((m) => ({ default: m.DevicePage })));
+const PipelineSettingsPage = lazy(() => import('./pages/settings/PipelineSettingsPage').then((m) => ({ default: m.PipelineSettingsPage })));
+const CustomFieldsPage = lazy(() => import('./pages/settings/CustomFieldsPage').then((m) => ({ default: m.CustomFieldsPage })));
+const PeoplePage = lazy(() => import('./pages/people/PeoplePage').then((m) => ({ default: m.PeoplePage })));
+const PersonPage = lazy(() => import('./pages/people/PersonPage').then((m) => ({ default: m.PersonPage })));
+const PersonFormPage = lazy(() => import('./pages/people/PersonFormPage').then((m) => ({ default: m.PersonFormPage })));
+const VisitorFormPage = lazy(() => import('./pages/people/VisitorFormPage').then((m) => ({ default: m.VisitorFormPage })));
+const AttendancePage = lazy(() => import('./pages/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage })));
+const EventPage = lazy(() => import('./pages/attendance/EventPage').then((m) => ({ default: m.EventPage })));
+const DoorModePage = lazy(() => import('./pages/attendance/DoorModePage').then((m) => ({ default: m.DoorModePage })));
+const ProgramsPage = lazy(() => import('./pages/programs/ProgramsPage').then((m) => ({ default: m.ProgramsPage })));
+const ProgramPage = lazy(() => import('./pages/programs/ProgramPage').then((m) => ({ default: m.ProgramPage })));
+const ProgramFormPage = lazy(() => import('./pages/programs/ProgramFormPage').then((m) => ({ default: m.ProgramFormPage })));
+const TeamPage = lazy(() => import('./pages/programs/TeamPage').then((m) => ({ default: m.TeamPage })));
+const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({ default: m.GroupPage })));
+const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
+const GivingPage = lazy(() => import('./pages/giving/GivingPage').then((m) => ({ default: m.GivingPage })));
+const RecordGiftPage = lazy(() => import('./pages/giving/RecordGiftPage').then((m) => ({ default: m.RecordGiftPage })));
+const GiftPage = lazy(() => import('./pages/giving/GiftPage').then((m) => ({ default: m.GiftPage })));
+const UnassignedPage = lazy(() => import('./pages/giving/UnassignedPage').then((m) => ({ default: m.UnassignedPage })));
+const ImportPage = lazy(() => import('./pages/giving/ImportPage').then((m) => ({ default: m.ImportPage })));
+const GivingSummaryPage = lazy(() => import('./pages/giving/GivingSummaryPage').then((m) => ({ default: m.GivingSummaryPage })));
+const StatementsPage = lazy(() => import('./pages/giving/StatementsPage').then((m) => ({ default: m.StatementsPage })));
+const FundsPage = lazy(() => import('./pages/settings/FundsPage').then((m) => ({ default: m.FundsPage })));
+const TemplatesPage = lazy(() => import('./pages/settings/TemplatesPage').then((m) => ({ default: m.TemplatesPage })));
+const FollowUpsPage = lazy(() => import('./pages/followups/FollowUpsPage').then((m) => ({ default: m.FollowUpsPage })));
+const RemindersPage = lazy(() => import('./pages/followups/RemindersPage').then((m) => ({ default: m.RemindersPage })));
+const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
+const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => ({ default: m.ReportPage })));
+const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
+const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
+const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -68,17 +70,20 @@ export function App() {
   if (profile.mustChangePassword) return <ChangePasswordPage />;
 
   return (
+    <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
     <Routes>
       {/* The door tablet fills the screen, without the menus. */}
       <Route path="/door/:orgId/:eventId" element={<RequirePermission permission="attendance.write"><DoorModePage /></RequirePermission>} />
       <Route path="*" element={<AppRoutes />} />
     </Routes>
+    </Suspense>
   );
 }
 
 function AppRoutes() {
   return (
     <AppShell>
+      <Suspense fallback={<p className="muted" aria-busy="true">Loading…</p>}>
       <Routes>
         <Route path="/" element={<TodayPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
@@ -120,10 +125,13 @@ function AppRoutes() {
         <Route path="/settings/users" element={<RequirePermission permission="users.manage"><UsersPage /></RequirePermission>} />
         <Route path="/settings/users/new" element={<RequirePermission permission="users.manage"><UserFormPage /></RequirePermission>} />
         <Route path="/settings/users/:uid" element={<RequirePermission permission="users.manage"><UserFormPage /></RequirePermission>} />
+        <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
+        <Route path="/help" element={<HelpPage />} />
         <Route path="/settings/audit" element={<RequirePermission permission="audit.read"><AuditLogPage /></RequirePermission>} />
         <Route path="/sign-in" element={<Navigate to="/" replace />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
+      </Suspense>
     </AppShell>
   );
 }

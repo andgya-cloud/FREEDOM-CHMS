@@ -57,7 +57,8 @@ const PeopleContext = createContext<PeopleValue | null>(null);
  */
 export function PeopleProvider({ children }: { children: ReactNode }) {
   const { can } = useAuth();
-  const { currentId, isCombined } = useOrg();
+  const { currentId, isCombined, organizations } = useOrg();
+  const practiceIds = organizations.filter((o) => o.training).map((o) => o.id).join(',');
   const [people, setPeople] = useState<Person[]>([]);
   const [loading, setLoading] = useState(true);
   const allowed = can('people.read');
@@ -71,10 +72,12 @@ export function PeopleProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const source = isCombined ? collectionGroup(db, 'people') : collection(db, 'organizations', currentId, 'people');
     return onSnapshot(source, { includeMetadataChanges: false }, (snap) => {
-      setPeople(snap.docs.map((d) => ({ id: d.id, ...d.data(ESTIMATE) }) as Person));
+      const rows = snap.docs.map((d) => ({ id: d.id, ...d.data(ESTIMATE) }) as Person);
+      // Practice people never mix into the combined view.
+      setPeople(isCombined ? rows.filter((p) => !practiceIds.split(',').includes(p.orgId)) : rows);
       setLoading(false);
     }, () => setLoading(false));
-  }, [allowed, currentId, isCombined]);
+  }, [allowed, currentId, isCombined, practiceIds]);
 
   const value = useMemo<PeopleValue>(() => {
     const live = people.filter((p) => !p.deletedAt).sort((a, b) => a.fullName.localeCompare(b.fullName));

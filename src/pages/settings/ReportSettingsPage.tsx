@@ -91,7 +91,7 @@ export function ReportSettingsPage() {
       <section className="card stack">
         <h2>Giving budget (optional)</h2>
         <p className="small muted">A monthly budget shows giving against budget in the pastor's copy. Weekly reports use a week's share (12 months ÷ 52 weeks).</p>
-        {organizations.filter((o) => o.type === 'church_campus').map((o) => (
+        {organizations.filter((o) => o.type === 'church_campus' && !o.training).map((o) => (
           <label key={o.id} className="field">
             <span>{o.name}, per month ({o.currency || 'KES'})</span>
             <input inputMode="decimal" value={budgets[o.id] ?? ''} placeholder="No budget" onChange={(e) => touch(setBudgets)({ ...budgets, [o.id]: e.target.value })} />

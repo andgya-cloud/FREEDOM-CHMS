@@ -18,6 +18,8 @@ export interface Organization {
   /** Programmes run by a college or ministry (classes, sessions, meals). */
   activities?: string[];
   active: boolean;
+  /** The practice organization: sample data only. */
+  training?: boolean;
   deletedAt: Timestamp | null;
   createdAt?: Timestamp;
 }
@@ -81,7 +83,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     if (currentId === ALL_ORGS && !canCombine) currentId = '';
     if (currentId !== ALL_ORGS && !live.some((o) => o.id === currentId)) {
       // Nothing chosen yet on this device: start on a church campus if there is one.
-      currentId = (live.find((o) => o.type === 'church_campus') ?? live[0])?.id ?? '';
+      currentId = (live.find((o) => o.type === 'church_campus' && !o.training) ?? live[0])?.id ?? '';
     }
     return {
       organizations: live,

@@ -105,7 +105,7 @@ service cloud.firestore {
     function validOrganization() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'type', 'parentId', 'timeZone', 'currency', 'receiptPrefix',
-               'serviceTimes', 'activities', 'active', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'serviceTimes', 'activities', 'active', 'training', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 120
         && d.type in ['church_campus', 'college', 'ministry']
         && (d.parentId == null || d.parentId is string)
@@ -741,6 +741,24 @@ service cloud.firestore {
           && request.resource.data.status == 'pending'
           && request.resource.data.email is bool
           && (request.resource.data.email == false || has('settings.manage'))
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
+      // "Download everything", one person's export and erasing one person. A Cloud
+      // Function checks the pastor again, does the erasing, logs it and marks it done.
+      match /dataRequests/{requestId} {
+        allow read: if canAccessOrg(orgId) && has('data.export');
+        allow create: if canAccessOrg(orgId) && has('data.export')
+          && request.resource.data.keys().hasOnly(['orgId', 'kind', 'personId', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.kind in ['export_all', 'export_person', 'erase_person', 'reset_training']
+          && (request.resource.data.kind == 'reset_training' ? orgId == 'training' : true)
+          && (request.resource.data.kind in ['export_all', 'reset_training']
+              ? request.resource.data.personId == null
+              : (request.resource.data.personId is string && existsInOrg('people', request.resource.data.personId)))
+          && request.resource.data.status == 'pending'
           && request.resource.data.createdBy == request.auth.uid
           && request.resource.data.createdAt == request.time;
         allow update, delete: if false;
