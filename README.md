@@ -119,6 +119,19 @@ The **Programmes** tab (church campuses) has three parts:
 
 Full details are in [docs/stage-4.md](docs/stage-4.md).
 
+## Giving and receipts
+
+Open **Giving** from Today (or **Record gift** for one gift). First, the pastor adds the funds: Settings → Funds → **Add Tithes and Offerings**, then any others, such as Building, with other spellings people type.
+
+- **One gift** (cash, bank, cheque, or an M-Pesa payment from the SMS): amount, date, fund, who gave, and the M-Pesa code for M-Pesa. Save, then **Share receipt** (WhatsApp) or **Print**.
+- **The Paybill 222118 statement**: download it from the M-Pesa portal as Excel (.xlsx) or CSV and import it. Payments already in the app (same M-Pesa code) are skipped, the fund comes from the text after # in the account (FCC#Tithes), and the person is suggested from the phone number and name for staff to confirm. The rest go to **Unassigned**. The import ends by checking that the statement total equals what is already in the app plus what was imported.
+- **Receipts** are numbered by the server per organization and year, for example FCN-2026-000123, in order, never reused. A gift saved offline shows a provisional number until it syncs. Amounts, dates and codes can't be edited: a mistake is voided with a reason (the record and its number stay, marked void) and entered again.
+- **Monthly summary** (finance staff): totals by fund and method, and the check against the statement, listing any payment on one side but not the other.
+- **Giving statements** (the pastor): from a person's record for any dates, or for everyone at once from Giving → Giving statements (last year's, in January).
+- Per-person giving is visible only to the pastor and staff given "Giving history per person". Other staff see only the gifts they recorded and the Unassigned list.
+
+Full details are in [docs/stage-5.md](docs/stage-5.md).
+
 ## Using it offline
 
 - The first sign-in on a device needs internet. After that the app opens and works with no connection.

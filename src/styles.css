@@ -116,7 +116,7 @@ h2 { font-size: 1.15rem; margin: 0 0 0.5rem; }
 .page-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .card p { margin: 0; }
-.card-head { display: flex; justify-content: space-between; align-items: center; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; flex-wrap: wrap; }
 .notice { background: var(--surface); border: 1px dashed var(--border); border-radius: var(--radius); padding: 16px; }
 .center-card { max-width: 420px; margin: 8vh auto; padding: 24px 16px; display: flex; flex-direction: column; align-items: stretch; gap: 10px; text-align: center; }
 .center-card .form { text-align: left; }
@@ -339,3 +339,16 @@ dl.details dd { margin: 0; overflow-wrap: anywhere; }
 .enrol-form { border-top: 1px solid var(--border); padding-top: 12px; gap: 10px; }
 .inline-number { width: 72px; min-height: 40px; }
 .badge + .badge, .row-title .badge, .link-title .badge { margin-left: 2px; }
+
+/* ---- Giving ---------------------------------------------------------------- */
+.table { width: 100%; border-collapse: collapse; margin-top: 0.75rem; font-size: 0.95rem; }
+.table th { text-align: left; font-weight: 600; color: var(--muted); font-size: 0.85rem; padding: 0.35rem 0.25rem; border-bottom: 1px solid var(--border); }
+.table td { padding: 0.45rem 0.25rem; border-bottom: 1px solid var(--border); }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; }
+details summary { cursor: pointer; }
+
+@media print {
+  .topbar, .tabbar, .no-print, .install-banner, .dev-ribbon, .toasts { display: none !important; }
+  .main { padding: 0; }
+  .card { border: 1px solid #ccc; box-shadow: none; }
+}

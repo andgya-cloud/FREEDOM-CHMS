@@ -10,7 +10,10 @@ cd freedom-chms
 echo "Installing (only changes are downloaded)..."
 npm install --no-audit --no-fund && npm --prefix functions install --no-audit --no-fund
 npm run build
-# Name the server jobs this update changes or adds. Naming them also avoids the
-# question about the old africa-south1 copy of the clean-up job.
-npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting,functions:purgeDeletedRecords,functions:syncProgrammes,functions:createUser,functions:updateUser,functions:resetUserPassword,functions:changeMyPassword,functions:recordSignIn
+# Stage 5: the server job that numbers receipts and keeps the fund ledger.
+# It goes first, on its own (a new job named in a longer list was once
+# skipped without a message), so it is ready before the new screens arrive.
+npx firebase deploy --project freedom-chms --only functions:onGiftWritten
+# Then the rules that protect gifts, and the app itself.
+npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting
 echo "Done: https://freedom-chms.web.app"

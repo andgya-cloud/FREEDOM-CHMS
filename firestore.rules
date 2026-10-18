@@ -420,6 +420,202 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ---- Giving (church campuses and later ADIA fees) ----------------------
+      //
+      // Per-person giving is private: only staff with giving.person.read (the
+      // pastor by default) read every gift. Staff who record gifts read the
+      // gifts they entered or confirmed, and the Unassigned queue, so they can
+      // print a receipt without seeing anyone's history.
+
+      function givingRead() {
+        return canAccessOrg(orgId) && has('giving.person.read');
+      }
+
+      // Funds are configuration, like programmes.
+      match /funds/{fundId} {
+        allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports') || has('giving.person.read'));
+        allow create, update: if orgWrite(orgId, 'settings.manage')
+          && fundId.matches('^[a-z0-9_]{2,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'aliases', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 40
+          && request.resource.data.aliases is list && request.resource.data.aliases.size() <= 10
+          && request.resource.data.active is bool;
+        allow delete: if false;
+      }
+
+      function giftFieldsValid() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['orgId', 'personId', 'giverName', 'phone', 'date', 'amountCents', 'fundId',
+               'method', 'mpesaCode', 'accountRef', 'status', 'unassignedReason', 'receivedBy', 'receivedByName',
+               'handledBy', 'notes', 'importId', 'receiptNumber', 'receiptIssuedAt', 'voidReason', 'voidedAt',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.orgId == orgId
+          && (d.personId == null || (d.personId is string && existsInOrg('people', d.personId)))
+          && shortText(d.giverName, 120)
+          && (d.phone == null || (d.phone is string && d.phone.matches('^[+]?[0-9*]{4,16}$')))
+          && isDate(d.date)
+          && d.amountCents is int && d.amountCents > 0 && d.amountCents <= 10000000000
+          && (d.fundId == null || (d.fundId is string && existsInOrg('funds', d.fundId)))
+          && d.method in ['mpesa', 'cash', 'bank', 'cheque']
+          && (d.method == 'mpesa'
+              ? (d.mpesaCode is string && d.mpesaCode.matches('^[A-Z0-9]{8,12}$'))
+              : d.mpesaCode == null)
+          && shortText(d.accountRef, 60)
+          && d.status in ['confirmed', 'unassigned', 'void']
+          && (d.unassignedReason == null || d.unassignedReason in ['person', 'fund', 'both'])
+          && shortText(d.receivedByName, 120)
+          && shortText(d.notes, 500)
+          && (d.importId == null || d.importId is string)
+          && d.deletedAt == null && d.deletedBy == null
+          // A confirmed gift names its giver and fund, so its receipt is complete.
+          && (d.status != 'confirmed' || (d.fundId != null && d.giverName.size() >= 1));
+      }
+
+      // Each M-Pesa code can be recorded once. Its entry here is written in the
+      // same batch as the gift, and a second gift with the same code is refused.
+      function mpesaCodeIsMine(giftId) {
+        let d = request.resource.data;
+        return d.method != 'mpesa'
+          || getAfter(/databases/$(database)/documents/organizations/$(orgId)/mpesaCodes/$(d.mpesaCode)).data.giftId == giftId;
+      }
+
+      match /gifts/{giftId} {
+        function giftIsMine() {
+          return canAccessOrg(orgId) && has('gifts.write')
+            && (resource.data.createdBy == request.auth.uid
+                || resource.data.handledBy == request.auth.uid
+                || resource.data.status == 'unassigned');
+        }
+        allow read: if givingRead() || giftIsMine();
+        allow create: if canAccessOrg(orgId) && has('gifts.write') && stampedCreate()
+          && giftId.matches('^[A-Za-z0-9]{10,40}$')
+          && giftFieldsValid()
+          && request.resource.data.status in ['confirmed', 'unassigned']
+          && request.resource.data.receivedBy == request.auth.uid
+          && request.resource.data.handledBy == (request.resource.data.status == 'confirmed' ? request.auth.uid : null)
+          && request.resource.data.receiptNumber == null
+          && request.resource.data.receiptIssuedAt == null
+          && request.resource.data.voidReason == null
+          && request.resource.data.voidedAt == null
+          && mpesaCodeIsMine(giftId);
+        // Money facts never change after entry: a mistake is voided and entered
+        // again. Once a receipt is numbered, its giver and fund are fixed too.
+        allow update: if canAccessOrg(orgId) && has('gifts.write') && (givingRead() || giftIsMine())
+          && stampedUpdate()
+          && giftFieldsValid()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['personId', 'giverName', 'phone', 'fundId',
+               'status', 'unassignedReason', 'handledBy', 'notes', 'voidReason', 'voidedAt', 'updatedAt', 'updatedBy'])
+          && resource.data.status != 'void'
+          && (resource.data.receiptNumber == null
+              || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['giverName', 'phone', 'fundId']))
+          // ...except that a gift recorded with a name only can be linked to that person later.
+          && (resource.data.receiptNumber == null || resource.data.personId == null
+              || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['personId']))
+          && (request.resource.data.status == resource.data.status
+              || (resource.data.status == 'unassigned' && request.resource.data.status == 'confirmed')
+              || request.resource.data.status == 'void')
+          // Whoever confirms a payment from the queue is the one who handled it.
+          && (resource.data.status == 'unassigned' && request.resource.data.status == 'confirmed'
+              ? request.resource.data.handledBy == request.auth.uid
+              : request.resource.data.handledBy == resource.data.handledBy)
+          && (request.resource.data.status != 'void'
+              || (request.resource.data.voidReason is string && request.resource.data.voidReason.size() >= 3
+                  && request.resource.data.voidedAt == request.time));
+        allow delete: if false;
+      }
+
+      // The entry names the gift and its amount, so an import can tell when a
+      // payment typed in by hand has a different amount from the statement.
+      function codeEntryValid(code) {
+        let d = request.resource.data;
+        let g = getAfter(/databases/$(database)/documents/organizations/$(orgId)/gifts/$(d.giftId)).data;
+        return d.keys().hasOnly(['orgId', 'giftId', 'amountCents', 'createdAt', 'createdBy'])
+          && d.orgId == orgId
+          && d.createdBy == request.auth.uid
+          && d.createdAt == request.time
+          && g.mpesaCode == code
+          && d.amountCents == g.amountCents;
+      }
+
+      match /mpesaCodes/{code} {
+        // Holds only the gift id; finance staff use it to find statement lines with no gift.
+        allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports'));
+        allow create: if canAccessOrg(orgId) && has('gifts.write')
+          && code.matches('^[A-Z0-9]{8,12}$')
+          && codeEntryValid(code);
+        // Re-entering a payment after its gift was voided points the code at the new gift.
+        allow update: if canAccessOrg(orgId) && has('gifts.write')
+          && codeEntryValid(code)
+          && get(/databases/$(database)/documents/organizations/$(orgId)/gifts/$(resource.data.giftId)).data.status == 'void';
+        allow delete: if false;
+      }
+
+      // A gift saved on a device that the server then refused (for example the
+      // same M-Pesa code recorded on two phones offline). Kept for staff to
+      // check by hand, so nothing is lost or overwritten.
+      match /giftReviews/{giftId} {
+        allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('giving.person.read'));
+        allow create: if orgWrite(orgId, 'gifts.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'giftId', 'giverName', 'personId', 'date', 'amountCents', 'fundId',
+               'method', 'mpesaCode', 'notes', 'savedAt', 'reason', 'status', 'resolvedNote',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.giftId == giftId
+          && request.resource.data.status == 'open'
+          && shortText(request.resource.data.reason, 300)
+          && !exists(/databases/$(database)/documents/organizations/$(orgId)/gifts/$(giftId));
+        allow update: if orgWrite(orgId, 'gifts.write')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'resolvedNote', 'updatedAt', 'updatedBy'])
+          && request.resource.data.status == 'resolved'
+          && shortText(request.resource.data.resolvedNote, 500);
+        allow delete: if false;
+      }
+
+      // Every completed line of an imported statement, by M-Pesa code, so the
+      // month's M-Pesa giving can be checked against the statement total. Holds
+      // no names or phone numbers. Importing the same line again changes nothing.
+      match /statementLines/{code} {
+        allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports'));
+        allow create, update: if canAccessOrg(orgId) && has('gifts.write')
+          && code.matches('^[A-Z0-9]{8,12}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'date', 'amountCents', 'importId', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && isDate(request.resource.data.date)
+          && request.resource.data.amountCents is int && request.resource.data.amountCents > 0
+          && (resource == null
+              ? (request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time)
+              : (request.resource.data.date == resource.data.date
+                 && request.resource.data.amountCents == resource.data.amountCents
+                 && request.resource.data.importId == resource.data.importId
+                 && request.resource.data.createdBy == resource.data.createdBy
+                 && request.resource.data.createdAt == resource.data.createdAt));
+        allow delete: if false;
+      }
+
+      // A record of each statement imported: totals only.
+      match /giftImports/{importId} {
+        allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports'));
+        allow create: if orgWrite(orgId, 'gifts.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'fileName', 'firstDate', 'lastDate', 'statementTotalCents',
+               'paymentCount', 'importedCount', 'importedCents', 'duplicateCount', 'duplicateCents', 'unassignedCount',
+               'skippedCount', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.fileName, 200);
+        allow update, delete: if false;
+      }
+
+      // Written only by Cloud Functions.
+      match /receipts/{number} {
+        allow read: if givingRead();
+        allow write: if false;
+      }
+      match /ledger/{month} {
+        allow read: if canAccessOrg(orgId) && has('finance.reports');
+        allow write: if false;
+      }
+      match /counters/{counterId} {
+        allow read, write: if false;
+      }
+
       // Created by Cloud Functions (for example when a visitor is added).
       // Staff work through them in the Follow-ups queue (Stage 6).
       match /followUps/{taskId} {
