@@ -14,6 +14,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { PipelineTimeline } from '../../components/PipelineTimeline';
 import { PastoralSection } from '../../components/PastoralSection';
 import { FollowUpsForPerson } from '../../components/FollowUpsForPerson';
+import { AttendanceForPerson } from '../../components/AttendanceForPerson';
 import { PERSON_STATUS_LABELS } from '../../../functions/src/shared/people';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
@@ -137,6 +138,7 @@ export function PersonPage() {
         </section>
       )}
 
+      {org && <AttendanceForPerson org={org} personId={personId} />}
       {can('followups.manage') && <FollowUpsForPerson orgId={orgId} personId={personId} />}
       {org?.type === 'church_campus' && <PipelineTimeline orgId={orgId} personId={personId} />}
       {can('pastoral.read') && <PastoralSection orgId={orgId} personId={personId} />}

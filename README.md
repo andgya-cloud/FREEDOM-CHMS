@@ -8,7 +8,7 @@ Built in stages. This README grows with each stage.
 |---|---|---|
 | 1 | Foundation: sign-in, roles, organization switcher, installable app, offline sync, server access rules, audit log | Approved |
 | 2 | People and visitors: quick visitor form, search, profiles, duplicate check, pipeline timeline, pastoral notes | Built, awaiting approval |
-| 3 | Services and attendance | Not started |
+| 3 | Services and attendance: headcounts, check-in by name, door tablet mode, ADIA class register, Hope Center sessions and meals | Built, awaiting approval |
 | 4 | Programs and groups | Not started |
 | 5 | Giving and receipts | Not started |
 | 6 | Follow-up and WhatsApp | Not started |
@@ -104,6 +104,10 @@ Settings → Organizations → **Add**. Fill in the name, type and receipt prefi
 ## Add staff
 
 Settings → Staff accounts → **Add**. Choose the role and organizations, and give the person the temporary password shown. They choose their own password at first sign-in. To reset a password or switch an account off, open the account.
+
+## Taking attendance
+
+Today → **Check in** (or the Attendance tab) and tap the service, class or session. Church services come from the organization's service times, and ADIA and Freedom Hope Center programmes come from its programme list (Settings → Organizations). For the entrance, open the service and tap **Door mode**: the tablet then shows only first names with an initial. Hand it back to staff to leave door mode. Full details are in [docs/stage-3.md](docs/stage-3.md).
 
 ## Using it offline
 

@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { readPref, writePref } from '../lib/storage';
 import type { OrganizationType } from '../../functions/src/shared/organizations';
+import { ESTIMATE } from '../lib/firestoreOptions';
 
 export interface Organization {
   id: string;
@@ -14,6 +15,8 @@ export interface Organization {
   currency: string;
   receiptPrefix: string;
   serviceTimes?: string[];
+  /** Programmes run by a college or ministry (classes, sessions, meals). */
+  activities?: string[];
   active: boolean;
   deletedAt: Timestamp | null;
   createdAt?: Timestamp;
@@ -52,7 +55,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     const toOrg = (id: string, data: Record<string, unknown>) => ({ id, ...data }) as Organization;
     if (profile.allOrgs) {
       return onSnapshot(collection(db, 'organizations'), (snap) => {
-        setOrgs(snap.docs.map((d) => toOrg(d.id, d.data())));
+        setOrgs(snap.docs.map((d) => toOrg(d.id, d.data(ESTIMATE))));
         setLoading(false);
       }, () => setLoading(false));
     }
@@ -61,7 +64,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     let remaining = profile.orgIds.length;
     if (remaining === 0) setLoading(false);
     const unsubs = profile.orgIds.map((id) => onSnapshot(doc(db, 'organizations', id), (snap) => {
-      if (snap.exists()) found.set(id, toOrg(id, snap.data()));
+      if (snap.exists()) found.set(id, toOrg(id, snap.data(ESTIMATE)!));
       else found.delete(id);
       setOrgs([...found.values()]);
       if (--remaining <= 0) setLoading(false);

@@ -4,6 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useOrg } from './OrgContext';
 import type { PersonStatus } from '../../functions/src/shared/people';
+import { ESTIMATE } from '../lib/firestoreOptions';
 
 export interface WhatsAppConsent {
   given: boolean;
@@ -70,7 +71,7 @@ export function PeopleProvider({ children }: { children: ReactNode }) {
     setLoading(true);
     const source = isCombined ? collectionGroup(db, 'people') : collection(db, 'organizations', currentId, 'people');
     return onSnapshot(source, { includeMetadataChanges: false }, (snap) => {
-      setPeople(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as Person));
+      setPeople(snap.docs.map((d) => ({ id: d.id, ...d.data(ESTIMATE) }) as Person));
       setLoading(false);
     }, () => setLoading(false));
   }, [allowed, currentId, isCombined]);
