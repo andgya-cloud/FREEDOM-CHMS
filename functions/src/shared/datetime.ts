@@ -101,6 +101,12 @@ export function formatDateTime(date: Date, timeZone = DEFAULT_TIME_ZONE): string
   return `${formatDate(date, timeZone)} ${pad(p.hour)}:${pad(p.minute)}`;
 }
 
+/** HH:MM (24-hour) */
+export function formatTime(date: Date, timeZone = DEFAULT_TIME_ZONE): string {
+  const p = zonedParts(date, timeZone);
+  return `${pad(p.hour)}:${pad(p.minute)}`;
+}
+
 /** Parses DD/MM/YYYY as local midnight; returns null for anything invalid. */
 export function parseDate(text: string, timeZone = DEFAULT_TIME_ZONE): Date | null {
   const m = /^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\s*$/.exec(text);

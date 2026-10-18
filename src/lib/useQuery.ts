@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { onSnapshot, type Query } from 'firebase/firestore';
+import { ESTIMATE } from './firestoreOptions';
 
 /** Live results of a Firestore query (served from the device cache when offline). */
 export function useLiveQuery<T>(makeQuery: () => Query | null, deps: unknown[]): { rows: T[]; loading: boolean; error: string } {
@@ -15,7 +16,7 @@ export function useLiveQuery<T>(makeQuery: () => Query | null, deps: unknown[]):
     }
     setLoading(true);
     return onSnapshot(q, (snap) => {
-      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data() }) as T));
+      setRows(snap.docs.map((d) => ({ id: d.id, ...d.data(ESTIMATE) }) as T));
       setLoading(false);
       setError('');
     }, (err) => {

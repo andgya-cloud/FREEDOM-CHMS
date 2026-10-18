@@ -22,6 +22,9 @@ import { PeoplePage } from './pages/people/PeoplePage';
 import { PersonPage } from './pages/people/PersonPage';
 import { PersonFormPage } from './pages/people/PersonFormPage';
 import { VisitorFormPage } from './pages/people/VisitorFormPage';
+import { AttendancePage } from './pages/attendance/AttendancePage';
+import { EventPage } from './pages/attendance/EventPage';
+import { DoorModePage } from './pages/attendance/DoorModePage';
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -45,9 +48,21 @@ export function App() {
   if (profile.mustChangePassword) return <ChangePasswordPage />;
 
   return (
+    <Routes>
+      {/* The door tablet fills the screen, without the menus. */}
+      <Route path="/door/:orgId/:eventId" element={<RequirePermission permission="attendance.write"><DoorModePage /></RequirePermission>} />
+      <Route path="*" element={<AppRoutes />} />
+    </Routes>
+  );
+}
+
+function AppRoutes() {
+  return (
     <AppShell>
       <Routes>
         <Route path="/" element={<TodayPage />} />
+        <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/attendance/:orgId/:eventId" element={<EventPage />} />
         <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
         <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />

@@ -9,7 +9,7 @@ export const SOFT_DELETE_RETENTION_DAYS = 30;
  * Every night, permanently removes records that were deleted more than 30 days ago.
  * Organization data collections are added to PURGE_COLLECTIONS as each stage adds them.
  */
-export const PURGE_COLLECTIONS: string[] = ['people', 'pipeline', 'prayerRequests', 'pastoralNotes', 'followUps'];
+export const PURGE_COLLECTIONS: string[] = ['people', 'pipeline', 'prayerRequests', 'pastoralNotes', 'followUps', 'events', 'attendance'];
 
 export const purgeDeletedRecords = onSchedule(
   // Cloud Scheduler isn't offered in africa-south1, so this job runs from Europe.
