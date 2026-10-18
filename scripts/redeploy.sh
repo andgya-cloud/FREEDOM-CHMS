@@ -12,5 +12,5 @@ npm install --no-audit --no-fund && npm --prefix functions install --no-audit --
 npm run build
 # Name the server jobs this update changes or adds. Naming them also avoids the
 # question about the old africa-south1 copy of the clean-up job.
-npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting,functions:purgeDeletedRecords,functions:syncProgrammes
+npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting,functions:purgeDeletedRecords,functions:syncProgrammes,functions:createUser,functions:updateUser,functions:resetUserPassword,functions:changeMyPassword,functions:recordSignIn
 echo "Done: https://freedom-chms.web.app"
