@@ -2,7 +2,7 @@
 
 ## What I built
 
-- **Faster on a slow phone.** Each screen now loads only when it is opened, and the big libraries (Firebase, React) are kept apart so a phone keeps them cached when the app is updated. The first load went from one 1.19 MB file to a 77 KB start-up file plus the screens you open. The PDF tools (about 590 KB) load only when someone makes a PDF.
+- **Faster on a slow phone.** Each screen now loads only when it is opened, and the big libraries (Firebase, React) are kept apart so a phone keeps them cached when the app is updated. What a phone downloads on first opening went from about 1.19 MB to about 0.96 MB (the app itself is now 77 KB; the rest is Firebase and React, which are cached separately). The other screens download only when opened, and the PDF tools (about 590 KB) only when someone makes a PDF. After the first visit the app opens from the phone's own copy, so the saving that matters most is on updates: only the changed parts download again.
 - **Help page.** Settings → Help has plain-language guides for the everyday jobs, with a search box. It shows only what the signed-in person can do.
 - **Data and backups** (pastor only), Settings → Data and backups:
   - **Weekly backup**: every Sunday 23:00 the whole database is saved as one file in Firebase Storage; the last 12 are kept. The page shows when the last one ran, or says if it failed.
