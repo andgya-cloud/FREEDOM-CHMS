@@ -7,6 +7,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { to: '/settings/pipeline', label: 'Journey stages', detail: 'Visitor, Salvation, Baptism, Growth Track…', permission: 'settings.manage' },
   { to: '/settings/custom-fields', label: 'Extra fields', detail: 'Your own fields on every person', permission: 'settings.manage' },
   { to: '/settings/funds', label: 'Funds', detail: 'Tithes, Offerings and other funds for giving', permission: 'settings.manage' },
+  { to: '/settings/templates', label: 'WhatsApp messages', detail: 'The words for welcomes, check-ins, care and receipts', permission: 'settings.manage' },
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', permission: 'users.manage' },
   { to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },
   { to: '/settings/device', label: 'This device', detail: 'Install, sync, theme and sign-out' },

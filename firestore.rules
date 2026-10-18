@@ -66,6 +66,13 @@ service cloud.firestore {
       allow write: if false; // Cloud Functions only
     }
 
+    // Names of active staff, so follow-ups can be assigned without reading
+    // private account details. Kept up to date by Cloud Functions.
+    match /staff/{uid} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
     match /roles/{roleId} {
       allow read: if isActive();
       // Changing a role triggers a function that recomputes everyone's permissions.
@@ -616,11 +623,92 @@ service cloud.firestore {
         allow read, write: if false;
       }
 
-      // Created by Cloud Functions (for example when a visitor is added).
-      // Staff work through them in the Follow-ups queue (Stage 6).
+      // ---- Follow-ups and WhatsApp messages --------------------------------
+
+      // Salvation and baptism follow-ups reveal religious belief, so only staff
+      // with pastoral access see them (the same rule as their journey stages).
+      function pastoralReason(reason) {
+        return reason in ['salvation', 'baptism_invite'];
+      }
+      function followUpVisible(d) {
+        return !pastoralReason(d.reason) || has('pastoral.read');
+      }
+      function validAssignee(d) {
+        return d.get('assignedTo', null) == null
+          || (exists(/databases/$(database)/documents/users/$(d.assignedTo))
+              && get(/databases/$(database)/documents/users/$(d.assignedTo)).data.active == true);
+      }
+      function validFollowUp(d) {
+        return d.keys().hasOnly(['orgId', 'personId', 'personName', 'reason', 'templateId', 'status',
+                 'assignedTo', 'assignedName', 'dueAt', 'outcome', 'note', 'doneAt', 'doneBy', 'lastMessageAt',
+                 'absentSince', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.status in ['open', 'done']
+          && d.dueAt is timestamp
+          && shortText(d.get('personName', ''), 120)
+          && shortText(d.get('note', ''), 1000)
+          && (d.get('assignedName', null) == null || shortText(d.assignedName, 80))
+          && (d.get('lastMessageAt', null) == null || d.lastMessageAt is timestamp)
+          && validAssignee(d);
+      }
+      // Marking a task done records the outcome, who and when; reopening clears them.
+      function validOutcome(d, before) {
+        return d.status == 'open'
+          ? d.get('outcome', null) == null && d.get('doneAt', null) == null && d.get('doneBy', null) == null
+          : before != null && before.status == 'done'
+            ? d.get('outcome', null) == before.get('outcome', null)
+              && d.get('doneAt', null) == before.get('doneAt', null)
+              && d.get('doneBy', null) == before.get('doneBy', null)
+            : d.outcome in ['Reached', 'Message sent, no reply yet', 'No answer', 'Wrong number', 'Asked us to stop', 'Other']
+              && d.doneAt == request.time && d.doneBy == request.auth.uid;
+      }
+
+      // Most tasks are created by Cloud Functions (a new visitor, a salvation,
+      // three weeks absent). Staff can add their own and work through them all.
       match /followUps/{taskId} {
-        allow read: if canAccessOrg(orgId) && has('followups.manage');
-        allow write: if false;
+        allow read: if canAccessOrg(orgId) && has('followups.manage') && followUpVisible(resource.data);
+        allow create: if orgWrite(orgId, 'followups.manage')
+          && validFollowUp(request.resource.data)
+          && request.resource.data.reason == 'other'
+          && request.resource.data.status == 'open'
+          && validOutcome(request.resource.data, null)
+          && existsInOrg('people', request.resource.data.personId);
+        allow update: if orgWrite(orgId, 'followups.manage')
+          && followUpVisible(resource.data)
+          && validFollowUp(request.resource.data)
+          && request.resource.data.personId == resource.data.personId
+          && request.resource.data.reason == resource.data.reason
+          && request.resource.data.get('templateId', null) == resource.data.get('templateId', null)
+          && request.resource.data.get('absentSince', null) == resource.data.get('absentSince', null)
+          && validOutcome(request.resource.data, resource.data);
+        allow delete: if false;
+      }
+
+      // A record of every WhatsApp message sent from the app: who sent it,
+      // when, to whom and with which template. The words themselves are not
+      // kept. Entries can't be changed or removed.
+      match /messages/{messageId} {
+        allow read: if canAccessOrg(orgId) && (has('followups.manage') || has('gifts.write'))
+          && (resource.data.sensitive == false || has('pastoral.read'));
+        allow create: if canAccessOrg(orgId) && (has('followups.manage') || has('gifts.write'))
+          && request.resource.data.keys().hasOnly(['orgId', 'personId', 'toPersonId', 'toName', 'viaGuardian',
+               'channel', 'templateId', 'templateName', 'followUpId', 'giftId', 'sensitive', 'senderName',
+               'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && request.resource.data.channel == 'whatsapp'
+          && request.resource.data.templateId is string
+          && shortText(request.resource.data.templateName, 80)
+          && shortText(request.resource.data.toName, 120)
+          && shortText(request.resource.data.senderName, 80)
+          && request.resource.data.viaGuardian is bool
+          && request.resource.data.sensitive == (request.resource.data.templateId in ['salvation_followup', 'baptism_invite'])
+          && (request.resource.data.sensitive == false || has('pastoral.read'))
+          && (request.resource.data.followUpId == null || request.resource.data.followUpId is string)
+          && (request.resource.data.giftId == null || request.resource.data.giftId is string)
+          && existsInOrg('people', request.resource.data.personId)
+          && existsInOrg('people', request.resource.data.toPersonId);
+        allow update, delete: if false;
       }
     }
 

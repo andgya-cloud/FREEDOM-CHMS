@@ -7,3 +7,4 @@ export { onPersonWritten } from './people.js';
 export { syncProgrammes } from './programs.js';
 export { onGiftWritten } from './giving.js';
 export { purgeDeletedRecords } from './maintenance.js';
+export { syncStaffDirectory, onPipelineWritten, dailyFollowUps } from './followups.js';

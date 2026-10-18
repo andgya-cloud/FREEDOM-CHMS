@@ -352,3 +352,15 @@ details summary { cursor: pointer; }
   .main { padding: 0; }
   .card { border: 1px solid #ccc; box-shadow: none; }
 }
+
+/* ---- Follow-ups ------------------------------------------------------------- */
+.follow-up { gap: 8px; }
+.follow-up p { margin: 0; }
+.follow-up-name { margin: 0; font-size: 1.05rem; }
+.follow-up-reason { font-weight: 600; }
+.follow-up-note { white-space: pre-wrap; }
+.follow-up-warn { border-left: 4px solid #d9a400; }
+.follow-up-danger { border-left: 4px solid #c0392b; }
+.follow-up-assign { max-width: 280px; }
+.template-card textarea { min-height: 120px; }
+.card code { background: var(--surface-2); border-radius: 6px; padding: 2px 6px; font-size: 0.85rem; }
