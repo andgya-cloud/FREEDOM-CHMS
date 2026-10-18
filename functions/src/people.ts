@@ -1,22 +1,16 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
-import { FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { FieldValue } from 'firebase-admin/firestore';
 import { db } from './common.js';
-import { zonedParts, zonedMidnight, DEFAULT_TIME_ZONE } from './shared/datetime.js';
+import { DEFAULT_TIME_ZONE } from './shared/datetime.js';
+import { endOfLocalDay } from './shared/followups.js';
+import { createFollowUp } from './followups.js';
 
 const SYSTEM = 'system';
-
-function endOfLocalDay(now: Date, timeZone: string): Date {
-  const p = zonedParts(now, timeZone);
-  const tomorrow = new Date(Date.UTC(p.year, p.month - 1, p.day + 1));
-  // 23:59 local, so it reads as "due today" rather than midnight tomorrow.
-  const midnight = zonedMidnight(tomorrow.getUTCFullYear(), tomorrow.getUTCMonth() + 1, tomorrow.getUTCDate(), timeZone);
-  return new Date(midnight.getTime() - 60_000);
-}
 
 /**
  * When a person is added or their phone number changes:
  * - flag anyone else in the organization with the same number as a possible duplicate;
- * - when a new visitor is added, create the same-day welcome follow-up.
+ * - when a new visitor is added, create the same-day welcome and the 48-hour check-in follow-ups.
  */
 export const onPersonWritten = onDocumentWritten('organizations/{orgId}/people/{personId}', async (event) => {
   const { orgId, personId } = event.params;
@@ -48,27 +42,11 @@ export const onPersonWritten = onDocumentWritten('organizations/{orgId}/people/{
   }
 
   if (created && after.status === 'visitor' && after.deletedAt == null) {
-    const org = await db.doc(`organizations/${orgId}`).get();
-    const timeZone = (org.get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE;
-    // A fixed id makes this safe to run twice.
-    await db.doc(`organizations/${orgId}/followUps/${personId}_first_visit`).create({
-      orgId,
-      personId,
-      personName: after.fullName ?? '',
-      reason: 'first_visit',
-      templateId: 'visitor_welcome',
-      status: 'open',
-      assignedTo: null,
-      dueAt: Timestamp.fromDate(endOfLocalDay(new Date(), timeZone)),
-      outcome: null,
-      deletedAt: null,
-      deletedBy: null,
-      createdAt: FieldValue.serverTimestamp(),
-      createdBy: SYSTEM,
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedBy: SYSTEM,
-    }).catch((err: { code?: number }) => {
-      if (err.code !== 6) throw err; // 6 = ALREADY_EXISTS
-    });
+    const timeZone = ((await db.doc(`organizations/${orgId}`).get()).get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE;
+    const now = new Date();
+    const task = { personId, personName: (after.fullName as string | undefined) ?? '' };
+    // A welcome the same day, then a check-in two days later.
+    await createFollowUp(orgId, `${personId}_first_visit`, { ...task, reason: 'first_visit', dueAt: endOfLocalDay(now, timeZone) });
+    await createFollowUp(orgId, `${personId}_48h`, { ...task, reason: 'checkin_48h', dueAt: endOfLocalDay(now, timeZone, 2) });
   }
 });

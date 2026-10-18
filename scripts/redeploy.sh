@@ -10,10 +10,14 @@ cd freedom-chms
 echo "Installing (only changes are downloaded)..."
 npm install --no-audit --no-fund && npm --prefix functions install --no-audit --no-fund
 npm run build
-# Stage 5: the server job that numbers receipts and keeps the fund ledger.
-# It goes first, on its own (a new job named in a longer list was once
-# skipped without a message), so it is ready before the new screens arrive.
-npx firebase deploy --project freedom-chms --only functions:onGiftWritten
-# Then the rules that protect gifts, and the app itself.
+# Stage 6: the server jobs for follow-ups. Each new one goes on its own (a new
+# job named in a longer list was once skipped without a message), so they are
+# ready before the new screens arrive.
+npx firebase deploy --project freedom-chms --only functions:syncStaffDirectory
+npx firebase deploy --project freedom-chms --only functions:onPipelineWritten
+npx firebase deploy --project freedom-chms --only functions:dailyFollowUps
+# The visitor job now adds the 48-hour check-in too.
+npx firebase deploy --project freedom-chms --only functions:onPersonWritten
+# Then the rules that protect follow-ups and the message log, and the app itself.
 npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting
 echo "Done: https://freedom-chms.web.app"

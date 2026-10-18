@@ -6,6 +6,8 @@ import { useToast } from '../../state/ToastContext';
 import { useFunds, useGift } from '../../state/useGiving';
 import { linkGiftToPerson, updateGiftNotes, voidGift } from '../../lib/givingWrites';
 import { PersonPicker } from '../../components/PersonPicker';
+import { WhatsAppSheet } from '../../components/WhatsAppSheet';
+import { usePeople } from '../../state/PeopleContext';
 import { openForPrinting, paymentLabel, receiptNumberFor, receiptPdf, shareOrDownload } from '../../lib/givingPdf';
 import { friendlyError } from '../../lib/errors';
 import { useSavedMessage } from '../../lib/useSavedMessage';
@@ -29,6 +31,8 @@ export function GiftPage() {
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [link, setLink] = useState<{ id: string | null; name: string } | null>(null);
+  const [whatsapp, setWhatsapp] = useState(false);
+  const { byId } = usePeople();
 
   if (!org || !gift) {
     return (
@@ -42,6 +46,7 @@ export function GiftPage() {
   const fundName = funds.find((f) => f.id === gift.fundId)?.name ?? 'No fund yet';
   const number = receiptNumberFor(org, gift);
   const canReceipt = gift.status !== 'unassigned' && (can('receipts.issue') || can('giving.person.read'));
+  const giver = gift.personId ? byId(gift.personId) : undefined;
 
   async function receipt(action: 'share' | 'print') {
     setBusy(true);
@@ -114,7 +119,19 @@ export function GiftPage() {
           <div className="dialog-actions">
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void receipt('share')}>Share receipt</button>
             <button type="button" className="btn" disabled={busy} onClick={() => void receipt('print')}>Print</button>
+            {giver && gift.status === 'confirmed' && <button type="button" className="btn" onClick={() => setWhatsapp(true)}>WhatsApp thank-you</button>}
           </div>
+        )}
+        {whatsapp && giver && (
+          <WhatsAppSheet
+            org={org}
+            person={giver}
+            templateId="giving_receipt"
+            templateIds={['giving_receipt']}
+            giftId={gift.id}
+            fields={{ receipt_number: gift.receiptNumber ?? number, amount: formatMoney(gift.amountCents, org.currency || 'KES'), fund: fundName, date: formatDateKey(gift.date) }}
+            onClose={() => setWhatsapp(false)}
+          />
         )}
       </section>
 

@@ -141,7 +141,7 @@ export function PersonPage() {
       )}
 
       {org && <AttendanceForPerson org={org} personId={personId} />}
-      {can('followups.manage') && <FollowUpsForPerson orgId={orgId} personId={personId} />}
+      {org && can('followups.manage') && <FollowUpsForPerson org={org} person={person} />}
       {org?.type === 'church_campus' && <InvolvementForPerson org={org} personId={personId} />}
       {org?.type === 'church_campus' && <PipelineTimeline orgId={orgId} personId={personId} />}
       {org && can('giving.person.read') && <GivingForPerson org={org} personId={personId} personName={person.fullName} />}

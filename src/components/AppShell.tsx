@@ -4,9 +4,12 @@ import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
 import { InstallBanner } from './InstallBanner';
 import { usingEmulators } from '../firebase';
+import { useTemplates } from '../state/useFollowUps';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
+  // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
+  useTemplates();
   return (
     <div className="shell">
       <header className="topbar">

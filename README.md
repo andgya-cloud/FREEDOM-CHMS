@@ -132,6 +132,25 @@ Open **Giving** from Today (or **Record gift** for one gift). First, the pastor 
 
 Full details are in [docs/stage-5.md](docs/stage-5.md).
 
+## Follow-ups and WhatsApp
+
+Open **Follow-ups** from Today. The app adds follow-ups by itself:
+
+- a same-day welcome and a 48-hour check-in for each new visitor;
+- a salvation follow-up and a baptism class invitation when a salvation is recorded;
+- every morning, a care message for regular attenders who haven't been to a service for 3 weeks.
+
+Staff can add their own from a person's record. Give each one to a staff member. One still open 3 days after it was due is escalated to the pastor.
+
+- **WhatsApp** opens the message filled in from its template, then WhatsApp with it ready to send. Back in the app, mark it done with what happened.
+- The pastor edits the seven templates in Settings → WhatsApp messages. Merge fields such as {first_name}, {campus} and {service_time} are filled in for each person.
+- WhatsApp only opens for people who agreed to it and haven't asked us to stop. A child's message goes to their parent or guardian.
+- Every message sent is logged: template, sender and time. The words are not stored.
+- **Programme reminders** (from Follow-ups) and the **WhatsApp thank-you** on a gift use the same templates.
+- Salvation and baptism follow-ups are for the pastor and staff with pastoral access only.
+
+Full details are in [docs/stage-6.md](docs/stage-6.md).
+
 ## Using it offline
 
 - The first sign-in on a device needs internet. After that the app opens and works with no connection.
