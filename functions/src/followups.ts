@@ -145,7 +145,7 @@ function isoDate(d: Date, timeZone: string): string {
  * 3 weeks get a care follow-up, and an open care follow-up closes itself when
  * the person comes back. Returns how many tasks were created.
  */
-export async function careFollowUps(orgId: string, timeZone: string, now = new Date()): Promise<{ created: number; closed: number }> {
+export async function careFollowUps(orgId: string, timeZone: string, now = new Date(), regularWeeks = 3): Promise<{ created: number; closed: number }> {
   const base = `organizations/${orgId}`;
   const since = isoDate(new Date(now.getTime() - LOOKBACK_DAYS * DAY), timeZone);
   const [marks, people, open] = await Promise.all([
@@ -184,7 +184,7 @@ export async function careFollowUps(orgId: string, timeZone: string, now = new D
   for (const person of people.docs) {
     const status = person.get('status') as string;
     if (status === 'inactive' || stillOpen.has(person.id)) continue;
-    const lastDate = absenceToFollowUp(byPerson.get(person.id) ?? [], now, timeZone);
+    const lastDate = absenceToFollowUp(byPerson.get(person.id) ?? [], now, timeZone, regularWeeks);
     if (!lastDate) continue;
     const made = await createFollowUp(orgId, `${person.id}_care_${lastDate}`, {
       personId: person.id,
@@ -210,9 +210,12 @@ export async function refreshStaffDirectory(): Promise<number> {
 export async function runDailyFollowUps(now = new Date()): Promise<void> {
   const staff = await refreshStaffDirectory();
   const orgs = await db.collection('organizations').where('type', '==', 'church_campus').get();
+  // The pastor sets who counts as a regular attender in Settings → Reports.
+  const weeks = Number((await db.doc('settings/reports').get()).get('regularWeeks'));
+  const regularWeeks = weeks >= 1 && weeks <= 8 ? Math.round(weeks) : 3;
   for (const org of orgs.docs) {
     if (org.get('deletedAt') != null || org.get('active') === false) continue;
-    const result = await careFollowUps(org.id, (org.get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE, now);
+    const result = await careFollowUps(org.id, (org.get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE, now, regularWeeks);
     logger.info(`Follow-ups for ${org.id}: ${result.created} care messages due, ${result.closed} closed because the person came back`);
   }
   logger.info(`Staff directory refreshed: ${staff} accounts`);

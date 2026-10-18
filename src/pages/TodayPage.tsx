@@ -8,6 +8,12 @@ import { matchesSearch } from '../../functions/src/shared/people';
 import { FirstRunChecklist } from '../components/FirstRunChecklist';
 import { PersonRow } from '../components/PersonRow';
 import { useFollowUpCounts } from '../state/useFollowUps';
+import { requestReport, useLatestReport, useReportPart } from '../state/useReports';
+import { Scorecard } from '../components/Scorecard';
+import { lastCompletePeriod } from '../../functions/src/shared/metrics';
+import { localDateKey } from '../../functions/src/shared/datetime';
+import type { GivingPart } from '../../functions/src/shared/reports';
+import type { Organization } from '../state/OrgContext';
 
 /**
  * The home screen: search first, then the four big actions.
@@ -86,6 +92,8 @@ export function TodayPage() {
         })}
       </div>
 
+      {current && can('people.read') && <HomeScorecard org={current} />}
+
       {organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
         <ul className="link-list">
           <li>
@@ -106,5 +114,35 @@ export function TodayPage() {
         </div>
       )}
     </div>
+  );
+}
+
+/** Last week's numbers from the latest weekly report, each opening the records behind it. */
+function HomeScorecard({ org }: { org: Organization }) {
+  const { user, can } = useAuth();
+  const { report, loading } = useLatestReport(org.id);
+  const giving = useReportPart<GivingPart>(org.id, report?.id ?? '', 'giving', can('finance.reports'), report?.generatedAt?.toMillis());
+  const [asked, setAsked] = useState(false);
+  if (loading) return null;
+  return (
+    <section className="stack">
+      <div className="page-head">
+        <h2>{report ? report.label : 'Scorecard'}</h2>
+        <Link to="/reports" className="btn btn-quiet">All reports</Link>
+      </div>
+      {report ? <Scorecard report={report} giving={giving} base={`/reports/${org.id}/${report.id}`} /> : (
+        <div className="card stack">
+          <p>The scorecard appears here after the first weekly report, made every Monday at 07:00.</p>
+          <button
+            type="button"
+            className="btn btn-primary align-start"
+            disabled={asked || !user}
+            onClick={() => { setAsked(true); requestReport(org.id, user!.uid, 'weekly', lastCompletePeriod('weekly', localDateKey(new Date(), org.timeZone)).from); }}
+          >
+            {asked ? 'Making it…' : "Make last week's report now"}
+          </button>
+        </div>
+      )}
+    </section>
   );
 }

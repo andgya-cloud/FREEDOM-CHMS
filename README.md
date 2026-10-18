@@ -151,6 +151,20 @@ Staff can add their own from a person's record. Give each one to a staff member.
 
 Full details are in [docs/stage-6.md](docs/stage-6.md).
 
+## Dashboard and reports
+
+Today shows last week's **scorecard**: attendance, first-time visitors, salvations, baptisms, small group and serving rates, giving (for staff with finance reports) and overdue follow-ups. Each number shows how it moved since last week and a year ago, and opens the records behind it.
+
+- A **weekly report** is made every Monday at 07:00 (Nairobi time) for Monday to Sunday, and a **monthly report** on the 1st at 07:00. Both are kept under **Reports**.
+- Each report has the scorecard, the three biggest changes in plain words, people needing follow-up, regulars away 4 weeks or more, programme progress, the journey funnel and a 12-week attendance chart. The giving summary is in the pastor's copy only.
+- **Make a report** builds one for any past week or month, and **Remake** brings one up to date. Every report downloads as a PDF or as a CSV that opens in Excel.
+- Salvation and baptism names are shown only to staff with pastoral access; giving only to staff with finance reports. The server rules enforce this.
+- With more than one campus, **Campuses compared** puts their latest weekly reports side by side.
+- Settings → Reports sets who counts as a regular attender, who gets reports by email, and an optional monthly giving budget.
+- Email uses the Firebase "Trigger Email" extension, which reads the `mail` collection. Until it is installed and email is ticked in Settings → Reports, reports are kept in the app only.
+
+The numbers are worked out in `functions/src/shared/metrics.ts` (tested in `metrics.test.ts`). Full details are in [docs/stage-7.md](docs/stage-7.md).
+
 ## Using it offline
 
 - The first sign-in on a device needs internet. After that the app opens and works with no connection.

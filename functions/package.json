@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "main": "lib/index.js",
-  "engines": { "node": "22" },
+  "engines": {
+    "node": "22"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "build:watch": "tsc -p tsconfig.json --watch",
@@ -12,7 +14,8 @@
   },
   "dependencies": {
     "firebase-admin": "^13.5.0",
-    "firebase-functions": "^6.6.0"
+    "firebase-functions": "^6.6.0",
+    "jspdf": "^3.0.4"
   },
   "devDependencies": {
     "typescript": "~5.9.3"
