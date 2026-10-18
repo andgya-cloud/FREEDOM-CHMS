@@ -42,6 +42,9 @@ import { FundsPage } from './pages/settings/FundsPage';
 import { TemplatesPage } from './pages/settings/TemplatesPage';
 import { FollowUpsPage } from './pages/followups/FollowUpsPage';
 import { RemindersPage } from './pages/followups/RemindersPage';
+import { ReportsPage } from './pages/reports/ReportsPage';
+import { ReportPage } from './pages/reports/ReportPage';
+import { ReportSettingsPage } from './pages/settings/ReportSettingsPage';
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -97,6 +100,8 @@ function AppRoutes() {
         <Route path="/giving/:orgId/:giftId" element={<RequirePermission anyOf={['gifts.write', 'giving.person.read']}><GiftPage /></RequirePermission>} />
         <Route path="/follow-ups" element={<RequirePermission permission="followups.manage"><FollowUpsPage /></RequirePermission>} />
         <Route path="/follow-ups/reminders" element={<RequirePermission permission="followups.manage"><RemindersPage /></RequirePermission>} />
+        <Route path="/reports" element={<RequirePermission permission="people.read"><ReportsPage /></RequirePermission>} />
+        <Route path="/reports/:orgId/:reportId" element={<RequirePermission permission="people.read"><ReportPage /></RequirePermission>} />
         <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
         <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
@@ -106,6 +111,7 @@ function AppRoutes() {
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
         <Route path="/settings/funds" element={<RequirePermission permission="settings.manage"><FundsPage /></RequirePermission>} />
+        <Route path="/settings/reports" element={<RequirePermission permission="settings.manage"><ReportSettingsPage /></RequirePermission>} />
         <Route path="/settings/templates" element={<RequirePermission permission="settings.manage"><TemplatesPage /></RequirePermission>} />
         <Route path="/settings/device" element={<DevicePage />} />
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />

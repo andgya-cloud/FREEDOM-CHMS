@@ -364,3 +364,31 @@ details summary { cursor: pointer; }
 .follow-up-assign { max-width: 280px; }
 .template-card textarea { min-height: 120px; }
 .card code { background: var(--surface-2); border-radius: 6px; padding: 2px 6px; font-size: 0.85rem; }
+
+/* ---- Scorecard and reports ---- */
+.tiles { list-style: none; margin: 0 0 16px; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 720px) { .tiles { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.tile { display: flex; flex-direction: column; gap: 2px; min-height: 100%; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; }
+.tile:hover { border-color: var(--primary); }
+.tile-label { font-size: 0.85rem; color: var(--muted); }
+.tile-value { font-size: 1.6rem; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.tile-change { font-size: 0.78rem; color: var(--muted); }
+.tile-good { color: var(--ok); }
+.tile-bad { color: var(--red); }
+.chart { margin: 0; }
+.chart svg { width: 100%; height: auto; display: block; }
+.chart-axis { stroke: var(--border); stroke-width: 1; }
+.chart-line { fill: none; stroke: var(--primary); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { fill: var(--primary); }
+.chart-text { fill: var(--muted); font-size: 10px; }
+.bars { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.bars li { display: grid; grid-template-columns: minmax(90px, 9rem) 1fr auto; gap: 8px; align-items: center; }
+.bars-label { font-size: 0.9rem; overflow-wrap: anywhere; }
+.bars-track { height: 14px; border-radius: 7px; background: var(--bg); border: 1px solid var(--border); overflow: hidden; }
+.bars-fill { display: block; height: 100%; background: var(--gold); }
+.bars-value { font-variant-numeric: tabular-nums; font-size: 0.9rem; text-align: right; }
+.report-section { scroll-margin-top: 72px; }
+.report-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.report-table th, .report-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.report-table td.num, .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.table-scroll { overflow-x: auto; }

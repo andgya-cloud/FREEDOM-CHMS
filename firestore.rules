@@ -710,6 +710,46 @@ service cloud.firestore {
           && existsInOrg('people', request.resource.data.toPersonId);
         allow update, delete: if false;
       }
+
+      // ---- Reports -----------------------------------------------------------
+      //
+      // Weekly and monthly reports are made by Cloud Functions. The report
+      // itself has counts only for salvations and baptisms; who was saved or
+      // baptised is in private/pastoral, and giving in private/giving.
+
+      match /reports/{reportId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow write: if false;
+
+        match /private/{part} {
+          allow read: if canAccessOrg(orgId)
+            && ((part == 'pastoral' && has('pastoral.read'))
+                || (part == 'giving' && has('finance.reports')));
+          allow write: if false;
+        }
+      }
+
+      // "Make a report" in the app. A Cloud Function makes it and marks the
+      // request done. Only staff who manage settings can have it emailed.
+      match /reportRequests/{requestId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create: if canAccessOrg(orgId) && has('people.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'type', 'from', 'email', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.type in ['weekly', 'monthly']
+          && isDate(request.resource.data.from)
+          && request.resource.data.status == 'pending'
+          && request.resource.data.email is bool
+          && (request.resource.data.email == false || has('settings.manage'))
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+    }
+
+    // Emails waiting to be sent by the Trigger Email extension. Server only.
+    match /mail/{mailId} {
+      allow read, write: if false;
     }
 
     // Combined view across every organization, for users who can see them all.
