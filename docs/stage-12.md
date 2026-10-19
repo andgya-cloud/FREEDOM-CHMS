@@ -33,3 +33,7 @@ Automated: the rule that picks the look and the clock text (3 new tests), all ea
 ## Adding another look later
 
 The look for each organization is chosen in `src/lib/look.ts` (by organization type today). A new look is a new name there and its styles in `src/styles.css`. If you want ADIA or the Hope Center to have their own, tell me how each should feel.
+
+## Update: full curved "cockpit" on wide screens
+
+On screens 900 pixels wide or more, the Freedom Church Today screen now matches the design page (freedom-cockpit.html): the cyan and gold curved bowl along the bottom, five tilted glass tiles (Check in, Add visitor, Record gift, Follow-ups, Nav) that follow the curve, and the page names (Today, People, Attendance, Programmes, Settings) as labels on the curve. The curve and tiles are drawn in percentages of the screen width, so they keep their shape at any size. On phones the earlier compact dock stays. Other organizations keep the standard look.

@@ -487,3 +487,76 @@ a.chip.chip-on { color: var(--primary-ink); }
 .look-cockpit .tab.active { color: var(--primary); text-shadow: 0 0 12px var(--glow); font-weight: 500; }
 @media (max-width: 520px) { .look-cockpit .tab { font-size: 0.78rem; padding-inline: 0; } .look-cockpit .tabbar { gap: 0; padding-inline: 2px; } }
 @media (prefers-reduced-motion: reduce) { .dock-btn { transition: none; } }
+
+/* Wide screens: the full curved "cockpit" (same shape as the design page). Everything is placed in percentages of a 2576 x 658 box
+   along the bottom, so the curve and the tiles keep their shape at any width. */
+.dock-bowl { display: none; }
+@media (min-width: 900px) {
+  .look-cockpit .main { padding-bottom: 27vw; }
+  .look-cockpit .cockpit-today { padding-bottom: 6vw; display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 38vw) minmax(0, 1fr); column-gap: 16px; row-gap: 0; align-items: start; }
+  .look-cockpit .cockpit-today > * { grid-column: 1 / -1; }
+  .look-cockpit .cockpit-today > section[aria-label='Switch organization'] { grid-row: 1; margin: 0.4vw 0 0; }
+  .look-cockpit .cockpit-today > h1 { grid-row: 2; font-size: clamp(3rem, 4.8vw, 8rem); margin: 1.6vw 0 0; }
+  .look-cockpit .cockpit-today > .lead { grid-row: 3; margin: 0 0 1.6vw; }
+  .look-cockpit .cockpit-today > form[role='search'] { grid-row: 4; grid-column: 2; margin: 0; width: 100%; }
+  .look-cockpit .cockpit-today > .checklist { grid-row: 4; grid-column: 1; justify-self: start; width: max-content; max-width: 100%; margin-left: 2vw; }
+  .look-cockpit .cockpit-today .checklist li { white-space: nowrap; }
+  .look-cockpit .cockpit-today .checklist .card-head { gap: 14px; justify-content: flex-start; }
+  .look-cockpit .cockpit-today > .row-list { grid-row: 5; grid-column: 2; position: relative; z-index: 20; background: var(--surface); border-radius: 16px; margin-top: 8px; }
+  .look-cockpit .cockpit-today > section.stack:not(.card) { margin-top: 20vw; }
+  .look-cockpit .topbar { padding-block: 10px; }
+  .look-cockpit .cockpit-today .lead { font-size: clamp(1.4rem, 1.7vw, 2.8rem); }
+  .look-cockpit .cockpit-today .chip, .look-cockpit .cockpit-today .search { background: rgba(255, 255, 255, 0.07); border-color: rgba(255, 255, 255, 0.14); backdrop-filter: blur(18px) saturate(140%); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.16); }
+  .look-cockpit .cockpit-today .chip { border-radius: 999px; min-height: 52px; padding: 0 28px; font-size: 1.1rem; font-weight: 300; }
+  .look-cockpit .cockpit-today .chip-on { border: 1.5px solid var(--primary); background: rgba(63, 216, 240, 0.07); box-shadow: 0 0 24px var(--glow), inset 0 0 30px rgba(63, 216, 240, 0.08); }
+  .look-cockpit .cockpit-today .search { min-height: 76px; font-size: 1.25rem; font-weight: 300; }
+  .look-cockpit .cockpit-today .checklist { background: transparent; border: 0; backdrop-filter: none; padding: 0; max-width: 340px; text-align: left; }
+  .look-cockpit .cockpit-today .checklist h2 { font-weight: 300; }
+
+  .cockpit-dock {
+    left: 0; right: 0; bottom: 0; width: 100%; height: auto; aspect-ratio: 2576 / 658;
+    padding: 0; gap: 0; background: none; border: 0; border-radius: 0; display: block; perspective: 1200px; pointer-events: none;
+  }
+  .dock-bowl { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+  .dock-btn {
+    position: absolute; pointer-events: auto; max-width: none; min-height: 0; padding: 0; gap: 0.5vw; border-radius: 1.1vw;
+    font-size: 1.55vw; background: rgba(255, 255, 255, 0.07); backdrop-filter: blur(18px) saturate(140%);
+    border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 30px rgba(0, 0, 0, 0.4);
+    transform-style: preserve-3d;
+  }
+  .dock-btn svg { width: 2.17vw; height: 2.17vw; stroke: #d8dbe4; stroke-width: 1.7; }
+  .dock-label { font-size: 1.55vw; font-weight: 400; }
+  .dock-count { font-size: 0.9vw; }
+  .dock-btn { transform: rotate(var(--r, 0deg)) rotateX(6deg); }
+  .dock-btn:hover:not(:disabled) { transform: rotate(var(--r, 0deg)) rotateX(6deg) translateY(-3px); border-color: rgba(255, 255, 255, 0.35); }
+  .dock-btn:nth-child(2) { --r: -8deg; left: 10.99%; top: 33.4%; width: 20.19%; height: 30.4%; max-width: none; border: 2px solid var(--primary); background: rgba(63, 216, 240, 0.1); box-shadow: 0 0 34px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+  .dock-btn:nth-child(2) svg { stroke: var(--primary); }
+  .dock-btn:nth-child(2):hover:not(:disabled) { border-color: var(--primary); }
+  .dock-btn:nth-child(3) { --r: -3deg; left: 32.07%; top: 34%; width: 14.36%; height: 28.9%; max-width: none; }
+  .dock-btn:nth-child(4) { --r: 1deg; left: 47.7%; top: 35.3%; width: 13.98%; height: 28.9%; max-width: none; }
+  .dock-btn:nth-child(5) { --r: 8deg; left: 62.7%; top: 35.6%; width: 15.14%; height: 28.9%; max-width: none; }
+  .dock-btn:nth-child(6) { --r: 13deg; left: 77.64%; top: 41.3%; width: 10.48%; height: 25.8%; max-width: none; }
+
+  .look-cockpit .tabbar {
+    left: 0; right: 0; bottom: 0; top: auto; width: 100%; height: auto; aspect-ratio: 2576 / 658; padding: 0;
+    background: none; border: 0; border-radius: 0; backdrop-filter: none; pointer-events: none; z-index: 10;
+  }
+  .look-cockpit .tab { position: absolute; transform: translateX(-50%); pointer-events: auto; font-size: 1.32vw; font-weight: 300; max-width: none; padding: 0; min-height: 0; }
+  .look-cockpit .tab.active { font-weight: 300; color: #5fe0f5; text-shadow: 0 0 18px rgba(95, 224, 245, 0.7); }
+  .look-cockpit .tab:nth-child(1) { left: 28.5%; top: 71.4%; }
+  .look-cockpit .tab:nth-child(2) { left: 39.2%; top: 73.3%; }
+  .look-cockpit .tab:nth-child(3) { left: 50%; top: 74.2%; }
+  .look-cockpit .tab:nth-child(4) { left: 60.5%; top: 73.3%; }
+  .look-cockpit .tab:nth-child(5) { left: 71%; top: 71.4%; }
+}
+@media (min-width: 900px) and (max-height: 799px) {
+  .look-cockpit .cockpit-today .checklist { padding: 0; margin-top: -4px; }
+  .look-cockpit .cockpit-today .checklist h2 { font-size: 0.95rem; margin: 0; }
+  .look-cockpit .cockpit-today .checklist .card-head { margin: 0 0 2px; }
+  .look-cockpit .cockpit-today .checklist .card-head .btn { min-height: 0; padding: 0 6px; font-size: 0.8rem; }
+  .look-cockpit .cockpit-today .checklist ol { gap: 0; margin: 0; }
+  .look-cockpit .cockpit-today .checklist li { font-size: 0.82rem; min-height: 0; padding-block: 1px; line-height: 1.35; }
+  .look-cockpit .cockpit-today .checklist .tick { width: 16px; height: 16px; font-size: 0.65rem; }
+  .look-cockpit .cockpit-today > h1 { margin-top: 1vw; }
+  .look-cockpit .cockpit-today > .lead { margin-bottom: 1vw; }
+}
