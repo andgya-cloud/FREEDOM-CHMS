@@ -177,6 +177,12 @@ Pick the Freedom Hope Center (type Ministry) at the top, then open **Hope**. Pro
 
 Details and the test list are in [docs/stage-10.md](docs/stage-10.md). Donors and sponsors are not built yet.
 
+## WhatsApp automation
+
+The visitor welcome, 48-hour check-in, care message and child-absent follow-up can be sent by the app itself through the WhatsApp Cloud API, from a new WhatsApp Business number. Settings → WhatsApp automation sets each type to Off, Staff approve each message first, or Send by itself (everything starts Off). Waiting messages appear on the follow-up card with Approve and send / Don't send. Delivery (sent, delivered, read, not delivered) shows on the card. A reply of "stop" switches that person's consent off. Only people who agreed to WhatsApp are messaged, a child's message goes to their guardian, sending is limited to 08:00 to 20:00, and salvation, baptism and fee messages are never automatic. The Meta access token, app secret and verify token are Firebase secrets, set with `scripts/whatsapp-setup.sh`, never in the code or database. Meta must approve each template first.
+
+Meta setup, the script, the test list and decisions are in [docs/stage-11.md](docs/stage-11.md).
+
 ## Dashboard and reports
 
 Today shows last week's **scorecard**: attendance, first-time visitors, salvations, baptisms, small group and serving rates, giving (for staff with finance reports) and overdue follow-ups. Each number shows how it moved since last week and a year ago, and opens the records behind it.

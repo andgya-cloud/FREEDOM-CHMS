@@ -9,3 +9,4 @@ functions/node_modules/
 *-debug.log
 .firebase/
 service-account*.json
+functions/.secret.local

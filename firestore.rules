@@ -87,16 +87,27 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // WhatsApp Cloud API settings. The access token is never stored here: it is a Firebase secret.
+    function validWhatsAppSettings(d) {
+      return d.enabled is bool
+        && d.phoneNumberId is string && d.phoneNumberId.size() <= 30
+        && d.modes is map
+        && d.modes.keys().hasOnly(['visitor_welcome', 'checkin_48h', 'care_absent', 'child_absent'])
+        && d.get('language', 'en') is string && d.get('language', 'en').size() <= 10;
+    }
+
     match /settings/{settingId} {
       allow read: if isActive();
       allow create: if has('settings.manage') && stampedCreate()
         && (settingId != 'pipeline'
-            || request.resource.data.sensitiveStageIds.hasAll(['salvation', 'baptism']));
+            || request.resource.data.sensitiveStageIds.hasAll(['salvation', 'baptism']))
+        && (settingId != 'whatsapp' || validWhatsAppSettings(request.resource.data));
       allow update: if has('settings.manage') && stampedUpdate()
         // A stage marked sensitive stays sensitive, so salvation and baptism
         // records can never be exposed to admins by editing the stage list.
         && (settingId != 'pipeline'
-            || request.resource.data.sensitiveStageIds.hasAll(resource.data.sensitiveStageIds));
+            || request.resource.data.sensitiveStageIds.hasAll(resource.data.sensitiveStageIds))
+        && (settingId != 'whatsapp' || validWhatsAppSettings(request.resource.data));
       allow delete: if false;
     }
 
@@ -608,6 +619,23 @@ service cloud.firestore {
                'skippedCount', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && shortText(request.resource.data.fileName, 200);
         allow update, delete: if false;
+      }
+
+      // Messages the system sends by itself through the WhatsApp Cloud API. Cloud
+      // Functions create them and send them; staff can only approve or cancel one
+      // that is waiting. Salvation and baptism messages are never queued here.
+      match /whatsappOutbox/{outboxId} {
+        allow read: if canAccessOrg(orgId) && has('followups.manage');
+        allow create, delete: if false;
+        allow update: if canAccessOrg(orgId) && has('followups.manage')
+          && resource.data.status == 'pending_approval'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approvedBy', 'approvedByName', 'updatedAt', 'updatedBy'])
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.updatedAt == request.time
+          && ((request.resource.data.status == 'queued'
+               && request.resource.data.approvedBy == request.auth.uid
+               && shortText(request.resource.data.approvedByName, 80))
+              || request.resource.data.status == 'cancelled');
       }
 
       // Written only by Cloud Functions.

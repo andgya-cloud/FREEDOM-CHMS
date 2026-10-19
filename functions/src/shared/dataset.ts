@@ -9,12 +9,13 @@ export const ORG_COLLECTIONS = [
   'courses', 'intakes', 'schoolSettings', 'students', 'studentPrivate', 'assessments', 'marks', 'feeStructures', 'invoices',
   'feeBalances', 'certificates', 'outcomes', 'schoolReports',
   'children', 'childPrivate', 'homeVisits', 'referrals', 'safeguardingConcerns', 'childExports', 'hopeReports',
+  'whatsappOutbox',
 ] as const;
 
 /** Collections whose records belong to one person (they carry a personId). */
 export const PERSON_COLLECTIONS = [
   'pipeline', 'prayerRequests', 'pastoralNotes', 'followUps', 'messages', 'attendance',
-  'enrollments', 'teamMembers', 'groupMembers',
+  'enrollments', 'teamMembers', 'groupMembers', 'whatsappOutbox',
 ] as const;
 
 /** ADIA records keyed by the student's id (the person's id), removed with the person. */

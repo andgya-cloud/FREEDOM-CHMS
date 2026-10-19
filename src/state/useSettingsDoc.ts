@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
+import { DEFAULT_WHATSAPP_SETTINGS, withWhatsAppDefaults, type WhatsAppSettings } from '../../functions/src/shared/whatsapp';
 import { DEFAULT_PIPELINE, type PipelineStage } from '../../functions/src/shared/people';
 
 function useSettingsDoc<T>(id: string, fallback: T): T {
@@ -43,4 +44,9 @@ const CUSTOM_FIELDS_FALLBACK: { fields: CustomField[] } = { fields: [] };
 
 export function useCustomFields(): CustomField[] {
   return useSettingsDoc('customFields', CUSTOM_FIELDS_FALLBACK).fields;
+}
+
+/** WhatsApp automation settings. Non-secret: the access token lives in Firebase secrets. */
+export function useWhatsAppSettings(): WhatsAppSettings {
+  return withWhatsAppDefaults(useSettingsDoc<WhatsAppSettings>('whatsapp', DEFAULT_WHATSAPP_SETTINGS));
 }

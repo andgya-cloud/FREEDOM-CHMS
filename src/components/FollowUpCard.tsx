@@ -9,6 +9,9 @@ import { assign, markDone, reopen, setNote, stopWhatsApp } from '../lib/followUp
 import { friendlyError } from '../lib/errors';
 import { useSavedMessage } from '../lib/useSavedMessage';
 import { WhatsAppSheet } from './WhatsAppSheet';
+import { useOutboxItem } from '../state/useOutbox';
+import { approveOutbox, cancelOutbox } from '../lib/whatsappWrites';
+import { OUTBOX_LABELS } from '../../functions/src/shared/whatsapp';
 import { FOLLOW_UP_OUTCOMES, FOLLOW_UP_REASON_LABELS, type FollowUpOutcome } from '../../functions/src/shared/followups';
 import { formatDate, formatDateKey, localDateKey } from '../../functions/src/shared/datetime';
 
@@ -22,7 +25,7 @@ interface Props {
 
 /** One follow-up: why, since when, who has it, and the buttons to work it. */
 export function FollowUpCard({ org, task, staff, showPerson = true }: Props) {
-  const { can, user } = useAuth();
+  const { can, user, profile } = useAuth();
   const { byId } = usePeople();
   const toast = useToast();
   const saved = useSavedMessage();
@@ -31,6 +34,7 @@ export function FollowUpCard({ org, task, staff, showPerson = true }: Props) {
   const [mode, setMode] = useState<'' | 'whatsapp' | 'done' | 'note'>('');
   const [outcome, setOutcome] = useState<FollowUpOutcome>('Reached');
   const [note, setNoteText] = useState(task.note ?? '');
+  const outbox = useOutboxItem(org.id, task.id);
   const due = dueLabel(task, org.timeZone);
   const callPhone = person?.status === 'child' ? guardian?.phone : person?.phone;
   const since = task.reason === 'care_absent' && task.absentSince
@@ -71,6 +75,21 @@ export function FollowUpCard({ org, task, staff, showPerson = true }: Props) {
         {task.assignedTo ? ` · ${task.assignedTo === user?.uid ? 'Yours' : `With ${task.assignedName ?? 'staff'}`}` : ' · Not assigned'}
         {task.lastMessageAt && ` · Messaged ${formatDate(task.lastMessageAt.toDate(), org.timeZone)}`}
       </p>
+      {outbox && outbox.status !== 'cancelled' && (
+        <div className={`notice small${outbox.status === 'failed' ? ' notice-warn' : ''}`} role="status">
+          <strong>Automatic WhatsApp: {OUTBOX_LABELS[outbox.status]}</strong>
+          {outbox.repliedAt && ' · They replied'}
+          <br />
+          <span>To {outbox.toName}{outbox.viaGuardian ? ' (parent or guardian)' : ''}: “{outbox.preview}”</span>
+          {outbox.status === 'failed' && outbox.error && <><br /><span>{outbox.error} You can still send it yourself with the WhatsApp button.</span></>}
+          {outbox.status === 'pending_approval' && task.status === 'open' && (
+            <div className="sheet-actions">
+              <button type="button" className="btn btn-primary" onClick={() => { approveOutbox(outbox, (profile?.displayName ?? '').split(' ')[0] ?? '').catch(fail); }}>Approve and send</button>
+              <button type="button" className="btn btn-quiet" onClick={() => { cancelOutbox(outbox).catch(fail); }}>Don't send</button>
+            </div>
+          )}
+        </div>
+      )}
       {task.note && mode !== 'note' && <p className="follow-up-note">{task.note}</p>}
       {task.status === 'done' && <p className="small">{task.outcome}{task.doneAt ? `, ${formatDate(task.doneAt.toDate(), org.timeZone)}` : ''}</p>}
       {!person && <p className="muted small">This person's record is not on this device or was removed.</p>}
