@@ -604,18 +604,19 @@ a.chip.chip-on { color: var(--primary-ink); }
 
 /* ---- Glass look: the frosted-glass panel over a blurred room, made for ADIA Training Centre (see src/lib/look.ts) ---- */
 :root[data-look='glass'] {
-  --bg: #0c2b30;
-  --surface: rgba(14, 58, 64, 0.78);
+  --bg: #0a1730;
+  --surface: rgba(16, 34, 72, 0.82);
   --surface-2: rgba(255, 255, 255, 0.12);
   --text: #f3fbfa;
-  --muted: #bfdad8;
-  --border: rgba(255, 255, 255, 0.28);
-  --primary: #7fe3dc;
-  --primary-ink: #052225;
+  --muted: #c3cde3;
+  --border: rgba(226, 178, 58, 0.45);
+  --primary: #f0c75e;
+  --primary-ink: #0b1a38;
   --gold-ink: #f0cf73;
   --ok: #6fe3a4;
   --red: #ff9488;
-  --glass-edge: rgba(255, 255, 255, 0.5);
+  --glass-edge: #e2b23a;
+  --gold: #e2b23a;
   color-scheme: dark;
   font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
 }
@@ -632,15 +633,15 @@ a.chip.chip-on { color: var(--primary-ink); }
 :root[data-look='glass'] body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; box-shadow: inset 0 0 22vw rgba(2, 20, 24, 0.55); }
 .look-glass { font-weight: 500; }
 .look-glass h1, .look-glass h2, .look-glass .brand { font-weight: 700; }
-.look-glass .topbar { background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(30px) saturate(150%); border-bottom: 1px solid rgba(255, 255, 255, 0.25); }
+.look-glass .topbar { background: rgba(14, 30, 66, 0.7); backdrop-filter: blur(30px) saturate(150%); border-bottom: 1px solid rgba(226, 178, 58, 0.6); }
 .look-glass .brand-name { font-weight: 700; }
-.look-glass .org-switcher select, .look-glass .org-name { border-radius: 999px; background: rgba(255, 255, 255, 0.14); border: 1px solid rgba(255, 255, 255, 0.35); padding: 6px 16px; flex: 0 1 auto; color: var(--text); font-weight: 600; }
+.look-glass .org-switcher select, .look-glass .org-name { border-radius: 999px; background: rgba(20, 42, 92, 0.7); border: 1px solid rgba(226, 178, 58, 0.7); padding: 6px 16px; flex: 0 1 auto; color: var(--text); font-weight: 600; }
 .look-glass .org-switcher { flex: 0 1 auto; }
 .look-glass .sync-badge { background: rgba(80, 200, 130, 0.28); color: #dcffe9; border: 1px solid rgba(160, 255, 200, 0.5); font-weight: 600; }
-.look-glass .card, .look-glass .notice { background: rgba(255, 255, 255, 0.13); border-color: rgba(255, 255, 255, 0.3); backdrop-filter: blur(24px) saturate(140%); }
-.look-glass .chip { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.32); }
-.look-glass .chip-on { background: linear-gradient(180deg, #ffffff 0%, #cfe6ff 100%); color: #0d3a52; border-color: #fff; box-shadow: 0 6px 18px rgba(0, 40, 60, 0.35), inset 0 1px 0 #fff; }
-.look-glass .search { background: rgba(255, 255, 255, 0.16); border: 1px solid rgba(255, 255, 255, 0.35); color: var(--text); border-radius: 999px; padding-left: 22px; min-height: 58px; backdrop-filter: blur(20px); }
+.look-glass .card, .look-glass .notice { background: rgba(18, 38, 82, 0.62); border-color: rgba(226, 178, 58, 0.5); backdrop-filter: blur(24px) saturate(140%); }
+.look-glass .chip { background: rgba(20, 42, 92, 0.6); border-color: rgba(226, 178, 58, 0.55); }
+.look-glass .chip-on { background: linear-gradient(180deg, #f7dd8f 0%, #e2b23a 100%); color: #0b1a38; border-color: #fff3c4; box-shadow: 0 6px 18px rgba(0, 10, 40, 0.45), inset 0 1px 0 #fff3c4; }
+.look-glass .search { background: rgba(20, 42, 92, 0.6); border: 1px solid rgba(226, 178, 58, 0.7); color: var(--text); border-radius: 999px; padding-left: 22px; min-height: 58px; backdrop-filter: blur(20px); }
 .look-glass .search::placeholder { color: rgba(243, 251, 250, 0.85); }
 .look-glass .btn-quiet { color: #d8fbf7; }
 .look-glass .chip:not(.chip-on) { color: #f3fbfa; }
@@ -648,57 +649,57 @@ a.chip.chip-on { color: var(--primary-ink); }
 /* The panel: the whole Today page floats as one frosted sheet */
 .glass-today {
   position: relative; padding: 22px 18px 26px; margin-top: 8px;
-  background: linear-gradient(160deg, rgba(40, 110, 116, 0.5) 0%, rgba(14, 70, 78, 0.55) 55%, rgba(30, 100, 108, 0.5) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.45); border-radius: 36px;
+  background: linear-gradient(160deg, rgba(30, 58, 118, 0.6) 0%, rgba(12, 28, 66, 0.66) 55%, rgba(24, 48, 104, 0.6) 100%);
+  border: 2px solid #e2b23a; border-radius: 36px;
   backdrop-filter: blur(46px) saturate(160%);
-  box-shadow: 0 40px 90px rgba(0, 30, 40, 0.45), inset 0 1.5px 0 rgba(255, 255, 255, 0.65), inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+  box-shadow: 0 40px 90px rgba(0, 8, 30, 0.55), 0 0 28px rgba(226, 178, 58, 0.25), inset 0 1.5px 0 rgba(255, 236, 170, 0.5), inset 0 -1px 0 rgba(226, 178, 58, 0.3);
 }
 .glass-today::before { content: ''; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; background: linear-gradient(115deg, rgba(255, 255, 255, 0.28) 0%, transparent 35%); mix-blend-mode: soft-light; }
 .glass-today > .muted:first-child { display: none; }
 .glass-today h1 { font-size: clamp(1.9rem, 4vw, 3.2rem); margin: 0 0 2px; letter-spacing: -0.01em; }
 .glass-today .lead { color: #e4f6f4; font-size: 1.15rem; margin: 0 0 14px; }
 .glass-today .big-actions { display: none; }
-.glass-today .card[aria-label='Switch organization'] { background: rgba(255, 255, 255, 0.1); box-shadow: inset 0 2px 8px rgba(0, 40, 60, 0.25); border-radius: 26px; }
+.glass-today .card[aria-label='Switch organization'] { background: rgba(10, 24, 58, 0.5); box-shadow: inset 0 2px 8px rgba(0, 8, 30, 0.4); border-radius: 26px; }
 .glass-today .card h2 { font-size: 1.1rem; }
 .glass-today .checklist { margin-top: 14px; border-radius: 26px; }
-.glass-today .tick { border-color: rgba(255, 255, 255, 0.6); }
+.glass-today .tick { border-color: rgba(226, 178, 58, 0.8); }
 .glass-today .done .tick { background: #3fbf7a; border-color: #8cf0b8; }
 .glass-today .checklist li.done { color: var(--text); }
 .glass-today form[role='search'] { margin-top: 14px; }
-.glass-today .row-list { background: rgba(10, 50, 56, 0.9); border-radius: 18px; }
+.glass-today .row-list { background: rgba(12, 26, 60, 0.95); border-radius: 18px; }
 
 .glass-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
 .glass-tile {
   position: relative; min-height: 150px; padding: 14px; border-radius: 30px; overflow: hidden;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; text-align: center;
   color: #fff; text-decoration: none; font: inherit; font-weight: 700; cursor: pointer;
-  background: linear-gradient(165deg, rgba(120, 232, 222, 0.82) 0%, rgba(30, 150, 160, 0.78) 55%, rgba(14, 104, 118, 0.85) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 18px 36px rgba(0, 40, 50, 0.4), inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -10px 22px rgba(0, 70, 85, 0.35);
+  background: linear-gradient(165deg, rgba(58, 96, 176, 0.88) 0%, rgba(24, 48, 110, 0.9) 55%, rgba(12, 26, 66, 0.94) 100%);
+  border: 2px solid #e2b23a;
+  box-shadow: 0 18px 36px rgba(0, 8, 30, 0.5), 0 0 18px rgba(226, 178, 58, 0.25), inset 0 2px 0 rgba(255, 236, 170, 0.45), inset 0 -10px 22px rgba(0, 10, 40, 0.45);
   transition: transform 0.15s, box-shadow 0.15s;
 }
-.glass-tile::after { content: ''; position: absolute; left: 6%; right: 6%; top: 3%; height: 38%; border-radius: 26px 26px 60% 60%; background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0)); pointer-events: none; }
-.glass-tile:hover:not(:disabled) { transform: translateY(-3px) scale(1.01); box-shadow: 0 24px 44px rgba(0, 40, 50, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -10px 22px rgba(0, 70, 85, 0.35); }
+.glass-tile::after { content: ''; position: absolute; left: 6%; right: 6%; top: 3%; height: 38%; border-radius: 26px 26px 60% 60%; background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0)); pointer-events: none; }
+.glass-tile:hover:not(:disabled) { transform: translateY(-3px) scale(1.01); box-shadow: 0 24px 44px rgba(0, 8, 30, 0.6), 0 0 26px rgba(226, 178, 58, 0.45), inset 0 2px 0 rgba(255, 236, 170, 0.6), inset 0 -10px 22px rgba(0, 10, 40, 0.45); }
 .glass-tile:active:not(:disabled) { transform: scale(0.98); }
 .glass-tile:disabled { opacity: 0.5; cursor: default; }
-.glass-tile svg { width: 44px; height: 44px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 3px 4px rgba(0, 50, 60, 0.4)); }
-.tile-dollar { font-size: 3.4rem; line-height: 1; font-weight: 800; background: linear-gradient(180deg, #ffffff 0%, #b9c7d3 45%, #6c7f90 55%, #e8f0f6 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 3px rgba(0, 50, 60, 0.45)); }
-.tile-label { font-size: 1.3rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0, 50, 60, 0.35); }
+.glass-tile svg { width: 44px; height: 44px; fill: none; stroke: #f0c75e; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 3px 4px rgba(0, 8, 30, 0.5)); }
+.tile-dollar { font-size: 3.4rem; line-height: 1; font-weight: 800; background: linear-gradient(180deg, #fff3c4 0%, #e2b23a 45%, #9a7418 55%, #f7dd8f 100%); -webkit-background-clip: text; background-clip: text; color: transparent; filter: drop-shadow(0 3px 3px rgba(0, 50, 60, 0.45)); }
+.tile-label { font-size: 1.3rem; font-weight: 700; text-shadow: 0 2px 4px rgba(0, 8, 30, 0.5); }
 .tile-sub { font-size: 0.85rem; font-weight: 600; opacity: 0.92; }
 
 /* The page tabs become the floating dock of round buttons */
 .look-glass .tabbar {
   left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 20px)); bottom: calc(12px + env(safe-area-inset-bottom));
-  padding: 8px 10px; border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 44px; gap: 2px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.12));
+  padding: 8px 10px; border: 2px solid #e2b23a; border-radius: 44px; gap: 2px;
+  background: linear-gradient(180deg, rgba(30, 58, 118, 0.72), rgba(10, 24, 58, 0.8));
   backdrop-filter: blur(36px) saturate(160%);
-  box-shadow: 0 22px 50px rgba(0, 30, 40, 0.45), inset 0 1.5px 0 rgba(255, 255, 255, 0.7);
+  box-shadow: 0 22px 50px rgba(0, 8, 30, 0.55), 0 0 22px rgba(226, 178, 58, 0.3), inset 0 1.5px 0 rgba(255, 236, 170, 0.5);
 }
 .look-glass .tab { color: #f3fbfa; font-size: 0.66rem; font-weight: 600; letter-spacing: 0; gap: 3px; max-width: none; }
-.look-glass .tab svg { width: 46px; height: 46px; padding: 11px; border-radius: 50%; stroke-width: 1.9; background: linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.08)); border: 1px solid rgba(255, 255, 255, 0.45); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6), 0 6px 14px rgba(0, 40, 50, 0.3); transition: transform 0.15s; }
+.look-glass .tab svg { width: 46px; height: 46px; padding: 11px; border-radius: 50%; stroke-width: 1.9; background: linear-gradient(180deg, rgba(58, 96, 176, 0.7), rgba(16, 34, 78, 0.85)); border: 1.5px solid #e2b23a; color: #f0c75e; box-shadow: inset 0 1px 0 rgba(255, 236, 170, 0.45), 0 6px 14px rgba(0, 8, 30, 0.4); transition: transform 0.15s; }
 .look-glass .tab:hover svg { transform: translateY(-2px); }
 .look-glass .tab.active { color: #fff; font-weight: 700; }
-.look-glass .tab.active svg { background: linear-gradient(180deg, #ffffff 0%, #d4e8f3 100%); color: #0d3a52; stroke: #0d3a52; box-shadow: 0 8px 18px rgba(0, 40, 60, 0.4), inset 0 1px 0 #fff; }
+.look-glass .tab.active svg { background: linear-gradient(180deg, #f7dd8f 0%, #e2b23a 100%); color: #0b1a38; stroke: #0b1a38; box-shadow: 0 8px 18px rgba(0, 8, 30, 0.5), inset 0 1px 0 #fff3c4; }
 
 @media (min-width: 900px) {
   .look-glass .main { max-width: 1280px; padding-top: 28px; padding-bottom: 140px; }
