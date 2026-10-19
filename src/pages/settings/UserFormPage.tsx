@@ -11,7 +11,7 @@ import { friendlyError } from '../../lib/errors';
 import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { passwordProblems } from '../../../functions/src/shared/password';
 
 interface FormState {
@@ -25,17 +25,29 @@ interface FormState {
   active: boolean;
 }
 
+const ROLE_HINTS: Record<string, string> = {
+  admin: ': everyday work, including recording gifts and receipts',
+  head: ': runs one organization and adds its staff, never sees money',
+  staff: ': everyday work in their organization, never sees money',
+};
+
 const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true };
 
 export function UserFormPage() {
   const { uid } = useParams();
   const isNew = !uid;
-  const { profile: me } = useAuth();
+  const { profile: me, can } = useAuth();
   const { organizations } = useOrg();
+  // An organization head (not the pastor) adds Staff for their own organizations only; the server checks this too.
+  const teamOnly = !can('users.manage');
+  const myOrgs = teamOnly ? organizations.filter((o) => me?.orgIds?.includes(o.id)) : organizations;
   const roles = useRoles();
   const toast = useToast();
   const navigate = useNavigate();
-  const [form, setForm] = useState<FormState>(() => ({ ...EMPTY, password: generateTemporaryPassword() }));
+  const [form, setForm] = useState<FormState>(() => ({
+    ...EMPTY, password: generateTemporaryPassword(),
+    ...(teamOnly ? { roleId: TEAM_ROLE_ID, orgIds: me?.orgIds?.length === 1 ? [...me.orgIds] : [] } : {}),
+  }));
   const [loaded, setLoaded] = useState(isNew);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -71,10 +83,12 @@ export function UserFormPage() {
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     setBusy(true);
     try {
-      const payload = {
-        displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
-        extraPermissions: role?.isOwner ? [] : form.extraPermissions,
-      };
+      const payload = teamOnly
+        ? { displayName: form.displayName.trim(), orgIds: form.orgIds }
+        : {
+          displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
+          extraPermissions: role?.isOwner ? [] : form.extraPermissions,
+        };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
         toast.show(`Account created. Give ${form.displayName.split(' ')[0]} the temporary password: ${form.password}`);
@@ -128,32 +142,38 @@ export function UserFormPage() {
           <span>Email</span>
           <input type="email" value={form.email} disabled={!isNew} onChange={(e) => set('email', e.target.value)} />
         </label>
-        <fieldset className="field">
-          <legend>Role</legend>
-          {roles.map((r) => (
-            <label key={r.id} className="check">
-              <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => set('roleId', r.id)} disabled={uid === me?.uid} />
-              <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ''}</span>
-            </label>
-          ))}
-        </fieldset>
+        {teamOnly ? (
+          <p className="hint">Role: <strong>Staff</strong>. They can record people, attendance, programmes and follow-ups, and never see money.</p>
+        ) : (
+          <fieldset className="field">
+            <legend>Role</legend>
+            {roles.map((r) => (
+              <label key={r.id} className="check">
+                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => set('roleId', r.id)} disabled={uid === me?.uid} />
+                <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ROLE_HINTS[r.id] ?? ''}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         {!role?.isOwner && (
           <>
             <fieldset className="field">
               <legend>Organizations</legend>
-              <label className="check">
-                <input type="checkbox" checked={form.allOrgs} onChange={(e) => set('allOrgs', e.target.checked)} />
-                <span>All organizations, including new ones</span>
-              </label>
-              {!form.allOrgs && organizations.map((o) => (
+              {!teamOnly && (
+                <label className="check">
+                  <input type="checkbox" checked={form.allOrgs} onChange={(e) => set('allOrgs', e.target.checked)} />
+                  <span>All organizations, including new ones</span>
+                </label>
+              )}
+              {!form.allOrgs && myOrgs.map((o) => (
                 <label key={o.id} className="check">
                   <input type="checkbox" checked={form.orgIds.includes(o.id)} onChange={() => toggle('orgIds', o.id)} />
                   <span>{o.name}</span>
                 </label>
               ))}
             </fieldset>
-            <fieldset className="field">
+            {!teamOnly && <fieldset className="field">
               <legend>Also allow</legend>
               <p className="hint">Off by default for admins.</p>
               {GRANTABLE_PERMISSIONS.map((p) => (
@@ -162,7 +182,7 @@ export function UserFormPage() {
                   <span>{PERMISSION_LABELS[p]}</span>
                 </label>
               ))}
-            </fieldset>
+            </fieldset>}
           </>
         )}
 

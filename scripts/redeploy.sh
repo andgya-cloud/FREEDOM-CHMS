@@ -38,6 +38,8 @@ fdeploy onAbsenceCheckRequested
 fdeploy onHopeReportRequested
 fdeploy dailyChildAbsences || echo "(The daily absence check was not deployed. Tell Claude.)"
 fdeploy scheduledHopeReports || echo "(The scheduled Hope Center reports were not deployed. Tell Claude.)"
+# Staff accounts (organization heads add staff for their own organization). These need no WhatsApp secrets.
+npx firebase deploy --project freedom-chms --only functions:createUser,functions:updateUser,functions:resetUserPassword,functions:listTeam
 # Then the rules, and the app itself.
 npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting
 # Backups need Firebase Storage. If you have switched it on, lock its rules now. If not, this

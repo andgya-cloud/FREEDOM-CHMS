@@ -19,6 +19,8 @@ export const PERMISSIONS = [
   'giving.person.read',
   'finance.reports',
   'settings.manage',
+  // An organization head adds and manages Staff accounts for their own organization only
+  'team.manage',
   // Pastor only
   'users.manage',
   'audit.read',
@@ -47,6 +49,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'giving.person.read': 'Giving history per person',
   'finance.reports': 'Financial reports',
   'settings.manage': 'Settings and organizations',
+  'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',
   'data.export': 'Export and erase data',
@@ -59,7 +62,13 @@ export interface RoleDefinition {
   permissions: string[];
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin', RoleDefinition> = {
+/** The day-to-day work of an organization, without any money. */
+const TEAM_WORK = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'followups.manage'];
+
+/** The role an organization head gives to the staff they add. */
+export const TEAM_ROLE_ID = 'staff';
+
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -73,7 +82,15 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin', RoleDefinition> = {
       'followups.manage',
     ],
   },
+  // For the person in charge of one organization, such as ADIA or Freedom Hope Center:
+  // their organization's everyday work, no money, and they can add Staff for it.
+  head: { name: 'Organization head', permissions: [...TEAM_WORK, 'team.manage'] },
+  staff: { name: 'Staff', permissions: [...TEAM_WORK] },
 };
+
+export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {
+  return Object.prototype.hasOwnProperty.call(DEFAULT_ROLES, id);
+}
 
 export function isPermission(value: string): value is Permission {
   return (PERMISSIONS as readonly string[]).includes(value);
@@ -112,4 +129,21 @@ export function can(profile: AccessProfile | null | undefined, permission: Permi
 export function canAccessOrg(profile: AccessProfile | null | undefined, orgId: string): boolean {
   if (!profile?.active) return false;
   return !!profile.allOrgs || !!profile.orgIds?.includes(orgId);
+}
+
+export interface TeamAccount {
+  roleId: string;
+  allOrgs?: boolean;
+  orgIds?: readonly string[];
+}
+
+/**
+ * Whether an organization head (team.manage, not the pastor) may create or change this account:
+ * only Staff accounts whose organizations are all among the head's own.
+ */
+export function canManageTeamAccount(head: AccessProfile | null | undefined, account: TeamAccount): boolean {
+  if (!can(head, 'team.manage') || head?.allOrgs) return false;
+  if (account.roleId !== TEAM_ROLE_ID || account.allOrgs) return false;
+  const orgIds = account.orgIds ?? [];
+  return orgIds.length > 0 && orgIds.every((id) => !!head?.orgIds?.includes(id));
 }

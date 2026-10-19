@@ -60,8 +60,15 @@ service cloud.firestore {
 
     // ---- Users and roles --------------------------------------------------
 
+    // An organization head may read the Staff accounts of their own organizations (see canManageTeamAccount).
+    function isMyTeamAccount(d) {
+      return has('team.manage') && me().allOrgs != true
+        && d.roleId == 'staff' && d.get('allOrgs', false) != true
+        && d.orgIds.size() > 0 && d.orgIds.hasOnly(me().orgIds);
+    }
+
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || has('users.manage'));
+      allow get: if signedIn() && (request.auth.uid == uid || has('users.manage') || isMyTeamAccount(resource.data));
       allow list: if has('users.manage');
       allow write: if false; // Cloud Functions only
     }

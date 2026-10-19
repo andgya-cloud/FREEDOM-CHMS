@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { effectivePermissions, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, TEAM_ROLE_ID, can, canManageTeamAccount, effectivePermissions, isDefaultRoleId, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 
 // The browser calls these directly, so anyone may reach them; each one checks
@@ -8,11 +8,34 @@ import { passwordProblems } from './shared/password.js';
 // them closed and every call fails.
 const CALLABLE = { invoker: 'public' } as const;
 
-async function loadRole(roleId: string): Promise<RoleDefinition> {
-  const snap = await db.doc(`roles/${roleId}`).get();
-  if (!snap.exists) throw new HttpsError('invalid-argument', 'That role does not exist.');
-  return snap.data() as RoleDefinition;
+async function loadRole(roleId: string, byUid?: string): Promise<RoleDefinition> {
+  const ref = db.doc(`roles/${roleId}`);
+  const snap = await ref.get();
+  if (snap.exists) return snap.data() as RoleDefinition;
+  // Roles added after the first setup (Organization head, Staff) are created the first time they are used.
+  if (byUid && isDefaultRoleId(roleId)) {
+    const role = DEFAULT_ROLES[roleId];
+    await ref.create({
+      name: role.name, isOwner: !!role.isOwner, system: true, permissions: role.permissions,
+      createdAt: FieldValue.serverTimestamp(), createdBy: byUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: byUid,
+    }).catch((err: { code?: number }) => { if (err.code !== 6) throw err; }); // 6: created meanwhile
+    return role;
+  }
+  throw new HttpsError('invalid-argument', 'That role does not exist.');
 }
+
+/**
+ * The pastor (users.manage) may manage any account. An organization head (team.manage) may only manage
+ * Staff accounts inside their own organizations, and gets back the caller with that limit applied.
+ */
+async function requireAccountManager(request: Parameters<typeof requireCaller>[0]) {
+  const caller = await requireCaller(request);
+  if (can(caller.profile, 'users.manage')) return { caller, teamOnly: false };
+  if (can(caller.profile, 'team.manage')) return { caller, teamOnly: true };
+  throw new HttpsError('permission-denied', 'You do not have permission to do that.');
+}
+
+const OUTSIDE_TEAM = 'You can only manage Staff accounts for your own organization.';
 
 function checkPassword(password: unknown, email: string): string {
   if (typeof password !== 'string') throw new HttpsError('invalid-argument', 'Enter a password.');
@@ -29,18 +52,21 @@ async function countActiveOwners(): Promise<number> {
   return owners.size;
 }
 
-/** Pastor creates a staff account with a temporary password. */
+/** Pastor (or an organization head, for their own Staff) creates an account with a temporary password. */
 export const createUser = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request, 'users.manage');
+  const { caller, teamOnly } = await requireAccountManager(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const email = requireString(data.email, 'the email', { min: 3 }).toLowerCase();
   const displayName = requireString(data.displayName, 'the name', { min: 2, max: 80 });
-  const roleId = requireString(data.roleId, 'the role');
+  const roleId = teamOnly ? TEAM_ROLE_ID : requireString(data.roleId, 'the role');
   const orgIds = requireStringArray(data.orgIds ?? [], 'the organizations');
-  const extraPermissions = requireStringArray(data.extraPermissions ?? [], 'the permissions');
+  const extraPermissions = teamOnly ? [] : requireStringArray(data.extraPermissions ?? [], 'the permissions');
   const password = checkPassword(data.password, email);
-  const role = await loadRole(roleId);
-  const allOrgs = role.isOwner ? true : data.allOrgs === true;
+  const role = await loadRole(roleId, caller.uid);
+  const allOrgs = role.isOwner ? true : !teamOnly && data.allOrgs === true;
+  if (teamOnly && !canManageTeamAccount(caller.profile, { roleId, allOrgs, orgIds })) {
+    throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  }
   if (!allOrgs && orgIds.length === 0) throw new HttpsError('invalid-argument', 'Choose at least one organization.');
 
   let uid: string;
@@ -75,26 +101,30 @@ export const createUser = onCall(CALLABLE, async (request) => {
   return { uid };
 });
 
-/** Pastor changes a user's role, organizations, granted permissions or active state. */
+/** Pastor changes a user's role, organizations, granted permissions or active state. A head may change their own Staff's name, organizations and active state. */
 export const updateUser = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request, 'users.manage');
+  const { caller, teamOnly } = await requireAccountManager(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const uid = requireString(data.uid, 'the user');
   const ref = db.doc(`users/${uid}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.');
   const current = snap.data() as UserProfile;
+  if (teamOnly && (uid === caller.uid || !canManageTeamAccount(caller.profile, current))) {
+    throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  }
 
   const next: Partial<UserProfile> = {};
   if (data.displayName !== undefined) next.displayName = requireString(data.displayName, 'the name', { min: 2, max: 80 });
-  if (data.roleId !== undefined) next.roleId = requireString(data.roleId, 'the role');
+  if (data.roleId !== undefined && !teamOnly) next.roleId = requireString(data.roleId, 'the role');
   if (data.orgIds !== undefined) next.orgIds = requireStringArray(data.orgIds, 'the organizations');
-  if (data.extraPermissions !== undefined) next.extraPermissions = requireStringArray(data.extraPermissions, 'the permissions');
-  if (data.allOrgs !== undefined) next.allOrgs = data.allOrgs === true;
+  if (data.extraPermissions !== undefined && !teamOnly) next.extraPermissions = requireStringArray(data.extraPermissions, 'the permissions');
+  if (data.allOrgs !== undefined && !teamOnly) next.allOrgs = data.allOrgs === true;
   if (data.active !== undefined) next.active = data.active === true;
 
   const merged = { ...current, ...next };
-  const role = await loadRole(merged.roleId);
+  if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  const role = await loadRole(merged.roleId, caller.uid);
   const currentRole = await loadRole(current.roleId);
   if (role.isOwner) merged.allOrgs = true;
   if (!merged.allOrgs && merged.orgIds.length === 0) throw new HttpsError('invalid-argument', 'Choose at least one organization.');
@@ -130,13 +160,16 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   return { ok: true };
 });
 
-/** Pastor sets a new temporary password; the user must change it at next sign-in. */
+/** Pastor (or a head, for their own Staff) sets a new temporary password; the user must change it at next sign-in. */
 export const resetUserPassword = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request, 'users.manage');
+  const { caller, teamOnly } = await requireAccountManager(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const uid = requireString(data.uid, 'the user');
   const snap = await db.doc(`users/${uid}`).get();
   if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+  if (teamOnly && (uid === caller.uid || !canManageTeamAccount(caller.profile, snap.data() as UserProfile))) {
+    throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  }
   const email = (snap.data() as UserProfile).email;
   const password = checkPassword(data.password, email);
   await auth.updateUser(uid, { password });
@@ -175,4 +208,21 @@ export const recordSignIn = onCall(CALLABLE, async (request) => {
     collection: 'users', docId: caller.uid, orgId: null,
   });
   return { ok: true };
+});
+
+/** An organization head's Staff accounts. Heads cannot list the users collection, so they read it through here. */
+export const listTeam = onCall(CALLABLE, async (request) => {
+  const { caller, teamOnly } = await requireAccountManager(request);
+  if (!teamOnly) throw new HttpsError('failed-precondition', 'The pastor sees every account in Staff accounts.');
+  const snap = await db.collection('users').where('roleId', '==', TEAM_ROLE_ID).get();
+  const users = snap.docs
+    .filter((d) => canManageTeamAccount(caller.profile, d.data() as UserProfile))
+    .map((d) => {
+      const u = d.data() as UserProfile & { lastSignInAt?: FirebaseFirestore.Timestamp };
+      return {
+        uid: d.id, displayName: u.displayName, email: u.email, roleId: u.roleId, orgIds: u.orgIds, active: u.active,
+        lastSignInAt: u.lastSignInAt ? u.lastSignInAt.toMillis() : null,
+      };
+    });
+  return { users };
 });

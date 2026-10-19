@@ -34,10 +34,16 @@ if (!values.project || !values.email || !values.name) {
 // Kept in step with functions/src/shared/permissions.ts and password.ts.
 const PERMISSIONS = [
   'people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue',
-  'followups.manage', 'pastoral.read', 'giving.person.read', 'finance.reports', 'settings.manage',
+  'followups.manage', 'pastoral.read', 'giving.person.read', 'finance.reports', 'settings.manage', 'team.manage',
   'users.manage', 'audit.read', 'data.export',
 ];
 const ADMIN = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue', 'followups.manage'];
+// Kept in step with DEFAULT_ROLES in functions/src/shared/permissions.ts. Neither role sees money.
+const TEAM_WORK = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'followups.manage'];
+const TEAM_ROLES = [
+  ['roles/head', { name: 'Organization head', isOwner: false, system: true, permissions: [...TEAM_WORK, 'team.manage'] }],
+  ['roles/staff', { name: 'Staff', isOwner: false, system: true, permissions: TEAM_WORK }],
+];
 
 function passwordProblems(pw, email) {
   const out = [];
@@ -119,7 +125,7 @@ if (!existingOwners.empty) {
   const ownerUid = existingOwners.docs[0].id;
   const stamp = { createdAt: FieldValue.serverTimestamp(), createdBy: ownerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: ownerUid };
   const added = [];
-  for (const [path, data] of [['settings/pipeline', PIPELINE_SETTINGS], ['settings/customFields', CUSTOM_FIELD_SETTINGS]]) {
+  for (const [path, data] of [['settings/pipeline', PIPELINE_SETTINGS], ['settings/customFields', CUSTOM_FIELD_SETTINGS], ...TEAM_ROLES]) {
     try {
       await db.doc(path).create({ ...data, ...stamp });
       added.push(path);
@@ -138,6 +144,7 @@ const stamp = { createdAt: FieldValue.serverTimestamp(), createdBy: uid, updated
 const batch = db.batch();
 batch.set(db.doc('roles/pastor'), { name: 'Pastor', isOwner: true, system: true, permissions: PERMISSIONS, ...stamp });
 batch.set(db.doc('roles/admin'), { name: 'Admin', isOwner: false, system: true, permissions: ADMIN, ...stamp });
+for (const [path, data] of TEAM_ROLES) batch.set(db.doc(path), { ...data, ...stamp });
 batch.set(db.doc('settings/app'), {
   inactivityMinutes: 15,
   regularAttender: { minWeeks: 3, ofLastWeeks: 8 },

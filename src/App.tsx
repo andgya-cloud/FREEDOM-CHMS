@@ -156,9 +156,9 @@ function AppRoutes() {
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
         <Route path="/settings/organizations/:orgId" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
-        <Route path="/settings/users" element={<RequirePermission permission="users.manage"><UsersPage /></RequirePermission>} />
-        <Route path="/settings/users/new" element={<RequirePermission permission="users.manage"><UserFormPage /></RequirePermission>} />
-        <Route path="/settings/users/:uid" element={<RequirePermission permission="users.manage"><UserFormPage /></RequirePermission>} />
+        <Route path="/settings/users" element={<RequirePermission anyOf={['users.manage', 'team.manage']}><UsersPage /></RequirePermission>} />
+        <Route path="/settings/users/new" element={<RequirePermission anyOf={['users.manage', 'team.manage']}><UserFormPage /></RequirePermission>} />
+        <Route path="/settings/users/:uid" element={<RequirePermission anyOf={['users.manage', 'team.manage']}><UserFormPage /></RequirePermission>} />
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/settings/audit" element={<RequirePermission permission="audit.read"><AuditLogPage /></RequirePermission>} />

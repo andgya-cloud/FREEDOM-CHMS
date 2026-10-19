@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import type { Permission } from '../../../functions/src/shared/permissions';
 
-const ITEMS: { to: string; label: string; detail: string; permission?: Permission }[] = [
+const ITEMS: { to: string; label: string; detail: string; permission?: Permission; orPermission?: Permission }[] = [
   { to: '/settings/organizations', label: 'Organizations', detail: 'Campuses, the college and ministries', permission: 'settings.manage' },
   { to: '/settings/pipeline', label: 'Journey stages', detail: 'Visitor, Salvation, Baptism, Growth Track…', permission: 'settings.manage' },
   { to: '/settings/custom-fields', label: 'Extra fields', detail: 'Your own fields on every person', permission: 'settings.manage' },
@@ -11,7 +11,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { to: '/settings/templates', label: 'WhatsApp messages', detail: 'The words for welcomes, check-ins, care and receipts', permission: 'settings.manage' },
   { to: '/settings/whatsapp', label: 'WhatsApp automation', detail: 'Let welcomes and check-ins send themselves, with your approval first', permission: 'settings.manage' },
   { to: '/settings/reports', label: 'Reports', detail: 'Regular attenders, who gets reports by email, giving budget', permission: 'settings.manage' },
-  { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', permission: 'users.manage' },
+  { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', permission: 'users.manage', orPermission: 'team.manage' },
   { to: '/settings/data', label: 'Data and backups', detail: 'Weekly backup, download everything, one person’s data, practice mode', permission: 'data.export' },
   { to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },
   { to: '/help', label: 'Help', detail: 'How to do the everyday jobs' },
@@ -24,7 +24,7 @@ export function SettingsPage() {
     <div className="page">
       <h1>Settings</h1>
       <ul className="link-list">
-        {ITEMS.filter((i) => !i.permission || can(i.permission)).map((i) => (
+        {ITEMS.filter((i) => !i.permission || can(i.permission) || (!!i.orPermission && can(i.orPermission))).map((i) => (
           <li key={i.to}>
             <Link to={i.to}>
               <span className="link-title">{i.label}</span>
