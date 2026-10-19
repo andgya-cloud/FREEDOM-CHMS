@@ -8,6 +8,7 @@ export const ORG_COLLECTIONS = [
   'reports',
   'courses', 'intakes', 'schoolSettings', 'students', 'studentPrivate', 'assessments', 'marks', 'feeStructures', 'invoices',
   'feeBalances', 'certificates', 'outcomes', 'schoolReports',
+  'children', 'childPrivate', 'homeVisits', 'referrals', 'safeguardingConcerns', 'childExports', 'hopeReports',
 ] as const;
 
 /** Collections whose records belong to one person (they carry a personId). */
@@ -20,6 +21,11 @@ export const PERSON_COLLECTIONS = [
 export const STUDENT_DOCS = ['students', 'studentPrivate', 'feeBalances', 'certificates'] as const;
 /** ADIA records that carry a studentId field: results and employment follow-ups are removed, invoices are kept for the accounts. */
 export const STUDENT_FIELD_COLLECTIONS = ['marks', 'outcomes'] as const;
+
+/** Freedom Hope Center records keyed by the child's id (the person's id), removed with the child. */
+export const CHILD_DOCS = ['children', 'childPrivate'] as const;
+/** Hope Center records that carry a childId field (home visits, referrals, safeguarding concerns): removed with the child. */
+export const CHILD_FIELD_COLLECTIONS = ['homeVisits', 'referrals', 'safeguardingConcerns'] as const;
 
 /** Money records are kept for the accounts, but stop naming the person when they are erased. */
 export const FINANCIAL_PERSON_COLLECTIONS = ['gifts', 'receipts', 'giftReviews'] as const;

@@ -939,6 +939,159 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ---- Freedom Hope Center -------------------------------------------
+      // Protecting children comes first. The register is open to staff who see
+      // people (names, codes, attendance). Welfare notes, home visits, referrals
+      // and safeguarding concerns are pastor-only: staff can raise a concern but
+      // cannot open it again. No record anywhere holds a photo.
+
+      function hopeRead() {
+        return canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
+      }
+      function validConsent(c) {
+        return c is map && c.keys().hasOnly(['given', 'date'])
+          && (c.given == null || c.given is bool)
+          && (c.date == null || isDate(c.date));
+      }
+
+      // One record per child, with the person's id as its id. The code (HC-0042) is added by a Cloud Function.
+      // Consent can be missing: saving never waits for it.
+      match /children/{childId} {
+        allow read: if hopeRead();
+        allow create, update: if orgWrite(orgId, 'people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'code', 'status', 'enrolledOn', 'exitedOn', 'schoolStatus', 'programmes',
+               'photoConsent', 'guardianConsent', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('people', childId)
+          && request.resource.data.status in ['active', 'exited']
+          && request.resource.data.schoolStatus in ['in_school', 'not_in_school', 'unknown']
+          && optionalDate(request.resource.data.get('enrolledOn', null))
+          && optionalDate(request.resource.data.get('exitedOn', null))
+          && listOf(request.resource.data.programmes, 8)
+          && validConsent(request.resource.data.photoConsent)
+          && validConsent(request.resource.data.guardianConsent)
+          && (resource == null ? request.resource.data.get('code', null) == null
+                               : request.resource.data.get('code', null) == resource.data.get('code', null));
+        allow delete: if false;
+      }
+
+      // Welfare notes, dietary and health flags, home circumstances. Pastor only.
+      match /childPrivate/{childId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create, update: if orgWrite(orgId, 'pastoral.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'welfare', 'health', 'home',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('children', childId)
+          && shortText(request.resource.data.get('welfare', ''), 4000)
+          && shortText(request.resource.data.get('health', ''), 2000)
+          && shortText(request.resource.data.get('home', ''), 2000);
+        allow delete: if false;
+      }
+
+      match /homeVisits/{visitId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create, update: if orgWrite(orgId, 'pastoral.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'childId', 'date', 'note',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('children', request.resource.data.childId)
+          && isDate(request.resource.data.date)
+          && shortText(request.resource.data.note, 3000)
+          && (resource == null || request.resource.data.childId == resource.data.childId);
+        allow delete: if false;
+      }
+
+      match /referrals/{referralId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create, update: if orgWrite(orgId, 'pastoral.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'childId', 'date', 'to', 'reason', 'status', 'outcome',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('children', request.resource.data.childId)
+          && isDate(request.resource.data.date)
+          && shortText(request.resource.data.to, 120) && request.resource.data.to.size() >= 1
+          && shortText(request.resource.data.reason, 1000)
+          && request.resource.data.status in ['open', 'closed']
+          && shortText(request.resource.data.get('outcome', ''), 1000)
+          && (resource == null || request.resource.data.childId == resource.data.childId);
+        allow delete: if false;
+      }
+
+      // A safeguarding concern. Any staff member who can see children may raise one, and
+      // from then on only the pastor can read it. The pastor closes it with a note.
+      match /safeguardingConcerns/{concernId} {
+        allow read: if canAccessOrg(orgId) && has('pastoral.read');
+        allow create: if canAccessOrg(orgId) && (has('people.write') || has('attendance.write'))
+          && request.resource.data.keys().hasOnly(['orgId', 'childId', 'summary', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && existsInOrg('children', request.resource.data.childId)
+          && shortText(request.resource.data.summary, 4000) && request.resource.data.summary.size() >= 1
+          && request.resource.data.status == 'open'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update: if canAccessOrg(orgId) && has('pastoral.read')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closingNote', 'closedAt', 'closedBy'])
+          && request.resource.data.status in ['open', 'closed']
+          && shortText(request.resource.data.get('closingNote', ''), 2000)
+          && (request.resource.data.status == 'open' || (request.resource.data.closedBy == request.auth.uid && request.resource.data.closedAt == request.time));
+        allow delete: if false;
+      }
+
+      // Anything that exports child data needs the pastor's approval, and is logged (every
+      // write here goes into the activity log). Staff ask; the pastor decides; the person who
+      // asked can then download once.
+      match /childExports/{exportId} {
+        allow read: if canAccessOrg(orgId) && (has('data.export') || resource.data.createdBy == request.auth.uid);
+        allow create: if canAccessOrg(orgId) && (has('people.read') || has('data.export'))
+          && request.resource.data.keys().hasOnly(['orgId', 'scope', 'reason', 'status', 'createdAt', 'createdBy', 'decidedBy', 'decidedAt'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.scope in ['register', 'attendance']
+          && shortText(request.resource.data.reason, 300) && request.resource.data.reason.size() >= 3
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time
+          && (request.resource.data.status == 'pending'
+              || (request.resource.data.status == 'approved' && has('data.export')
+                  && request.resource.data.decidedBy == request.auth.uid && request.resource.data.decidedAt == request.time));
+        allow update: if canAccessOrg(orgId)
+          && ((has('data.export') && resource.data.status == 'pending'
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'decidedBy', 'decidedAt'])
+                && request.resource.data.status in ['approved', 'denied']
+                && request.resource.data.decidedBy == request.auth.uid && request.resource.data.decidedAt == request.time)
+              || (resource.data.createdBy == request.auth.uid && resource.data.status == 'approved'
+                  && resource.data.get('downloadedAt', null) == null
+                  && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadedAt'])
+                  && request.resource.data.downloadedAt == request.time));
+        allow delete: if false;
+      }
+
+      // Weekly (pastor: names by code) and monthly (counts only) Hope Center reports, made by a Cloud Function.
+      match /hopeReports/{reportId} {
+        allow read: if canAccessOrg(orgId)
+          && (resource.data.audience == 'counts' ? (has('people.read') || has('finance.reports')) : has('pastoral.read'));
+        allow write: if false;
+      }
+      match /hopeReportRequests/{requestId} {
+        allow read: if canAccessOrg(orgId) && (has('people.read') || has('pastoral.read'));
+        allow create: if canAccessOrg(orgId)
+          && request.resource.data.keys().hasOnly(['orgId', 'type', 'from', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.type in ['weekly', 'monthly']
+          && (request.resource.data.type == 'monthly' ? has('people.read') : has('pastoral.read'))
+          && isDate(request.resource.data.from)
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+      // "Check now" for children who have missed three sessions.
+      match /absenceCheckRequests/{requestId} {
+        allow read: if canAccessOrg(orgId) && has('followups.manage');
+        allow create: if canAccessOrg(orgId) && has('followups.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'status', 'createdAt', 'createdBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.status == 'pending'
+          && request.resource.data.createdBy == request.auth.uid
+          && request.resource.data.createdAt == request.time;
+        allow update, delete: if false;
+      }
+
       // "Download everything", one person's export and erasing one person. A Cloud
       // Function checks the pastor again, does the erasing, logs it and marks it done.
       match /dataRequests/{requestId} {

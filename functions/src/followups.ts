@@ -19,7 +19,7 @@ async function timeZoneOf(orgId: string): Promise<string> {
 export async function createFollowUp(
   orgId: string,
   taskId: string,
-  task: { personId: string; personName: string; reason: FollowUpReason; dueAt: Date; absentSince?: string },
+  task: { personId: string; personName: string; reason: FollowUpReason; dueAt: Date; absentSince?: string; note?: string },
 ): Promise<boolean> {
   const now = FieldValue.serverTimestamp();
   try {
@@ -34,7 +34,7 @@ export async function createFollowUp(
       assignedName: null,
       dueAt: Timestamp.fromDate(task.dueAt),
       outcome: null,
-      note: '',
+      note: task.note ?? '',
       doneAt: null,
       doneBy: null,
       lastMessageAt: null,
@@ -54,7 +54,7 @@ export async function createFollowUp(
 }
 
 /** Closes a task the system can see is no longer needed (for example, the person was baptised). */
-async function closeFollowUp(orgId: string, taskId: string, outcome: string): Promise<void> {
+export async function closeFollowUp(orgId: string, taskId: string, outcome: string): Promise<void> {
   const ref = db.doc(`organizations/${orgId}/followUps/${taskId}`);
   await db.runTransaction(async (tx) => {
     const snap = await tx.get(ref);

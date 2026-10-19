@@ -35,6 +35,8 @@ export function FollowUpCard({ org, task, staff, showPerson = true }: Props) {
   const callPhone = person?.status === 'child' ? guardian?.phone : person?.phone;
   const since = task.reason === 'care_absent' && task.absentSince
     ? `Last at church ${formatDateKey(task.absentSince)}`
+    : task.reason === 'child_absent' && task.absentSince
+    ? `Missed since ${formatDateKey(task.absentSince)}`
     : task.createdAt ? `Since ${formatDate(task.createdAt.toDate(), org.timeZone)}` : '';
   const fail = (err: unknown) => toast.show(friendlyError(err));
 
