@@ -81,20 +81,21 @@ export function TodayPage() {
         <nav className="cockpit-dock" aria-label="Quick actions">
           <svg className="dock-bowl" viewBox="0 0 2576 658" preserveAspectRatio="none" fill="none" aria-hidden="true">
             <defs>
-              <linearGradient id="dock-dk" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".035" /><stop offset="1" stopColor="#fff" stopOpacity="0" /></linearGradient>
-              <filter id="dock-gl" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="9" /></filter>
-              <filter id="dock-gl2" x="-10%" y="-100%" width="120%" height="300%"><feGaussianBlur stdDeviation="22" /></filter>
+              <linearGradient id="dock-dk" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".035" /><stop offset="1" stopColor="#000" stopOpacity=".25" /></linearGradient>
+              <radialGradient id="dock-hi"><stop offset="0" stopColor="#bff6ff" stopOpacity=".9" /><stop offset="1" stopColor="#3fd8f0" stopOpacity="0" /></radialGradient>
+              <filter id="dock-b10" x="-5%" y="-30%" width="110%" height="160%"><feGaussianBlur stdDeviation="10" /></filter>
+              <filter id="dock-b4" x="-5%" y="-30%" width="110%" height="160%"><feGaussianBlur stdDeviation="4" /></filter>
             </defs>
-            <path d="M206,255 C600,170 950,162 1288,162 C1626,162 1976,170 2370,255 L2318,428 C2156,400 2016,342 1855,342 C1616,342 1476,406 1288,406 C1100,406 960,342 721,342 C560,342 420,400 258,428 Z" fill="url(#dock-dk)" />
-            <path d="M258,428 C420,400 560,342 721,342 C960,342 1100,406 1288,406 C1476,406 1616,342 1855,342 C2016,342 2156,400 2318,428" stroke="#3fd8f0" strokeWidth="14" opacity=".3" filter="url(#dock-gl2)" />
-            <path d="M0,-58 C70,160 120,310 230,385" stroke="#d9a35b" strokeWidth="1.5" opacity=".6" />
-            <path d="M2576,-58 C2506,160 2456,310 2346,385" stroke="#d9a35b" strokeWidth="1.5" opacity=".6" />
-            <path d="M206,255 C600,170 950,162 1288,162 C1626,162 1976,170 2370,255" stroke="#d9a35b" strokeWidth="1.8" opacity=".85" />
-            <path d="M0,10 C90,220 140,370 258,428 C420,400 560,342 721,342 C960,342 1100,406 1288,406 C1476,406 1616,342 1855,342 C2016,342 2156,400 2318,428 C2436,370 2486,220 2576,10" stroke="#3fd8f0" strokeWidth="5" filter="url(#dock-gl)" opacity=".8" />
-            <path d="M0,10 C90,220 140,370 258,428 C420,400 560,342 721,342 C960,342 1100,406 1288,406 C1476,406 1616,342 1855,342 C2016,342 2156,400 2318,428 C2436,370 2486,220 2576,10" stroke="#3fd8f0" strokeWidth="3" />
-            <path d="M560,472 C575,534 592,557 645,557 L1931,557 C1984,557 2001,534 2016,472" stroke="#d9a35b" strokeWidth="1.5" opacity=".7" />
-            <ellipse cx="721" cy="432" rx="46" ry="9" fill="#3fd8f0" filter="url(#dock-gl)" />
-            <ellipse cx="721" cy="432" rx="14" ry="4" fill="#bff6ff" />
+            <path d="M300,262 C600,250 900,165 1288,165 C1676,165 1976,250 2276,262 L2240,455 C2150,475 2050,465 1920,445 C1700,410 1500,402 1288,402 C1100,402 900,400 640,442 C520,465 430,475 340,435 Z" fill="url(#dock-dk)" />
+            <path d="M0,10 C70,150 170,250 300,262 C600,250 900,165 1288,165 C1676,165 1976,250 2276,262 C2406,250 2506,150 2576,10" stroke="#d9a35b" strokeWidth="2" opacity=".65" />
+            <g stroke="#3fd8f0">
+              <path d="M0,65 C70,230 200,370 340,435 C430,475 520,465 640,442 C900,400 1100,402 1288,402 C1500,402 1700,410 1920,445 C2050,465 2150,475 2240,455 C2380,415 2510,270 2576,55" strokeWidth="14" opacity=".55" filter="url(#dock-b10)" />
+              <path d="M0,65 C70,230 200,370 340,435 C430,475 520,465 640,442 C900,400 1100,402 1288,402 C1500,402 1700,410 1920,445 C2050,465 2150,475 2240,455 C2380,415 2510,270 2576,55" strokeWidth="6" opacity=".7" filter="url(#dock-b4)" />
+              <path d="M0,65 C70,230 200,370 340,435 C430,475 520,465 640,442 C900,400 1100,402 1288,402 C1500,402 1700,410 1920,445 C2050,465 2150,475 2240,455 C2380,415 2510,270 2576,55" strokeWidth="3.5" />
+            </g>
+            <path d="M560,485 C610,530 650,558 780,558 H1796 C1926,558 1966,530 2016,485" stroke="#d9a35b" strokeWidth="1.5" opacity=".55" />
+            <ellipse cx="715" cy="428" rx="70" ry="9" fill="#3fd8f0" filter="url(#dock-b4)" opacity=".9" />
+            <circle cx="640" cy="412" r="34" fill="url(#dock-hi)" />
           </svg>
           {ACTIONS.map((a) => {
             const ready = organizations.length > 0 && allowedTo(a.to);

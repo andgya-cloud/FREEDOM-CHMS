@@ -515,7 +515,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 
   .cockpit-dock {
     left: 0; right: 0; bottom: 0; width: 100%; height: auto; aspect-ratio: 2576 / 658;
-    padding: 0; gap: 0; background: none; border: 0; border-radius: 0; display: block; perspective: 1200px; pointer-events: none;
+    padding: 0; gap: 0; background: none; border: 0; border-radius: 0; display: block; pointer-events: none;
   }
   .dock-bowl { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
   .dock-btn {
@@ -525,31 +525,37 @@ a.chip.chip-on { color: var(--primary-ink); }
     transform-style: preserve-3d;
   }
   .dock-btn svg { width: 2.17vw; height: 2.17vw; stroke: #d8dbe4; stroke-width: 1.7; }
-  .dock-label { font-size: 1.55vw; font-weight: 400; }
+  .dock-label { font-size: 1.55vw; font-weight: 400; color: #e6e6ea; }
   .dock-count { font-size: 0.9vw; }
-  .dock-btn { transform: rotate(var(--r, 0deg)) rotateX(6deg); }
-  .dock-btn:hover:not(:disabled) { transform: rotate(var(--r, 0deg)) rotateX(6deg) translateY(-3px); border-color: rgba(255, 255, 255, 0.35); }
-  .dock-btn:nth-child(2) { --r: -8deg; left: 10.99%; top: 33.4%; width: 20.19%; height: 30.4%; max-width: none; border: 2px solid var(--primary); background: rgba(63, 216, 240, 0.1); box-shadow: 0 0 34px var(--glow), inset 0 1px 0 rgba(255, 255, 255, 0.25); }
+  .dock-btn { transform: perspective(1400px) rotateY(var(--ry, 0deg)) rotateZ(var(--rz, 0deg)); transition: transform 0.15s, border-color 0.15s; border-radius: 1.16vw;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.13) 0%, rgba(255, 255, 255, 0.04) 55%, rgba(255, 255, 255, 0.07) 100%);
+    border: 1.5px solid rgba(255, 255, 255, 0.14); backdrop-filter: blur(22px) saturate(150%);
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.28), inset 0 -18px 36px rgba(0, 0, 0, 0.22), 0 18px 40px rgba(0, 0, 0, 0.5); }
+  .dock-btn:hover:not(:disabled) { transform: perspective(1400px) rotateY(var(--ry, 0deg)) rotateZ(var(--rz, 0deg)) translateY(-3px); border-color: rgba(255, 255, 255, 0.32); }
+  .dock-btn:nth-child(2) { --rz: -9deg; --ry: 6deg; left: 11.26%; top: 34.95%; width: 20.57%; height: 28.88%; max-width: none; border-color: var(--primary); color: #6fe3f5;
+    background: linear-gradient(145deg, rgba(63, 216, 240, 0.18), rgba(63, 216, 240, 0.04));
+    box-shadow: inset 0 1.5px 0 rgba(255, 255, 255, 0.28), inset 0 -18px 36px rgba(0, 0, 0, 0.22), 0 18px 40px rgba(0, 0, 0, 0.5), 0 0 26px rgba(63, 216, 240, 0.5), 0 0 60px rgba(63, 216, 240, 0.2); }
   .dock-btn:nth-child(2) svg { stroke: var(--primary); }
   .dock-btn:nth-child(2):hover:not(:disabled) { border-color: var(--primary); }
-  .dock-btn:nth-child(3) { --r: -3deg; left: 32.07%; top: 34%; width: 14.36%; height: 28.9%; max-width: none; }
-  .dock-btn:nth-child(4) { --r: 1deg; left: 47.7%; top: 35.3%; width: 13.98%; height: 28.9%; max-width: none; }
-  .dock-btn:nth-child(5) { --r: 8deg; left: 62.7%; top: 35.6%; width: 15.14%; height: 28.9%; max-width: none; }
-  .dock-btn:nth-child(6) { --r: 13deg; left: 77.64%; top: 41.3%; width: 10.48%; height: 25.8%; max-width: none; }
+  .dock-btn:nth-child(3) { --rz: -2deg; --ry: 3deg; left: 32.14%; top: 29.79%; width: 14.67%; height: 29.18%; max-width: none; }
+  .dock-btn:nth-child(4) { --rz: 1deg; --ry: 0deg; left: 47.71%; top: 29.18%; width: 14.29%; height: 28.88%; max-width: none; }
+  .dock-btn:nth-child(5) { --rz: 7deg; --ry: -4deg; left: 62.69%; top: 33.43%; width: 15.53%; height: 28.88%; max-width: none; }
+  .dock-btn:nth-child(6) { --rz: 13deg; --ry: -8deg; left: 77.56%; top: 39.51%; width: 11.06%; height: 26.6%; max-width: none; }
+  .dock-btn:nth-child(2) .dock-label { color: #e6e6ea; }
 
   .look-cockpit .tabbar {
     left: 0; right: 0; bottom: 0; top: auto; width: 100%; height: auto; aspect-ratio: 2576 / 658; padding: 0;
     background: none; border: 0; border-radius: 0; backdrop-filter: none; pointer-events: none; z-index: 10;
   }
-  .look-cockpit .tab { position: absolute; transform: translateX(-50%); pointer-events: auto; font-size: 1.32vw; font-weight: 300; max-width: none; padding: 0; min-height: 0; }
+  .look-cockpit .tab { position: absolute; pointer-events: auto; font-size: 1.32vw; font-weight: 300; max-width: none; padding: 0; min-height: 0; }
   .look-cockpit .tab.active { font-weight: 300; color: #5fe0f5; text-shadow: 0 0 18px rgba(95, 224, 245, 0.7); }
-  .look-cockpit .tab:nth-child(1) { left: 28.5%; top: 71.4%; }
-  .look-cockpit .tab:nth-child(2) { left: 39.2%; top: 73.3%; }
-  .look-cockpit .tab:nth-child(3) { left: 50%; top: 74.2%; }
-  .look-cockpit .tab:nth-child(4) { left: 60.5%; top: 73.3%; }
-  .look-cockpit .tab:nth-child(5) { left: 71%; top: 71.4%; }
+  .look-cockpit .tab:nth-child(1) { left: 28.49%; top: 76.6%; transform: translate(-50%, -50%); }
+  .look-cockpit .tab:nth-child(2) { left: 39.21%; top: 76.6%; transform: translate(-50%, -50%); }
+  .look-cockpit .tab:nth-child(3) { left: 50%; top: 76.6%; transform: translate(-50%, -50%); }
+  .look-cockpit .tab:nth-child(4) { left: 60.6%; top: 76.6%; transform: translate(-50%, -50%); }
+  .look-cockpit .tab:nth-child(5) { left: 71.19%; top: 76.6%; transform: translate(-50%, -50%); }
 }
-@media (min-width: 900px) and (max-height: 799px) {
+@media (min-width: 900px) {
   .look-cockpit .cockpit-today .checklist { padding: 0; margin-top: -4px; }
   .look-cockpit .cockpit-today .checklist h2 { font-size: 0.95rem; margin: 0; }
   .look-cockpit .cockpit-today .checklist .card-head { margin: 0 0 2px; }
@@ -557,6 +563,41 @@ a.chip.chip-on { color: var(--primary-ink); }
   .look-cockpit .cockpit-today .checklist ol { gap: 0; margin: 0; }
   .look-cockpit .cockpit-today .checklist li { font-size: 0.82rem; min-height: 0; padding-block: 1px; line-height: 1.35; }
   .look-cockpit .cockpit-today .checklist .tick { width: 16px; height: 16px; font-size: 0.65rem; }
-  .look-cockpit .cockpit-today > h1 { margin-top: 1vw; }
+  .look-cockpit .cockpit-today > h1 { margin-top: 1.4vw; }
   .look-cockpit .cockpit-today > .lead { margin-bottom: 1vw; }
+}
+
+/* Thin type, quiet top bar, ambient glow and the notch under the clock (wide screens) */
+:root[data-look='cockpit'] body {
+  background:
+    radial-gradient(ellipse 32% 38% at 10% 88%, rgba(63, 216, 240, 0.2), transparent 70%),
+    radial-gradient(ellipse 32% 38% at 90% 88%, rgba(63, 216, 240, 0.2), transparent 70%),
+    radial-gradient(ellipse 18% 30% at 2% 58%, rgba(217, 163, 91, 0.1), transparent 70%),
+    radial-gradient(ellipse 18% 30% at 98% 58%, rgba(217, 163, 91, 0.1), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 50% 38%, #0b1226 0%, #050814 60%, #02040a 100%) fixed;
+}
+.look-cockpit .cockpit-today, .look-cockpit .cockpit-today h2 { font-weight: 300; }
+.look-cockpit .cockpit-today h1 { font-weight: 300; }
+.look-cockpit .brand-name { font-weight: 400; color: #c9ccd6; }
+.look-cockpit .org-switcher select, .look-cockpit .org-name { font-weight: 400; font-size: 0.95rem; color: #b8bcc9; }
+.look-cockpit .sync-badge { font-weight: 400; }
+.look-cockpit .brand-f { flex: none; }
+@media (min-width: 900px) {
+  .look-cockpit .topbar { padding-block: 8px; }
+  .look-cockpit .topbar::after {
+    height: 44px; bottom: -42px; opacity: 1; background: none; pointer-events: none;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 2576 44' preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' x2='1' y1='0' y2='0'><stop offset='0' stop-color='%233fd8f0' stop-opacity='0'/><stop offset='.08' stop-color='%233fd8f0' stop-opacity='.75'/><stop offset='.45' stop-color='%233fd8f0' stop-opacity='.7'/><stop offset='.55' stop-color='%23d9a35b' stop-opacity='.75'/><stop offset='.92' stop-color='%23d9a35b' stop-opacity='.6'/><stop offset='1' stop-color='%23d9a35b' stop-opacity='0'/></linearGradient></defs><path d='M0,2 H930 C985,2 985,42 1040,42 H1540 C1595,42 1595,2 1650,2 H2576' fill='none' stroke='url(%23g)' stroke-width='2' vector-effect='non-scaling-stroke'/></svg>");
+    background-size: 100% 100%; background-repeat: no-repeat;
+  }
+  .look-cockpit .main { padding-top: 40px; }
+  .look-cockpit .cockpit-today .chip { font-weight: 400; }
+  .look-cockpit .cockpit-today .search { font-weight: 300; }
+  .live-clock-time { font-weight: 300; }
+}
+@media (min-width: 900px) and (max-height: 799px) {
+  .look-cockpit .cockpit-today .chip { min-height: 42px; font-size: 0.95rem; padding: 0 20px; }
+  .look-cockpit .cockpit-today > h1 { font-size: clamp(2.6rem, 3.6vw, 8rem); margin-top: 0.4vw; }
+  .look-cockpit .cockpit-today > .lead { font-size: 1.1rem; margin-bottom: 0.6vw; }
+  .look-cockpit .cockpit-today .search { min-height: 56px; }
+  .look-cockpit .main { padding-top: 34px; }
 }
