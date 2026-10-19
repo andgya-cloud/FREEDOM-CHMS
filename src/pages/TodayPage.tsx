@@ -37,6 +37,14 @@ const GLASS_ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
 ] as const;
 
+/** Freedom Hope Center's four tiles on the aurora look. */
+const HOPE_ACTIONS = [
+  { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
+  { label: 'Register child', to: '/hope/children/new', icon: ACTIONS[1].icon },
+  { label: 'Record gift', to: '/giving/new', icon: ACTIONS[2].icon },
+  { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
+] as const;
+
 const NAV_ICON = 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.600 6.500l1.600-1.600 1.600 1.100a7 7 0 0 1 1.700-.7l.4-1.900h2.200l.4 1.900a7 7 0 0 1 1.700.7l1.600-1.100 1.600 1.600-1.100 1.600a7 7 0 0 1 .7 1.700l1.900.4z';
 
 export function TodayPage() {
@@ -50,7 +58,9 @@ export function TodayPage() {
   const look = lookFor(current);
   const cockpit = look === 'cockpit';
   const glass = look === 'glass';
-  const allowedTo = (to: string) => (to === '/visitors/new' || to === '/school/students/new' ? can('people.write')
+  const aurora = look === 'aurora';
+  const tileActions = aurora ? HOPE_ACTIONS : GLASS_ACTIONS;
+  const allowedTo = (to: string) => (to === '/visitors/new' || to === '/school/students/new' || to === '/hope/children/new' ? can('people.write')
     : to === '/school/fees' ? can('gifts.write') || can('finance.reports') || can('giving.person.read')
     : to === '/attendance' ? can('attendance.write') || can('people.read')
     : to === '/giving/new' ? can('gifts.write')
@@ -59,12 +69,19 @@ export function TodayPage() {
   const results = useMemo(() => (query.trim().length >= 2 ? people.filter((p) => matchesSearch(p, query)).slice(0, 8) : []), [people, query]);
 
   return (
-    <div className={`page${cockpit ? ' cockpit-today' : ''}${glass ? ' glass-today' : ''}`}>
+    <div className={`page${cockpit ? ' cockpit-today' : ''}${glass ? ' glass-today' : ''}${aurora ? ' aurora-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
-      <h1>{cockpit ? 'InsightIQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
-      {!loading && organizations.length > 0 && (
-        <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
-      )}
+      {(() => {
+        const heading = (
+          <>
+            <h1>{cockpit ? 'InsightIQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
+            {!loading && organizations.length > 0 && (
+              <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
+            )}
+          </>
+        );
+        return aurora ? <div className="hello-card">{heading}</div> : heading;
+      })()}
 
       <OrgButtons />
 
@@ -128,15 +145,17 @@ export function TodayPage() {
         </nav>
       )}
 
-      {glass && (
+      {(glass || aurora) && (
         <div className="glass-tiles">
-          {GLASS_ACTIONS.map((a) => {
+          {tileActions.map((a) => {
             const ready = organizations.length > 0 && allowedTo(a.to);
             const inner = (
               <>
                 {a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">$</span>}
-                <span className="tile-label">{a.label}</span>
-                {a.to === '/follow-ups' && current && <span className="tile-sub">{counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`}</span>}
+                <span className="tile-text">
+                  <span className="tile-label">{a.label}</span>
+                  {a.to === '/follow-ups' && current && <span className="tile-sub">{counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`}</span>}
+                </span>
               </>
             );
             return ready
@@ -147,7 +166,7 @@ export function TodayPage() {
       )}
 
       <div className="big-actions">
-        {!cockpit && !glass && ACTIONS.map((a) => {
+        {!cockpit && !glass && !aurora && ACTIONS.map((a) => {
           const allowed = allowedTo(a.to);
           const ready = organizations.length > 0 && allowed;
           return ready ? (

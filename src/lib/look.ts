@@ -2,13 +2,14 @@ import type { Organization } from '../state/OrgContext';
 
 /**
  * Each organization can have its own interface. "cockpit" is the dark, curved layout made for Freedom Church;
- * "glass" is the frosted-glass panel over a blurred room made for ADIA Training Centre; everything else keeps the standard look. A new look is added here and in styles.css.
+ * "glass" is the frosted-glass panel over a blurred room made for ADIA Training Centre; "aurora" is the floating, tilted green-and-gold glass made for Freedom Hope Center; everything else keeps the standard look. A new look is added here and in styles.css.
  */
-export type Look = 'standard' | 'cockpit' | 'glass';
+export type Look = 'standard' | 'cockpit' | 'glass' | 'aurora';
 
 export function lookFor(org: Pick<Organization, 'type'> | null | undefined): Look {
   if (org?.type === 'church_campus') return 'cockpit';
-  return org?.type === 'college' ? 'glass' : 'standard';
+  if (org?.type === 'college') return 'glass';
+  return org?.type === 'ministry' ? 'aurora' : 'standard';
 }
 
 /** "Africa/Nairobi" becomes "Nairobi", "America/New_York" becomes "New York". */

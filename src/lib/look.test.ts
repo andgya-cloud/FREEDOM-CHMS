@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { cityOf, clockText, lookFor } from './look';
 
 describe('lookFor', () => {
-  it('gives the church campus the cockpit look, ADIA the glass look and every other organization the standard look', () => {
+  it('gives the church campus the cockpit look, ADIA the glass look, Hope the aurora look and every other organization the standard look', () => {
     expect(lookFor({ type: 'church_campus' })).toBe('cockpit');
     expect(lookFor({ type: 'college' })).toBe('glass');
-    expect(lookFor({ type: 'ministry' })).toBe('standard');
+    expect(lookFor({ type: 'ministry' })).toBe('aurora');
     expect(lookFor(null)).toBe('standard');
   });
 });

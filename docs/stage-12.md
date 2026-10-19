@@ -40,3 +40,6 @@ On screens 900 pixels wide or more, the Freedom Church Today screen now matches 
 
 ## Update: glass look for ADIA Training Centre
 ADIA (organization type College) now has its own "glass" look: a frosted panel over a blurred room, thick teal glass tiles (Check in, Add student, Record fees, Follow-ups) and a floating dock of round buttons. Church keeps the cockpit and Hope the standard look. Set in `src/lib/look.ts`; styles at the end of `src/styles.css`. A fixed-stage design page is in the deploy folder (`adia-glass.html`).
+
+## Update: aurora look for Freedom Hope Center
+Hope (type Ministry) has the "aurora" look: floating, slightly tilted glass cards over a dark green background, in shades of green with gold outlines on the buttons. Tiles: Check in, Register child, Record gift, Follow-ups. Tilt is switched off on phones.
