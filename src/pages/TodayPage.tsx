@@ -71,6 +71,7 @@ export function TodayPage() {
   return (
     <div className={`page${cockpit ? ' cockpit-today' : ''}${glass ? ' glass-today' : ''}${aurora ? ' aurora-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
+      {glass && <img className="adia-crest" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={160} height={160} />}
       {(() => {
         const heading = (
           <>

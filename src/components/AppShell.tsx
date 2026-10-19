@@ -30,7 +30,6 @@ export function AppShell({ children }: { children: ReactNode }) {
         <OrgSwitcher />
         {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
         <SyncBadge />
-        {look === 'glass' && <img className="org-logo-top" src="/org/adia-logo.png" alt="ADIA Training Centre" width={44} height={44} />}
       </header>
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}
       {current?.training && <div className="dev-ribbon" role="status">Practice mode. Everything here is made up and is never mixed with real records.</div>}

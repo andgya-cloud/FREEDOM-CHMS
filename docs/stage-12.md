@@ -50,4 +50,4 @@ The compass logo Andy sent replaces the old icon everywhere: the top bar on all 
 
 ## Organization logos
 
-Each organization shows its own logo next to the Insight-IQ one: ADIA in the top bar on the right (glass look only), Freedom Church above the Insight-IQ heading on Today (cockpit look), and Freedom Hope Center inside the Insight-IQ card on Today (aurora look). Files: public/org/*.png, cut from the images Andy sent.
+Each organization shows its own logo next to the Insight-IQ one: the gold ADIA crest on a white tile in the top-right corner of the ADIA Today panel (glass look only; it moved there from the top bar at Andy's request), Freedom Church above the Insight-IQ heading on Today (cockpit look), and Freedom Hope Center inside the Insight-IQ card on Today (aurora look). Files: public/org/*.png, cut from the images Andy sent.
