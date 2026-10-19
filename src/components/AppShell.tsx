@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
@@ -6,20 +6,29 @@ import { InstallBanner } from './InstallBanner';
 import { usingEmulators } from '../firebase';
 import { useOrg } from '../state/OrgContext';
 import { useTemplates } from '../state/useFollowUps';
+import { LiveClock } from './LiveClock';
+import { lookFor } from '../lib/look';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { current } = useOrg();
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
   useTemplates();
+  const look = lookFor(current);
+  // The look changes the colours of every page, so it is set on the page root.
+  useEffect(() => {
+    document.documentElement.dataset.look = look;
+    return () => { delete document.documentElement.dataset.look; };
+  }, [look]);
   return (
-    <div className="shell">
+    <div className={`shell look-${look}`}>
       <header className="topbar">
         <NavLink to="/" className="brand" aria-label="Freedom ChMS, Today">
           <img src="/favicon.svg" alt="" width={28} height={28} />
           <span className="brand-name">Freedom ChMS</span>
         </NavLink>
         <OrgSwitcher />
+        {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
         <SyncBadge />
       </header>
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}

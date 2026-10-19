@@ -16,6 +16,7 @@ import { lastCompletePeriod } from '../../functions/src/shared/metrics';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import type { GivingPart } from '../../functions/src/shared/reports';
 import type { Organization } from '../state/OrgContext';
+import { lookFor } from '../lib/look';
 
 /**
  * The home screen: search first, then the four big actions.
@@ -28,6 +29,8 @@ const ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: 'M21 12a8 8 0 0 1-11.8 7L3 21l2-6A8 8 0 1 1 21 12Z' },
 ] as const;
 
+const NAV_ICON = 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.600 6.500l1.600-1.600 1.600 1.100a7 7 0 0 1 1.700-.7l.4-1.900h2.200l.4 1.900a7 7 0 0 1 1.700.7l1.600-1.100 1.600 1.600-1.100 1.600a7 7 0 0 1 .7 1.700l1.900.4z';
+
 export function TodayPage() {
   const { profile, can } = useAuth();
   const { current, isCombined, organizations, loading } = useOrg();
@@ -36,10 +39,16 @@ export function TodayPage() {
   const navigate = useNavigate();
   const [query, setQuery] = useState('');
   const firstName = profile?.displayName.split(' ')[0] ?? '';
+  const cockpit = lookFor(current) === 'cockpit';
+  const allowedTo = (to: string) => (to === '/visitors/new' ? can('people.write')
+    : to === '/attendance' ? can('attendance.write') || can('people.read')
+    : to === '/giving/new' ? can('gifts.write')
+    : to === '/follow-ups' ? can('followups.manage')
+    : true);
   const results = useMemo(() => (query.trim().length >= 2 ? people.filter((p) => matchesSearch(p, query)).slice(0, 8) : []), [people, query]);
 
   return (
-    <div className="page">
+    <div className={`page${cockpit ? ' cockpit-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
       <h1>Hello{firstName ? `, ${firstName}` : ''}</h1>
       {!loading && organizations.length > 0 && (
@@ -68,13 +77,31 @@ export function TodayPage() {
       <HopeAlerts />
       <FirstRunChecklist />
 
+      {cockpit && (
+        <nav className="cockpit-dock" aria-label="Quick actions">
+          {ACTIONS.map((a) => {
+            const ready = organizations.length > 0 && allowedTo(a.to);
+            const inner = (
+              <>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg>
+                <span className="dock-label">{a.label}</span>
+                {a.to === '/follow-ups' && current && counts.due > 0 && <span className="dock-count">{counts.due} due</span>}
+              </>
+            );
+            return ready
+              ? <Link key={a.label} to={a.to} className="dock-btn">{inner}</Link>
+              : <button key={a.label} type="button" className="dock-btn" disabled>{inner}</button>;
+          })}
+          <Link to="/settings" className="dock-btn">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d={NAV_ICON} /></svg>
+            <span className="dock-label">Nav</span>
+          </Link>
+        </nav>
+      )}
+
       <div className="big-actions">
-        {ACTIONS.map((a) => {
-          const allowed = a.to === '/visitors/new' ? can('people.write')
-            : a.to === '/attendance' ? can('attendance.write') || can('people.read')
-            : a.to === '/giving/new' ? can('gifts.write')
-            : a.to === '/follow-ups' ? can('followups.manage')
-            : true;
+        {!cockpit && ACTIONS.map((a) => {
+          const allowed = allowedTo(a.to);
           const ready = organizations.length > 0 && allowed;
           return ready ? (
             <Link key={a.label} to={a.to} className="big-action">

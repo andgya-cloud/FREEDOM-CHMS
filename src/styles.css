@@ -395,3 +395,95 @@ details summary { cursor: pointer; }
 
 a.chip { text-decoration: none; color: inherit; }
 a.chip.chip-on { color: var(--primary-ink); }
+
+/* ---- Cockpit look: the dark, curved interface made for Freedom Church (see src/lib/look.ts) ---- */
+:root[data-look='cockpit'] {
+  --bg: #060b18;
+  --surface: #0d1526;
+  --surface-2: #131e36;
+  --text: #e7edf8;
+  --muted: #94a2bb;
+  --border: #22314f;
+  --primary: #52d6ee;
+  --primary-ink: #04141b;
+  --gold-ink: #e2b23a;
+  --ok: #4cd08f;
+  --red: #ff7b6e;
+  --glow: rgba(82, 214, 238, 0.45);
+  color-scheme: dark;
+}
+:root[data-look='cockpit'] body { background: radial-gradient(120% 70% at 50% 0%, #0b1530 0%, #060b18 60%) fixed; }
+.look-cockpit .topbar { background: rgba(6, 11, 24, 0.85); backdrop-filter: blur(10px); border-bottom: 0; position: sticky; }
+.look-cockpit .topbar::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--primary) 30%, var(--gold) 70%, transparent); opacity: 0.7; }
+.look-cockpit .brand-name { font-weight: 500; }
+.look-cockpit .org-switcher select, .look-cockpit .org-name { border-radius: 999px; background: var(--surface-2); border: 1px solid var(--border); padding: 6px 14px; flex: 0 1 auto; }
+.look-cockpit .org-switcher { flex: 0 1 auto; }
+.live-clock { margin-inline: auto; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.live-clock-time { font-size: 1.5rem; font-weight: 300; letter-spacing: -0.01em; }
+.live-clock-city { color: var(--muted); font-size: 0.85rem; }
+@media (min-width: 900px) { .live-clock-time { font-size: 2.6rem; } .live-clock-city { font-size: 1.05rem; } }
+@media (max-width: 520px) { .live-clock-city { display: none; } .look-cockpit .topbar { gap: 8px; } .look-cockpit .brand { display: none; } .look-cockpit .org-switcher { flex: 1 1 auto; } .look-cockpit .org-switcher select { max-width: none; } .live-clock { margin-inline: 0; } .live-clock-time { font-size: 1.15rem; } .look-cockpit .org-switcher select { font-size: 0.9rem; padding-inline: 10px; } }
+.look-cockpit .sync-badge { background: transparent; color: var(--ok); }
+
+.look-cockpit .card { background: rgba(19, 30, 54, 0.6); border-color: var(--border); backdrop-filter: blur(6px); }
+.look-cockpit .chip { background: rgba(19, 30, 54, 0.6); }
+.look-cockpit .chip-on { background: rgba(82, 214, 238, 0.12); color: var(--primary); border-color: var(--primary); box-shadow: 0 0 16px var(--glow); }
+.look-cockpit .btn-primary { box-shadow: 0 0 14px rgba(82, 214, 238, 0.25); }
+
+/* Today, centred, with the actions on a curved dock */
+.look-cockpit .cockpit-today { text-align: center; padding-bottom: 230px; }
+.look-cockpit .cockpit-today > .muted:first-child { display: none; }
+.look-cockpit .cockpit-today h1 { font-size: clamp(2.4rem, 8vw, 4.4rem); font-weight: 300; letter-spacing: -0.02em; margin: 1.2rem 0 0.2rem; }
+.look-cockpit .cockpit-today .lead { color: var(--muted); font-size: 1.3rem; margin-bottom: 1.6rem; }
+.look-cockpit .cockpit-today .card[aria-label='Switch organization'] { background: transparent; border: 0; backdrop-filter: none; align-items: center; padding: 0; margin-bottom: 1.2rem; }
+.look-cockpit .cockpit-today .card[aria-label='Switch organization'] h2 { font-weight: 400; font-size: 1.2rem; }
+.look-cockpit .cockpit-today .chips { justify-content: center; }
+.look-cockpit .cockpit-today .chip { min-height: 44px; padding: 0 18px; }
+.look-cockpit .cockpit-today form[role='search'] { max-width: 720px; margin: 1.6rem auto 0; }
+.look-cockpit .cockpit-today .search { border-radius: 999px; background: rgba(19, 30, 54, 0.6); border: 1px solid var(--border); padding-left: 22px; min-height: 58px; }
+.look-cockpit .cockpit-today .row-list, .look-cockpit .cockpit-today .stack, .look-cockpit .cockpit-today .card, .look-cockpit .cockpit-today .link-list { text-align: left; }
+.look-cockpit .cockpit-today .big-actions { display: none; }
+
+.cockpit-dock {
+  position: fixed; left: 0; right: 0; z-index: 9;
+  bottom: calc(56px + env(safe-area-inset-bottom));
+  display: flex; justify-content: center; align-items: flex-end; gap: 10px;
+  padding: 26px 10px 12px;
+  background: linear-gradient(to top, rgba(14, 38, 58, 0.97), rgba(7, 13, 28, 0.97));
+  border-radius: 50% 50% 0 0 / 34px 34px 0 0;
+  border-top: 1px solid rgba(226, 178, 58, 0.45);
+}
+.dock-btn {
+  flex: 1 1 0; max-width: 200px; min-width: 0; min-height: 84px; padding: 10px 6px;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  color: var(--text); text-decoration: none; font: inherit; cursor: pointer;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(82, 214, 238, 0.28); border-radius: 20px;
+  backdrop-filter: blur(8px); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+  transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+}
+.dock-btn:first-child { border-color: var(--primary); box-shadow: 0 0 22px var(--glow); }
+.dock-btn:hover:not(:disabled) { border-color: var(--primary); box-shadow: 0 0 22px var(--glow); }
+.dock-btn:disabled { opacity: 0.4; cursor: default; }
+.dock-btn svg { width: 30px; height: 30px; fill: none; stroke: var(--primary); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.dock-label { font-size: 0.95rem; font-weight: 500; }
+.dock-count { font-size: 0.72rem; color: var(--gold); }
+@media (min-width: 760px) {
+  .dock-btn { min-height: 110px; }
+  .dock-label { font-size: 1.25rem; }
+  .dock-btn svg { width: 38px; height: 38px; }
+  .dock-btn:nth-child(1) { transform: rotate(-4deg) translateY(10px); }
+  .dock-btn:nth-child(2) { transform: rotate(-1.5deg); }
+  .dock-btn:nth-child(3) { transform: rotate(0.5deg); }
+  .dock-btn:nth-child(4) { transform: rotate(2.5deg); }
+  .dock-btn:nth-child(5) { transform: rotate(5deg) translateY(14px); max-width: 130px; }
+  .dock-btn:hover:not(:disabled) { transform: translateY(-4px); }
+}
+@media (max-width: 420px) { .dock-btn { border-radius: 16px; } .dock-btn svg { width: 24px; height: 24px; } .dock-label { font-size: 0.8rem; } }
+
+/* The page tabs become labels on the curved base */
+.look-cockpit .tabbar { background: rgba(6, 11, 24, 0.92); backdrop-filter: blur(10px); border-top: 1px solid rgba(82, 214, 238, 0.35); border-radius: 50% 50% 0 0 / 22px 22px 0 0; justify-content: center; gap: 4px; }
+.look-cockpit .tab { color: var(--muted); font-size: 0.95rem; letter-spacing: 0; max-width: 190px; justify-content: center; }
+.look-cockpit .tab svg { display: none; }
+.look-cockpit .tab.active { color: var(--primary); text-shadow: 0 0 12px var(--glow); font-weight: 500; }
+@media (max-width: 520px) { .look-cockpit .tab { font-size: 0.78rem; padding-inline: 0; } .look-cockpit .tabbar { gap: 0; padding-inline: 2px; } }
+@media (prefers-reduced-motion: reduce) { .dock-btn { transition: none; } }
