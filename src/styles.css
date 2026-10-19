@@ -862,7 +862,28 @@ a.chip.chip-on { color: var(--primary-ink); }
 @media (prefers-reduced-motion: reduce) { .look-aurora .glass-tile, .look-aurora .tab svg { transition: none; } .aurora-today { transform: none; } }
 
 /* Each organization's own logo, beside the Insight-IQ logo (which stays in the top bar). */
-.adia-crest { margin-left: auto; flex: none; width: 48px; height: 48px; background: #fff; border-radius: 10px; box-shadow: 0 0 0 1.5px #e2b23a, 0 4px 14px rgba(0, 30, 40, 0.3); }
+.adia-crest { position: absolute; top: 16px; right: 18px; z-index: 2; width: 56px; height: 56px; background: #fff; border-radius: 12px; box-shadow: 0 0 0 1.5px #e2b23a, 0 8px 20px rgba(0, 30, 40, 0.3); }
+
+/* ADIA: smaller action buttons, and the menu split into a left group and a right group. */
+.look-glass .glass-tile { min-height: 104px; padding: 10px; border-radius: 24px; gap: 4px; }
+.look-glass .glass-tile svg { width: 32px; height: 32px; }
+.look-glass .tile-dollar { font-size: 2.4rem; }
+.look-glass .tile-label { font-size: 1.05rem; }
+.look-glass .tile-sub { font-size: 0.78rem; }
+.look-glass .tab svg { width: 40px; height: 40px; padding: 9px; }
+@media (min-width: 900px) {
+  .glass-today > .adia-crest { position: static; grid-row: 1; grid-column: 2; justify-self: end; align-self: center; width: clamp(64px, 5vw, 80px); height: auto; border-radius: 14px; margin: -6px 0; }
+  .look-glass .glass-tile { min-height: clamp(96px, 11vh, 140px); border-radius: 32px; }
+  .look-glass .glass-tile svg { width: 40px; height: 40px; }
+  .look-glass .tile-dollar { font-size: 3rem; }
+  .look-glass .tile-label { font-size: 1.25rem; }
+  .look-glass .tile-sub { font-size: 0.85rem; }
+  .look-glass .glass-tiles { gap: 14px; }
+  .look-glass .tabbar { width: min(1180px, calc(100% - 48px)); padding: 8px 22px; justify-content: flex-start; gap: 6px; }
+  .look-glass .tab { flex: 0 0 auto; min-width: 96px; font-size: 0.85rem; }
+  .look-glass .tab:nth-child(4) { margin-left: auto; }
+  .look-glass .tab svg { width: 50px; height: 50px; padding: 12px; }
+}
 .church-logo { display: block; margin: 0 auto 0.5rem; width: clamp(56px, 6vw, 90px); height: auto; }
 .hello-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
 .hope-logo { flex: none; width: clamp(70px, 9vw, 120px); height: auto; border-radius: 14px; background: #fff; padding: 6px; box-shadow: 0 0 0 2px #e2b23a, 0 8px 20px rgba(0, 20, 10, 0.4); }
