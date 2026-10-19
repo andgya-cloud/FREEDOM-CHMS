@@ -1,3 +1,4 @@
+import { useSchool } from '../../state/useSchool';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -33,6 +34,8 @@ export function AttendancePage() {
   const [otherName, setOtherName] = useState('');
   const { events, loading } = useEvents(orgId, localDateKey(new Date(Date.now() - RECENT_DAYS * 86_400_000), tz));
   const canRecord = can('attendance.write');
+  // ADIA classes are the programmes set up under School, so the register lists that programme's students.
+  const school = useSchool(current?.type === 'college' ? current.id : '');
 
   if (isCombined || !current) {
     return (
@@ -53,7 +56,7 @@ export function AttendancePage() {
   }
 
   const org = current;
-  const choices = eventChoices(org);
+  const choices = [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
   const todays = events.filter((e) => e.date === date);
   const noun = org.type === 'church_campus' ? 'service' : org.type === 'college' ? 'class' : 'session';
 

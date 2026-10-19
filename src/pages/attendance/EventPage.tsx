@@ -12,6 +12,7 @@ import { HeadcountEditor } from '../../components/HeadcountEditor';
 import { CheckInPanel } from '../../components/CheckInPanel';
 import { ClassRegister, type RosterSpec } from '../../components/ClassRegister';
 import { ProgramSessionPanel } from '../../components/ProgramSessionPanel';
+import { useSchool } from '../../state/useSchool';
 import { useEnrollments, useGroupMembers, useGroups, usePrograms } from '../../state/usePrograms';
 import { enrol } from '../../lib/programWrites';
 import { EVENT_TYPE_LABELS } from '../../../functions/src/shared/attendance';
@@ -131,7 +132,10 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
   const { members } = useGroupMembers(groupId ? orgId : '', { groupId });
   const program = programs.find((p) => p.id === programId);
   const group = groups.find((g) => g.id === groupId);
-  const tz = organizations.find((o) => o.id === orgId)?.timeZone;
+  const orgInfo = organizations.find((o) => o.id === orgId);
+  const tz = orgInfo?.timeZone;
+  const isClass = orgInfo?.type === 'college' && event?.type === 'class' && !programId && !groupId;
+  const school = useSchool(isClass ? orgId : '');
 
   if (event && program) {
     const isMakeUp = !event.cohortId;
@@ -169,6 +173,21 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
         addLabel: 'Add guest',
       },
     };
+  }
+  if (event && isClass) {
+    // An ADIA class: the register lists the enrolled students of the course named on the class.
+    const course = school.courses.find((c) => c.name === (event.activity ?? event.name));
+    if (course) {
+      return {
+        back: { to: '/school', label: 'School' },
+        roster: {
+          ids: new Set(school.students.filter((st) => st.courseId === course.id && st.status === 'enrolled').map((st) => st.id)),
+          title: `${course.name} register`,
+          empty: 'No students are enrolled in this programme yet. Enrol them under School → Students.',
+          addLabel: 'Add guest',
+        },
+      };
+    }
   }
   return { back: { to: '/attendance', label: 'Attendance' } };
 }

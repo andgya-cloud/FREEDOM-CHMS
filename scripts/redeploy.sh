@@ -17,6 +17,13 @@ npx firebase deploy --project freedom-chms --only functions:weeklyBackup
 # The nightly clean-up now follows the "keep deleted records" setting. It runs in Europe because
 # Cloud Scheduler is not offered in Africa, so deploy it by name.
 npx firebase deploy --project freedom-chms --only functions:purgeDeletedRecords || echo "(The nightly clean-up was not updated. Tell Claude.)"
+# Stage 9: ADIA Training Centre. Each new job goes on its own.
+npx firebase deploy --project freedom-chms --only functions:onStudentCreated
+npx firebase deploy --project freedom-chms --only functions:onInvoiceWritten
+npx firebase deploy --project freedom-chms --only functions:onFeePaymentWritten
+npx firebase deploy --project freedom-chms --only functions:onCertificateCreated
+npx firebase deploy --project freedom-chms --only functions:onSchoolReportRequested
+npx firebase deploy --project freedom-chms --only functions:scheduledSchoolReports || echo "(The scheduled school reports were not deployed. Tell Claude.)"
 # Then the rules, and the app itself.
 npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting
 # Backups need Firebase Storage. If you have switched it on, lock its rules now. If not, this

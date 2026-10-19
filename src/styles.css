@@ -392,3 +392,6 @@ details summary { cursor: pointer; }
 .report-table th, .report-table td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .report-table td.num, .report-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .table-scroll { overflow-x: auto; }
+
+a.chip { text-decoration: none; color: inherit; }
+a.chip.chip-on { color: var(--primary-ink); }

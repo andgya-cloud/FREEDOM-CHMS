@@ -35,6 +35,20 @@ const TOPICS: Topic[] = [
     link: { to: '/giving', label: 'Open Giving' },
   },
   {
+    id: 'school', title: 'ADIA: enrol a student and take class attendance',
+    permission: 'people.write',
+    body: ['Choose ADIA at the top, then open School. Students → Enrol a student: pick the programme, intake and level, and add a sponsor or guardian with a phone number. The admission number is made for you once you are online.',
+      'For a class, open Attendance, tap the programme name, and mark each student present, late, absent or excused. This works offline on a tablet. The student page shows the attendance percentage, and the overview lists anyone below the alert level.'],
+    link: { to: '/school', label: 'Open School' },
+  },
+  {
+    id: 'school-fees', title: 'ADIA: fees, payments and arrears',
+    permission: 'gifts.write',
+    body: ['Fees → pick a programme and intake, list the fees, save, then Bill all enrolled students. Record a payment from the student\'s page (it is saved under School fees and gets the next receipt number). The arrears list updates by itself.',
+      'To remind a sponsor, open the student with a balance and tap Remind sponsor. WhatsApp opens only for sponsors who agreed to it; otherwise you get a Call button.'],
+    link: { to: '/school/fees', label: 'Open Fees' },
+  },
+  {
     id: 'reports', title: 'Read the weekly report',
     permission: 'people.read',
     body: ['Every Monday at 7 am a report is made for the week before. Today shows the eight numbers, and Reports keeps the full report as PDF or Excel.',
