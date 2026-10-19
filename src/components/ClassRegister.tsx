@@ -20,6 +20,10 @@ export interface RosterSpec {
   /** What happens when someone not on the list is added (for example, enrol them). */
   onAddOther?: (person: Person) => void;
   addLabel?: string;
+  /** How a typed name or scanned code finds someone. Defaults to the usual people search. */
+  search?: (person: Person, text: string) => boolean;
+  /** Pressing Enter with exactly one match marks them present (a keyboard-style code scanner types the code and presses Enter). */
+  checkInOnEnter?: boolean;
 }
 
 interface Props {
@@ -49,9 +53,10 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec }:
       .filter((p) => p.orgId === org.id && ((!spec && p.status === 'student') || ids.has(p.id)))
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [people, byPerson, extraIds, org.id, spec]);
-  const shown = filter.trim().length >= 2 ? roster.filter((p) => matchesSearch(p, filter)) : roster;
+  const find = spec?.search ?? matchesSearch;
+  const shown = filter.trim().length >= 2 ? roster.filter((p) => find(p, filter)) : roster;
   const others = filter.trim().length >= 2
-    ? people.filter((p) => p.orgId === org.id && !roster.includes(p) && matchesSearch(p, filter)).slice(0, 5)
+    ? people.filter((p) => p.orgId === org.id && !roster.includes(p) && find(p, filter)).slice(0, 5)
     : [];
   const statusOf = (p: Person): AttendanceStatus | null => {
     const m = byPerson.get(p.id);
@@ -81,7 +86,16 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec }:
         {tally.map(([s, n]) => <span key={s} className={`tally-item mark-${s}`}>{ATTENDANCE_STATUS_LABELS[s]} <strong>{n}</strong></span>)}
         <span className="tally-item">Not marked <strong>{unmarked.length}</strong></span>
       </p>
-      <input type="search" className="search" placeholder={spec ? 'Find someone, or add someone not on the list' : 'Find a student, or add someone not on the list'} aria-label="Find someone" value={filter} onChange={(e) => setFilter(e.target.value)} />
+      <input type="search" className="search" placeholder={spec ? 'Find someone, or add someone not on the list' : 'Find a student, or add someone not on the list'} aria-label="Find someone" value={filter} onChange={(e) => setFilter(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key !== 'Enter' || !spec?.checkInOnEnter || !canRecord || filter.trim().length < 2) return;
+          e.preventDefault();
+          if (shown.length === 1) {
+            mark(shown[0]!, 'present');
+            toast.show(`${shown[0]!.fullName} marked present`);
+            setFilter('');
+          } else toast.show(shown.length === 0 ? 'Nobody with that name or code is on this list.' : 'More than one match. Tap the right name.');
+        }} />
       {roster.length === 0 && filter.trim().length < 2 && (spec ? <p className="muted">{spec.empty}</p> : (
         <p className="muted">No students yet. Add people with the status Student in <Link to="/people/new">People</Link>, or search above to add someone to this class.</p>
       ))}

@@ -8,13 +8,14 @@ import { zonedMidnight } from './datetime.js';
 
 // ---- Tasks ---------------------------------------------------------------------
 
-export const FOLLOW_UP_REASONS = ['first_visit', 'checkin_48h', 'care_absent', 'salvation', 'baptism_invite', 'other'] as const;
+export const FOLLOW_UP_REASONS = ['first_visit', 'checkin_48h', 'care_absent', 'child_absent', 'salvation', 'baptism_invite', 'other'] as const;
 export type FollowUpReason = (typeof FOLLOW_UP_REASONS)[number];
 
 export const FOLLOW_UP_REASON_LABELS: Record<FollowUpReason, string> = {
   first_visit: 'First visit: welcome',
   checkin_48h: 'First visit: 48-hour check-in',
   care_absent: 'Absent 3 weeks: care message',
+  child_absent: 'Child missed 3 sessions: call the guardian',
   salvation: 'Salvation follow-up',
   baptism_invite: 'Baptism class invitation',
   other: 'Follow-up',
@@ -109,6 +110,11 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
     body: "Hi {first_name}, it's {staff_name} from {campus}. We have missed you these last few weeks and wanted to check that you are well. Is there anything we can pray with you about?",
   },
   {
+    id: 'child_absent',
+    name: 'Child missed sessions (to the guardian)',
+    body: 'Hello {first_name}, this is {staff_name} from {campus}. We have missed {child_name} at our sessions these last few weeks and wanted to check that all is well. Is there anything we can help with? God bless you.',
+  },
+  {
     id: 'salvation_followup',
     name: 'Salvation follow-up',
     body: "Hi {first_name}, it's {staff_name} from {campus}. We are so glad about your decision to follow Jesus! I'd love to meet up and help you take your next steps. When would suit you this week?",
@@ -140,6 +146,7 @@ export const TEMPLATE_FOR_REASON: Record<FollowUpReason, string> = {
   first_visit: 'visitor_welcome',
   checkin_48h: 'checkin_48h',
   care_absent: 'care_absent',
+  child_absent: 'child_absent',
   salvation: 'salvation_followup',
   baptism_invite: 'baptism_invite',
   other: 'checkin_48h',

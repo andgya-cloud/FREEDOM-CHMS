@@ -44,6 +44,11 @@ export function AppShell({ children }: { children: ReactNode }) {
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>
             School
           </NavLink>
+        ) : current?.type === 'ministry' ? (
+          <NavLink to="/hope" className="tab">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6.6 5.3 5.3 0 0 1 21.3 12C19 16.600 12 21 12 21Z" /></svg>
+            Hope
+          </NavLink>
         ) : (
           <NavLink to="/programs" className={({ isActive }) => `tab${isActive || /^\/(teams|groups)\//.test(location.pathname) ? ' active' : ''}`}>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v13H6a2 2 0 0 0-2 2.5Zm0 0A2 2 0 0 0 6 22h12v-5M8 8h6M8 11h4" /></svg>

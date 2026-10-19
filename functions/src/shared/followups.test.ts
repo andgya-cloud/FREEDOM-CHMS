@@ -69,12 +69,12 @@ describe('templates', () => {
     expect(unknownFields('Hi {first_name} and {frist_name}')).toEqual(['frist_name']);
   });
 
-  it('has all eight starting templates, and keeps edited ones', () => {
+  it('has all nine starting templates, and keeps edited ones', () => {
     expect(DEFAULT_TEMPLATES.map((t) => t.id)).toEqual([
-      'visitor_welcome', 'checkin_48h', 'care_absent', 'salvation_followup', 'baptism_invite', 'program_reminder', 'giving_receipt', 'fee_reminder',
+      'visitor_welcome', 'checkin_48h', 'care_absent', 'child_absent', 'salvation_followup', 'baptism_invite', 'program_reminder', 'giving_receipt', 'fee_reminder',
     ]);
     const merged = withDefaults([{ id: 'visitor_welcome', name: 'Welcome', body: 'Karibu {first_name}!' }]);
-    expect(merged).toHaveLength(8);
+    expect(merged).toHaveLength(9);
     expect(merged[0]!.body).toBe('Karibu {first_name}!');
   });
 

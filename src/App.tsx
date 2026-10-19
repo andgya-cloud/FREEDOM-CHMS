@@ -57,6 +57,12 @@ const FeesPage = lazy(() => import('./pages/school/FeesPage').then((m) => ({ def
 const GraduationPage = lazy(() => import('./pages/school/GraduationPage').then((m) => ({ default: m.GraduationPage })));
 const SchoolReportsPage = lazy(() => import('./pages/school/SchoolReportsPage').then((m) => ({ default: m.SchoolReportsPage })));
 const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage').then((m) => ({ default: m.SchoolSettingsPage })));
+const HopeHome = lazy(() => import('./pages/hope/HopeHome').then((m) => ({ default: m.HopeHome })));
+const ChildrenPage = lazy(() => import('./pages/hope/ChildrenPage').then((m) => ({ default: m.ChildrenPage })));
+const RegisterChildPage = lazy(() => import('./pages/hope/RegisterChildPage').then((m) => ({ default: m.RegisterChildPage })));
+const ChildPage = lazy(() => import('./pages/hope/ChildPage').then((m) => ({ default: m.ChildPage })));
+const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
+const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((m) => ({ default: m.HopeExportsPage })));
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -132,6 +138,12 @@ function AppRoutes() {
         <Route path="/school/graduation" element={<RequirePermission permission="people.read"><GraduationPage /></RequirePermission>} />
         <Route path="/school/reports" element={<RequirePermission anyOf={['finance.reports', 'settings.manage']}><SchoolReportsPage /></RequirePermission>} />
         <Route path="/school/settings" element={<RequirePermission permission="settings.manage"><SchoolSettingsPage /></RequirePermission>} />
+        <Route path="/hope" element={<RequirePermission permission="people.read"><HopeHome /></RequirePermission>} />
+        <Route path="/hope/children" element={<RequirePermission permission="people.read"><ChildrenPage /></RequirePermission>} />
+        <Route path="/hope/children/new" element={<RequirePermission permission="people.write"><RegisterChildPage /></RequirePermission>} />
+        <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
+        <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
+        <Route path="/hope/exports" element={<RequirePermission permission="people.read"><HopeExportsPage /></RequirePermission>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />

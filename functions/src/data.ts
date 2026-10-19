@@ -12,6 +12,8 @@ import {
   anonymisedGift,
   backupPath,
   backupsToRemove,
+  CHILD_DOCS,
+  CHILD_FIELD_COLLECTIONS,
   FINANCIAL_PERSON_COLLECTIONS,
   ORG_COLLECTIONS,
   PERSON_COLLECTIONS,
@@ -56,6 +58,16 @@ export async function erasePerson(orgId: string, personId: string): Promise<Reco
   }
   for (const name of STUDENT_FIELD_COLLECTIONS) {
     const found = await base.collection(name).where('studentId', '==', personId).get();
+    counts[name] = found.size;
+    await deleteAll(found.docs.map((d) => d.ref));
+  }
+  // Freedom Hope Center: the child's register entry, private notes, visits, referrals and concerns all go.
+  for (const name of CHILD_DOCS) {
+    const ref = base.collection(name).doc(personId);
+    if ((await ref.get()).exists) { await ref.delete(); counts[name] = 1; }
+  }
+  for (const name of CHILD_FIELD_COLLECTIONS) {
+    const found = await base.collection(name).where('childId', '==', personId).get();
     counts[name] = found.size;
     await deleteAll(found.docs.map((d) => d.ref));
   }

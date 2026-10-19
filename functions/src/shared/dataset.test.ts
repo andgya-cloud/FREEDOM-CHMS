@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { anonymisedGift, backupsToRemove, ERASED_NAME, ORG_COLLECTIONS, PERSON_COLLECTIONS, retentionDays, toPlain } from './dataset.js';
+import { CHILD_DOCS, CHILD_FIELD_COLLECTIONS, anonymisedGift, backupsToRemove, ERASED_NAME, ORG_COLLECTIONS, PERSON_COLLECTIONS, retentionDays, toPlain } from './dataset.js';
 
 describe('retention', () => {
   it('defaults to 30 days and stays between 7 and 365', () => {
@@ -27,6 +27,9 @@ describe('erase', () => {
   });
   it('person data collections are all backed up too', () => {
     for (const c of PERSON_COLLECTIONS) expect(ORG_COLLECTIONS).toContain(c);
+  });
+  it('every Hope Center child record is backed up and erased with the child', () => {
+    for (const c of [...CHILD_DOCS, ...CHILD_FIELD_COLLECTIONS]) expect(ORG_COLLECTIONS).toContain(c);
   });
 });
 

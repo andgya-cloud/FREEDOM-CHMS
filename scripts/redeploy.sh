@@ -24,6 +24,12 @@ npx firebase deploy --project freedom-chms --only functions:onFeePaymentWritten
 npx firebase deploy --project freedom-chms --only functions:onCertificateCreated
 npx firebase deploy --project freedom-chms --only functions:onSchoolReportRequested
 npx firebase deploy --project freedom-chms --only functions:scheduledSchoolReports || echo "(The scheduled school reports were not deployed. Tell Claude.)"
+# Stage 10: Freedom Hope Center. Each new job goes on its own.
+npx firebase deploy --project freedom-chms --only functions:onChildCreated
+npx firebase deploy --project freedom-chms --only functions:onAbsenceCheckRequested
+npx firebase deploy --project freedom-chms --only functions:onHopeReportRequested
+npx firebase deploy --project freedom-chms --only functions:dailyChildAbsences || echo "(The daily absence check was not deployed. Tell Claude.)"
+npx firebase deploy --project freedom-chms --only functions:scheduledHopeReports || echo "(The scheduled Hope Center reports were not deployed. Tell Claude.)"
 # Then the rules, and the app itself.
 npx firebase deploy --project freedom-chms --only firestore:rules,firestore:indexes,hosting
 # Backups need Firebase Storage. If you have switched it on, lock its rules now. If not, this
