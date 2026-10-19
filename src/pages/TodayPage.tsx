@@ -74,13 +74,18 @@ export function TodayPage() {
       {(() => {
         const heading = (
           <>
-            <h1>{cockpit || glass || aurora ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
+            <h1>
+              {cockpit && <img className="church-logo" src="/org/church-logo.png" alt="" width={90} height={126} />}
+              {cockpit || glass || aurora ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}
+            </h1>
             {!loading && organizations.length > 0 && (
               <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
             )}
           </>
         );
-        return aurora ? <div className="hello-card">{heading}</div> : heading;
+        return aurora
+          ? <div className="hello-card"><div>{heading}</div><img className="hope-logo" src="/org/hope-logo.png" alt="Freedom Hope Center, OneChild" width={98} height={120} /></div>
+          : heading;
       })()}
 
       <OrgButtons />

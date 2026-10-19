@@ -47,3 +47,7 @@ Hope (type Ministry) has the "aurora" look: floating, slightly tilted glass card
 ## Insight-IQ logo
 
 The compass logo Andy sent replaces the old icon everywhere: the top bar on all three organizations, the sign-in page (with "The People Compass" under the name), the browser tab and the installed app icon. The name is now written "Insight-IQ". Icons are made from the upload by cropping the compass onto white (public/logo-mark.png, favicon.png, apple-touch-icon.png, pwa-*.png).
+
+## Organization logos
+
+Each organization shows its own logo next to the Insight-IQ one: ADIA in the top bar on the right (glass look only), Freedom Church above the Insight-IQ heading on Today (cockpit look), and Freedom Hope Center inside the Insight-IQ card on Today (aurora look). Files: public/org/*.png, cut from the images Andy sent.

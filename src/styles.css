@@ -860,3 +860,9 @@ a.chip.chip-on { color: var(--primary-ink); }
   .look-aurora .tab svg { width: 62px; height: 62px; padding: 15px; }
 }
 @media (prefers-reduced-motion: reduce) { .look-aurora .glass-tile, .look-aurora .tab svg { transition: none; } .aurora-today { transform: none; } }
+
+/* Each organization's own logo, beside the Insight-IQ logo (which stays in the top bar). */
+.org-logo-top { margin-left: auto; flex: none; border-radius: 9px; box-shadow: 0 0 0 1.5px #e2b23a, 0 4px 14px rgba(0, 0, 0, 0.35); }
+.church-logo { display: block; margin: 0 auto 0.5rem; width: clamp(56px, 6vw, 90px); height: auto; }
+.hello-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.hope-logo { flex: none; width: clamp(70px, 9vw, 120px); height: auto; border-radius: 14px; background: #fff; padding: 6px; box-shadow: 0 0 0 2px #e2b23a, 0 8px 20px rgba(0, 20, 10, 0.4); }
