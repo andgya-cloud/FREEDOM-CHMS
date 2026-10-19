@@ -18,10 +18,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'logo-mark.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'InsightIQ',
-        short_name: 'InsightIQ',
+        name: 'Insight-IQ',
+        short_name: 'Insight-IQ',
         description: 'People, attendance, giving and follow-up for Freedom Church.',
         theme_color: '#14284b',
         background_color: '#ffffff',

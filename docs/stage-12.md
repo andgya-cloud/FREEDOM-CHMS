@@ -43,3 +43,7 @@ ADIA (organization type College) now has its own "glass" look: a frosted panel o
 
 ## Update: aurora look for Freedom Hope Center
 Hope (type Ministry) has the "aurora" look: floating, slightly tilted glass cards over a dark green background, in shades of green with gold outlines on the buttons. Tiles: Check in, Register child, Record gift, Follow-ups. Tilt is switched off on phones.
+
+## Insight-IQ logo
+
+The compass logo Andy sent replaces the old icon everywhere: the top bar on all three organizations, the sign-in page (with "The People Compass" under the name), the browser tab and the installed app icon. The name is now written "Insight-IQ". Icons are made from the upload by cropping the compass onto white (public/logo-mark.png, favicon.png, apple-touch-icon.png, pwa-*.png).

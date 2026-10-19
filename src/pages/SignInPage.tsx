@@ -30,8 +30,9 @@ export function SignInPage() {
 
   return (
     <div className="center-card">
-      <img src="/favicon.svg" alt="" width={56} height={56} />
-      <h1>InsightIQ</h1>
+      <img src="/logo-mark.png" alt="" width={72} height={72} />
+      <h1>Insight-IQ</h1>
+      <p className="tagline">The People Compass</p>
       <p className="muted">Sign in with the account the pastor gave you.</p>
       <form onSubmit={submit} className="form">
         <label className="field">

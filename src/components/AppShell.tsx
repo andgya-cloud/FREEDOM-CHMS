@@ -23,11 +23,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className={`shell look-${look}`}>
       <header className="topbar">
-        <NavLink to="/" className="brand" aria-label="InsightIQ, Today">
-          {look === 'cockpit'
-            ? <svg className="brand-f" width={28} height={30} viewBox="0 0 32 35" fill="none" stroke="#9aa0ad" strokeWidth="3.6" strokeLinecap="round" aria-hidden="true"><path d="M28 3C16 2 9 7 7 17l-2 15" /><path d="M9 17c7-1.5 12-1.5 17-3.5" /></svg>
-            : <img src="/favicon.svg" alt="" width={28} height={28} />}
-          <span className="brand-name">InsightIQ</span>
+        <NavLink to="/" className="brand" aria-label="Insight-IQ, Today">
+          <img className="brand-logo" src="/logo-mark.png" alt="" width={30} height={30} />
+          <span className="brand-name">Insight-IQ</span>
         </NavLink>
         <OrgSwitcher />
         {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}

@@ -82,6 +82,8 @@ h2 { font-size: 1.15rem; margin: 0 0 0.5rem; }
 }
 .brand { display: flex; align-items: center; gap: 8px; text-decoration: none; color: var(--text); font-weight: 700; }
 .brand-name { display: none; }
+.center-card > img { align-self: center; }
+.center-card .tagline { margin: -10px 0 8px; color: #e0782c; font-weight: 600; letter-spacing: 0.02em; }
 @media (min-width: 640px) { .brand-name { display: inline; } }
 .org-switcher { flex: 1; min-width: 0; }
 .org-switcher select { width: 100%; max-width: 360px; font-weight: 600; }
@@ -581,7 +583,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 .look-cockpit .brand-name { font-weight: 400; color: #c9ccd6; }
 .look-cockpit .org-switcher select, .look-cockpit .org-name { font-weight: 400; font-size: 0.95rem; color: #b8bcc9; }
 .look-cockpit .sync-badge { font-weight: 400; }
-.look-cockpit .brand-f { flex: none; }
+.brand-logo { flex: none; border-radius: 7px; }
 @media (min-width: 900px) {
   .look-cockpit .topbar { padding-block: 8px; }
   .look-cockpit .topbar::after {

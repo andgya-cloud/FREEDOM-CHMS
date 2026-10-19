@@ -74,7 +74,7 @@ export function TodayPage() {
       {(() => {
         const heading = (
           <>
-            <h1>{cockpit || glass || aurora ? 'InsightIQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
+            <h1>{cockpit || glass || aurora ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
             {!loading && organizations.length > 0 && (
               <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
             )}
