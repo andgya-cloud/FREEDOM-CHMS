@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  absencesDue, absenceTaskId, programmeOfTask, CAME_BACK, buildHopeReport, childCode, consentMissing, hopeMetrics, missedInARow, monthsBefore, normalizeCode, programmeOf,
+  absencesDue, absenceTaskId, programmeOfTask, CAME_BACK, ageOn, buildHopeReport, childCode, consentMissing, hopeMetrics, missedInARow, monthsBefore, normalizeCode, programmeOf,
   NO_CONSENT, type Child, type HopeInput, type SessionEvent, type SessionRecord,
 } from './hope.js';
 
@@ -90,6 +90,14 @@ describe('absence task ids', () => {
   it('a task closed because the child came back is not a guardian contact', () => {
     const m = hopeMetrics({ children: [], programmes: PROGRAMMES, events: [], records: [], today: '2026-04-01', absenceTasks: [{ status: 'done', outcome: 'Reached' }, { status: 'done', outcome: CAME_BACK }] }, { from: '2026-03-01', to: '2026-03-31' });
     expect(m.guardianContactRate).toBe(100);
+  });
+});
+
+describe('ageOn', () => {
+  it('counts whole years', () => {
+    expect(ageOn('2015-06-15', '2026-06-14')).toBe(10);
+    expect(ageOn('2015-06-15', '2026-06-15')).toBe(11);
+    expect(ageOn(null, '2026-06-15')).toBeNull();
   });
 });
 

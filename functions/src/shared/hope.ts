@@ -33,6 +33,9 @@ export interface Child {
   status: ChildStatus;
   enrolledOn: string | null;
   exitedOn?: string | null;
+  dateOfBirth?: string | null;
+  /** The school's name, as the guardian reports it. */
+  school?: string | null;
   schoolStatus: SchoolStatus;
   programmes: ChildProgramme[];
   photoConsent: Consent;
@@ -269,4 +272,14 @@ export function buildHopeReport(
     audience: 'pastor',
     followUps: (openTasks ?? []).map((t) => ({ code: who?.[t.childId]?.code ?? '', name: who?.[t.childId]?.name ?? 'Unknown child', programme: t.programme, since: t.since })),
   };
+}
+
+/** Age in whole years on a day, or null when the date of birth is not known. */
+export function ageOn(dateOfBirth: string | null | undefined, day: string): number | null {
+  if (!dateOfBirth) return null;
+  const [y, m, d] = dateOfBirth.split('-').map(Number) as [number, number, number];
+  const [ty, tm, td] = day.split('-').map(Number) as [number, number, number];
+  if (!y || !ty) return null;
+  const years = ty - y - (tm < m || (tm === m && td < d) ? 1 : 0);
+  return years >= 0 ? years : null;
 }

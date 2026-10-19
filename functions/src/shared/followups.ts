@@ -112,7 +112,7 @@ export const DEFAULT_TEMPLATES: MessageTemplate[] = [
   {
     id: 'child_absent',
     name: 'Child missed sessions (to the guardian)',
-    body: 'Hello {first_name}, this is {staff_name} from {campus}. We have missed your child at our sessions these last few weeks and wanted to check that all is well. Is there anything we can help with? God bless you.',
+    body: 'Hello {first_name}, this is {staff_name} from {campus}. We have missed {child_name} at our sessions these last few weeks and wanted to check that all is well. Is there anything we can help with? God bless you.',
   },
   {
     id: 'salvation_followup',

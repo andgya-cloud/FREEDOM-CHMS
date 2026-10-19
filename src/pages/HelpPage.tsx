@@ -42,6 +42,22 @@ const TOPICS: Topic[] = [
     link: { to: '/school', label: 'Open School' },
   },
   {
+    id: 'hope-register', title: 'Hope Center: register a child and take attendance',
+    permission: 'people.write',
+    body: ['Choose Freedom Hope Center at the top, then open Hope. Register a child: type the name, date of birth, school and the programmes they join, and add a guardian with a phone number. The code (for example HC-0042) is made once you are online.',
+      'Consent can be left blank, but the child shows "Consent missing" until the guardian agrees. No photos are stored in the system.',
+      'For Saturday meals, open Hope and tap Saturday meals, then type how many new and returning children came if you are not taking names. For football, chess or music, tap the programme, then tap each name, or type or scan the child\'s code and press Enter. It works offline on a tablet.'],
+    link: { to: '/hope', label: 'Open Hope' },
+  },
+  {
+    id: 'hope-care', title: 'Hope Center: absent children, concerns and exports',
+    permission: 'people.read',
+    body: ['When a child misses three sessions in a row of a programme, a follow-up appears for the guardian. Open it from Follow-ups and use the WhatsApp button; messages always go to the guardian, never to the child.',
+      'If you are worried about a child, open their page and tap Raise a safeguarding concern. Only the pastor is told and can read it.',
+      'To take children\'s details out of the system (for a sponsor, for example), open Hope → Exports and ask. The pastor approves, you download once, and it is recorded.'],
+    link: { to: '/hope/exports', label: 'Open Exports' },
+  },
+  {
     id: 'school-fees', title: 'ADIA: fees, payments and arrears',
     permission: 'gifts.write',
     body: ['Fees → pick a programme and intake, list the fees, save, then Bill all enrolled students. Record a payment from the student\'s page (it is saved under School fees and gets the next receipt number). The arrears list updates by itself.',

@@ -13,6 +13,10 @@ import { CheckInPanel } from '../../components/CheckInPanel';
 import { ClassRegister, type RosterSpec } from '../../components/ClassRegister';
 import { ProgramSessionPanel } from '../../components/ProgramSessionPanel';
 import { useSchool } from '../../state/useSchool';
+import { useChildren } from '../../state/useHope';
+import { updateChild } from '../../lib/hopeWrites';
+import { MEALS_PROGRAMME, normalizeCode, programmeOf } from '../../../functions/src/shared/hope';
+import { activitiesFor } from '../../../functions/src/shared/attendance';
 import { useEnrollments, useGroupMembers, useGroups, usePrograms } from '../../state/usePrograms';
 import { enrol } from '../../lib/programWrites';
 import { EVENT_TYPE_LABELS } from '../../../functions/src/shared/attendance';
@@ -66,7 +70,7 @@ export function EventPage() {
     navigate(linked.back.to);
   }
 
-  const isClass = event.type === 'class' || event.type === 'group';
+  const isClass = event.type === 'class' || event.type === 'group' || !!linked.roster;
   return (
     <div className="page narrow">
       <p><Link to={linked.back.to}>← {linked.back.label}</Link></p>
@@ -136,6 +140,8 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
   const tz = orgInfo?.timeZone;
   const isClass = orgInfo?.type === 'college' && event?.type === 'class' && !programId && !groupId;
   const school = useSchool(isClass ? orgId : '');
+  const isHope = orgInfo?.type === 'ministry' && (event?.type === 'session' || event?.type === 'meal') && !programId && !groupId;
+  const hope = useChildren(isHope ? orgId : '');
 
   if (event && program) {
     const isMakeUp = !event.cohortId;
@@ -188,6 +194,42 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
         },
       };
     }
+  }
+  if (event && isHope && orgInfo) {
+    // Freedom Hope Center: the register lists the active children of this session's programme (everyone for Saturday meals).
+    const programmes = activitiesFor({ type: orgInfo.type, activities: orgInfo.activities });
+    const name = programmeOf(event, programmes);
+    const isMeals = name?.toLowerCase() === MEALS_PROGRAMME.toLowerCase() || event.type === 'meal';
+    const mine = hope.children.filter((c) => c.status === 'active' && (isMeals || (name && c.programmes.some((p) => p.name.toLowerCase() === name.toLowerCase()))));
+    const byId = new Map(hope.children.map((c) => [c.id, c]));
+    return {
+      back: { to: '/hope', label: 'Hope Center' },
+      roster: {
+        ids: new Set(mine.map((c) => c.id)),
+        title: `${event.name} register`,
+        empty: isMeals ? 'No children are registered yet. Use the headcount above, or register children first.' : `No children have joined ${name ?? 'this programme'} yet. Search above to add one, or register children first.`,
+        note: (personId) => {
+          const c = byId.get(personId);
+          if (!c) return null;
+          const prog = name ? c.programmes.find((p) => p.name.toLowerCase() === name.toLowerCase()) : undefined;
+          return [c.code ?? 'code pending', prog?.group].filter(Boolean).join(' · ');
+        },
+        // Typing or scanning HC-0042 (or just 42 after "HC") finds the child; names work as usual.
+        search: (p, text) => {
+          const c = byId.get(p.id);
+          const code = normalizeCode(text);
+          return p.fullName.toLowerCase().includes(text.trim().toLowerCase()) || (!!c?.code && (!!code && c.code === code || c.code.toLowerCase().includes(text.trim().toLowerCase())));
+        },
+        checkInOnEnter: true,
+        addLabel: 'Add',
+        onAddOther: !isMeals && name && can('people.write') ? (p: Person) => {
+          const c = byId.get(p.id);
+          if (!c) return;
+          updateChild(orgId, c.id, { programmes: [...c.programmes, { name, group: '', level: '' }] }).catch((err) => toast.show(friendlyError(err)));
+          toast.show(`${p.fullName} added to ${name}.`);
+        } : undefined,
+      },
+    };
   }
   return { back: { to: '/attendance', label: 'Attendance' } };
 }

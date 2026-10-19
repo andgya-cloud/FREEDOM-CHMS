@@ -15,7 +15,7 @@ Built in stages. This README grows with each stage.
 | 7 | Dashboard and automatic reports | Not started |
 | 8 | Hardening: backups, exports, training mode, help, two-step sign-in | Not started |
 | 9 | ADIA Training Centre module | Not started |
-| 10 | Freedom Hope Center module | Not started |
+| 10 | Freedom Hope Center module | Built, awaiting approval |
 
 ## How it fits together
 
@@ -162,6 +162,20 @@ Pick the ADIA college at the top, then open **School** (it replaces the Programm
 - **Fees**: fee structure per programme and intake, bill the intake (safe to repeat), record a payment from the student page (it is a gift in the *School fees* fund with the next ADIA receipt number), arrears list, fee statement PDF, WhatsApp reminder to a sponsor who agreed to WhatsApp (otherwise a Call button).
 - **Graduation**: issue a certificate (serial `ADIA-CERT-2026-0007`), certificate register, and follow-ups at 3, 6 and 12 months.
 - **Reports** (pastor and finance staff): weekly attendance and alerts report and monthly enrolment, results and fee report, made on schedule (Monday and the 1st, 07:00) and on request, with PDF.
+
+## Freedom Hope Center
+
+Pick the Freedom Hope Center (type Ministry) at the top, then open **Hope**. Protecting children comes before every other feature.
+
+- **Children register**: name, date of birth, gender, guardian or caregiver, school and whether they are in school, joined date, programmes (with a team, instrument or level where it applies), status (active or left). The code (`HC-0042`) is made by the server and never reused. Lists show the code and name. **No photo is stored anywhere.**
+- **Consent**: guardian consent and photo consent are each yes, no or not yet, with a date. A child saves without them; they show a "Consent missing" badge and are counted on the home screens.
+- **Programmes**: Saturday meals (headcount of new and returning children when names are not taken, or tap names), Football academy (training and match sessions, team or age group), Chess club (level reached), Music academy (instrument or class, progress level). An event name that starts with a programme's name belongs to it ("Football academy match").
+- **Check-in**: Attendance or Hope → tap the session, then tap a name, or type or scan the code and press Enter (a keyboard-style barcode scanner works). Works offline.
+- **Welfare**: three missed sessions in a row of a programme create a follow-up to the guardian (a daily check at 06:30, and a "Check now" button); WhatsApp always goes to the guardian, never to the child; the follow-up closes itself when the child comes back. Welfare notes, health flags, home circumstances, home visits and referrals are pastor-only. **Raise a safeguarding concern** is on every child page: it can be raised by any staff member, only the pastor can read it afterwards.
+- **Privacy**: dashboards and the monthly report are counts only. Admins see names and attendance but not welfare records. An export of child data needs the pastor's approval, can be downloaded once, and is written to the activity log (Hope → Exports).
+- **Numbers**: children registered and active (came in the last 8 weeks), weekly attendance per programme, meals served, attendance consistency (3 in 4 sessions), retention at 6 months, programme reach, school enrolment as reported by guardians, guardian contact rate. Reports: a monthly counts-only report for leadership and donors and a weekly attendance and follow-up report for the pastor, with PDF.
+
+Details and the test list are in [docs/stage-10.md](docs/stage-10.md). Donors and sponsors are not built yet.
 
 ## Dashboard and reports
 

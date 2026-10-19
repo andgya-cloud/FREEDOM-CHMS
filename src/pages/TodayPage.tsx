@@ -7,6 +7,7 @@ import { formatDate } from '../../functions/src/shared/datetime';
 import { matchesSearch } from '../../functions/src/shared/people';
 import { FirstRunChecklist } from '../components/FirstRunChecklist';
 import { OrgButtons } from '../components/OrgButtons';
+import { HopeAlerts } from '../components/HopeAlerts';
 import { PersonRow } from '../components/PersonRow';
 import { useFollowUpCounts } from '../state/useFollowUps';
 import { requestReport, useLatestReport, useReportPart } from '../state/useReports';
@@ -64,6 +65,7 @@ export function TodayPage() {
         <p className="muted">Nobody matches. <Link to="/visitors/new">Add as a visitor</Link></p>
       )}
 
+      <HopeAlerts />
       <FirstRunChecklist />
 
       <div className="big-actions">

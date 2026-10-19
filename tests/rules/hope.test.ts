@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDoc, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { created, makeEnv, seed } from './helpers';
 
 let env: RulesTestEnvironment;
@@ -141,6 +141,11 @@ describe('Hope Center reports', () => {
     await assertFails(getDoc(doc(as('hopeAdmin'), `${O}/hopeReports/weekly_2026-10-12`)));
     await assertSucceeds(getDoc(doc(as('pastor'), `${O}/hopeReports/weekly_2026-10-12`)));
     await assertFails(setDoc(doc(as('pastor'), `${O}/hopeReports/monthly_2026-10-01`), { orgId: 'hope' }));
+  });
+  it('lets a list query through only for what the person may read', async () => {
+    await assertSucceeds(getDocs(collection(as('pastor'), `${O}/hopeReports`)));
+    await assertFails(getDocs(collection(as('hopeAdmin'), `${O}/hopeReports`)));
+    await assertSucceeds(getDocs(query(collection(as('hopeAdmin'), `${O}/hopeReports`), where('audience', '==', 'counts'))));
   });
   it('lets an admin ask for a monthly report only', async () => {
     const req = (uid: string, type: string) => ({ orgId: 'hope', type, from: '2026-09-01', status: 'pending', createdAt: serverTimestamp(), createdBy: uid });

@@ -13,9 +13,9 @@ import { header, newPdf, receiptNumberFor, paymentLabel, GREY, INK } from './giv
 
 const file = (pdf: JsPdf, name: string) => new File([pdf.output('blob')], name, { type: 'application/pdf' });
 
-interface Column { label: string; x: number; align?: 'right' }
+export interface Column { label: string; x: number; align?: 'right' }
 
-function drawTable(pdf: JsPdf, y: number, cols: Column[], rows: string[][], bottom: number): number {
+export function drawTable(pdf: JsPdf, y: number, cols: Column[], rows: string[][], bottom: number): number {
   const head = (at: number) => {
     pdf.setFont('helvetica', 'bold');
     pdf.setFontSize(9);
