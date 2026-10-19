@@ -6,6 +6,7 @@ import { usePeople } from '../state/PeopleContext';
 import { formatDate } from '../../functions/src/shared/datetime';
 import { matchesSearch } from '../../functions/src/shared/people';
 import { FirstRunChecklist } from '../components/FirstRunChecklist';
+import { OrgButtons } from '../components/OrgButtons';
 import { PersonRow } from '../components/PersonRow';
 import { useFollowUpCounts } from '../state/useFollowUps';
 import { requestReport, useLatestReport, useReportPart } from '../state/useReports';
@@ -43,6 +44,8 @@ export function TodayPage() {
       {!loading && organizations.length > 0 && (
         <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
       )}
+
+      <OrgButtons />
 
       {can('people.read') && organizations.length > 0 && (
         <form role="search" onSubmit={(e) => { e.preventDefault(); navigate(`/people?q=${encodeURIComponent(query)}`); }}>
