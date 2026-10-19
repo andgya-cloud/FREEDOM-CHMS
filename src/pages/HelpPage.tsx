@@ -23,7 +23,8 @@ const TOPICS: Topic[] = [
     id: 'followups', title: 'Do today\'s follow-ups',
     permission: 'followups.manage',
     body: ['Follow-ups lists who needs a call or message today. Tap one, then WhatsApp opens with the words already written. Press send in WhatsApp, then mark it done.',
-      'If someone asks you to stop messaging them, tap Stop messages on their page. They will not be messaged again.'],
+      'If someone asks you to stop messaging them, tap Stop messages on their page. They will not be messaged again.',
+      'When the pastor has switched on WhatsApp automation, some follow-ups show a box called Automatic WhatsApp. If it says Waiting for your approval, read the message and tap Approve and send, or Don\'t send. A reply of "stop" from the person switches their WhatsApp messages off by itself.'],
     link: { to: '/follow-ups', label: 'Open Follow-ups' },
   },
   {
