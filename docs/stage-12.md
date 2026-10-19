@@ -37,3 +37,6 @@ The look for each organization is chosen in `src/lib/look.ts` (by organization t
 ## Update: full curved "cockpit" on wide screens
 
 On screens 900 pixels wide or more, the Freedom Church Today screen now matches the design page (freedom-cockpit.html): the cyan and gold curved bowl along the bottom, five tilted glass tiles (Check in, Add visitor, Record gift, Follow-ups, Nav) that follow the curve, and the page names (Today, People, Attendance, Programmes, Settings) as labels on the curve. The curve and tiles are drawn in percentages of the screen width, so they keep their shape at any size. On phones the earlier compact dock stays. Other organizations keep the standard look.
+
+## Update: glass look for ADIA Training Centre
+ADIA (organization type College) now has its own "glass" look: a frosted panel over a blurred room, thick teal glass tiles (Check in, Add student, Record fees, Follow-ups) and a floating dock of round buttons. Church keeps the cockpit and Hope the standard look. Set in `src/lib/look.ts`; styles at the end of `src/styles.css`. A fixed-stage design page is in the deploy folder (`adia-glass.html`).

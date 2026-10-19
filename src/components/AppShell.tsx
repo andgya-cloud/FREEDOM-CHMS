@@ -53,7 +53,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         {current?.type === 'college' ? (
           <NavLink to="/school" className="tab">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>
-            School
+            {look === 'glass' ? 'Programmes' : 'School'}
           </NavLink>
         ) : current?.type === 'ministry' ? (
           <NavLink to="/hope" className="tab">
