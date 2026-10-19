@@ -729,3 +729,12 @@ a.chip.chip-on { color: var(--primary-ink); }
   .look-glass .tab svg { width: 52px; height: 52px; padding: 13px; }
 }
 @media (prefers-reduced-motion: reduce) { .glass-tile, .look-glass .tab svg { transition: none; } .glass-today { transform: none; } }
+
+/* Gold outline on the glass buttons (tiles, dock, organization chips) */
+.glass-tile { border: 2px solid #e2b23a; box-shadow: 0 18px 36px rgba(0, 40, 50, 0.4), 0 0 14px rgba(226, 178, 58, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -10px 22px rgba(0, 70, 85, 0.35); }
+.glass-tile:hover:not(:disabled) { box-shadow: 0 24px 44px rgba(0, 40, 50, 0.5), 0 0 24px rgba(226, 178, 58, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -10px 22px rgba(0, 70, 85, 0.35); }
+.look-glass .tab svg { border: 1.5px solid #e2b23a; }
+.look-glass .tab.active svg { border-color: #e2b23a; box-shadow: 0 0 14px rgba(226, 178, 58, 0.55), 0 8px 18px rgba(0, 40, 60, 0.4), inset 0 1px 0 #fff; }
+.look-glass .chip { border-color: rgba(226, 178, 58, 0.8); }
+.look-glass .chip-on { border-color: #e2b23a; }
+.look-glass .btn { border: 1.5px solid #e2b23a; }
