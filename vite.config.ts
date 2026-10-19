@@ -20,8 +20,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Freedom ChMS',
-        short_name: 'Freedom',
+        name: 'InsightIQ',
+        short_name: 'InsightIQ',
         description: 'People, attendance, giving and follow-up for Freedom Church.',
         theme_color: '#14284b',
         background_color: '#ffffff',
