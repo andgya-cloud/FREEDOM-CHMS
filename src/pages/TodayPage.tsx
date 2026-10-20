@@ -1,14 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useOrg } from '../state/OrgContext';
-import { usePeople } from '../state/PeopleContext';
 import { formatDate } from '../../functions/src/shared/datetime';
-import { matchesSearch } from '../../functions/src/shared/people';
 import { FirstRunChecklist } from '../components/FirstRunChecklist';
 import { OrgButtons } from '../components/OrgButtons';
 import { HopeAlerts } from '../components/HopeAlerts';
-import { PersonRow } from '../components/PersonRow';
+import { QuickSearch } from '../components/QuickSearch';
 import { useFollowUpCounts } from '../state/useFollowUps';
 import { requestReport, useLatestReport, useReportPart } from '../state/useReports';
 import { Scorecard } from '../components/Scorecard';
@@ -50,10 +48,7 @@ const NAV_ICON = 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7
 export function TodayPage() {
   const { profile, can } = useAuth();
   const { current, isCombined, organizations, loading } = useOrg();
-  const { people } = usePeople();
   const counts = useFollowUpCounts(current?.id ?? '', current?.timeZone ?? 'Africa/Nairobi');
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
   const firstName = profile?.displayName.split(' ')[0] ?? '';
   const look = lookFor(current);
   const cockpit = look === 'cockpit';
@@ -66,12 +61,10 @@ export function TodayPage() {
     : to === '/giving/new' ? can('gifts.write')
     : to === '/follow-ups' ? can('followups.manage')
     : true);
-  const results = useMemo(() => (query.trim().length >= 2 ? people.filter((p) => matchesSearch(p, query)).slice(0, 8) : []), [people, query]);
 
   return (
     <div className={`page${cockpit ? ' cockpit-today' : ''}${glass ? ' glass-today' : ''}${aurora ? ' aurora-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
-      {glass && <img className="adia-crest" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />}
       {(() => {
         const heading = (
           <>
@@ -91,22 +84,7 @@ export function TodayPage() {
 
       <OrgButtons />
 
-      {can('people.read') && organizations.length > 0 && (
-        <form role="search" onSubmit={(e) => { e.preventDefault(); navigate(`/people?q=${encodeURIComponent(query)}`); }}>
-          <input
-            type="search"
-            className="search"
-            placeholder="Find anyone by name or phone"
-            aria-label="Find a person"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </form>
-      )}
-      {results.length > 0 && <ul className="row-list">{results.map((p) => <PersonRow key={`${p.orgId}/${p.id}`} person={p} />)}</ul>}
-      {query.trim().length >= 2 && results.length === 0 && (
-        <p className="muted">Nobody matches. <Link to="/visitors/new">Add as a visitor</Link></p>
-      )}
+      {!glass && can('people.read') && organizations.length > 0 && <QuickSearch />}
 
       <HopeAlerts />
       <FirstRunChecklist />
@@ -157,7 +135,7 @@ export function TodayPage() {
             const ready = organizations.length > 0 && allowedTo(a.to);
             const inner = (
               <>
-                {a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">$</span>}
+                {a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">Ksh.</span>}
                 <span className="tile-text">
                   <span className="tile-label">{a.label}</span>
                   {a.to === '/follow-ups' && current && <span className="tile-sub">{counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`}</span>}
