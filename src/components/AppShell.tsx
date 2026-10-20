@@ -66,10 +66,10 @@ export function AppShell({ children }: { children: ReactNode }) {
       <InstallBanner />
     </>
   );
-  // ADIA Training Centre: navy and gold, with the menu down a side panel on wide screens (a bottom dock on phones).
-  if (look === 'glass') {
+  // ADIA Training Centre and Freedom Church: the menu down a side panel on wide screens (a bottom dock on phones).
+  if (look === 'glass' || look === 'cockpit') {
     return (
-      <div className="shell look-glass">
+      <div className={`shell look-${look} side-look`}>
         <aside className="adia-side">
           <NavLink to="/" className="brand" aria-label="Insight-IQ, Today">
             <img className="brand-logo" src="/logo-mark.png" alt="" width={56} height={56} />
@@ -81,8 +81,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="adia-body">
           <header className="adia-head">
             {can('people.read') && <QuickSearch className="adia-search" />}
+            {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
             <SyncBadge />
-            <img className="adia-crest" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
+            {look === 'glass'
+              ? <img className="org-mark" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
+              : <img className="org-mark org-mark-church" src="/org/church-logo.png" alt="Freedom Church" width={90} height={126} />}
           </header>
           {notices}
           <main className="main">{children}</main>
@@ -98,7 +101,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="brand-name">Insight-IQ</span>
         </NavLink>
         <OrgSwitcher />
-        {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
         <SyncBadge />
       </header>
       {notices}

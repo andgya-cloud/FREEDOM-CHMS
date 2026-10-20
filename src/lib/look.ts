@@ -1,8 +1,8 @@
 import type { Organization } from '../state/OrgContext';
 
 /**
- * Each organization can have its own interface. "cockpit" is the dark, curved layout made for Freedom Church;
- * "glass" is the frosted-glass panel over a blurred room made for ADIA Training Centre; "aurora" is the floating, tilted green-and-gold glass made for Freedom Hope Center; everything else keeps the standard look. A new look is added here and in styles.css.
+ * Each organization can have its own interface. "cockpit" is the midnight-and-cyan side-panel layout made for Freedom Church;
+ * "glass" is the navy-and-gold side-panel layout made for ADIA Training Centre; "aurora" is the floating, tilted green-and-gold glass made for Freedom Hope Center; everything else keeps the standard look. A new look is added here and in styles.css.
  */
 export type Look = 'standard' | 'cockpit' | 'glass' | 'aurora';
 

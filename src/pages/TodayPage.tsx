@@ -43,8 +43,6 @@ const HOPE_ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
 ] as const;
 
-const NAV_ICON = 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.600 6.500l1.600-1.600 1.600 1.100a7 7 0 0 1 1.700-.7l.4-1.900h2.200l.4 1.900a7 7 0 0 1 1.700.7l1.600-1.100 1.600 1.600-1.100 1.600a7 7 0 0 1 .7 1.700l1.900.4z';
-
 export function TodayPage() {
   const { profile, can } = useAuth();
   const { current, isCombined, organizations, loading } = useOrg();
@@ -54,7 +52,9 @@ export function TodayPage() {
   const cockpit = look === 'cockpit';
   const glass = look === 'glass';
   const aurora = look === 'aurora';
-  const tileActions = aurora ? HOPE_ACTIONS : GLASS_ACTIONS;
+  // ADIA and Freedom Church share the side-panel layout; the page underneath is the same.
+  const sided = glass || cockpit;
+  const tileActions = aurora ? HOPE_ACTIONS : cockpit ? ACTIONS : GLASS_ACTIONS;
   const allowedTo = (to: string) => (to === '/visitors/new' || to === '/school/students/new' || to === '/hope/children/new' ? can('people.write')
     : to === '/school/fees' ? can('gifts.write') || can('finance.reports') || can('giving.person.read')
     : to === '/attendance' ? can('attendance.write') || can('people.read')
@@ -63,13 +63,12 @@ export function TodayPage() {
     : true);
 
   return (
-    <div className={`page${cockpit ? ' cockpit-today' : ''}${glass ? ' glass-today' : ''}${aurora ? ' aurora-today' : ''}`}>
+    <div className={`page${sided ? ' glass-today' : ''}${aurora ? ' aurora-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
       {(() => {
         const heading = (
           <>
             <h1>
-              {cockpit && <img className="church-logo" src="/org/church-logo.png" alt="" width={90} height={126} />}
               {cockpit || glass || aurora ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}
             </h1>
             {!loading && organizations.length > 0 && (
@@ -84,52 +83,12 @@ export function TodayPage() {
 
       <OrgButtons />
 
-      {!glass && can('people.read') && organizations.length > 0 && <QuickSearch />}
+      {!sided && can('people.read') && organizations.length > 0 && <QuickSearch />}
 
       <HopeAlerts />
       <FirstRunChecklist />
 
-      {cockpit && (
-        <nav className="cockpit-dock" aria-label="Quick actions">
-          <svg className="dock-bowl" viewBox="0 0 2576 658" preserveAspectRatio="none" fill="none" aria-hidden="true">
-            <defs>
-              <linearGradient id="dock-dk" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="#fff" stopOpacity=".035" /><stop offset="1" stopColor="#000" stopOpacity=".25" /></linearGradient>
-              <radialGradient id="dock-hi"><stop offset="0" stopColor="#bff6ff" stopOpacity=".9" /><stop offset="1" stopColor="#3fd8f0" stopOpacity="0" /></radialGradient>
-              <filter id="dock-b10" x="-5%" y="-30%" width="110%" height="160%"><feGaussianBlur stdDeviation="10" /></filter>
-              <filter id="dock-b4" x="-5%" y="-30%" width="110%" height="160%"><feGaussianBlur stdDeviation="4" /></filter>
-            </defs>
-            <path d="M300,262 C600,250 900,165 1288,165 C1676,165 1976,250 2276,262 L2240,455 C2150,475 2050,465 1920,445 C1700,410 1500,402 1288,402 C1100,402 900,400 640,442 C520,465 430,475 340,435 Z" fill="url(#dock-dk)" />
-            <path d="M0,10 C70,150 170,250 300,262 C600,250 900,165 1288,165 C1676,165 1976,250 2276,262 C2406,250 2506,150 2576,10" stroke="#d9a35b" strokeWidth="2" opacity=".65" />
-            <g stroke="#3fd8f0">
-              <path d="M0,65 C70,230 200,370 340,435 C430,475 520,465 640,442 C900,400 1100,402 1288,402 C1500,402 1700,410 1920,445 C2050,465 2150,475 2240,455 C2380,415 2510,270 2576,55" strokeWidth="14" opacity=".55" filter="url(#dock-b10)" />
-              <path d="M0,65 C70,230 200,370 340,435 C430,475 520,465 640,442 C900,400 1100,402 1288,402 C1500,402 1700,410 1920,445 C2050,465 2150,475 2240,455 C2380,415 2510,270 2576,55" strokeWidth="6" opacity=".7" filter="url(#dock-b4)" />
-              <path d="M0,65 C70,230 200,370 340,435 C430,475 520,465 640,442 C900,400 1100,402 1288,402 C1500,402 1700,410 1920,445 C2050,465 2150,475 2240,455 C2380,415 2510,270 2576,55" strokeWidth="3.5" />
-            </g>
-            <path d="M560,485 C610,530 650,558 780,558 H1796 C1926,558 1966,530 2016,485" stroke="#d9a35b" strokeWidth="1.5" opacity=".55" />
-            <ellipse cx="715" cy="428" rx="70" ry="9" fill="#3fd8f0" filter="url(#dock-b4)" opacity=".9" />
-            <circle cx="640" cy="412" r="34" fill="url(#dock-hi)" />
-          </svg>
-          {ACTIONS.map((a) => {
-            const ready = organizations.length > 0 && allowedTo(a.to);
-            const inner = (
-              <>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg>
-                <span className="dock-label">{a.label}</span>
-                {a.to === '/follow-ups' && current && counts.due > 0 && <span className="dock-count">{counts.due} due</span>}
-              </>
-            );
-            return ready
-              ? <Link key={a.label} to={a.to} className="dock-btn">{inner}</Link>
-              : <button key={a.label} type="button" className="dock-btn" disabled>{inner}</button>;
-          })}
-          <Link to="/settings" className="dock-btn">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d={NAV_ICON} /></svg>
-            <span className="dock-label">Nav</span>
-          </Link>
-        </nav>
-      )}
-
-      {(glass || aurora) && (
+      {(sided || aurora) && (
         <div className="glass-tiles">
           {tileActions.map((a) => {
             const ready = organizations.length > 0 && allowedTo(a.to);

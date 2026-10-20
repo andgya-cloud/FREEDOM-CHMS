@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { cityOf, clockText } from '../lib/look';
 
-/** The time in the header (cockpit look), kept in step with the organization's time zone. */
+/** The time in the header (Freedom Church look), kept in step with the organization's time zone. */
 export function LiveClock({ timeZone }: { timeZone: string }) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
