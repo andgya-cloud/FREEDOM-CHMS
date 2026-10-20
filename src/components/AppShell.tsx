@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Attendance
       </NavLink>
       {current?.type === 'college' ? (
-        <NavLink to="/school" className="tab">
+        <NavLink to="/school" className={({ isActive }) => `tab${isActive && !location.pathname.startsWith('/school/petty-cash') ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>
           {look === 'glass' ? 'Programmes' : 'School'}
         </NavLink>
@@ -51,6 +51,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/programs" className={({ isActive }) => `tab${isActive || /^\/(teams|groups)\//.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v13H6a2 2 0 0 0-2 2.5Zm0 0A2 2 0 0 0 6 22h12v-5M8 8h6M8 11h4" /></svg>
           Programmes
+        </NavLink>
+      )}
+      {current?.type === 'college' && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('users.manage')) && (
+        <NavLink to="/school/petty-cash" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
+          Petty Cash
         </NavLink>
       )}
       <NavLink to="/settings" className="tab">

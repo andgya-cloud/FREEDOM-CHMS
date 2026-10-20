@@ -19,6 +19,10 @@ export const PERMISSIONS = [
   'giving.person.read',
   'finance.reports',
   'settings.manage',
+  // ADIA petty cash: make requests, check them (accountant), give final approval and set the budget (board)
+  'pettycash.request',
+  'pettycash.check',
+  'pettycash.approve',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -35,6 +39,9 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'giving.person.read',
   'finance.reports',
   'settings.manage',
+  'pettycash.request',
+  'pettycash.check',
+  'pettycash.approve',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -49,6 +56,9 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'giving.person.read': 'Giving history per person',
   'finance.reports': 'Financial reports',
   'settings.manage': 'Settings and organizations',
+  'pettycash.request': 'Petty cash: make requests',
+  'pettycash.check': 'Petty cash: check requests (accountant)',
+  'pettycash.approve': 'Petty cash: final approval and monthly budget',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',

@@ -515,6 +515,8 @@ a.chip.chip-on { color: var(--primary-ink); }
 .side-look .tab { color: rgba(255, 255, 255, 0.7); font-weight: 500; border: 1px solid transparent; border-radius: 14px; transition: background 0.2s, color 0.2s; }
 .side-look .tab:hover { background: rgba(255, 255, 255, 0.08); color: rgb(var(--acc-light)); }
 .side-look .tab.active { color: rgb(var(--acc)); font-weight: 600; background: rgb(var(--acc) / 0.1); border-color: rgb(var(--acc) / 0.3); }
+/* Six tabs (ADIA with Petty Cash) on a phone: smaller labels so they do not run into each other. */
+@media (max-width: 899px) { .side-look .tabbar:has(> .tab:nth-child(6)) .tab { font-size: 0.6rem; letter-spacing: -0.02em; overflow: hidden; text-overflow: ellipsis; } }
 
 /* The header: search, the "All saved" badge and the ADIA crest */
 .adia-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -598,3 +600,33 @@ a.chip.chip-on { color: var(--primary-ink); }
 .live-clock { display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
 .live-clock-time { font-weight: 300; letter-spacing: -0.01em; }
 .live-clock-city { color: var(--muted); font-size: 0.85rem; }
+
+/* ---------- Petty cash (ADIA) ---------- */
+.row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.petty-number { font-size: 0.85rem; color: var(--muted); }
+.petty-figures { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+.petty-figures li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.petty-figures li span { font-size: 0.8rem; color: var(--muted); }
+.petty-figures li strong { font-size: 1.1rem; }
+.petty-balance { color: rgb(var(--acc, 34 120 80)); }
+.petty-bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
+.petty-bar span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--acc, 34 120 80)); transition: width .3s; }
+.petty-warning .petty-bar span { background: var(--gold); }
+.petty-over .petty-bar span { background: var(--red); }
+.petty-over .petty-balance { color: var(--red); }
+.petty-line { grid-template-columns: 1fr 150px auto; align-items: end; }
+@media (max-width: 560px) { .petty-line { grid-template-columns: 1fr 110px; } .petty-line .btn { grid-column: 1 / -1; } }
+.petty-total { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 1.05rem; }
+.petty-total strong { font-size: 1.3rem; }
+.petty-items { list-style: none; margin: 0; padding: 0; }
+.petty-items li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.petty-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.petty-steps li { display: flex; flex-direction: column; gap: 2px; padding-left: 26px; position: relative; color: var(--muted); }
+.petty-steps li::before { content: ''; position: absolute; left: 0; top: 3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); }
+.petty-steps li.done { color: inherit; }
+.petty-steps li.done::before { background: rgb(var(--acc, 34 120 80)); border-color: rgb(var(--acc, 34 120 80)); }
+@media print {
+  .petty-print .row-actions, .adia-side, .adia-head, .tabbar, .dev-ribbon { display: none !important; }
+  .petty-print .card { background: #fff !important; color: #000 !important; border: 1px solid #999 !important; box-shadow: none !important; backdrop-filter: none !important; }
+  .petty-print, .petty-print * { color: #000 !important; }
+}

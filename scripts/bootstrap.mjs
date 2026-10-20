@@ -34,7 +34,8 @@ if (!values.project || !values.email || !values.name) {
 // Kept in step with functions/src/shared/permissions.ts and password.ts.
 const PERMISSIONS = [
   'people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue',
-  'followups.manage', 'pastoral.read', 'giving.person.read', 'finance.reports', 'settings.manage', 'team.manage',
+  'followups.manage', 'pastoral.read', 'giving.person.read', 'finance.reports', 'settings.manage',
+  'pettycash.request', 'pettycash.check', 'pettycash.approve', 'team.manage',
   'users.manage', 'audit.read', 'data.export',
 ];
 const ADMIN = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue', 'followups.manage'];

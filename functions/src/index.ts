@@ -11,5 +11,6 @@ export { syncStaffDirectory, onPipelineWritten, dailyFollowUps } from './followu
 export { onReportRequested, scheduledReports } from './reports.js';
 export { onDataRequested, weeklyBackup } from './data.js';
 export { onStudentCreated, onInvoiceWritten, onFeePaymentWritten, onCertificateCreated, onSchoolReportRequested, scheduledSchoolReports } from './school.js';
+export { onPettyCashCreated } from './pettyCash.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';
