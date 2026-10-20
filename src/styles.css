@@ -433,135 +433,11 @@ a.chip.chip-on { color: var(--primary-ink); }
 .glass-tile { border: 2px solid #e2b23a; box-shadow: 0 18px 36px rgba(0, 40, 50, 0.4), 0 0 14px rgba(226, 178, 58, 0.3), inset 0 2px 0 rgba(255, 255, 255, 0.7), inset 0 -10px 22px rgba(0, 70, 85, 0.35); }
 .glass-tile:hover:not(:disabled) { box-shadow: 0 24px 44px rgba(0, 40, 50, 0.5), 0 0 24px rgba(226, 178, 58, 0.5), inset 0 2px 0 rgba(255, 255, 255, 0.8), inset 0 -10px 22px rgba(0, 70, 85, 0.35); }
 
-/* ---- Aurora look: floating, tilted green-and-gold glass made for Freedom Hope Center (see src/lib/look.ts) ---- */
-:root[data-look='aurora'] {
-  --bg: #04150f;
-  --surface: rgba(10, 52, 36, 0.82);
-  --surface-2: rgba(255, 255, 255, 0.1);
-  --text: #f1fbf5;
-  --muted: #b9d9c6;
-  --border: rgba(226, 178, 58, 0.5);
-  --primary: #f0c75e;
-  --primary-ink: #052214;
-  --gold: #e2b23a;
-  --gold-ink: #f0cf73;
-  --ok: #7be9a8;
-  --red: #ff9488;
-  color-scheme: dark;
-  font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Noto Sans', sans-serif;
-}
-:root[data-look='aurora'] body {
-  background:
-    radial-gradient(ellipse 40% 50% at 88% 30%, rgba(40, 200, 120, 0.5), transparent 70%),
-    radial-gradient(ellipse 36% 46% at 70% 90%, rgba(20, 150, 110, 0.55), transparent 70%),
-    radial-gradient(ellipse 34% 44% at 18% 85%, rgba(120, 200, 60, 0.4), transparent 70%),
-    radial-gradient(ellipse 30% 36% at 52% 55%, rgba(226, 178, 58, 0.22), transparent 70%),
-    radial-gradient(ellipse 50% 50% at 8% 20%, rgba(10, 110, 70, 0.55), transparent 70%),
-    linear-gradient(160deg, #03140e 0%, #06261a 50%, #031009 100%) fixed;
-}
-.look-aurora { font-weight: 500; }
-.look-aurora h1, .look-aurora h2 { font-weight: 700; }
-.look-aurora .topbar { background: rgba(4, 28, 18, 0.55); backdrop-filter: blur(24px) saturate(150%); border-bottom: 1px solid rgba(226, 178, 58, 0.55); }
-.look-aurora .brand-name { font-weight: 700; }
-.look-aurora .org-switcher { flex: 0 1 auto; }
-.look-aurora .org-switcher select, .look-aurora .org-name { border-radius: 999px; background: rgba(20, 90, 60, 0.55); border: 1.5px solid #e2b23a; padding: 6px 16px; flex: 0 1 auto; color: var(--text); font-weight: 600; }
-.look-aurora .sync-badge { background: rgba(80, 220, 140, 0.25); color: #dcffe9; border: 1px solid rgba(160, 255, 200, 0.55); font-weight: 600; }
-.look-aurora .card, .look-aurora .notice { background: rgba(14, 70, 48, 0.55); border-color: rgba(226, 178, 58, 0.55); backdrop-filter: blur(22px) saturate(140%); }
-.look-aurora .chip { background: rgba(20, 100, 66, 0.55); border: 1.5px solid #e2b23a; color: var(--text); }
-.look-aurora .chip-on { background: linear-gradient(180deg, #f7dd8f 0%, #e2b23a 100%); color: #0b2a18; border-color: #fff3c4; box-shadow: 0 6px 18px rgba(0, 20, 10, 0.45); }
-.look-aurora .btn { border: 1.5px solid #e2b23a; }
-.look-aurora .btn-quiet { color: #d8fbe6; }
-.look-aurora .search { background: rgba(20, 100, 66, 0.5); border: 1.5px solid #e2b23a; color: var(--text); border-radius: 999px; padding-left: 22px; min-height: 58px; backdrop-filter: blur(20px); }
-.look-aurora .search::placeholder { color: rgba(241, 251, 245, 0.8); }
-
-.aurora-today { display: flex; flex-direction: column; gap: 14px; padding-top: 8px; }
-.aurora-today > .muted:first-child { display: none; }
-.aurora-today .big-actions { display: none; }
-.hello-card {
-  padding: 18px 24px; border-radius: 26px; border: 2px solid #e2b23a;
-  background: linear-gradient(160deg, rgba(40, 140, 96, 0.55), rgba(10, 60, 40, 0.7));
-  backdrop-filter: blur(24px) saturate(150%);
-  box-shadow: 0 24px 50px rgba(0, 20, 10, 0.5), 0 0 22px rgba(226, 178, 58, 0.25), inset 0 1.5px 0 rgba(255, 240, 180, 0.4);
-}
-.hello-card h1 { margin: 0; font-size: clamp(2rem, 4vw, 3.4rem); letter-spacing: -0.01em; }
-.hello-card .lead { margin: 2px 0 0; color: var(--muted); font-size: 1.15rem; }
-.aurora-today .card[aria-label='Switch organization'] { border-radius: 28px; border-width: 2px; border-color: #e2b23a; box-shadow: 0 20px 44px rgba(0, 20, 10, 0.45); }
-.aurora-today .card h2 { font-size: 1.1rem; }
-.aurora-today .checklist { border-radius: 26px; border: 2px solid #e2b23a; box-shadow: 0 20px 44px rgba(0, 20, 10, 0.45); }
-.aurora-today .tick { border-color: rgba(226, 178, 58, 0.85); }
-.aurora-today .done .tick { background: #2fbf74; border-color: #8cf0b8; }
-.aurora-today .checklist li.done { color: var(--text); }
-.aurora-today .row-list { background: rgba(6, 40, 26, 0.95); border-radius: 18px; }
-
-.look-aurora .glass-tiles { gap: 14px; margin-top: 0; }
-.look-aurora .glass-tile {
-  flex-direction: row; justify-content: flex-start; gap: 16px; min-height: 96px; padding: 14px 22px; border-radius: 26px; text-align: left;
-  background: linear-gradient(150deg, rgba(60, 180, 120, 0.6) 0%, rgba(20, 110, 74, 0.7) 55%, rgba(120, 190, 70, 0.45) 100%);
-  border: 2px solid #e2b23a;
-  box-shadow: 0 20px 40px rgba(0, 20, 10, 0.5), 0 0 16px rgba(226, 178, 58, 0.3), inset 0 1.5px 0 rgba(255, 255, 255, 0.45);
-  backdrop-filter: blur(22px) saturate(150%);
-}
-.look-aurora .glass-tile::after { display: none; }
-.look-aurora .glass-tile:hover:not(:disabled) { box-shadow: 0 26px 48px rgba(0, 20, 10, 0.55), 0 0 28px rgba(226, 178, 58, 0.55), inset 0 1.5px 0 rgba(255, 255, 255, 0.55); }
-.look-aurora .glass-tile svg { flex: none; width: 52px; height: 52px; padding: 12px; border-radius: 50%; background: rgba(255, 255, 255, 0.14); border: 1.5px solid rgba(226, 178, 58, 0.8); stroke: #fff; filter: none; }
-.look-aurora .tile-text { align-items: flex-start; }
-.look-aurora .tile-label { font-size: 1.35rem; }
-.look-aurora .glass-tile:first-child { border-color: #f7dd8f; box-shadow: 0 22px 46px rgba(0, 20, 10, 0.55), 0 0 30px rgba(226, 178, 58, 0.5), inset 0 1.5px 0 rgba(255, 255, 255, 0.6); }
-
-/* The dock: the page tabs float as one glass pill */
-.look-aurora .tabbar {
-  left: 50%; right: auto; transform: translateX(-50%); width: min(560px, calc(100% - 20px)); bottom: calc(12px + env(safe-area-inset-bottom));
-  padding: 8px 10px; border: 2px solid #e2b23a; border-radius: 44px; gap: 2px;
-  background: linear-gradient(180deg, rgba(40, 140, 96, 0.55), rgba(6, 40, 26, 0.8));
-  backdrop-filter: blur(30px) saturate(160%);
-  box-shadow: 0 22px 50px rgba(0, 20, 10, 0.55), 0 0 22px rgba(226, 178, 58, 0.3);
-}
-.look-aurora .tab { color: #f1fbf5; font-size: 0.66rem; font-weight: 600; letter-spacing: 0; gap: 3px; max-width: none; }
-.look-aurora .tab svg { width: 44px; height: 44px; padding: 11px; border-radius: 50%; stroke-width: 1.9; background: rgba(255, 255, 255, 0.12); border: 1.5px solid #e2b23a; transition: transform 0.15s; }
-.look-aurora .tab:hover svg { transform: translateY(-2px); }
-.look-aurora .tab.active { color: #fff; font-weight: 700; }
-.look-aurora .tab.active svg { background: linear-gradient(180deg, #f7dd8f, #e2b23a); stroke: #0b2a18; box-shadow: 0 0 14px rgba(226, 178, 58, 0.55); }
-
-@media (min-width: 900px) {
-  .look-aurora .main { max-width: 1320px; padding-top: 30px; padding-bottom: 150px; }
-  .aurora-today {
-    display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: minmax(0, auto); gap: 22px; align-items: center;
-    transform: perspective(2200px) rotateX(5deg) rotateZ(-3deg); transform-origin: 50% 40%;
-  }
-  .aurora-today > * { grid-column: 1 / -1; }
-  .aurora-today > .hello-card { grid-column: 1 / span 5; grid-row: 1 / span 2; padding: 34px 40px; border-radius: 34px; }
-  .hello-card h1 { font-size: clamp(2.6rem, 4vw, 4.4rem); }
-  .aurora-today > .card[aria-label='Switch organization'] { grid-column: 6 / span 7; grid-row: 1; padding: 16px 24px; }
-  .aurora-today > .quick-search > form[role='search'] { grid-column: 7 / span 6; grid-row: 2; }
-  .aurora-today > .quick-search > .row-list { grid-column: 7 / span 6; grid-row: 3; z-index: 20; }
-  .look-aurora .glass-tiles { display: contents; }
-  .look-aurora .glass-tile { min-height: 130px; border-radius: 32px; }
-  .look-aurora .glass-tile:nth-child(1) { grid-column: 4 / span 5; grid-row: 4 / span 2; min-height: 190px; }
-  .look-aurora .glass-tile:nth-child(2) { grid-column: 1 / span 3; grid-row: 4; transform: rotate(1deg); }
-  .look-aurora .glass-tile:nth-child(3) { grid-column: 1 / span 4; grid-row: 6; margin-right: 6px; }
-  .look-aurora .glass-tile:nth-child(4) { grid-column: 5 / span 4; grid-row: 6; }
-  .aurora-today > .checklist { grid-column: 9 / span 4; grid-row: 4 / span 3; padding: 22px 26px; }
-  .aurora-today > section.stack:not(.card) { grid-row: 8; }
-  .aurora-today > .link-list { grid-row: 9; text-align: left; }
-  .aurora-today > .notice, .aurora-today > .alerts { grid-row: auto; }
-  .look-aurora .glass-tile svg { width: 64px; height: 64px; padding: 15px; }
-  .look-aurora .glass-tile:nth-child(1) .tile-label { font-size: 2.2rem; }
-  .look-aurora .tabbar { width: min(820px, 62vw); padding: 12px 18px; border-radius: 70px; transform: translateX(-50%) rotate(-2deg); }
-  .look-aurora .tab { font-size: 0.95rem; }
-  .look-aurora .tab svg { width: 62px; height: 62px; padding: 15px; }
-}
-@media (prefers-reduced-motion: reduce) { .look-aurora .glass-tile, .look-aurora .tab svg { transition: none; } .aurora-today { transform: none; } }
-
-
-@media (min-width: 900px) {
-}
-.hello-card { display: flex; align-items: center; justify-content: space-between; gap: 18px; }
-.hope-logo { flex: none; width: clamp(70px, 9vw, 120px); height: auto; border-radius: 14px; background: #fff; padding: 6px; box-shadow: 0 0 0 2px #e2b23a, 0 8px 20px rgba(0, 20, 10, 0.4); }
-
 /* ---- Side-panel looks: frosted panels with an accent outline and the menu down a side panel.
-   ADIA Training Centre ("glass" in src/lib/look.ts) is navy and gold; Freedom Church ("cockpit") is midnight blue and cyan.
+   ADIA Training Centre ("glass" in src/lib/look.ts) is navy and gold; Freedom Church ("cockpit") is midnight blue and cyan;
+   Freedom Hope Center ("aurora") is deep green and gold.
    --acc and --acc-light are the accent colours as "r g b". ---- */
-:root[data-look='glass'], :root[data-look='cockpit'] {
+:root[data-look='glass'], :root[data-look='cockpit'], :root[data-look='aurora'] {
   --acc: 210 167 75;
   --acc-light: 224 187 105;
   --bg: #0b112c;
@@ -589,13 +465,27 @@ a.chip.chip-on { color: var(--primary-ink); }
   --gold-ink: #e2b23a;
   --ok: #4cd08f;
 }
+:root[data-look='aurora'] {
+  --acc: 226 178 58;
+  --acc-light: 240 207 115;
+  --bg: #04150f;
+  --surface: rgba(6, 30, 20, 0.94);
+  --primary-ink: #052214;
+  --ok: #7be9a8;
+}
+:root[data-look='aurora'] body {
+  background:
+    radial-gradient(ellipse 40% 45% at 90% 10%, rgba(40, 200, 120, 0.22), transparent 70%),
+    radial-gradient(ellipse 35% 40% at 5% 95%, rgba(120, 200, 60, 0.14), transparent 70%),
+    linear-gradient(135deg, #03140e 0%, #06261a 50%, #031009 100%) fixed;
+}
 :root[data-look='cockpit'] body {
   background:
     radial-gradient(ellipse 40% 30% at 85% 0%, rgba(63, 216, 240, 0.14), transparent 70%),
     radial-gradient(ellipse 35% 30% at 0% 100%, rgba(217, 163, 91, 0.1), transparent 70%),
     radial-gradient(120% 70% at 50% 0%, #0b1530 0%, #060b18 60%) fixed;
 }
-.side-look option { background: #0b112c; color: #fff; }
+.side-look option { background: var(--bg); color: #fff; }
 /* The frosted panel with the gold outline */
 .side-look .adia-side, .side-look .card, .side-look .notice, .side-look .glass-tile, .side-look .search, .side-look .org-switcher select, .side-look .org-name {
   background: rgba(255, 255, 255, 0.03);
@@ -619,7 +509,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 .side-look .org-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-look .tabbar {
   left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); padding: 6px; gap: 4px; border-radius: 24px;
-  background: rgba(6, 10, 31, 0.88); border: 1px solid rgb(var(--acc) / 0.4);
+  background: var(--surface); border: 1px solid rgb(var(--acc) / 0.4);
   backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 .side-look .tab { color: rgba(255, 255, 255, 0.7); font-weight: 500; border: 1px solid transparent; border-radius: 14px; transition: background 0.2s, color 0.2s; }
@@ -630,8 +520,8 @@ a.chip.chip-on { color: var(--primary-ink); }
 .adia-body { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 .adia-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 12px 0; }
 .adia-search { display: block; position: relative; order: 3; flex: 1 1 100%; }
-.adia-search .row-list { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30; background: #0b112c; border: 1px solid rgb(var(--acc) / 0.4); border-radius: 16px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
-.adia-search .quick-search-none { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30; margin: 0; padding: 12px 16px; background: #0b112c; border: 1px solid rgb(var(--acc) / 0.4); border-radius: 16px; }
+.adia-search .row-list { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30; background: var(--bg); border: 1px solid rgb(var(--acc) / 0.4); border-radius: 16px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5); }
+.adia-search .quick-search-none { position: absolute; top: calc(100% + 8px); left: 0; right: 0; z-index: 30; margin: 0; padding: 12px 16px; background: var(--bg); border: 1px solid rgb(var(--acc) / 0.4); border-radius: 16px; }
 .side-look .search {
   border-radius: 999px; min-height: 52px; padding-left: 48px; color: #fff; border-color: rgb(var(--acc) / 0.4);
   background: rgba(255, 255, 255, 0.03) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.5)' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-4-4'/%3E%3C/svg%3E") no-repeat 18px center / 18px;
@@ -701,7 +591,7 @@ a.chip.chip-on { color: var(--primary-ink); }
   .side-look .tile-label { font-size: 1.125rem; }
 }
 @media (prefers-reduced-motion: reduce) { .side-look .glass-tile, .side-look .glass-tile svg, .side-look .tile-dollar { transition: none; } .side-look .sync-dot { animation: none; } }
-.org-mark-church { object-fit: contain; padding: 4px; }
+.org-mark-church, .org-mark-hope { object-fit: contain; padding: 4px; }
 .side-look .live-clock { margin-inline: 0; flex: none; }
 .side-look .live-clock-time { font-size: 1.4rem; color: rgb(var(--acc-light)); }
 @media (max-width: 899px) { .side-look .live-clock { display: none; } }

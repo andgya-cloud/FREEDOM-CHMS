@@ -27,7 +27,7 @@ const ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: 'M21 12a8 8 0 0 1-11.8 7L3 21l2-6A8 8 0 1 1 21 12Z' },
 ] as const;
 
-/** ADIA Training Centre's four tiles on the glass look. */
+/** ADIA Training Centre's four tiles. */
 const GLASS_ACTIONS = [
   { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
   { label: 'Add student', to: '/school/students/new', icon: ACTIONS[1].icon },
@@ -35,7 +35,7 @@ const GLASS_ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
 ] as const;
 
-/** Freedom Hope Center's four tiles on the aurora look. */
+/** Freedom Hope Center's four tiles. */
 const HOPE_ACTIONS = [
   { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
   { label: 'Register child', to: '/hope/children/new', icon: ACTIONS[1].icon },
@@ -52,8 +52,8 @@ export function TodayPage() {
   const cockpit = look === 'cockpit';
   const glass = look === 'glass';
   const aurora = look === 'aurora';
-  // ADIA and Freedom Church share the side-panel layout; the page underneath is the same.
-  const sided = glass || cockpit;
+  // ADIA, Freedom Church and Hope Center share the side-panel layout; the page underneath is the same.
+  const sided = glass || cockpit || aurora;
   const tileActions = aurora ? HOPE_ACTIONS : cockpit ? ACTIONS : GLASS_ACTIONS;
   const allowedTo = (to: string) => (to === '/visitors/new' || to === '/school/students/new' || to === '/hope/children/new' ? can('people.write')
     : to === '/school/fees' ? can('gifts.write') || can('finance.reports') || can('giving.person.read')
@@ -63,23 +63,12 @@ export function TodayPage() {
     : true);
 
   return (
-    <div className={`page${sided ? ' glass-today' : ''}${aurora ? ' aurora-today' : ''}`}>
+    <div className={`page${sided ? ' glass-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
-      {(() => {
-        const heading = (
-          <>
-            <h1>
-              {cockpit || glass || aurora ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}
-            </h1>
-            {!loading && organizations.length > 0 && (
-              <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
-            )}
-          </>
-        );
-        return aurora
-          ? <div className="hello-card"><div>{heading}</div><img className="hope-logo" src="/org/hope-logo.png" alt="Freedom Hope Center, OneChild" width={98} height={120} /></div>
-          : heading;
-      })()}
+      <h1>{sided ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
+      {!loading && organizations.length > 0 && (
+        <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
+      )}
 
       <OrgButtons />
 
@@ -88,7 +77,7 @@ export function TodayPage() {
       <HopeAlerts />
       <FirstRunChecklist />
 
-      {(sided || aurora) && (
+      {sided && (
         <div className="glass-tiles">
           {tileActions.map((a) => {
             const ready = organizations.length > 0 && allowedTo(a.to);
@@ -109,7 +98,7 @@ export function TodayPage() {
       )}
 
       <div className="big-actions">
-        {!cockpit && !glass && !aurora && ACTIONS.map((a) => {
+        {!sided && ACTIONS.map((a) => {
           const allowed = allowedTo(a.to);
           const ready = organizations.length > 0 && allowed;
           return ready ? (
