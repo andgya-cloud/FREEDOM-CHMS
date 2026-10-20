@@ -35,11 +35,14 @@ const GLASS_ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
 ] as const;
 
+/** Freedom Church's four tiles. An empty icon shows "Ksh." instead. */
+const CHURCH_ACTIONS = [ACTIONS[0], ACTIONS[1], { label: 'Record gift', to: '/giving/new', icon: '' }, ACTIONS[3]] as const;
+
 /** Freedom Hope Center's four tiles. */
 const HOPE_ACTIONS = [
   { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
   { label: 'Register child', to: '/hope/children/new', icon: ACTIONS[1].icon },
-  { label: 'Record gift', to: '/giving/new', icon: ACTIONS[2].icon },
+  { label: 'Record gift', to: '/giving/new', icon: '' },
   { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
 ] as const;
 
@@ -54,7 +57,7 @@ export function TodayPage() {
   const aurora = look === 'aurora';
   // ADIA, Freedom Church and Hope Center share the side-panel layout; the page underneath is the same.
   const sided = glass || cockpit || aurora;
-  const tileActions = aurora ? HOPE_ACTIONS : cockpit ? ACTIONS : GLASS_ACTIONS;
+  const tileActions = aurora ? HOPE_ACTIONS : cockpit ? CHURCH_ACTIONS : GLASS_ACTIONS;
   const allowedTo = (to: string) => (to === '/visitors/new' || to === '/school/students/new' || to === '/hope/children/new' ? can('people.write')
     : to === '/school/fees' ? can('gifts.write') || can('finance.reports') || can('giving.person.read')
     : to === '/attendance' ? can('attendance.write') || can('people.read')
