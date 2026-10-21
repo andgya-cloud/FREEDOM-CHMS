@@ -713,3 +713,34 @@ a.chip.chip-on { color: var(--primary-ink); }
   .petty-print .card { background: #fff !important; color: #000 !important; border: 1px solid #999 !important; box-shadow: none !important; backdrop-filter: none !important; }
   .petty-print, .petty-print * { color: #000 !important; }
 }
+
+/* ---- ADIA payroll ------------------------------------------------------------ */
+@media (max-width: 899px) { .side-look .tabbar:has(> .tab:nth-child(7)) { gap: 2px; padding: 4px; } .side-look .tabbar:has(> .tab:nth-child(7)) .tab { font-size: 0.55rem; padding-left: 0; padding-right: 0; } }
+.payroll-stat-cost { color: #7c3aed; }
+.link-list .link-button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 14px 16px; min-height: 60px; background: none; border: 0; text-align: left; color: var(--text); font: inherit; cursor: pointer; }
+.link-list .link-button:disabled { cursor: default; }
+.link-list .link-button:not(:disabled):hover { background: rgba(29, 78, 216, 0.04); }
+.payroll-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.payroll-items { border: 1px solid var(--border); border-radius: 12px; padding: 12px; margin: 0; }
+.payroll-items legend { font-weight: 600; padding: 0 6px; }
+.payroll-item { display: grid; grid-template-columns: 1fr 120px auto; gap: 8px; }
+.payroll-rates { list-style: none; margin: 0; padding: 0; }
+.payroll-rates li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.payroll-rates span { color: var(--muted); }
+.payroll-table th, .payroll-table td { white-space: nowrap; }
+.payroll-table tfoot th { border-top: 2px solid var(--border); color: var(--text); }
+.payroll-status { margin: 0; font-weight: 600; }
+.payslips { display: flex; flex-direction: column; gap: 16px; }
+.payslip-head { display: flex; justify-content: space-between; gap: 16px; border-bottom: 2px solid var(--border); padding-bottom: 10px; }
+.payslip-who { text-align: right; }
+.payslip-ids { margin: 8px 0 0; color: var(--muted); }
+.payslip-cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; }
+.payslip-net { display: flex; justify-content: space-between; font-size: 1.15rem; padding: 10px 12px; margin: 12px 0 4px; border-radius: 10px; background: rgba(22, 163, 74, 0.08); color: #166534; }
+@media print {
+  .payroll-run .adia-side, .adia-side, .adia-head, .tabbar, .dev-ribbon, .toasts, .install-banner { display: none !important; }
+  .payroll-run .no-print { display: none !important; }
+  .petty-light { padding: 0 !important; background: #fff !important; }
+  .payslip { break-inside: avoid; page-break-after: always; background: #fff !important; border: 1px solid #999 !important; box-shadow: none !important; }
+  .payslip, .payslip * { color: #000 !important; }
+}
+.petty-light .chips[aria-label="Payroll"] { margin-bottom: 16px; }

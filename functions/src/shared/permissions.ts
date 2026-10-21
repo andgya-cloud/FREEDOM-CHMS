@@ -24,6 +24,9 @@ export const PERMISSIONS = [
   'pettycash.check',
   'pettycash.approve',
   'pettycash.authorize',
+  // ADIA payroll: keep staff pay details and prepare pay runs; approve pay runs and set the deduction rates
+  'payroll.manage',
+  'payroll.approve',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -44,6 +47,8 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'pettycash.check',
   'pettycash.approve',
   'pettycash.authorize',
+  'payroll.manage',
+  'payroll.approve',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -62,6 +67,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'pettycash.check': 'Petty cash: check requests (accountant)',
   'pettycash.approve': 'Petty cash: final approval',
   'pettycash.authorize': 'Petty cash: sign top-ups and resets (3 signatures needed)',
+  'payroll.manage': 'Payroll: staff pay details and preparing pay runs',
+  'payroll.approve': 'Payroll: approving pay runs and deduction rates',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',

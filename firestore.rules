@@ -1236,6 +1236,75 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ADIA payroll. Staff pay details and pay runs are seen only by those who keep or approve the payroll
+      // (and the pastor). A pay run is approved by someone other than whoever last prepared it, and is then locked.
+      function pay(permission) {
+        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+      }
+      function payAny() {
+        return pay('payroll.manage') || pay('payroll.approve');
+      }
+      function payItems(v) {
+        return v is list && v.size() <= 20;
+      }
+      match /payrollStaff/{staffId} {
+        allow read: if payAny();
+        allow create, update: if pay('payroll.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'staffNo', 'jobTitle', 'kraPin', 'nssfNo', 'shifNo',
+               'paymentDetails', 'basicCents', 'allowances', 'deductions', 'active',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 1
+          && shortText(request.resource.data.staffNo, 40) && shortText(request.resource.data.jobTitle, 80)
+          && shortText(request.resource.data.kraPin, 20) && shortText(request.resource.data.nssfNo, 30)
+          && shortText(request.resource.data.shifNo, 30) && shortText(request.resource.data.paymentDetails, 200)
+          && request.resource.data.basicCents is int && request.resource.data.basicCents >= 0 && request.resource.data.basicCents <= 100000000000
+          && payItems(request.resource.data.allowances) && payItems(request.resource.data.deductions)
+          && request.resource.data.active is bool
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /payrollRuns/{month} {
+        allow read: if payAny();
+        allow create: if pay('payroll.manage') && month.matches('^[0-9]{4}-[0-9]{2}$') && stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'approved',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.month == month
+          && request.resource.data.status == 'draft' && request.resource.data.approved == null
+          && request.resource.data.preparedBy == request.auth.uid && shortText(request.resource.data.preparedByName, 120)
+          && request.resource.data.lines is list && request.resource.data.lines.size() <= 300
+          && request.resource.data.totals is map && request.resource.data.rates is map;
+        allow update: if resource.data.status == 'draft' && stampedUpdate() && (
+          // Prepared again from the current staff details, while still a draft.
+          (pay('payroll.manage')
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'updatedAt', 'updatedBy'])
+            && request.resource.data.preparedBy == request.auth.uid && shortText(request.resource.data.preparedByName, 120)
+            && request.resource.data.lines is list && request.resource.data.lines.size() <= 300)
+          // Approved by someone who did not prepare it; it is then locked.
+          || (pay('payroll.approve') && resource.data.preparedBy != request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approved', 'updatedAt', 'updatedBy'])
+            && request.resource.data.status == 'approved'
+            && request.resource.data.approved.keys().hasOnly(['uid', 'name', 'at'])
+            && request.resource.data.approved.uid == request.auth.uid && request.resource.data.approved.at == request.time
+            && shortText(request.resource.data.approved.name, 120)));
+        allow delete: if false;
+      }
+      match /payrollSettings/{settingId} {
+        allow read: if payAny();
+        allow create, update: if pay('payroll.approve') && settingId == 'rates'
+          && request.resource.data.keys().hasOnly(['orgId', 'nssfRate', 'nssfUpperLimitCents', 'shifRate', 'shifMinimumCents', 'housingRate',
+               'personalReliefCents', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.nssfRate is number && request.resource.data.nssfRate >= 0 && request.resource.data.nssfRate <= 0.5
+          && request.resource.data.shifRate is number && request.resource.data.shifRate >= 0 && request.resource.data.shifRate <= 0.5
+          && request.resource.data.housingRate is number && request.resource.data.housingRate >= 0 && request.resource.data.housingRate <= 0.5
+          && request.resource.data.nssfUpperLimitCents is int && request.resource.data.nssfUpperLimitCents >= 0
+          && request.resource.data.shifMinimumCents is int && request.resource.data.shifMinimumCents >= 0
+          && request.resource.data.personalReliefCents is int && request.resource.data.personalReliefCents >= 0
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+
       match /dataRequests/{requestId} {
         allow read: if canAccessOrg(orgId) && has('data.export');
         allow create: if canAccessOrg(orgId) && has('data.export')

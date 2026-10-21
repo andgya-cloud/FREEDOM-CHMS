@@ -39,7 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Attendance
       </NavLink>
       {current?.type === 'college' ? (
-        <NavLink to="/school" className={({ isActive }) => `tab${isActive && !location.pathname.startsWith('/school/petty-cash') ? ' active' : ''}`}>
+        <NavLink to="/school" className={({ isActive }) => `tab${isActive && !/^\/school\/(petty-cash|payroll)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>
           {look === 'glass' ? 'Programmes' : 'School'}
         </NavLink>
@@ -58,6 +58,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to={pettyCashBase(current.type)} className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
           Petty Cash
+        </NavLink>
+      )}
+      {current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
+        <NavLink to="/school/payroll" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" /></svg>
+          Payroll
         </NavLink>
       )}
       <NavLink to="/settings" className="tab">
@@ -85,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <OrgSwitcher />
           {tabs}
         </aside>
-        <div className={`adia-body${/^\/((school|hope)\/)?petty-cash/.test(location.pathname) ? ' petty-light' : ''}`}>
+        <div className={`adia-body${/^\/((school|hope)\/)?petty-cash|^\/school\/payroll/.test(location.pathname) ? ' petty-light' : ''}`}>
           <header className="adia-head">
             {can('people.read') && <QuickSearch className="adia-search" />}
             {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
