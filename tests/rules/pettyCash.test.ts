@@ -43,6 +43,11 @@ async function seedRequest(id: string, data: Record<string, unknown> = {}) {
 }
 
 describe('petty cash', () => {
+  it("accepts Freedom Hope Center's categories and refuses made-up ones", async () => {
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/h1'), { ...newRequest('doreen'), category: "Children's needs" }));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/h2'), { ...newRequest('doreen'), category: 'Holiday' }));
+  });
+
   it('lets a requester submit their own request only, and see only their own', async () => {
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/a'), newRequest('doreen')));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/b'), newRequest('ronald')));

@@ -4,8 +4,21 @@
  * different person from the one who checked it. Firestore rules enforce the same steps.
  */
 
+/** ADIA Training Centre's categories, from its old petty cash app. */
 export const PETTY_CASH_CATEGORIES = ['Freedom Hope Center', 'Staff Payments', 'Other'] as const;
-export type PettyCashCategory = (typeof PETTY_CASH_CATEGORIES)[number];
+/** Freedom Hope Center's categories. */
+export const HOPE_PETTY_CASH_CATEGORIES = ["Children's needs", 'Programmes & activities', 'Staff Payments', 'Office & supplies', 'Other'] as const;
+export type PettyCashCategory = (typeof PETTY_CASH_CATEGORIES)[number] | (typeof HOPE_PETTY_CASH_CATEGORIES)[number];
+
+/** The categories offered to an organization: Freedom Hope Center (a ministry) has its own. */
+export function pettyCashCategoriesFor(orgType: string | undefined): readonly PettyCashCategory[] {
+  return orgType === 'ministry' ? HOPE_PETTY_CASH_CATEGORIES : PETTY_CASH_CATEGORIES;
+}
+
+/** Where an organization's petty cash pages live. */
+export function pettyCashBase(orgType: string | undefined) {
+  return orgType === 'ministry' ? '/hope/petty-cash' : '/school/petty-cash';
+}
 
 export type PettyCashStatus = 'submitted' | 'checked' | 'approved' | 'rejected';
 export const PETTY_CASH_STATUS_LABELS: Record<PettyCashStatus, string> = {

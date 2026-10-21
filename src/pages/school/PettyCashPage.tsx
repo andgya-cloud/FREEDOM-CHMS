@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -7,15 +7,32 @@ import { usePettyCash, type FundRow, type RequisitionRow } from '../../state/use
 import { approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, rejectRequisition, signFund, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import {
   FUND_SIGNATURES_NEEDED, itemsTotalCents, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
-  PETTY_CASH_CATEGORIES, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
+  pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
-import { SchoolGate, money } from './common';
+import { money } from './common';
+import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'just now');
 const label = (r: RequisitionRow) => r.number ?? 'New request';
+
+/** Petty cash belongs to ADIA Training Centre (a college) and Freedom Hope Center (a ministry); asks which when another is selected. */
+function PettyGate({ title, children }: { title: string; children: (org: Organization) => ReactNode }) {
+  const { current, organizations, select } = useOrg();
+  if (current && (current.type === 'college' || current.type === 'ministry')) return <>{children(current)}</>;
+  const orgs = organizations.filter((o) => (o.type === 'college' || o.type === 'ministry') && !o.deletedAt);
+  return (
+    <div className="page narrow">
+      <h1>{title}</h1>
+      <div className="card">
+        <p>Petty cash is kept by ADIA Training Centre and Freedom Hope Center. Which one?</p>
+        <div className="chips">{orgs.map((o) => <button key={o.id} type="button" className="chip" onClick={() => select(o.id)}>{o.name}</button>)}</div>
+      </div>
+    </div>
+  );
+}
 
 function NoAccess() {
   return <div className="page narrow"><h1>Petty cash</h1><p>Petty cash is for the people the pastor has given access.</p></div>;
@@ -138,7 +155,7 @@ function RequisitionList({ org, rows, empty }: { org: Organization; rows: Requis
     <ul className="link-list">
       {rows.map((r) => (
         <li key={r.id}>
-          <Link to={`/school/petty-cash/${r.id}`}>
+          <Link to={`${pettyCashBase(org.type)}/${r.id}`}>
             <span className="link-title">{label(r)} · {r.requesterName}</span>
             <span className="link-detail">{money(org, r.totalCents)} · {PETTY_CASH_STATUS_LABELS[r.status]} · {r.category}</span>
           </Link>
@@ -150,7 +167,7 @@ function RequisitionList({ org, rows, empty }: { org: Organization; rows: Requis
 
 /** Petty cash home: the budget, what is waiting for you, your requests and the approved ones. */
 export function PettyCashPage() {
-  return <SchoolGate title="Petty cash">{(org) => <Home org={org} />}</SchoolGate>;
+  return <PettyGate title="Petty cash">{(org) => <Home org={org} />}</PettyGate>;
 }
 
 function Home({ org }: { org: Organization }) {
@@ -167,7 +184,7 @@ function Home({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head">
         <h1>Petty cash</h1>
-        {p.canRequest && <Link to="/school/petty-cash/new" className="btn btn-primary">New requisition</Link>}
+        {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}
       </div>
       {p.seesAll && <Stats org={org} onReset={() => setShowReset(true)} />}
       {p.seesAll && (showReset || resetOpen) && <FundCard org={org} kind="reset" onClose={() => setShowReset(false)} />}
@@ -204,7 +221,7 @@ function Home({ org }: { org: Organization }) {
 interface Line { key: number; description: string; amount: string }
 
 export function NewRequisitionPage() {
-  return <SchoolGate title="New requisition">{(org) => <NewRequisition org={org} />}</SchoolGate>;
+  return <PettyGate title="New requisition">{(org) => <NewRequisition org={org} />}</PettyGate>;
 }
 
 function NewRequisition({ org }: { org: Organization }) {
@@ -237,12 +254,12 @@ function NewRequisition({ org }: { org: Organization }) {
     });
     saved.catch((err) => toast.show(friendlyError(err)));
     toast.show('Request submitted. It now goes to the accountant.');
-    navigate(`/school/petty-cash/${id}`);
+    navigate(`${pettyCashBase(org.type)}/${id}`);
   }
 
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>New requisition</h1><Link to="/school/petty-cash" className="btn btn-quiet">Back</Link></div>
+      <div className="page-head"><h1>New requisition</h1><Link to={pettyCashBase(org.type)} className="btn btn-quiet">Back</Link></div>
       {previous.length > 0 && (
         <section className="card stack">
           <h2>Start from an old requisition</h2>
@@ -264,7 +281,7 @@ function NewRequisition({ org }: { org: Organization }) {
           <label className="field"><span>Category</span>
             <select value={category} onChange={(e) => setCategory(e.target.value as PettyCashCategory)}>
               <option value="">Choose a category…</option>
-              {PETTY_CASH_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {pettyCashCategoriesFor(org.type).map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </label>
         </div>
@@ -288,7 +305,7 @@ function NewRequisition({ org }: { org: Organization }) {
 }
 
 export function RequisitionPage() {
-  return <SchoolGate title="Requisition">{(org) => <Requisition org={org} />}</SchoolGate>;
+  return <PettyGate title="Requisition">{(org) => <Requisition org={org} />}</PettyGate>;
 }
 
 function Requisition({ org }: { org: Organization }) {
@@ -300,7 +317,7 @@ function Requisition({ org }: { org: Organization }) {
   const [reason, setReason] = useState('');
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
-  if (!r) return <div className="page narrow"><h1>Requisition</h1><p className="muted">{p.loading ? 'Loading…' : 'This requisition was not found.'}</p><Link to="/school/petty-cash">Back to petty cash</Link></div>;
+  if (!r) return <div className="page narrow"><h1>Requisition</h1><p className="muted">{p.loading ? 'Loading…' : 'This requisition was not found.'}</p><Link to={pettyCashBase(org.type)}>Back to petty cash</Link></div>;
   const step = nextStepFor(r, { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove });
   const name = profile?.displayName ?? 'Staff';
   const act = (write: Promise<unknown>, done: string) => { write.catch((err) => toast.show(friendlyError(err))); toast.show(done); };
@@ -311,7 +328,7 @@ function Requisition({ org }: { org: Organization }) {
         <h1>{label(r)}</h1>
         <div className="row-actions">
           <button type="button" className="btn btn-quiet" onClick={() => window.print()}>Print</button>
-          <Link to="/school/petty-cash" className="btn btn-quiet">Back</Link>
+          <Link to={pettyCashBase(org.type)} className="btn btn-quiet">Back</Link>
         </div>
       </div>
       <section className="card stack">
