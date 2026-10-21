@@ -903,3 +903,4 @@ a.kpi:hover { border-color: var(--primary); }
 .gauges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
 .gauges .gauge figcaption { font-size: 0.85rem; }
 .petty-insights .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (min-width: 900px) { .petty-light .petty-insights .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.gauges-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } @container (min-width: 560px) { .gauges-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }

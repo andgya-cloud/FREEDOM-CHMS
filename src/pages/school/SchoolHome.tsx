@@ -6,7 +6,9 @@ import { friendlyError } from '../../lib/errors';
 import { setupSchool } from '../../lib/schoolWrites';
 import { useFunds } from '../../state/useGiving';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { arrearsList, attendanceAlerts, capacityOf, collectionRate, OUTCOME_LABELS, schoolMetrics } from '../../../functions/src/shared/school';
+import { arrearsList, attendanceAlerts, capacityOf, collectionRate, OUTCOME_LABELS, schoolMetrics, STUDENT_STATUSES, STUDENT_STATUS_LABELS } from '../../../functions/src/shared/school';
+import { Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
+import { Bars } from '../../components/Scorecard';
 import { ADIA_PROGRAMMES } from '../../../functions/src/shared/schoolSetup';
 import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -46,11 +48,14 @@ function Home({ org }: { org: Organization }) {
     }
   }
 
-  const tiles: [string, string][] = [
-    ['Enrolled', String(metrics.enrolled)], ['Attendance', pct(metrics.attendanceRate)], ['Pass rate', pct(metrics.passRate)],
-    ['Retention', pct(metrics.retentionRate)], ['Graduation rate', pct(metrics.graduationRate)], ['Working at 6 months', pct(metrics.employmentRate)],
-  ];
-  if (s.feesAllowed) tiles.push(['Fees collected', pct(collectionRate(billed, paid))], ['Arrears', money(org, arrears.reduce((a, b) => a + b.balanceCents, 0))]);
+  const live = s.students.filter((x) => !x.deletedAt);
+  const statusCount = (k: (typeof STUDENT_STATUSES)[number]) => live.filter((x) => x.status === k).length;
+  const arrearsCents = arrears.reduce((a, b) => a + b.balanceCents, 0);
+  const collected = collectionRate(billed, paid);
+  const rate = (label: string, v: number | null, caption?: string) => (
+    <Gauge key={label} value={v ?? 0} max={100} label={label} display={pct(v)} caption={caption} bands={[0.5, 0.75]} />
+  );
+  const intakes = s.intakes.filter((i) => i.active !== false).map((i) => ({ i, c: capacityOf(i, s.students) }));
 
   return (
     <div className="page narrow">
@@ -64,11 +69,38 @@ function Home({ org }: { org: Organization }) {
             : <p className="muted small">Ask the pastor to set this up.</p>}
         </section>
       )}
-      <ul className="tiles" aria-label="School numbers">
-        {tiles.map(([label, value]) => (
-          <li key={label}><div className="tile"><span className="tile-label">{label}</span><span className="tile-value">{value}</span></div></li>
-        ))}
-      </ul>
+      <KpiRow label="School numbers">
+        <KpiCard label="Enrolled" value={String(metrics.enrolled)} tone="gold" note={`${statusCount('applicant')} applicants waiting`} to="/school/students" />
+        <KpiCard label="Graduated" value={String(statusCount('graduated'))} tone="ok" note={`Working at 6 months: ${pct(metrics.employmentRate)}`} to="/school/graduation" />
+        <KpiCard label="Withdrawn" value={String(metrics.withdrawn)} tone={metrics.withdrawn ? 'warn' : 'ok'} note={`Retention ${pct(metrics.retentionRate)}`} />
+        {s.feesAllowed
+          ? <KpiCard label="Fee arrears" value={money(org, arrearsCents)} tone={arrearsCents ? 'warn' : 'ok'} note={`${arrears.length} ${arrears.length === 1 ? 'student owes' : 'students owe'}`} to="/school/fees" />
+          : <KpiCard label="Below attendance" value={String(alerts.length)} tone={alerts.length ? 'warn' : 'ok'} note={`Under ${s.settings.attendanceThreshold}% of classes`} />}
+      </KpiRow>
+
+      <div className="dash-grid">
+        <Panel title="How the school is doing" wide>
+          <div className="gauges gauges-3">
+            {rate('Attendance', metrics.attendanceRate)}
+            {rate('Pass rate', metrics.passRate)}
+            {rate('Retention', metrics.retentionRate)}
+            {rate('Graduation', metrics.graduationRate)}
+            {rate('Working at 6 months', metrics.employmentRate)}
+            {s.feesAllowed && rate('Fees collected', collected, billed ? `${money(org, paid)} of ${money(org, billed)}` : undefined)}
+          </div>
+        </Panel>
+        <Panel title="Students by programme">
+          <Donut label="Enrolled students by programme" rows={metrics.byCourse.map((c) => ({ label: c.name, value: c.enrolled }))} center={String(metrics.enrolled)} centerNote="enrolled" />
+        </Panel>
+        <Panel title="Where every student is">
+          <Donut label="Students by status" rows={STUDENT_STATUSES.map((k) => ({ label: STUDENT_STATUS_LABELS[k], value: statusCount(k) }))} center={String(live.length)} centerNote="students" />
+        </Panel>
+        <Panel title="Places taken in each intake" wide>
+          {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Courses</Link>.</p> : (
+            <Bars rows={intakes.map(({ i, c }) => ({ label: `${s.courseName(i.courseId)} · ${i.name}`, value: c.taken, note: i.capacity != null ? `of ${i.capacity}${c.full ? ', full' : ''}` : undefined }))} />
+          )}
+        </Panel>
+      </div>
 
       <section className="card stack">
         <h2>Attendance below {s.settings.attendanceThreshold}%</h2>
@@ -93,18 +125,6 @@ function Home({ org }: { org: Organization }) {
           )}
         </section>
       )}
-
-      <section className="card stack">
-        <h2>Places in each intake</h2>
-        {s.intakes.filter((i) => i.active !== false).length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Courses</Link>.</p> : (
-          <ul className="link-list">
-            {s.intakes.filter((i) => i.active !== false).map((i) => {
-              const c = capacityOf(i, s.students);
-              return <li key={i.id}><div><span className="link-title">{s.courseName(i.courseId)} · {i.name}</span><span className="link-detail">{c.taken}{i.capacity != null ? ` of ${i.capacity}` : ''} places taken{c.full ? ' · full' : ''}</span></div></li>;
-            })}
-          </ul>
-        )}
-      </section>
 
       <section className="card stack">
         <div className="card-head"><h2>Graduate follow-ups due</h2><Link to="/school/graduation" className="btn btn-quiet">Open</Link></div>

@@ -36,7 +36,7 @@ export function compact(v: number): string {
   const a = Math.abs(v);
   if (a >= 1e6) return `${+(v / 1e6).toFixed(1)}M`;
   if (a >= 1e3) return `${+(v / 1e3).toFixed(1)}k`;
-  return String(Math.round(v));
+  return String(+v.toFixed(a < 10 ? 1 : 0));
 }
 
 /** Shares of a whole as whole-number percentages that add up to 100 (largest remainder). */

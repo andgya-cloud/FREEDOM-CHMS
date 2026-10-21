@@ -163,6 +163,8 @@ export function ColumnChart({ rows, format = fmtDefault, axis = compact, label, 
   const hi = highlight ?? rows.length - 1;
   const showValues = rows.length <= 8 || slot >= 40;
   const labelEvery = Math.ceil(rows.length / Math.max(2, Math.floor((W - L) / 44)));
+  const fit = (t: string) => { const room = Math.max(4, Math.floor((slot * labelEvery) / 6.2)); return t.length > room ? `${t.slice(0, room - 1)}…` : t; };
+  if (!rows.some((r) => r.value > 0)) return <p className="muted small">Nothing recorded yet.</p>;
   return (
     <figure className="viz" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
@@ -181,7 +183,7 @@ export function ColumnChart({ rows, format = fmtDefault, axis = compact, label, 
                 <title>{`${r.label}: ${format(r.value)}`}</title>
               </rect>
               {showValues && r.value > 0 && <text x={cx} y={y(0) - h - 4} textAnchor="middle" className="viz-val">{axis(r.value)}</text>}
-              {i % labelEvery === 0 && <text x={cx} y={H - 6} textAnchor="middle" className="viz-tick">{r.label}</text>}
+              {i % labelEvery === 0 && <text x={cx} y={H - 6} textAnchor="middle" className="viz-tick">{fit(r.label)}</text>}
             </g>
           );
         })}
