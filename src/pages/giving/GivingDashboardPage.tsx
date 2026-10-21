@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import type { Organization } from '../../state/OrgContext';
 import { useFunds, useLedgerMonths, type LedgerMonth } from '../../state/useGiving';
 import { OrgGate } from '../../components/OrgGate';
-import { ColumnChart, Donut, Gauge, KpiCard, KpiRow, LineChart, Panel } from '../../components/charts';
-import { addMonths, compact, monthsEnding, pctChange, shortMonth } from '../../lib/analytics';
+import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, LineChart, Panel } from '../../components/charts';
+import { addMonths, compact, monthsEnding, pctChange, shortMonth, toCsv } from '../../lib/analytics';
 import { formatMoney, GIFT_METHOD_LABELS, GIFT_METHODS } from '../../../functions/src/shared/giving';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 
@@ -72,6 +72,15 @@ function Dashboard({ org }: { org: Organization }) {
     return { id, name: fundName(id), now, before, change: pctChange(now, before) };
   }).sort((a, b) => b.now - a.now);
 
+  const allFunds = [...new Set(last12.flatMap((m) => Object.keys(byMonth.get(m)?.funds ?? {})))];
+  const csv = () => toCsv(
+    ['Month', 'Total', 'Gifts', 'Average gift', ...allFunds.map(fundName), ...GIFT_METHODS.map((k) => GIFT_METHOD_LABELS[k])],
+    last12.map((m) => {
+      const l = byMonth.get(m);
+      const k = (c: number | undefined) => ((c ?? 0) / 100).toFixed(2);
+      return [m, k(l?.totalCents), l?.count ?? 0, k(avg(m)), ...allFunds.map((f) => k(l?.funds?.[f]?.cents)), ...GIFT_METHODS.map((g) => k(l?.methods?.[g]?.cents))];
+    }),
+  );
   const ytdVsLastYear = lastYearAll ? ytdTotal / lastYearAll : 0;
   const spark = last12.map(total);
 
@@ -80,7 +89,10 @@ function Dashboard({ org }: { org: Organization }) {
       <p className="no-print"><Link to="/giving">← Giving</Link></p>
       <div className="page-head">
         <h1>Giving dashboard</h1>
-        <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
+        <span className="row-actions">
+          <CsvButton name={`Giving-${month}.csv`} csv={csv} />
+          <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
+        </span>
       </div>
       <p className="lead">{org.name} · {shortMonth(month, true)}</p>
       <div className="dash-controls no-print">

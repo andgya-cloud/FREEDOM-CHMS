@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import type { Organization } from '../../state/OrgContext';
 import { useReports } from '../../state/useReports';
 import { OrgGate } from '../../components/OrgGate';
-import { ColumnChart, Donut, Funnel, Gauge, KpiCard, KpiRow, LineChart, Panel } from '../../components/charts';
+import { ColumnChart, CsvButton, Donut, Funnel, Gauge, KpiCard, KpiRow, LineChart, Panel } from '../../components/charts';
 import type { Headlines } from '../../../functions/src/shared/reports';
+import { toCsv } from '../../lib/analytics';
 
 /**
  * The ministry dashboard: the weekly reports laid side by side, so the pastor
@@ -52,7 +53,13 @@ function Dashboard({ org }: { org: Organization }) {
     <div className="page dash">
       <div className="page-head">
         <h1>Dashboard</h1>
-        <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
+        <span className="row-actions">
+          <CsvButton name={`Dashboard-${latest.from}.csv`} csv={() => toCsv(
+            ['Week of', 'Attendance', 'First-time visitors', 'Salvations', 'Baptisms', 'Regular attenders', 'In a group %', 'Serving %', 'Visitors back %', 'Followed up in 48h %', 'Net growth'],
+            shown.map((r) => { const c = r.headlines.current; return [r.from, c.attendance, c.visitors, c.salvations, c.baptisms, c.regularAttenders, c.groupParticipation, c.servingRate, c.returnRate, c.followUpSpeed, c.netGrowth]; }),
+          )} />
+          <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
+        </span>
       </div>
       <p className="lead">{org.name} · {latest.label}</p>
       <div className="dash-controls no-print">

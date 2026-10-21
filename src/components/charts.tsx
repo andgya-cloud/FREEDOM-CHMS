@@ -281,3 +281,17 @@ export function Funnel({ steps, label }: { steps: { label: string; count: number
     </ol>
   );
 }
+
+/** A button that saves the figures behind a dashboard as a CSV file for Excel. */
+export function CsvButton({ name, csv }: { name: string; csv: () => string }) {
+  return (
+    <button type="button" className="btn btn-quiet no-print" onClick={() => {
+      const url = URL.createObjectURL(new Blob(['﻿', csv()], { type: 'text/csv;charset=utf-8' }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      a.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    }}>Download CSV</button>
+  );
+}

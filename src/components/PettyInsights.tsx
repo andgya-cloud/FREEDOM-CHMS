@@ -4,8 +4,8 @@ import type { RequisitionRow } from '../state/usePettyCash';
 import type { FundSummary } from '../../functions/src/shared/pettyCash';
 import { formatMoney } from '../../functions/src/shared/giving';
 import { Bars } from './Scorecard';
-import { ColumnChart, Donut, Gauge, KpiCard, KpiRow, Panel } from './charts';
-import { addMonths, monthsEnding, shortMonth } from '../lib/analytics';
+import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, Panel } from './charts';
+import { addMonths, monthsEnding, shortMonth, toCsv } from '../lib/analytics';
 
 /**
  * Petty cash at a glance, for the people who see every requisition: how much
@@ -34,9 +34,15 @@ export function PettyInsights({ org, month, requisitions, summary }: { org: Orga
     <section className="stack petty-insights">
       <div className="page-head">
         <h2>Spending at a glance</h2>
-        <div className="segmented no-print" role="group" aria-label="How many months">
-          {([6, 12] as const).map((n) => <button key={n} type="button" className={span === n ? 'on' : ''} onClick={() => setSpan(n)}>{n} months</button>)}
-        </div>
+        <span className="row-actions">
+          <div className="segmented no-print" role="group" aria-label="How many months">
+            {([6, 12] as const).map((n) => <button key={n} type="button" className={span === n ? 'on' : ''} onClick={() => setSpan(n)}>{n} months</button>)}
+          </div>
+          <CsvButton name={`Petty-cash-${month}.csv`} csv={() => toCsv(
+            ['Number', 'Month', 'Requested by', 'Category', 'Amount', 'Checked by', 'Approved by'],
+            approved.map((r) => [r.number, r.month, r.requesterName, r.category, (r.totalCents / 100).toFixed(2), r.checked?.name ?? '', r.approved?.name ?? '']),
+          )} />
+        </span>
       </div>
       <KpiRow label="Petty cash figures">
         <KpiCard label={`Approved in ${shortMonth(month)}`} value={kes(perMonth(month))} tone="gold" spark={months.map(perMonth)}

@@ -50,3 +50,11 @@ export function shares(values: number[]): number[] {
   for (const [, i] of order) { if (left <= 0) break; out[i]! += 1; left -= 1; }
   return out;
 }
+
+/** Rows as CSV text, quoting any cell with a comma, quote or line break. */
+type Cell = string | number | null;
+export function toCsv(head: readonly string[], rows: readonly (readonly Cell[])[]): string {
+  const all: (readonly Cell[])[] = [head, ...rows];
+  const cell = (v: Cell) => { const t = v == null ? '' : String(v); return /[",\r\n]/.test(t) ? `"${t.replace(/"/g, '""')}"` : t; };
+  return all.map((r) => r.map(cell).join(',')).join('\r\n');
+}

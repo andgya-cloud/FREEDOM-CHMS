@@ -3,8 +3,8 @@ import type { PayRun, StaffRow } from '../state/usePayroll';
 import { loanRepaidCents } from '../../functions/src/shared/payroll';
 import { formatMoney } from '../../functions/src/shared/giving';
 import { Bars } from './Scorecard';
-import { Donut, KpiCard, KpiRow, LineChart, Panel } from './charts';
-import { addMonths, monthsEnding, shortMonth } from '../lib/analytics';
+import { CsvButton, Donut, KpiCard, KpiRow, LineChart, Panel } from './charts';
+import { addMonths, monthsEnding, shortMonth, toCsv } from '../lib/analytics';
 
 /**
  * Payroll at a glance, from approved pay runs: what each month cost ADIA,
@@ -29,7 +29,13 @@ export function PayrollInsights({ org, runs, staff }: { org: Organization; runs:
 
   return (
     <section className="stack petty-insights">
-      <h2>Payroll at a glance</h2>
+      <div className="page-head">
+        <h2>Payroll at a glance</h2>
+        <CsvButton name={`Payroll-${latest.month.slice(0, 4)}.csv`} csv={() => toCsv(
+          ['Month', 'Staff', 'Gross', 'PAYE', 'NSSF (staff)', 'NSSF (ADIA)', 'SHIF', 'Housing Levy (staff)', 'Housing Levy (ADIA)', 'Loans and other', 'Net pay', 'Cost to ADIA'],
+          [...approved].reverse().map((r) => { const x = r.totals; const k = (c: number) => (c / 100).toFixed(2); return [r.month, x.staff, k(x.grossCents), k(x.payeCents), k(x.nssfCents), k(x.employerNssfCents), k(x.shifCents), k(x.housingCents), k(x.employerHousingCents), k(x.otherDeductionsCents), k(x.netCents), k(x.employerCostCents)]; }),
+        )} />
+      </div>
       <KpiRow label="Payroll figures">
         <KpiCard label={`Cost to ADIA, ${shortMonth(latest.month, true)}`} value={kes(t.employerCostCents)} tone="gold"
           spark={months.map((m) => byMonth.get(m)?.totals.employerCostCents ?? 0)}
