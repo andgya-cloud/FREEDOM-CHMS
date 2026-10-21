@@ -133,7 +133,7 @@ function Dashboard({ org }: { org: Organization }) {
             </Panel>
 
             <Panel title="Year so far against last year">
-              <Gauge value={ytdTotal} max={lastYearAll} label={`${year} so far`} display={lastYearAll ? `${Math.round(ytdVsLastYear * 100)}%` : '–'}
+              <Gauge value={ytdTotal} max={lastYearAll} bands={[(ytd.length / 12) * 0.9, ytd.length / 12]} label={`${year} so far`} display={lastYearAll ? `${Math.round(ytdVsLastYear * 100)}%` : '–'}
                 caption={lastYearAll ? `of all of ${Number(year) - 1} (${kes(lastYearAll)})` : `No giving recorded for ${Number(year) - 1}`} />
               <p className="muted small">Ahead of the pace to match last year when this is above {Math.round((ytd.length / 12) * 100)}%.</p>
             </Panel>

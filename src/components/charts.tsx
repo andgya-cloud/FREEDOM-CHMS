@@ -99,7 +99,7 @@ export function LineChart({ labels, series, format = fmtDefault, axis = compact,
   const n = labels.length;
   const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, n - 1);
   const y = (v: number) => T + (1 - v / top) * (H - T - B);
-  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * top);
+  const ticks = (top < 20 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((f) => f * top);
   const pathOf = (vals: (number | null)[]) => {
     let d = '';
     let open = false;
@@ -130,13 +130,13 @@ export function LineChart({ labels, series, format = fmtDefault, axis = compact,
             <text x={L - 6} y={y(t) + 3.5} textAnchor="end" className="viz-tick">{axis(t)}</text>
           </g>
         ))}
-        {labels.map((l, i) => (i % every === 0 || i === n - 1) && (
+        {labels.map((l, i) => ((i % every === 0 && n - 1 - i >= every) || i === n - 1) && (
           <text key={l + i} x={x(i)} y={H - 6} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} className="viz-tick">{l}</text>
         ))}
         {area && <path d={area} className="viz-area" />}
         {series.map((s, k) => <path key={s.name} d={pathOf(s.values)} className={`viz-line c${k + 1}${s.dashed ? ' dashed' : ''}`} />)}
         {series.map((s, k) => s.values.map((v, i) => v != null && (
-          <circle key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={k === 0 ? 3 : 2.2} className={`viz-dot c${k + 1}`} />
+          <circle key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={k === 0 ? 3 : 2.2} className={`viz-dot c${k + 1}${s.dashed ? ' dashed' : ''}`} />
         )))}
         {labels.map((l, i) => (
           <rect key={`h${i}`} x={x(i) - (W - L - R) / Math.max(1, n - 1) / 2} y={T} width={(W - L - R) / Math.max(1, n - 1)} height={H - T - B} className="viz-hit">
@@ -229,8 +229,10 @@ export function Donut({ rows, format = fmtDefault, center, centerNote, label }: 
 }
 
 /** A half-dial from 0 to `max`, for progress toward a target or a rate. */
-export function Gauge({ value, max, label, display, caption, lowerIsBetter }: {
-  value: number; max: number; label: string; display: string; caption?: string; lowerIsBetter?: boolean;
+export function Gauge({ value, max, label, display, caption, bands }: {
+  value: number; max: number; label: string; display: string; caption?: string;
+  /** Shares of `max` from which the dial turns gold, then green; without them it stays one colour. */
+  bands?: [fair: number, good: number];
 }) {
   const f = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
   const R = 54;
@@ -238,9 +240,7 @@ export function Gauge({ value, max, label, display, caption, lowerIsBetter }: {
     const a = Math.PI * (1 - to);
     return `M${70 - R},74 A${R},${R} 0 0 1 ${(70 + R * Math.cos(a)).toFixed(2)},${(74 - R * Math.sin(a)).toFixed(2)}`;
   };
-  const good = lowerIsBetter ? f <= 0.5 : f >= 0.75;
-  const fair = lowerIsBetter ? f <= 0.8 : f >= 0.4;
-  const tone = good ? 'g-good' : fair ? 'g-fair' : 'g-low';
+  const tone = !bands ? 'g-plain' : f >= bands[1] ? 'g-good' : f >= bands[0] ? 'g-fair' : 'g-low';
   return (
     <figure className="viz gauge">
       <svg viewBox="0 0 140 86" role="img" aria-label={`${label}: ${display}`}>
@@ -260,5 +260,22 @@ export function Panel({ title, action, children, wide }: { title: string; action
       <div className="panel-head"><h2>{title}</h2>{action}</div>
       {children}
     </section>
+  );
+}
+
+/** Steps people move through, each bar sized against the first, with how many were lost between steps. */
+export function Funnel({ steps, label }: { steps: { label: string; count: number; dropOff: number | null }[]; label: string }) {
+  const max = Math.max(1, ...steps.map((s) => s.count));
+  return (
+    <ol className="funnel" aria-label={label}>
+      {steps.map((s, i) => (
+        <li key={s.label}>
+          <span className="funnel-label">{s.label}</span>
+          <span className="funnel-track"><span className={`funnel-bar c${(i % 6) + 1}`} style={{ width: `${Math.max(2, (s.count / max) * 100)}%` }} /></span>
+          <span className="funnel-count">{s.count.toLocaleString('en-GB')}</span>
+          {i > 0 && <span className="funnel-drop muted small">{s.dropOff == null ? '' : `${s.dropOff}% did not go on`}</span>}
+        </li>
+      ))}
+    </ol>
   );
 }

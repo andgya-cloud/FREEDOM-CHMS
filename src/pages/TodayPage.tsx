@@ -161,7 +161,10 @@ function HomeScorecard({ org }: { org: Organization }) {
     <section className="stack">
       <div className="page-head">
         <h2>{report ? report.label : 'Scorecard'}</h2>
-        <Link to="/reports" className="btn btn-quiet">All reports</Link>
+        <span className="row-actions">
+          {report && <Link to="/dashboard" className="btn btn-primary">Dashboard</Link>}
+          <Link to="/reports" className="btn btn-quiet">All reports</Link>
+        </span>
       </div>
       {report ? <Scorecard report={report} giving={giving} base={`/reports/${org.id}/${report.id}`} /> : (
         <div className="card stack">
