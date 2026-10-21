@@ -1,0 +1,264 @@
+import { Link } from 'react-router-dom';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { compact, niceMax, pctChange, shares } from '../lib/analytics';
+
+/**
+ * The dashboard kit: KPI cards, line and column charts, donuts, gauges and
+ * sparklines. Drawn as plain SVG so they work offline, print, and follow the
+ * light, dark and church looks through CSS colours (--c1 to --c6).
+ */
+
+const fmtDefault = (v: number) => v.toLocaleString('en-GB');
+
+/** The drawn width of a chart, so its labels stay readable on a phone and on a wide screen. */
+function useWidth(fallback = 640) {
+  const ref = useRef<HTMLElement>(null);
+  const [w, setW] = useState(fallback);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(([e]) => { const cw = Math.round(e!.contentRect.width); if (cw > 0) setW(cw); });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  return [ref, w] as const;
+}
+
+/** "▲ 12% vs last month", green when it moved the good way. */
+export function Delta({ now, before, since, lowerIsBetter }: { now: number | null; before: number | null; since: string; lowerIsBetter?: boolean }) {
+  const p = pctChange(now, before);
+  if (p == null) return <span className="kpi-delta">No figure for {since}</span>;
+  const tone = p === 0 ? '' : (p > 0) !== !!lowerIsBetter ? ' up-good' : ' up-bad';
+  return (
+    <span className={`kpi-delta${tone}`}>
+      <span aria-hidden="true">{p > 0 ? '▲' : p < 0 ? '▼' : '●'} </span>
+      {p === 0 ? 'Same as' : `${Math.abs(p)}% ${p > 0 ? 'up on' : 'down on'}`} {since}
+    </span>
+  );
+}
+
+export interface KpiProps {
+  label: string;
+  value: string;
+  /** Comparisons shown under the value. */
+  changes?: { now: number | null; before: number | null; since: string }[];
+  lowerIsBetter?: boolean;
+  spark?: number[];
+  note?: ReactNode;
+  to?: string;
+  tone?: 'gold' | 'navy' | 'ok' | 'warn';
+}
+
+/** A KPI card: the figure, how it moved, and a small trend line. */
+export function KpiCard({ label, value, changes = [], lowerIsBetter, spark, note, to, tone }: KpiProps) {
+  const body = (
+    <>
+      <span className="kpi-label">{label}</span>
+      <span className="kpi-value">{value}</span>
+      {changes.map((c) => <Delta key={c.since} {...c} lowerIsBetter={lowerIsBetter} />)}
+      {note && <span className="kpi-note">{note}</span>}
+      {spark && spark.length > 1 && <Sparkline values={spark} />}
+    </>
+  );
+  const cls = `kpi${tone ? ` kpi-${tone}` : ''}`;
+  return <li>{to ? <Link to={to} className={cls}>{body}</Link> : <div className={cls}>{body}</div>}</li>;
+}
+
+export function KpiRow({ children, label }: { children: ReactNode; label: string }) {
+  return <ul className="kpis" aria-label={label}>{children}</ul>;
+}
+
+/** A tiny trend line with the last point marked. */
+export function Sparkline({ values, width = 120, height = 30 }: { values: number[]; width?: number; height?: number }) {
+  const max = Math.max(...values);
+  const min = Math.min(0, ...values);
+  const span = max - min || 1;
+  const x = (i: number) => 2 + (i * (width - 4)) / Math.max(1, values.length - 1);
+  const y = (v: number) => height - 3 - ((v - min) / span) * (height - 6);
+  const d = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const i = values.length - 1;
+  return (
+    <svg className="spark" viewBox={`0 0 ${width} ${height}`} aria-hidden="true" preserveAspectRatio="none">
+      <path d={`${d} L${x(i)},${height} L${x(0)},${height} Z`} className="spark-area" />
+      <path d={d} className="spark-line" />
+      <circle cx={x(i)} cy={y(values[i]!)} r={2.6} className="spark-dot" />
+    </svg>
+  );
+}
+
+export interface Series { name: string; values: (number | null)[]; dashed?: boolean }
+
+/** Lines over time with a light grid; the first series is filled. Hover a column to read every value. */
+export function LineChart({ labels, series, format = fmtDefault, axis = compact, label, height = 200 }: {
+  labels: string[]; series: Series[]; format?: (v: number) => string; axis?: (v: number) => string; label: string; height?: number;
+}) {
+  const [ref, W] = useWidth();
+  const H = W < 480 ? Math.round(height * 0.85) : height;
+  const L = 42, R = 12, T = 12, B = 24;
+  const top = niceMax(Math.max(0, ...series.flatMap((s) => s.values.map((v) => v ?? 0))));
+  const n = labels.length;
+  const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, n - 1);
+  const y = (v: number) => T + (1 - v / top) * (H - T - B);
+  const ticks = [0, 0.25, 0.5, 0.75, 1].map((f) => f * top);
+  const pathOf = (vals: (number | null)[]) => {
+    let d = '';
+    let open = false;
+    vals.forEach((v, i) => {
+      if (v == null) { open = false; return; }
+      d += `${open ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
+      open = true;
+    });
+    return d.trim();
+  };
+  const first = series[0];
+  const firstPts = first ? first.values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] != null) : [];
+  const area = firstPts.length > 1
+    ? `${pathOf(first!.values)} L${x(firstPts[firstPts.length - 1]![0])},${y(0)} L${x(firstPts[0]![0])},${y(0)} Z`
+    : '';
+  const every = Math.ceil(n / Math.max(3, Math.floor(W / 70)));
+  return (
+    <figure className="viz" ref={ref}>
+      {series.length > 1 && (
+        <ul className="viz-legend">
+          {series.map((s, k) => <li key={s.name}><span className={`swatch c${k + 1}${s.dashed ? ' dashed' : ''}`} />{s.name}</li>)}
+        </ul>
+      )}
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        {ticks.map((t) => (
+          <g key={t}>
+            <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="viz-grid" />
+            <text x={L - 6} y={y(t) + 3.5} textAnchor="end" className="viz-tick">{axis(t)}</text>
+          </g>
+        ))}
+        {labels.map((l, i) => (i % every === 0 || i === n - 1) && (
+          <text key={l + i} x={x(i)} y={H - 6} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} className="viz-tick">{l}</text>
+        ))}
+        {area && <path d={area} className="viz-area" />}
+        {series.map((s, k) => <path key={s.name} d={pathOf(s.values)} className={`viz-line c${k + 1}${s.dashed ? ' dashed' : ''}`} />)}
+        {series.map((s, k) => s.values.map((v, i) => v != null && (
+          <circle key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={k === 0 ? 3 : 2.2} className={`viz-dot c${k + 1}`} />
+        )))}
+        {labels.map((l, i) => (
+          <rect key={`h${i}`} x={x(i) - (W - L - R) / Math.max(1, n - 1) / 2} y={T} width={(W - L - R) / Math.max(1, n - 1)} height={H - T - B} className="viz-hit">
+            <title>{`${l}\n${series.map((s) => `${s.name}: ${s.values[i] == null ? '–' : format(s.values[i]!)}`).join('\n')}`}</title>
+          </rect>
+        ))}
+      </svg>
+      <figcaption className="visually-hidden">{label}</figcaption>
+    </figure>
+  );
+}
+
+/** Upright bars for a handful of periods or groups; the last (or chosen) bar is gold. */
+export function ColumnChart({ rows, format = fmtDefault, axis = compact, label, highlight, height = 180 }: {
+  rows: { label: string; value: number }[]; format?: (v: number) => string; axis?: (v: number) => string; label: string; highlight?: number; height?: number;
+}) {
+  const [ref, W] = useWidth();
+  const H = height;
+  const L = 42, R = 8, T = 18, B = 24;
+  const top = niceMax(Math.max(0, ...rows.map((r) => r.value)));
+  const slot = (W - L - R) / Math.max(1, rows.length);
+  const bw = Math.min(46, slot * 0.62);
+  const y = (v: number) => T + (1 - v / top) * (H - T - B);
+  const hi = highlight ?? rows.length - 1;
+  const showValues = rows.length <= 8 || slot >= 40;
+  const labelEvery = Math.ceil(rows.length / Math.max(2, Math.floor((W - L) / 44)));
+  return (
+    <figure className="viz" ref={ref}>
+      <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        {[0, 0.5, 1].map((f) => (
+          <g key={f}>
+            <line x1={L} x2={W - R} y1={y(f * top)} y2={y(f * top)} className="viz-grid" />
+            <text x={L - 6} y={y(f * top) + 3.5} textAnchor="end" className="viz-tick">{axis(f * top)}</text>
+          </g>
+        ))}
+        {rows.map((r, i) => {
+          const cx = L + slot * i + slot / 2;
+          const h = Math.max(0, y(0) - y(r.value));
+          return (
+            <g key={r.label + i}>
+              <rect x={cx - bw / 2} y={y(0) - h} width={bw} height={h} rx={3} className={i === hi ? 'viz-bar hi' : 'viz-bar'}>
+                <title>{`${r.label}: ${format(r.value)}`}</title>
+              </rect>
+              {showValues && r.value > 0 && <text x={cx} y={y(0) - h - 4} textAnchor="middle" className="viz-val">{axis(r.value)}</text>}
+              {i % labelEvery === 0 && <text x={cx} y={H - 6} textAnchor="middle" className="viz-tick">{r.label}</text>}
+            </g>
+          );
+        })}
+      </svg>
+      <figcaption className="visually-hidden">{label}</figcaption>
+    </figure>
+  );
+}
+
+/** A ring split into shares, with a legend of amounts and percentages. */
+export function Donut({ rows, format = fmtDefault, center, centerNote, label }: {
+  rows: { label: string; value: number }[]; format?: (v: number) => string; center?: string; centerNote?: string; label: string;
+}) {
+  const shown = rows.filter((r) => r.value > 0);
+  const top = shown.slice(0, 5);
+  const rest = shown.slice(5).reduce((s, r) => s + r.value, 0);
+  const parts = rest > 0 ? [...top, { label: 'Others', value: rest }] : top;
+  const total = parts.reduce((s, r) => s + r.value, 0);
+  const pct = shares(parts.map((p) => p.value));
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  let at = 0;
+  return (
+    <figure className="viz donut">
+      <svg viewBox="0 0 140 140" role="img" aria-label={label}>
+        <circle cx={70} cy={70} r={R} className="donut-track" />
+        {total > 0 && parts.map((p, i) => {
+          const len = (p.value / total) * C;
+          const seg = <circle key={p.label} cx={70} cy={70} r={R} className={`donut-seg c${i + 1}`} strokeDasharray={`${Math.max(0, len - 1.5)} ${C}`} strokeDashoffset={-at} transform="rotate(-90 70 70)"><title>{`${p.label}: ${format(p.value)} (${pct[i]}%)`}</title></circle>;
+          at += len;
+          return seg;
+        })}
+        {center && <text x={70} y={centerNote ? 70 : 75} textAnchor="middle" className="donut-center">{center}</text>}
+        {centerNote && <text x={70} y={86} textAnchor="middle" className="viz-tick">{centerNote}</text>}
+      </svg>
+      <ul className="viz-legend col">
+        {parts.length === 0 && <li className="muted">Nothing yet</li>}
+        {parts.map((p, i) => (
+          <li key={p.label}><span className={`swatch c${i + 1}`} /><span className="lg-name">{p.label}</span><span className="lg-val">{format(p.value)} <span className="muted">{pct[i]}%</span></span></li>
+        ))}
+      </ul>
+      <figcaption className="visually-hidden">{label}</figcaption>
+    </figure>
+  );
+}
+
+/** A half-dial from 0 to `max`, for progress toward a target or a rate. */
+export function Gauge({ value, max, label, display, caption, lowerIsBetter }: {
+  value: number; max: number; label: string; display: string; caption?: string; lowerIsBetter?: boolean;
+}) {
+  const f = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  const R = 54;
+  const arc = (to: number) => {
+    const a = Math.PI * (1 - to);
+    return `M${70 - R},74 A${R},${R} 0 0 1 ${(70 + R * Math.cos(a)).toFixed(2)},${(74 - R * Math.sin(a)).toFixed(2)}`;
+  };
+  const good = lowerIsBetter ? f <= 0.5 : f >= 0.75;
+  const fair = lowerIsBetter ? f <= 0.8 : f >= 0.4;
+  const tone = good ? 'g-good' : fair ? 'g-fair' : 'g-low';
+  return (
+    <figure className="viz gauge">
+      <svg viewBox="0 0 140 86" role="img" aria-label={`${label}: ${display}`}>
+        <path d={arc(1)} className="gauge-track" />
+        {f > 0 && <path d={arc(f)} className={`gauge-fill ${tone}`} />}
+        <text x={70} y={68} textAnchor="middle" className="gauge-value">{display}</text>
+      </svg>
+      <figcaption><strong>{label}</strong>{caption && <span className="muted small"> {caption}</span>}</figcaption>
+    </figure>
+  );
+}
+
+/** A dashboard panel: a titled card with an optional control on the right. */
+export function Panel({ title, action, children, wide }: { title: string; action?: ReactNode; children: ReactNode; wide?: boolean }) {
+  return (
+    <section className={`panel${wide ? ' panel-wide' : ''}`}>
+      <div className="panel-head"><h2>{title}</h2>{action}</div>
+      {children}
+    </section>
+  );
+}

@@ -37,6 +37,7 @@ const GiftPage = lazy(() => import('./pages/giving/GiftPage').then((m) => ({ def
 const UnassignedPage = lazy(() => import('./pages/giving/UnassignedPage').then((m) => ({ default: m.UnassignedPage })));
 const ImportPage = lazy(() => import('./pages/giving/ImportPage').then((m) => ({ default: m.ImportPage })));
 const GivingSummaryPage = lazy(() => import('./pages/giving/GivingSummaryPage').then((m) => ({ default: m.GivingSummaryPage })));
+const GivingDashboardPage = lazy(() => import('./pages/giving/GivingDashboardPage').then((m) => ({ default: m.GivingDashboardPage })));
 const StatementsPage = lazy(() => import('./pages/giving/StatementsPage').then((m) => ({ default: m.StatementsPage })));
 const FundsPage = lazy(() => import('./pages/settings/FundsPage').then((m) => ({ default: m.FundsPage })));
 const WhatsAppSettingsPage = lazy(() => import('./pages/settings/WhatsAppSettingsPage').then((m) => ({ default: m.WhatsAppSettingsPage })));
@@ -125,6 +126,7 @@ function AppRoutes() {
         <Route path="/giving/unassigned" element={<RequirePermission permission="gifts.write"><UnassignedPage /></RequirePermission>} />
         <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
         <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
+        <Route path="/giving/dashboard" element={<RequirePermission permission="finance.reports"><GivingDashboardPage /></RequirePermission>} />
         <Route path="/giving/statements" element={<RequirePermission permission="giving.person.read"><StatementsPage /></RequirePermission>} />
         <Route path="/giving/:orgId/:giftId" element={<RequirePermission anyOf={['gifts.write', 'giving.person.read']}><GiftPage /></RequirePermission>} />
         <Route path="/follow-ups" element={<RequirePermission permission="followups.manage"><FollowUpsPage /></RequirePermission>} />
