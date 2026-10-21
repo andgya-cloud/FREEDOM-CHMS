@@ -3,7 +3,7 @@ import { collection, doc, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
-import { DEFAULT_PAYROLL_RATES, type PayLine, type PayrollRates, type PayrollStaff, type PayrollTotals } from '../../functions/src/shared/payroll';
+import { DEFAULT_PAYROLL_RATES, type MonthAdjustment, type PayLine, type PayrollRates, type PayrollStaff, type PayrollTotals } from '../../functions/src/shared/payroll';
 import type { Permission } from '../../functions/src/shared/permissions';
 import type { Organization } from './OrgContext';
 
@@ -18,6 +18,8 @@ export interface PayRun {
   preparedBy: string;
   preparedByName: string;
   approved: { uid: string; name: string; at?: Timestamp } | null;
+  reviewed?: { uid: string; name: string; at?: Timestamp } | null;
+  adjustments?: Record<string, MonthAdjustment>;
   updatedAt?: Timestamp;
 }
 

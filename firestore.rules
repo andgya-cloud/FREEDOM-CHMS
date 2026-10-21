@@ -1251,7 +1251,7 @@ service cloud.firestore {
         allow read: if payAny();
         allow create, update: if pay('payroll.manage')
           && request.resource.data.keys().hasOnly(['orgId', 'name', 'staffNo', 'jobTitle', 'kraPin', 'nssfNo', 'shifNo',
-               'paymentDetails', 'basicCents', 'allowances', 'deductions', 'active',
+               'paymentDetails', 'basicCents', 'allowances', 'deductions', 'active', 'idNo', 'phone', 'email', 'loans',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId
           && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 1
@@ -1260,6 +1260,8 @@ service cloud.firestore {
           && shortText(request.resource.data.shifNo, 30) && shortText(request.resource.data.paymentDetails, 200)
           && request.resource.data.basicCents is int && request.resource.data.basicCents >= 0 && request.resource.data.basicCents <= 100000000000
           && payItems(request.resource.data.allowances) && payItems(request.resource.data.deductions)
+          && shortText(request.resource.data.get('idNo', ''), 20) && shortText(request.resource.data.get('phone', ''), 20)
+          && shortText(request.resource.data.get('email', ''), 120) && payItems(request.resource.data.get('loans', []))
           && request.resource.data.active is bool
           && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
         allow delete: if false;
@@ -1267,19 +1269,27 @@ service cloud.firestore {
       match /payrollRuns/{month} {
         allow read: if payAny();
         allow create: if pay('payroll.manage') && month.matches('^[0-9]{4}-[0-9]{2}$') && stampedCreate() && freshRecord()
-          && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'approved',
+          && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'approved', 'adjustments', 'reviewed',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId && request.resource.data.month == month
           && request.resource.data.status == 'draft' && request.resource.data.approved == null
+          && request.resource.data.get('reviewed', null) == null && request.resource.data.get('adjustments', {}) is map
           && request.resource.data.preparedBy == request.auth.uid && shortText(request.resource.data.preparedByName, 120)
           && request.resource.data.lines is list && request.resource.data.lines.size() <= 300
           && request.resource.data.totals is map && request.resource.data.rates is map;
         allow update: if resource.data.status == 'draft' && stampedUpdate() && (
           // Prepared again from the current staff details, while still a draft.
           (pay('payroll.manage')
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'updatedAt', 'updatedBy'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'adjustments', 'reviewed', 'updatedAt', 'updatedBy'])
+            && request.resource.data.get('reviewed', null) == null && request.resource.data.get('adjustments', {}) is map
             && request.resource.data.preparedBy == request.auth.uid && shortText(request.resource.data.preparedByName, 120)
             && request.resource.data.lines is list && request.resource.data.lines.size() <= 300)
+          // Checked and signed as reviewed by someone who did not prepare it (preparing again clears it).
+          || (payAny() && resource.data.preparedBy != request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewed', 'updatedAt', 'updatedBy'])
+            && request.resource.data.reviewed.keys().hasOnly(['uid', 'name', 'at'])
+            && request.resource.data.reviewed.uid == request.auth.uid && request.resource.data.reviewed.at == request.time
+            && shortText(request.resource.data.reviewed.name, 120))
           // Approved by someone who did not prepare it; it is then locked.
           || (pay('payroll.approve') && resource.data.preparedBy != request.auth.uid
             && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approved', 'updatedAt', 'updatedBy'])

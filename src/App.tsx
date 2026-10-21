@@ -62,6 +62,7 @@ const NewRequisitionPage = lazy(() => import('./pages/school/PettyCashPage').the
 const RequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.RequisitionPage })));
 const PayrollPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPage })));
 const PayrollStaffPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollStaffPage })));
+const PayrollPersonPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPersonPage })));
 const PayrollRunPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollRunPage })));
 const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage').then((m) => ({ default: m.SchoolSettingsPage })));
 const HopeHome = lazy(() => import('./pages/hope/HopeHome').then((m) => ({ default: m.HopeHome })));
@@ -149,6 +150,7 @@ function AppRoutes() {
         <Route path="/school/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
         <Route path="/school/payroll" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPage /></RequirePermission>} />
         <Route path="/school/payroll/staff" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollStaffPage /></RequirePermission>} />
+        <Route path="/school/payroll/staff/:staffId" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPersonPage /></RequirePermission>} />
         <Route path="/school/payroll/:month" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollRunPage /></RequirePermission>} />
         <Route path="/school/settings" element={<RequirePermission permission="settings.manage"><SchoolSettingsPage /></RequirePermission>} />
         <Route path="/hope" element={<RequirePermission permission="people.read"><HopeHome /></RequirePermission>} />

@@ -2,7 +2,7 @@ import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { createStamps, updateRecord } from './records';
 import { trackWrite } from './sync';
-import type { PayLine, PayrollRates, PayrollStaff, PayrollTotals } from '../../functions/src/shared/payroll';
+import type { MonthAdjustment, PayLine, PayrollRates, PayrollStaff, PayrollTotals } from '../../functions/src/shared/payroll';
 
 const me = () => {
   const u = auth.currentUser;
@@ -20,11 +20,17 @@ export function saveStaff(orgId: string, id: string | null, input: StaffInput) {
 }
 
 /** Prepares (or prepares again) a month's pay run from the current staff details and rates. */
-export function preparePayRun(orgId: string, month: string, exists: boolean, data: { lines: PayLine[]; totals: PayrollTotals; rates: PayrollRates }, preparedByName: string) {
+export function preparePayRun(orgId: string, month: string, exists: boolean, data: { lines: PayLine[]; totals: PayrollTotals; rates: PayrollRates; adjustments: Record<string, MonthAdjustment> }, preparedByName: string) {
   const ref = doc(db, 'organizations', orgId, 'payrollRuns', month);
-  const body = { ...data, preparedBy: me(), preparedByName };
+  // Firestore does not store undefined, so optional staff fields are written as empty text.
+  const body = { ...JSON.parse(JSON.stringify(data)) as typeof data, preparedBy: me(), preparedByName, reviewed: null };
   if (exists) return updateRecord(ref, body);
   return trackWrite(setDoc(ref, { orgId, month, status: 'draft', approved: null, ...body, ...createStamps() }));
+}
+
+/** Signs a pay run as checked; whoever prepared it cannot. */
+export function reviewPayRun(orgId: string, month: string, name: string) {
+  return updateRecord(doc(db, 'organizations', orgId, 'payrollRuns', month), { reviewed: { uid: me(), name, at: serverTimestamp() } });
 }
 
 /** Approves a pay run; it is then locked. */

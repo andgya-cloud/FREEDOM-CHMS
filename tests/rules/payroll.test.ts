@@ -55,6 +55,25 @@ describe('payroll rules', () => {
     await assertFails(updateDoc(ref('daniel'), { lines: [], ...touched('daniel') }));
   });
 
+  it('lets someone other than the preparer sign a pay run as reviewed, and preparing again clears it', async () => {
+    const ref = (uid: string) => doc(as(uid), 'organizations/adia/payrollRuns/2026-10');
+    const review = (uid: string) => ({ reviewed: { uid, name: uid, at: serverTimestamp() }, ...touched(uid) });
+    await assertSucceeds(setDoc(ref('daniel'), { ...run('daniel'), adjustments: { s1: { earnings: [], unpaid: [] } }, reviewed: null }));
+    await assertFails(updateDoc(ref('daniel'), review('daniel')));
+    await assertFails(updateDoc(ref('head'), review('head')));
+    await assertFails(updateDoc(ref('elias'), { ...review('elias'), lines: [1] }));
+    await assertSucceeds(updateDoc(ref('elias'), review('elias')));
+    await assertFails(updateDoc(ref('daniel'), { lines: [], preparedBy: 'daniel', preparedByName: 'Daniel', ...touched('daniel') }));
+    await assertSucceeds(updateDoc(ref('daniel'), { lines: [], preparedBy: 'daniel', preparedByName: 'Daniel', reviewed: null, adjustments: {}, ...touched('daniel') }));
+  });
+
+  it('keeps ID numbers, contacts and loans on staff pay details', async () => {
+    const s = { ...staffDoc('daniel'), idNo: '12345678', phone: '+254700000000', email: 'r@example.org',
+      loans: [{ id: 'L1', name: 'Advance', principalCents: 1000000, instalmentCents: 500000, startMonth: '2026-10' }] };
+    await assertSucceeds(setDoc(doc(as('daniel'), 'organizations/adia/payrollStaff/s1'), s));
+    await assertFails(setDoc(doc(as('daniel'), 'organizations/adia/payrollStaff/s2'), { ...s, idNo: 'x'.repeat(30) }));
+  });
+
   it('lets only an approver change the deduction rates', async () => {
     const rates = (uid: string) => ({ orgId: 'adia', nssfRate: 0.06, nssfUpperLimitCents: 7200000, shifRate: 0.0275, shifMinimumCents: 30000, housingRate: 0.015, personalReliefCents: 240000, ...stamps(uid) });
     await assertFails(setDoc(doc(as('daniel'), 'organizations/adia/payrollSettings/rates'), rates('daniel')));
