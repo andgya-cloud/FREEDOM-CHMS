@@ -601,7 +601,7 @@ function Payslip({ org, month, line: l, run }: { org: Organization; month: strin
         <img className="slip-crest" src="/org/adia-crest.png" alt="" width={72} height={72} />
         <div className="slip-title">
           <h3>ADIA Training Centre</h3>
-          <p>Staff Slip</p>
+          <p>Staff Payslip</p>
         </div>
         <div className="slip-month"><span>Pay period</span><strong>{monthName(month)}</strong></div>
       </header>
@@ -633,7 +633,7 @@ function Payslip({ org, month, line: l, run }: { org: Organization; month: strin
         </p>
         <footer className="slip-foot">
           <span>{run.approved ? `Approved by ${run.approved.name}` : 'Not yet approved'}</span>
-          <span>Computer-generated slip · Keep it confidential</span>
+          <span>Computer-generated payslip · Keep it confidential</span>
         </footer>
       </div>
       <div className="row-actions no-print slip-actions">

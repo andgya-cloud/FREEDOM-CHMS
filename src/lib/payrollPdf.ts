@@ -24,14 +24,14 @@ function crestImage(): Promise<string | null> {
   return crest;
 }
 
-/** A staff member's ADIA staff slip as a PDF, made on the device, for sending by WhatsApp or email. */
+/** A staff member's ADIA staff payslip as a PDF, made on the device, for sending by WhatsApp or email. */
 export async function payslipPdf(org: Organization, monthLabel: string, month: string, l: PayLine, approvedBy: string | null): Promise<File> {
   const pdf = await newPdf('a5');
   const w = pdf.internal.pageSize.getWidth();
   const h = pdf.internal.pageSize.getHeight();
   const m = (c: number) => formatMoney(c, org.currency || 'KES');
 
-  // Navy band with the crest, the name and "Staff Slip".
+  // Navy band with the crest, the name and "Staff Payslip".
   pdf.setFillColor(...NAVY);
   pdf.rect(0, 0, w, 34, 'F');
   pdf.setFillColor(...GOLD);
@@ -49,7 +49,7 @@ export async function payslipPdf(org: Organization, monthLabel: string, month: s
   pdf.setTextColor(...GOLD);
   pdf.setFontSize(8.5);
   pdf.setCharSpace(1.6);
-  pdf.text('STAFF SLIP', 40, 22.5);
+  pdf.text('STAFF PAYSLIP', 40, 22.5);
   pdf.setCharSpace(0);
   pdf.setTextColor(220, 224, 235);
   pdf.setFont('helvetica', 'normal');
@@ -150,10 +150,10 @@ export async function payslipPdf(org: Organization, monthLabel: string, month: s
   pdf.setLineWidth(0.2);
   pdf.line(12, h - 14, w - 12, h - 14);
   pdf.text(approvedBy ? `Approved by ${approvedBy}` : 'Not yet approved', 12, h - 9);
-  pdf.text('Computer-generated slip · Keep it confidential', w - 12, h - 9, { align: 'right' });
+  pdf.text('Computer-generated payslip · Keep it confidential', w - 12, h - 9, { align: 'right' });
   pdf.setFillColor(...GOLD);
   pdf.rect(0, h - 3, w, 3, 'F');
 
   const safe = l.name.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  return new File([pdf.output('blob')], `Staff-Slip-${month}-${safe}.pdf`, { type: 'application/pdf' });
+  return new File([pdf.output('blob')], `Staff-Payslip-${month}-${safe}.pdf`, { type: 'application/pdf' });
 }
