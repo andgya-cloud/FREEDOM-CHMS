@@ -31,6 +31,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users/eliz'), user('head', [...TEAM_WORK, 'team.manage', 'pettycash.check', 'pettycash.request'], ['adia']));
     await setDoc(doc(db, 'users/elias'), user('staff', [...TEAM_WORK, 'pettycash.approve'], ['adia']));
     await setDoc(doc(db, 'users/plainHead'), user('head', [...TEAM_WORK, 'team.manage'], ['adia']));
+    for (const s of ['s1', 's2', 's3']) await setDoc(doc(db, `users/${s}`), user('staff', [...TEAM_WORK, 'pettycash.authorize'], ['adia']));
     await setDoc(doc(db, 'users/fcnAcc'), user('staff', [...TEAM_WORK, 'pettycash.check'], ['fcn']));
   });
 });
@@ -82,12 +83,30 @@ describe('petty cash', () => {
     await assertSucceeds(updateDoc(doc(as('elias'), 'organizations/adia/pettyCash/r2'), { status: 'rejected', rejection: { uid: 'elias', name: 'Elias', reason: 'No receipt', at: serverTimestamp() }, ...touched('elias') }));
   });
 
-  it('lets only a board member set the monthly budget', async () => {
-    const budget = (uid: string) => ({ orgId: 'adia', amountCents: 10000000, note: '', deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: uid, updatedAt: serverTimestamp(), updatedBy: uid });
-    await assertFails(setDoc(doc(as('eliz'), 'organizations/adia/pettyBudgets/2026-10'), budget('eliz')));
-    await assertFails(setDoc(doc(as('elias'), 'organizations/adia/pettyBudgets/october'), budget('elias')));
-    await assertSucceeds(setDoc(doc(as('elias'), 'organizations/adia/pettyBudgets/2026-10'), budget('elias')));
-    await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyBudgets/2026-10')));
-    await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyBudgets/2026-10')));
+  it('adds money only after three different stakeholders sign', async () => {
+    const sig = (uid: string) => ({ name: uid, at: serverTimestamp() });
+    const fund = (uid: string, extra: Record<string, unknown> = {}) => ({
+      orgId: 'adia', kind: 'topup', amountCents: 50000000, signatures: { [uid]: sig(uid) }, status: 'collecting', doneAt: null,
+      deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: uid, updatedAt: serverTimestamp(), updatedBy: uid, ...extra,
+    });
+    const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyFunds/f1');
+    // Only stakeholders start one, already signed by themselves and not yet complete.
+    await assertFails(setDoc(ref('doreen'), fund('doreen')));
+    await assertFails(setDoc(ref('s1'), fund('s1', { status: 'done' })));
+    await assertFails(setDoc(ref('s1'), fund('s1', { signatures: { s1: sig('s1'), s2: sig('s2') } })));
+    await assertFails(setDoc(ref('s1'), fund('s1', { kind: 'reset' })));
+    await assertSucceeds(setDoc(ref('s1'), fund('s1')));
+    // Nobody signs twice, or for someone else, and the second signature does not complete it.
+    await assertFails(updateDoc(ref('s1'), { 'signatures.s1.name': 'again', ...touched('s1') }));
+    await assertFails(updateDoc(ref('s2'), { 'signatures.s3': sig('s3'), ...touched('s2') }));
+    await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), status: 'done', doneAt: serverTimestamp(), ...touched('s2') }));
+    await assertSucceeds(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
+    // The third must complete it.
+    await assertFails(updateDoc(ref('s3'), { 'signatures.s3': sig('s3'), ...touched('s3') }));
+    await assertSucceeds(updateDoc(ref('s3'), { 'signatures.s3': sig('s3'), status: 'done', doneAt: serverTimestamp(), ...touched('s3') }));
+    // A completed top-up cannot be changed.
+    await assertFails(updateDoc(ref('s1'), { status: 'cancelled', ...touched('s1') }));
+    await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyFunds/f1')));
+    await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyFunds/f1')));
   });
 });

@@ -601,19 +601,101 @@ a.chip.chip-on { color: var(--primary-ink); }
 .live-clock-time { font-weight: 300; letter-spacing: -0.01em; }
 .live-clock-city { color: var(--muted); font-size: 0.85rem; }
 
-/* ---------- Petty cash (ADIA) ---------- */
+/* ---------- Petty cash (ADIA): a light frosted page beside the dark side panel (Andy's design, 2026-10-21) ---------- */
 .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.petty-light {
+  --bg: #f8fafc; --surface: rgba(255, 255, 255, 0.72); --surface-2: #eef2f7; --text: #1f2937; --muted: #6b7280;
+  --border: #e5e7eb; --primary: #1d4ed8; --primary-ink: #fff; --red: #dc2626; --blue: #1d4ed8;
+  color-scheme: light; color: var(--text);
+  background: linear-gradient(135deg, #f8fafc 0%, #dbeafe 100%);
+  border-radius: 24px; padding: 16px 12px; margin: 12px 12px 96px; min-height: calc(100vh - 140px);
+}
+.petty-light option { background: #fff; color: var(--text); }
+.side-look .petty-light .card, .side-look .petty-light .notice {
+  background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 18px;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06), 0 8px 10px -6px rgba(0, 0, 0, 0.02);
+}
+.side-look .petty-light .search { color: var(--text); background-color: rgba(255, 255, 255, 0.6); border-color: var(--border); }
+.side-look .petty-light .search::placeholder { color: #9ca3af; }
+.side-look .petty-light .sync-badge { color: #4b5563; background: rgba(255, 255, 255, 0.6); border-color: var(--border); }
+.side-look .petty-light .sync-dot { background: #22c55e; }
+.side-look .petty-light .btn-quiet { color: #374151; border-color: #cbd5e1; }
+.side-look .petty-light .btn-quiet:hover { color: var(--blue); border-color: var(--blue); background: rgba(29, 78, 216, 0.06); }
+.petty-light input, .petty-light select { background: #fff; color: var(--text); border-color: var(--border); }
+.petty-light input[readonly], .petty-light input:disabled { background: #f3f4f6; }
+.petty-light .link-list { background: #fff; }
+.petty-light .danger-text { color: var(--red); }
+.petty-light .adia-search .row-list, .petty-light .adia-search .quick-search-none { background: #fff; border-color: var(--border); }
+@media (min-width: 900px) { .petty-light { padding: 32px; margin: 0; min-height: calc(100vh - 48px); } }
+.petty-light .page.narrow { max-width: 1024px; }
+.side-look .petty-light .search { box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); }
+@media (max-width: 560px) {
+  .petty-light .page-head h1 { font-size: 1.4rem; }
+  .petty-auth-head { padding: 14px; gap: 10px; }
+  .petty-auth-title h2 { font-size: 0.98rem; }
+  .petty-auth-body { padding: 18px 14px; }
+}
+
+.petty-caps { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.petty-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+@media (min-width: 720px) { .petty-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; } }
+.petty-stat {
+  position: relative; overflow: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  padding: 20px 12px; border-radius: 18px; text-align: center;
+  background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(255, 255, 255, 0.6); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.06);
+}
+.petty-stat span { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af; }
+.petty-stat strong { font-size: clamp(1.05rem, 1.6vw + 0.6rem, 1.5rem); font-weight: 800; white-space: nowrap; }
+.petty-stat::after { content: ''; position: absolute; bottom: 0; left: 25%; width: 50%; height: 4px; border-radius: 4px 4px 0 0; background: currentColor; }
+.petty-stat-budget { color: #2563eb; }
+.petty-stat-spent { color: #dc2626; }
+.petty-stat-left { color: #16a34a; }
+.petty-stat-over { color: #dc2626; }
+.petty-reset {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 16px 12px; border-radius: 18px; cursor: pointer;
+  font: inherit; color: #1f2937; background: linear-gradient(to bottom, #fef08a, #fde047); border: 1px solid #facc15; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s, transform 0.2s;
+}
+.petty-reset:hover:not(:disabled) { box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14); transform: translateY(-1px); }
+.petty-reset:disabled { cursor: default; opacity: 0.6; }
+.petty-reset svg { width: 40px; height: 40px; padding: 9px; box-sizing: border-box; border-radius: 50%; background: rgba(29, 78, 216, 0.1); fill: none; stroke: #1d4ed8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.petty-reset strong { font-size: 0.9rem; line-height: 1.15; }
+.petty-reset small { font-size: 0.65rem; font-weight: 700; color: #4b5563; }
+
+.petty-auth { margin-bottom: 24px; border-radius: 18px; overflow: hidden; background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
+.petty-auth-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: #1d4ed8; color: #fff; }
+.petty-auth-icon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); }
+.petty-auth-icon svg { width: 22px; height: 22px; fill: none; stroke: #D2A74B; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.petty-auth-title { flex: 1; min-width: 0; }
+.petty-auth-title h2 { margin: 0; font-size: 1.1rem; color: #fff; }
+.petty-auth-title p { margin: 2px 0 0; font-size: 0.78rem; color: rgba(255, 255, 255, 0.8); }
+.petty-auth-count { flex: none; padding: 6px 16px; border-radius: 999px; font-weight: 700; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); }
+.petty-auth-body { display: flex; flex-direction: column; gap: 18px; padding: 22px 20px; }
+.petty-auth-body .field input { padding: 14px 16px; border-radius: 12px; }
+.petty-auth-amount { margin: 0; font-size: 1rem; }
+.petty-warn { margin: 0; padding: 12px 16px; border-radius: 12px; font-size: 0.9rem; font-weight: 500; color: #854d0e; background: #fefce8; border: 1px solid #fef08a; }
+.petty-warn::before { content: '⚠  '; color: #ca8a04; }
+.petty-signers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.petty-signers li { padding: 18px; border-radius: 18px; background: rgba(248, 250, 252, 0.6); border: 1px solid #e2e8f0; }
+.petty-signers li.signed { background: #f0fdf4; border-color: #bbf7d0; }
+.petty-signer-head { display: flex; align-items: center; gap: 12px; }
+.petty-signer-head h3 { margin: 0; font-size: 1rem; flex: 1; }
+.petty-signer-no { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: #e2e8f0; color: #475569; font-weight: 700; font-size: 0.875rem; }
+.signed .petty-signer-no { background: #16a34a; color: #fff; }
+.petty-signer-when { font-size: 0.8rem; color: var(--muted); }
+.petty-signer-name { margin: 10px 0 0 44px; }
+.petty-signer-form { display: flex; flex-direction: column; gap: 12px; margin-top: 14px; }
+.petty-signer-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.petty-signer-row .field { flex: 1 1 220px; }
+.petty-signer-row .btn { min-height: 48px; padding-inline: 24px; border-radius: 12px; }
+.petty-left { margin: 0; padding: 14px 16px; border-radius: 14px; background: rgba(255, 255, 255, 0.72); border: 1px solid var(--border); }
+
 .petty-number { font-size: 0.85rem; color: var(--muted); }
 .petty-figures { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
-.petty-figures li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); }
+.petty-figures li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: #fff; }
 .petty-figures li span { font-size: 0.8rem; color: var(--muted); }
 .petty-figures li strong { font-size: 1.1rem; }
-.petty-balance { color: rgb(var(--acc, 34 120 80)); }
-.petty-bar { height: 8px; border-radius: 99px; background: var(--border); overflow: hidden; }
-.petty-bar span { display: block; height: 100%; border-radius: inherit; background: rgb(var(--acc, 34 120 80)); transition: width .3s; }
-.petty-warning .petty-bar span { background: var(--gold); }
-.petty-over .petty-bar span { background: var(--red); }
-.petty-over .petty-balance { color: var(--red); }
 .petty-line { grid-template-columns: 1fr 150px auto; align-items: end; }
 @media (max-width: 560px) { .petty-line { grid-template-columns: 1fr 110px; } .petty-line .btn { grid-column: 1 / -1; } }
 .petty-total { display: flex; justify-content: space-between; align-items: baseline; margin: 4px 0 0; padding-top: 10px; border-top: 1px solid var(--border); font-size: 1.05rem; }
@@ -622,9 +704,9 @@ a.chip.chip-on { color: var(--primary-ink); }
 .petty-items li { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .petty-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
 .petty-steps li { display: flex; flex-direction: column; gap: 2px; padding-left: 26px; position: relative; color: var(--muted); }
-.petty-steps li::before { content: ''; position: absolute; left: 0; top: 3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); }
+.petty-steps li::before { content: ''; position: absolute; left: 0; top: 3px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid #cbd5e1; }
 .petty-steps li.done { color: inherit; }
-.petty-steps li.done::before { background: rgb(var(--acc, 34 120 80)); border-color: rgb(var(--acc, 34 120 80)); }
+.petty-steps li.done::before { background: #16a34a; border-color: #16a34a; }
 @media print {
   .petty-print .row-actions, .adia-side, .adia-head, .tabbar, .dev-ribbon { display: none !important; }
   .petty-print .card { background: #fff !important; color: #000 !important; border: 1px solid #999 !important; box-shadow: none !important; backdrop-filter: none !important; }

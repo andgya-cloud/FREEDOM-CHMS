@@ -55,30 +55,58 @@ export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterI
   return null;
 }
 
-export interface BudgetSummary {
-  budgetCents: number | null;
-  approvedCents: number;
-  pendingCents: number;
-  /** Budget less what is approved and what is still waiting; negative when over. */
-  balanceCents: number | null;
-  usedPercent: number;
-  state: 'healthy' | 'warning' | 'over' | 'none';
+/** Signatures needed before money is added to petty cash, or the budget is reset. */
+export const FUND_SIGNATURES_NEEDED = 3;
+export type PettyFundKind = 'topup' | 'reset';
+export type PettyFundStatus = 'collecting' | 'done' | 'cancelled';
+export interface PettyFundSignature { name: string; at?: unknown }
+/** A top-up (money added) or a reset (the budget starts again from zero), signed by three stakeholders. */
+export interface PettyFund {
+  id: string;
+  kind: PettyFundKind;
+  /** Zero for a reset. */
+  amountCents: number;
+  /** Keyed by the signer's account. */
+  signatures: Record<string, PettyFundSignature>;
+  status: PettyFundStatus;
+  doneAt?: unknown;
 }
 
-/** This month's budget against the requisitions counted in it. Rejected ones do not count. */
-export function budgetSummary(budgetCents: number | null, month: string, requisitions: readonly Pick<PettyCashRequisition, 'month' | 'status' | 'totalCents'>[], extraCents = 0): BudgetSummary {
-  let approvedCents = 0;
-  let pendingCents = extraCents;
+/** The status a fund record takes once it has this many signatures. */
+export function fundStatusAfter(signatureCount: number): PettyFundStatus {
+  return signatureCount >= FUND_SIGNATURES_NEEDED ? 'done' : 'collecting';
+}
+
+export interface FundSummary {
+  budgetCents: number;
+  spentCents: number;
+  remainingCents: number;
+  /** Requests still waiting for a signature. */
+  pendingCents: number;
+}
+
+/**
+ * Budget, spending and what is left since the last reset. Only completed top-ups count, and only approved
+ * requests are spent. `millis` reads a stored time; a time still being saved (null) counts as now.
+ */
+export function fundSummary(
+  funds: readonly Pick<PettyFund, 'kind' | 'amountCents' | 'status' | 'doneAt'>[],
+  requisitions: readonly Pick<PettyCashRequisition, 'status' | 'totalCents' | 'approved'>[],
+  millis: (t: unknown) => number | null,
+  now = Date.now(),
+): FundSummary {
+  const at = (t: unknown) => millis(t) ?? now;
+  let periodStart = -Infinity;
+  for (const f of funds) if (f.kind === 'reset' && f.status === 'done') periodStart = Math.max(periodStart, at(f.doneAt));
+  let budgetCents = 0;
+  for (const f of funds) if (f.kind === 'topup' && f.status === 'done' && at(f.doneAt) > periodStart) budgetCents += f.amountCents;
+  let spentCents = 0;
+  let pendingCents = 0;
   for (const r of requisitions) {
-    if (r.month !== month) continue;
-    if (r.status === 'approved') approvedCents += r.totalCents;
+    if (r.status === 'approved' && at(r.approved?.at) > periodStart) spentCents += r.totalCents;
     else if (r.status === 'submitted' || r.status === 'checked') pendingCents += r.totalCents;
   }
-  if (budgetCents == null) return { budgetCents, approvedCents, pendingCents, balanceCents: null, usedPercent: 0, state: 'none' };
-  const used = approvedCents + pendingCents;
-  const balanceCents = budgetCents - used;
-  const usedPercent = budgetCents > 0 ? (used / budgetCents) * 100 : used > 0 ? 100 : 0;
-  return { budgetCents, approvedCents, pendingCents, balanceCents, usedPercent, state: balanceCents < 0 ? 'over' : usedPercent > 90 ? 'warning' : 'healthy' };
+  return { budgetCents, spentCents, remainingCents: budgetCents - spentCents, pendingCents };
 }
 
 /** Shillings typed in a box ("1,250.50") as cents, or null when it is not a valid amount. */

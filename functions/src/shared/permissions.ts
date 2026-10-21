@@ -23,6 +23,7 @@ export const PERMISSIONS = [
   'pettycash.request',
   'pettycash.check',
   'pettycash.approve',
+  'pettycash.authorize',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -42,6 +43,7 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'pettycash.request',
   'pettycash.check',
   'pettycash.approve',
+  'pettycash.authorize',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -58,7 +60,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'settings.manage': 'Settings and organizations',
   'pettycash.request': 'Petty cash: make requests',
   'pettycash.check': 'Petty cash: check requests (accountant)',
-  'pettycash.approve': 'Petty cash: final approval and monthly budget',
+  'pettycash.approve': 'Petty cash: final approval',
+  'pettycash.authorize': 'Petty cash: sign top-ups and resets (3 signatures needed)',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',

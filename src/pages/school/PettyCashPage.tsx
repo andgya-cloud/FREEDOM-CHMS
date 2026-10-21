@@ -3,11 +3,11 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { usePettyCash, type RequisitionRow } from '../../state/usePettyCash';
-import { approveRequisition, checkRequisition, rejectRequisition, setPettyBudget, submitRequisition } from '../../lib/pettyCashWrites';
+import { usePettyCash, type FundRow, type RequisitionRow } from '../../state/usePettyCash';
+import { approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, rejectRequisition, signFund, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import {
-  budgetSummary, itemsTotalCents, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
-  PETTY_CASH_CATEGORIES, PETTY_CASH_STATUS_LABELS, type PettyCashCategory,
+  FUND_SIGNATURES_NEEDED, itemsTotalCents, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
+  PETTY_CASH_CATEGORIES, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { SchoolGate, money } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -15,53 +15,119 @@ import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'just now');
-const monthName = (month: string) => new Date(`${month}-01T12:00:00`).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
 const label = (r: RequisitionRow) => r.number ?? 'New request';
 
 function NoAccess() {
   return <div className="page narrow"><h1>Petty cash</h1><p>Petty cash is for the people the pastor has given access.</p></div>;
 }
 
-/** The month's budget and its live balance. A board member can set it. */
-function BudgetCard({ org, extraCents = 0 }: { org: Organization; extraCents?: number }) {
+/** Total budget, spent and remaining since the last reset, and the tile that starts a reset. */
+function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
   const p = usePettyCash(org);
-  const toast = useToast();
-  const [editing, setEditing] = useState(false);
-  const [amount, setAmount] = useState('');
-  const s = budgetSummary(p.budget?.amountCents ?? null, p.month, p.requisitions, extraCents);
-  function save() {
-    const cents = parseAmountCents(amount);
-    if (cents == null) { toast.show('Type the budget in shillings, for example 100000.'); return; }
-    setPettyBudget(org.id, p.month, cents, '', !!p.budget).catch((err) => toast.show(friendlyError(err)));
-    setEditing(false);
-    toast.show('Budget saved');
-  }
+  const s = p.summary;
   return (
-    <section className={`card stack petty-budget petty-${s.state}`} aria-label="Budget">
-      <div className="card-head">
-        <h2>{monthName(p.month)} budget</h2>
-        {p.canApprove && !editing && <button type="button" className="btn btn-quiet" onClick={() => { setAmount(p.budget ? String(p.budget.amountCents / 100) : ''); setEditing(true); }}>{p.budget ? 'Change' : 'Set budget'}</button>}
-      </div>
-      {editing ? (
-        <div className="field-row">
-          <label className="field"><span>Budget for {monthName(p.month)} (KES)</span><input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 100000" autoFocus /></label>
-          <button type="button" className="btn btn-primary align-start" onClick={save}>Save</button>
-          <button type="button" className="btn btn-quiet align-start" onClick={() => setEditing(false)}>Cancel</button>
+    <div className="petty-stats">
+      <div className="petty-stat petty-stat-budget"><span>Total budget</span><strong>{money(org, s.budgetCents)}</strong></div>
+      <div className="petty-stat petty-stat-spent"><span>Total spent</span><strong>{money(org, s.spentCents)}</strong></div>
+      <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Remaining</span><strong>{money(org, s.remainingCents)}</strong></div>
+      <button type="button" className="petty-reset" onClick={onReset} disabled={!p.canAuthorize} title={p.canAuthorize ? undefined : 'Only the signing stakeholders can reset the budget'}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4" /></svg>
+        <strong>Reset<br />Budget</strong>
+        <small>3-SIG AUTH</small>
+      </button>
+    </div>
+  );
+}
+
+const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
+  topup: { title: 'Top-Up Authorization', sub: `Any ${FUND_SIGNATURES_NEEDED} stakeholders must sign to add funds`, done: 'Top-up complete. The money is now in the budget.' },
+  reset: { title: 'Reset Budget Authorization', sub: `Any ${FUND_SIGNATURES_NEEDED} stakeholders must sign to start the budget again from zero`, done: 'Budget reset. It now starts again from zero.' },
+};
+
+/** A top-up or a reset collecting its three signatures. Each stakeholder signs from their own account with their own password. */
+function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKind; onClose?: () => void }) {
+  const p = usePettyCash(org);
+  const { profile } = useAuth();
+  const toast = useToast();
+  const [amount, setAmount] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
+  const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
+  const iSigned = !!open && p.uid in open.signatures;
+  const cents = kind === 'topup' ? (open ? open.amountCents : parseAmountCents(amount)) : 0;
+  const ready = kind === 'reset' || (cents != null && cents > 0);
+  const name = profile?.displayName ?? 'Stakeholder';
+  const text = FUND_TEXT[kind];
+
+  async function confirm() {
+    if (!ready || !password) return;
+    setBusy(true);
+    try {
+      await confirmOwnPassword(password);
+    } catch (err) {
+      setBusy(false);
+      toast.show(friendlyError(err));
+      return;
+    }
+    const last = !!open && signed.length + 1 >= FUND_SIGNATURES_NEEDED;
+    const write = open ? signFund(org.id, open, name) : startFund(org.id, kind, cents ?? 0, name);
+    write.catch((err) => toast.show(friendlyError(err)));
+    setPassword(''); setAmount(''); setBusy(false);
+    toast.show(last ? text.done : `Signed. ${FUND_SIGNATURES_NEEDED - signed.length - 1} more signature${FUND_SIGNATURES_NEEDED - signed.length - 1 === 1 ? '' : 's'} needed.`);
+    if (last && kind === 'reset') onClose?.();
+  }
+
+  return (
+    <section className="petty-auth" aria-label={text.title}>
+      <div className="petty-auth-head">
+        <div className="petty-auth-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d={kind === 'topup' ? 'M9 3h6l-1.5 3h-3zM6 10c0-2 2.7-4 6-4s6 2 6 4l1 8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3zM12 10v7M10 12.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5-1 1-2 1.3-2 .6-2 1.4.9 1.3 2 1.3 2-.6 2-1.3' : 'M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4'} /></svg>
         </div>
-      ) : s.budgetCents == null ? (
-        <p className="muted small">{p.canApprove ? 'No budget set for this month yet.' : 'No budget set for this month yet. A board member sets it.'}</p>
-      ) : (
-        <>
-          <ul className="petty-figures">
-            <li><span>Budget</span><strong>{money(org, s.budgetCents)}</strong></li>
-            <li><span>Approved</span><strong>{money(org, s.approvedCents)}</strong></li>
-            <li><span>{extraCents ? 'Waiting, with this request' : 'Waiting for approval'}</span><strong>{money(org, s.pendingCents)}</strong></li>
-            <li><span>Balance</span><strong className="petty-balance">{money(org, s.balanceCents ?? 0)}</strong></li>
-          </ul>
-          <div className="petty-bar" role="img" aria-label={`${Math.min(s.usedPercent, 100).toFixed(0)}% of the budget used`}><span style={{ width: `${Math.min(s.usedPercent, 100)}%` }} /></div>
-          {s.state === 'over' && <p className="small danger-text">This is over the month's budget.</p>}
-        </>
-      )}
+        <div className="petty-auth-title"><h2>{text.title}</h2><p>{text.sub}</p></div>
+        <span className="petty-auth-count">{signed.length}/{FUND_SIGNATURES_NEEDED}</span>
+      </div>
+      <div className="petty-auth-body">
+        {kind === 'topup' && (open ? (
+          <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a stakeholder'}</p>
+        ) : (
+          <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
+            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount to top up e.g. 500000" disabled={!p.canAuthorize} />
+          </label>
+        ))}
+        {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
+        {!ready && <p className="petty-warn">Enter the top-up amount above before stakeholders can sign</p>}
+        <ol className="petty-signers">
+          {Array.from({ length: FUND_SIGNATURES_NEEDED }, (_, n) => {
+            const s = signed[n];
+            const mine = !s && n === signed.length && p.canAuthorize && !iSigned;
+            return (
+              <li key={n} className={s ? 'signed' : ''}>
+                <div className="petty-signer-head"><span className="petty-signer-no">{s ? '✓' : n + 1}</span><h3>Authorizer {n + 1}</h3>{s && <span className="petty-signer-when">{when(s[1].at)}</span>}</div>
+                {s ? (
+                  <p className="petty-signer-name">Signed by {s[1].name}</p>
+                ) : mine ? (
+                  <div className="petty-signer-form">
+                    <label className="field"><span>Stakeholder</span><input value={name} readOnly /></label>
+                    <div className="petty-signer-row">
+                      <label className="field"><span>Your Insight-IQ password</span>
+                        <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password / signature" disabled={!ready || busy} />
+                      </label>
+                      <button type="button" className="btn btn-primary" disabled={!ready || !password || busy} onClick={confirm}>{busy ? 'Checking…' : '✓ Confirm'}</button>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="petty-signer-name muted">{iSigned ? 'Waiting for another stakeholder to sign from their own account' : p.canAuthorize ? 'Waiting for the signature above' : 'Waiting for a stakeholder to sign'}</p>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        <div className="row-actions">
+          {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
+          {onClose && !open && <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>}
+        </div>
+      </div>
     </section>
   );
 }
@@ -93,25 +159,31 @@ function Home({ org }: { org: Organization }) {
   const waiting = p.requisitions.filter((r) => nextStepFor(r, actor));
   const mine = p.requisitions.filter((r) => r.requesterId === p.uid);
   const approved = p.requisitions.filter((r) => r.status === 'approved');
+  const resetOpen = p.funds.some((f) => f.kind === 'reset' && f.status === 'collecting');
+  const [showReset, setShowReset] = useState(false);
   const inProgress = p.requisitions.filter((r) => r.status === 'submitted' || r.status === 'checked');
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
       <div className="page-head">
         <h1>Petty cash</h1>
-        <Link to="/school/petty-cash/new" className="btn btn-primary">New requisition</Link>
+        {p.canRequest && <Link to="/school/petty-cash/new" className="btn btn-primary">New requisition</Link>}
       </div>
-      <BudgetCard org={org} />
+      {p.seesAll && <Stats org={org} onReset={() => setShowReset(true)} />}
+      {p.seesAll && (showReset || resetOpen) && <FundCard org={org} kind="reset" onClose={() => setShowReset(false)} />}
+      {p.seesAll && <FundCard org={org} kind="topup" />}
       {(p.canCheck || p.canApprove) && (
         <section className="card stack">
           <h2>Waiting for you</h2>
           <RequisitionList org={org} rows={waiting} empty="Nothing needs your signature." />
         </section>
       )}
-      <section className="card stack">
-        <h2>My requests</h2>
-        <RequisitionList org={org} rows={mine} empty="You have not made a request yet." />
-      </section>
+      {p.canRequest && (
+        <section className="card stack">
+          <h2>My requests</h2>
+          <RequisitionList org={org} rows={mine} empty="You have not made a request yet." />
+        </section>
+      )}
       {p.seesAll && (
         <>
           <section className="card stack">
@@ -209,7 +281,7 @@ function NewRequisition({ org }: { org: Organization }) {
         )}
         <p className="petty-total">Total <strong>{money(org, total)}</strong></p>
       </section>
-      <BudgetCard org={org} extraCents={total} />
+      {p.seesAll && <p className="petty-left">Remaining in the budget after this request: <strong>{money(org, p.summary.remainingCents - total)}</strong></p>}
       <button type="button" className="btn btn-primary" onClick={submit}>Submit requisition</button>
     </div>
   );

@@ -1,8 +1,9 @@
 import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { createStamps, updateRecord } from './records';
 import { trackWrite } from './sync';
-import { itemsTotalCents, type PettyCashCategory, type PettyCashItem } from '../../functions/src/shared/pettyCash';
+import { fundStatusAfter, itemsTotalCents, type PettyCashCategory, type PettyCashItem, type PettyFund, type PettyFundKind } from '../../functions/src/shared/pettyCash';
 
 const me = () => {
   const u = auth.currentUser;
@@ -38,9 +39,33 @@ export function rejectRequisition(orgId: string, id: string, name: string, reaso
   return updateRecord(reqRef(orgId, id), { status: 'rejected', rejection: { uid: me(), name, reason, at: serverTimestamp() } });
 }
 
-/** The petty cash budget for a month ("2026-10"). */
-export function setPettyBudget(orgId: string, month: string, amountCents: number, note: string, exists: boolean) {
-  const ref = doc(db, 'organizations', orgId, 'pettyBudgets', month);
-  if (exists) return updateRecord(ref, { orgId, amountCents, note });
-  return trackWrite(setDoc(ref, { orgId, amountCents, note, ...createStamps() }));
+/** A stakeholder's signature is their own Insight-IQ password, checked again before they sign. */
+export async function confirmOwnPassword(password: string) {
+  const u = auth.currentUser;
+  if (!u?.email) throw new Error('Please sign in again.');
+  await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, password));
+}
+
+const fundRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'pettyFunds', id);
+
+/** Starts a top-up or a reset with the first signature. Two more stakeholders must sign it. */
+export function startFund(orgId: string, kind: PettyFundKind, amountCents: number, name: string) {
+  const ref = doc(collection(db, 'organizations', orgId, 'pettyFunds'));
+  return trackWrite(setDoc(ref, {
+    orgId, kind, amountCents: kind === 'topup' ? amountCents : 0,
+    signatures: { [me()]: { name, at: serverTimestamp() } }, status: 'collecting', doneAt: null, ...createStamps(),
+  }));
+}
+
+/** Adds this person's signature; the third one completes it. */
+export function signFund(orgId: string, fund: Pick<PettyFund, 'id' | 'signatures'>, name: string) {
+  const uid = me();
+  const status = fundStatusAfter(Object.keys(fund.signatures).length + 1);
+  return updateRecord(fundRef(orgId, fund.id), {
+    [`signatures.${uid}`]: { name, at: serverTimestamp() }, status, ...(status === 'done' ? { doneAt: serverTimestamp() } : {}),
+  });
+}
+
+export function cancelFund(orgId: string, id: string) {
+  return updateRecord(fundRef(orgId, id), { status: 'cancelled' });
 }

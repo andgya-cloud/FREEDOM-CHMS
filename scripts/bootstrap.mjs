@@ -35,7 +35,7 @@ if (!values.project || !values.email || !values.name) {
 const PERMISSIONS = [
   'people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue',
   'followups.manage', 'pastoral.read', 'giving.person.read', 'finance.reports', 'settings.manage',
-  'pettycash.request', 'pettycash.check', 'pettycash.approve', 'team.manage',
+  'pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'team.manage',
   'users.manage', 'audit.read', 'data.export',
 ];
 const ADMIN = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue', 'followups.manage'];

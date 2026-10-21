@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { budgetSummary, itemsTotalCents, nextStepFor, parseAmountCents, pettyCashNumber } from './pettyCash';
+import { fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, pettyCashNumber } from './pettyCash';
 
 describe('petty cash', () => {
   it('numbers requisitions like the old system', () => {
@@ -32,16 +32,27 @@ describe('petty cash', () => {
     expect(nextStepFor({ ...checked, status: 'approved' }, elias)).toBeNull();
   });
 
-  it('measures the month against its budget, leaving out rejected requests', () => {
-    const reqs = [
-      { month: '2026-10', status: 'approved' as const, totalCents: 4000000 },
-      { month: '2026-10', status: 'submitted' as const, totalCents: 3000000 },
-      { month: '2026-10', status: 'rejected' as const, totalCents: 9000000 },
-      { month: '2026-09', status: 'approved' as const, totalCents: 9000000 },
+  it('counts signed top-ups and approved spending since the last reset', () => {
+    const t = (ms: number) => ({ ms });
+    const millis = (x: unknown) => (x && typeof x === 'object' && 'ms' in x ? (x as { ms: number }).ms : null);
+    const funds = [
+      { kind: 'topup' as const, amountCents: 5000000, status: 'done' as const, doneAt: t(100) },
+      { kind: 'reset' as const, amountCents: 0, status: 'done' as const, doneAt: t(200) },
+      { kind: 'topup' as const, amountCents: 10000000, status: 'done' as const, doneAt: t(300) },
+      { kind: 'topup' as const, amountCents: 9900000, status: 'collecting' as const, doneAt: null },
     ];
-    expect(budgetSummary(10000000, '2026-10', reqs)).toMatchObject({ approvedCents: 4000000, pendingCents: 3000000, balanceCents: 3000000, state: 'healthy' });
-    expect(budgetSummary(10000000, '2026-10', reqs, 2500000).state).toBe('warning');
-    expect(budgetSummary(10000000, '2026-10', reqs, 4000000)).toMatchObject({ balanceCents: -1000000, state: 'over' });
-    expect(budgetSummary(null, '2026-10', reqs).state).toBe('none');
+    const reqs = [
+      { status: 'approved' as const, totalCents: 1000000, approved: { uid: 'a', name: 'A', role: 'Board member', at: t(150) } },
+      { status: 'approved' as const, totalCents: 2500000, approved: { uid: 'a', name: 'A', role: 'Board member', at: t(350) } },
+      { status: 'checked' as const, totalCents: 700000, approved: null },
+      { status: 'rejected' as const, totalCents: 900000, approved: null },
+    ];
+    expect(fundSummary(funds, reqs, millis, 1000)).toEqual({ budgetCents: 10000000, spentCents: 2500000, remainingCents: 7500000, pendingCents: 700000 });
+    expect(fundSummary([], [], millis).budgetCents).toBe(0);
+  });
+
+  it('completes a top-up at the third signature', () => {
+    expect(fundStatusAfter(2)).toBe('collecting');
+    expect(fundStatusAfter(3)).toBe('done');
   });
 });
