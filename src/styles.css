@@ -619,6 +619,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 .side-look .petty-light .search::placeholder { color: #9ca3af; }
 .side-look .petty-light .sync-badge { color: #4b5563; background: rgba(255, 255, 255, 0.6); border-color: var(--border); }
 .side-look .petty-light .sync-dot { background: #22c55e; }
+.side-look .petty-light .live-clock-time { color: #166534; }
 .side-look .petty-light .btn-quiet { color: #374151; border-color: #cbd5e1; }
 .side-look .petty-light .btn-quiet:hover { color: var(--blue); border-color: var(--blue); background: rgba(29, 78, 216, 0.06); }
 .petty-light input, .petty-light select { background: #fff; color: var(--text); border-color: var(--border); }

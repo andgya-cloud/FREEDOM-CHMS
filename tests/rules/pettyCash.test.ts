@@ -43,8 +43,9 @@ async function seedRequest(id: string, data: Record<string, unknown> = {}) {
 }
 
 describe('petty cash', () => {
-  it("accepts Freedom Hope Center's categories and refuses made-up ones", async () => {
+  it("accepts Freedom Hope Center's and Freedom Church's categories and refuses made-up ones", async () => {
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/h1'), { ...newRequest('doreen'), category: "Children's needs" }));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/c1'), { ...newRequest('doreen'), category: 'Hospitality' }));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/h2'), { ...newRequest('doreen'), category: 'Holiday' }));
   });
 

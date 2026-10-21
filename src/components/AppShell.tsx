@@ -10,7 +10,7 @@ import { LiveClock } from './LiveClock';
 import { lookFor } from '../lib/look';
 import { QuickSearch } from './QuickSearch';
 import { useAuth } from '../state/AuthContext';
-import { pettyCashBase } from '../../functions/src/shared/pettyCash';
+import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           Programmes
         </NavLink>
       )}
-      {(current?.type === 'college' || current?.type === 'ministry') && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
+      {current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type) && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
         <NavLink to={pettyCashBase(current.type)} className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
           Petty Cash
@@ -85,7 +85,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <OrgSwitcher />
           {tabs}
         </aside>
-        <div className={`adia-body${/^\/(school|hope)\/petty-cash/.test(location.pathname) ? ' petty-light' : ''}`}>
+        <div className={`adia-body${/^\/((school|hope)\/)?petty-cash/.test(location.pathname) ? ' petty-light' : ''}`}>
           <header className="adia-head">
             {can('people.read') && <QuickSearch className="adia-search" />}
             {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}

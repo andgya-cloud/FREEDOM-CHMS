@@ -8,16 +8,22 @@
 export const PETTY_CASH_CATEGORIES = ['Freedom Hope Center', 'Staff Payments', 'Other'] as const;
 /** Freedom Hope Center's categories. */
 export const HOPE_PETTY_CASH_CATEGORIES = ["Children's needs", 'Programmes & activities', 'Staff Payments', 'Office & supplies', 'Other'] as const;
-export type PettyCashCategory = (typeof PETTY_CASH_CATEGORIES)[number] | (typeof HOPE_PETTY_CASH_CATEGORIES)[number];
+/** Freedom Church's categories. */
+export const CHURCH_PETTY_CASH_CATEGORIES = ['Ministry & programmes', 'Hospitality', 'Staff Payments', 'Office & supplies', 'Other'] as const;
+export type PettyCashCategory = (typeof PETTY_CASH_CATEGORIES)[number] | (typeof HOPE_PETTY_CASH_CATEGORIES)[number]
+  | (typeof CHURCH_PETTY_CASH_CATEGORIES)[number];
 
-/** The categories offered to an organization: Freedom Hope Center (a ministry) has its own. */
+/** Organizations that keep petty cash: ADIA (a college), Freedom Hope Center (a ministry) and Freedom Church campuses. */
+export const PETTY_CASH_ORG_TYPES = ['college', 'ministry', 'church_campus'] as const;
+
+/** The categories offered to an organization: each kind has its own. */
 export function pettyCashCategoriesFor(orgType: string | undefined): readonly PettyCashCategory[] {
-  return orgType === 'ministry' ? HOPE_PETTY_CASH_CATEGORIES : PETTY_CASH_CATEGORIES;
+  return orgType === 'ministry' ? HOPE_PETTY_CASH_CATEGORIES : orgType === 'church_campus' ? CHURCH_PETTY_CASH_CATEGORIES : PETTY_CASH_CATEGORIES;
 }
 
 /** Where an organization's petty cash pages live. */
 export function pettyCashBase(orgType: string | undefined) {
-  return orgType === 'ministry' ? '/hope/petty-cash' : '/school/petty-cash';
+  return orgType === 'ministry' ? '/hope/petty-cash' : orgType === 'church_campus' ? '/petty-cash' : '/school/petty-cash';
 }
 
 export type PettyCashStatus = 'submitted' | 'checked' | 'approved' | 'rejected';

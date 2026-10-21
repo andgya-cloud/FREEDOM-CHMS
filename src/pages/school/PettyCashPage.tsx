@@ -7,7 +7,7 @@ import { usePettyCash, type FundRow, type RequisitionRow } from '../../state/use
 import { approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, rejectRequisition, signFund, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import {
   FUND_SIGNATURES_NEEDED, itemsTotalCents, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
-  pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
+  PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
 import { useOrg } from '../../state/OrgContext';
@@ -18,16 +18,17 @@ const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'just now');
 const label = (r: RequisitionRow) => r.number ?? 'New request';
 
-/** Petty cash belongs to ADIA Training Centre (a college) and Freedom Hope Center (a ministry); asks which when another is selected. */
+/** Petty cash belongs to ADIA Training Centre, Freedom Hope Center and Freedom Church; asks which when another is selected. */
+const keepsPettyCash = (type: string | undefined) => (PETTY_CASH_ORG_TYPES as readonly string[]).includes(type ?? '');
 function PettyGate({ title, children }: { title: string; children: (org: Organization) => ReactNode }) {
   const { current, organizations, select } = useOrg();
-  if (current && (current.type === 'college' || current.type === 'ministry')) return <>{children(current)}</>;
-  const orgs = organizations.filter((o) => (o.type === 'college' || o.type === 'ministry') && !o.deletedAt);
+  if (current && keepsPettyCash(current.type)) return <>{children(current)}</>;
+  const orgs = organizations.filter((o) => keepsPettyCash(o.type) && !o.deletedAt);
   return (
     <div className="page narrow">
       <h1>{title}</h1>
       <div className="card">
-        <p>Petty cash is kept by ADIA Training Centre and Freedom Hope Center. Which one?</p>
+        <p>Which organization's petty cash?</p>
         <div className="chips">{orgs.map((o) => <button key={o.id} type="button" className="chip" onClick={() => select(o.id)}>{o.name}</button>)}</div>
       </div>
     </div>

@@ -1132,7 +1132,7 @@ service cloud.firestore {
       // "Download everything", one person's export and erasing one person. A Cloud
       // Function checks the pastor again, does the erasing, logs it and marks it done.
       // ---- ADIA petty cash ---------------------------------------------------
-      // Petty cash for ADIA Training Centre and Freedom Hope Center, each organization on its own.
+      // Petty cash for ADIA Training Centre, Freedom Hope Center and Freedom Church, each organization on its own.
       // Submitted by the requester, checked by the accountant, then final approval by a board member.
       // Nobody acts on their own request, and the final approver is never the person who checked it.
       // The pastor (users.manage) holds every petty cash role, as accounts made before petty cash existed
@@ -1167,7 +1167,7 @@ service cloud.firestore {
           && request.resource.data.requesterId == request.auth.uid
           && shortText(request.resource.data.requesterName, 120)
           && request.resource.data.category in ['Freedom Hope Center', 'Staff Payments', 'Other',
-               "Children's needs", 'Programmes & activities', 'Office & supplies']
+               "Children's needs", 'Programmes & activities', 'Office & supplies', 'Ministry & programmes', 'Hospitality']
           && request.resource.data.items is list && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 30
           && request.resource.data.totalCents is int && request.resource.data.totalCents > 0 && request.resource.data.totalCents <= 100000000000
           && request.resource.data.month is string && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
