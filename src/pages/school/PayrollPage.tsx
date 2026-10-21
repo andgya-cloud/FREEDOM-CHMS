@@ -570,9 +570,6 @@ function RunView({ org }: { org: Organization }) {
 
 function Payslip({ org, month, line: l, run }: { org: Organization; month: string; line: PayLine; run: PayRun }) {
   const toast = useToast();
-  const row = (label: string, cents: number, strong = false) => (
-    <tr><td>{strong ? <strong>{label}</strong> : label}</td><td className="num">{strong ? <strong>{money(org, cents)}</strong> : money(org, cents)}</td></tr>
-  );
   const text = `Hello ${l.name.split(' ')[0]}, here is your ${org.name} payslip for ${monthName(month)}. Net pay ${money(org, l.netCents)}.`;
   const pdf = () => payslipPdf(org, monthName(month), month, l, run.approved?.name ?? null);
   const whatsapp = async () => {
@@ -592,39 +589,54 @@ function Payslip({ org, month, line: l, run }: { org: Organization; month: strin
       toast.show('Payslip saved. Attach it to the email that opened.');
     } catch (err) { toast.show(friendlyError(err)); }
   };
+  const earnings: [string, number][] = [['Basic salary', l.basicCents], ...l.allowances.map((a) => [a.name, a.amountCents] as [string, number]),
+    ...(l.oneOff ?? []).map((a) => [`${a.name} (this month)`, a.amountCents] as [string, number]),
+    ...(l.unpaid ?? []).map((a) => [`Less: ${a.name}`, -a.amountCents] as [string, number])];
+  const deductions: [string, number][] = [['NSSF', l.nssfCents], ['SHIF', l.shifCents], ['Housing Levy', l.housingCents], ['PAYE', l.payeCents],
+    ...l.deductions.map((d) => [d.name, d.amountCents] as [string, number])];
+  const field = (label: string, value: string | undefined) => <div><span>{label}</span><strong>{value || '–'}</strong></div>;
   return (
-    <article className="card payslip">
-      <header className="payslip-head">
-        <div><strong>{org.name}</strong><br /><span>Payslip · {monthName(month)}</span></div>
-        <div className="payslip-who"><strong>{l.name}</strong>{l.jobTitle && <><br />{l.jobTitle}</>}{l.staffNo && <><br />Staff no. {l.staffNo}</>}</div>
+    <article className="slip">
+      <header className="slip-head">
+        <img className="slip-crest" src="/org/adia-crest.png" alt="" width={72} height={72} />
+        <div className="slip-title">
+          <h3>ADIA Training Centre</h3>
+          <p>Staff Slip</p>
+        </div>
+        <div className="slip-month"><span>Pay period</span><strong>{monthName(month)}</strong></div>
       </header>
-      <p className="small payslip-ids">KRA PIN {l.kraPin || '–'} · NSSF {l.nssfNo || '–'} · SHIF {l.shifNo || '–'}</p>
-      <div className="payslip-cols">
-        <table className="table">
-          <thead><tr><th>Earnings</th><th className="num">KES</th></tr></thead>
-          <tbody>
-            {row('Basic salary', l.basicCents)}
-            {l.allowances.map((a, i) => <tr key={`a${i}`}><td>{a.name}</td><td className="num">{money(org, a.amountCents)}</td></tr>)}
-            {(l.oneOff ?? []).map((a, i) => <tr key={`o${i}`}><td>{a.name} (this month)</td><td className="num">{money(org, a.amountCents)}</td></tr>)}
-            {(l.unpaid ?? []).map((a, i) => <tr key={`u${i}`}><td>Less: {a.name}</td><td className="num">−{money(org, a.amountCents)}</td></tr>)}
-            {row('Gross pay', l.grossCents, true)}
-          </tbody>
-        </table>
-        <table className="table">
-          <thead><tr><th>Deductions</th><th className="num">KES</th></tr></thead>
-          <tbody>
-            {row('NSSF', l.nssfCents)}
-            {row('SHIF', l.shifCents)}
-            {row('Housing Levy', l.housingCents)}
-            {row(`PAYE (tax ${num(l.taxBeforeReliefCents)} less relief ${num(l.reliefCents)})`, l.payeCents)}
-            {l.deductions.map((d, i) => <tr key={i}><td>{d.name}</td><td className="num">{money(org, d.amountCents)}</td></tr>)}
-            {row('Total deductions', l.totalDeductionsCents, true)}
-          </tbody>
-        </table>
+      <div className="slip-body">
+        <div className="slip-who">
+          {field('Name', l.name)}
+          {field('Job title', l.jobTitle)}
+          {field('Staff no.', l.staffNo)}
+          {field('ID number', l.idNo)}
+          {field('KRA PIN', l.kraPin)}
+          {field('NSSF / SHIF', `${l.nssfNo || '–'} / ${l.shifNo || '–'}`)}
+        </div>
+        <div className="slip-cols">
+          <section>
+            <h4>Earnings</h4>
+            {earnings.map(([k, v], i) => <div key={i} className="slip-row"><span>{k}</span><span>{money(org, v)}</span></div>)}
+            <div className="slip-row slip-sum"><span>Gross pay</span><span>{money(org, l.grossCents)}</span></div>
+          </section>
+          <section>
+            <h4>Deductions</h4>
+            {deductions.map(([k, v], i) => <div key={i} className="slip-row"><span>{k}</span><span>{money(org, v)}</span></div>)}
+            <div className="slip-row slip-sum"><span>Total deductions</span><span>{money(org, l.totalDeductionsCents)}</span></div>
+          </section>
+        </div>
+        <div className="slip-net"><span>Net pay</span><strong>{money(org, l.netCents)}</strong></div>
+        <p className="slip-note">
+          Taxable pay {money(org, l.taxableCents)} · Tax {money(org, l.taxBeforeReliefCents)} less personal relief {money(org, l.reliefCents)}
+          {l.paymentDetails ? ` · Paid to ${l.paymentDetails}` : ''}
+        </p>
+        <footer className="slip-foot">
+          <span>{run.approved ? `Approved by ${run.approved.name}` : 'Not yet approved'}</span>
+          <span>Computer-generated slip · Keep it confidential</span>
+        </footer>
       </div>
-      <p className="payslip-net">Net pay <strong>{money(org, l.netCents)}</strong></p>
-      <p className="small muted">Taxable pay {money(org, l.taxableCents)}{l.paymentDetails ? ` · Paid to ${l.paymentDetails}` : ''}{run.approved ? ` · Approved by ${run.approved.name}` : ' · Not yet approved'}</p>
-      <div className="row-actions no-print">
+      <div className="row-actions no-print slip-actions">
         <button type="button" className="btn btn-quiet" onClick={whatsapp}>Send by WhatsApp</button>
         <button type="button" className="btn btn-quiet" onClick={email} disabled={!l.email} title={l.email ? undefined : 'Add an email in Staff pay details'}>Send by email</button>
       </div>
