@@ -10,6 +10,7 @@ import {
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
+import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import type { Timestamp } from 'firebase/firestore';
@@ -202,6 +203,7 @@ function Home({ org }: { org: Organization }) {
           <RequisitionList org={org} rows={mine} empty="You have not made a request yet." />
         </section>
       )}
+      {p.seesAll && !p.loading && <PettyInsights org={org} month={p.month} requisitions={p.requisitions} summary={p.summary} />}
       {p.seesAll && (
         <>
           <section className="card stack">

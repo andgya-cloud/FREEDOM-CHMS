@@ -1,4 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { PayrollInsights } from '../../components/PayrollInsights';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -78,6 +79,7 @@ function PayrollHome({ org }: { org: Organization }) {
           )}
         </section>
       )}
+      {!p.loading && <PayrollInsights org={org} runs={p.runs} staff={p.staff} />}
       <section className="card stack">
         <h2>Pay runs</h2>
         {p.runs.length === 0 ? <p className="muted small">No pay run yet.</p> : (

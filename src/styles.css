@@ -878,7 +878,8 @@ a.kpi:hover { border-color: var(--primary); }
 .swatch.c6, .donut-seg.c6 { background: var(--c6); stroke: var(--c6); }
 .swatch.dashed.c2, .swatch.c2.dashed { background: repeating-linear-gradient(90deg, var(--c6) 0 4px, transparent 4px 7px); }
 .donut { display: grid; grid-template-columns: minmax(120px, 170px) 1fr; gap: 16px; align-items: center; }
-@media (max-width: 420px) { .donut { grid-template-columns: 1fr; } .donut svg { max-width: 190px; margin: 0 auto; } }
+.panel { container-type: inline-size; }
+@container (max-width: 440px) { .donut { grid-template-columns: 1fr; } .donut svg { max-width: 180px; margin: 0 auto; } }
 .donut-track { fill: none; stroke: var(--surface-2); stroke-width: 16; }
 .donut-seg { fill: none; stroke-width: 16; }
 .donut-center { fill: var(--text); font-size: 12.5px; font-weight: 750; }
@@ -901,3 +902,4 @@ a.kpi:hover { border-color: var(--primary); }
 .funnel-drop { grid-column: 2 / -1; margin-top: -6px; }
 .gauges { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; }
 .gauges .gauge figcaption { font-size: 0.85rem; }
+.petty-insights .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (min-width: 900px) { .petty-light .petty-insights .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }

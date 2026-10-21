@@ -196,8 +196,8 @@ export function Donut({ rows, format = fmtDefault, center, centerNote, label }: 
   rows: { label: string; value: number }[]; format?: (v: number) => string; center?: string; centerNote?: string; label: string;
 }) {
   const shown = rows.filter((r) => r.value > 0);
-  const top = shown.slice(0, 5);
-  const rest = shown.slice(5).reduce((s, r) => s + r.value, 0);
+  const top = shown.length <= 6 ? shown : shown.slice(0, 5);
+  const rest = shown.slice(top.length).reduce((s, r) => s + r.value, 0);
   const parts = rest > 0 ? [...top, { label: 'Others', value: rest }] : top;
   const total = parts.reduce((s, r) => s + r.value, 0);
   const pct = shares(parts.map((p) => p.value));
