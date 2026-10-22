@@ -7,6 +7,7 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, removeReceipt, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
+import { coSignFund, coSignRequisition } from '../../lib/coSign';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
@@ -108,6 +109,47 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
   );
 }
 
+/**
+ * Another stakeholder signs on this device with their own email and password, like the old app's
+ * signing boxes. Their signature is saved as them, and the person signed in here stays signed in.
+ */
+function CoSignForm({ label: title, onSign }: { label: string; onSign: (email: string, password: string) => Promise<string> }) {
+  const toast = useToast();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function go() {
+    if (!email.trim() || !password) return;
+    setBusy(true);
+    try {
+      const name = await onSign(email, password);
+      setEmail(''); setPassword('');
+      toast.show(`Signed by ${name}.`);
+    } catch (err) {
+      const code = (err as { code?: string })?.code ?? '';
+      toast.show(code.includes('permission-denied')
+        ? 'That person cannot sign this. They need petty cash signing ticked on their account, and cannot sign their own request or sign twice.'
+        : code === 'auth/network-request-failed' ? 'Signing here needs a connection. Try again when online.' : friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="petty-signer-form">
+      <p className="small muted">{title}</p>
+      <div className="petty-signer-row">
+        <label className="field"><span>Stakeholder's email</span>
+          <input type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" disabled={busy} />
+        </label>
+        <label className="field"><span>Their Insight-IQ password</span>
+          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
+        </label>
+        <button type="button" className="btn btn-primary" disabled={!email.trim() || !password || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Confirm'}</button>
+      </div>
+    </div>
+  );
+}
+
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
   topup: { title: 'Top-Up Authorization', sub: `Any ${FUND_SIGNATURES_NEEDED} stakeholders must sign to add funds`, done: 'Top-up complete. The money is now in the budget.' },
   reset: { title: 'Reset Budget Authorization', sub: `Any ${FUND_SIGNATURES_NEEDED} stakeholders must sign to start the budget again from zero`, done: 'Budget reset. It now starts again from zero.' },
@@ -185,8 +227,10 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
                       <button type="button" className="btn btn-primary" disabled={!ready || !password || busy} onClick={confirm}>{busy ? 'Checking…' : '✓ Confirm'}</button>
                     </div>
                   </div>
+                ) : open && n === signed.length ? (
+                  <CoSignForm label="Another stakeholder signs here with their own email and password, or from their own account." onSign={(email, pw) => coSignFund(org.id, open, email, pw)} />
                 ) : (
-                  <p className="petty-signer-name muted">{iSigned ? 'Waiting for another stakeholder to sign from their own account' : p.canAuthorize ? 'Waiting for the signature above' : 'Waiting for a stakeholder to sign'}</p>
+                  <p className="petty-signer-name muted">Waiting for the signature above</p>
                 )}
               </li>
             );
@@ -517,6 +561,12 @@ function Requisition({ org }: { org: Organization }) {
               <button type="button" className="btn btn-quiet danger-text" onClick={() => setRejecting(true)}>Reject</button>
             </div>
           )}
+        </section>
+      )}
+      {r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
+        <section className="card stack no-print">
+          <h2>Another stakeholder signs on this device</h2>
+          <CoSignForm label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}. The stakeholder types their own email and password. You stay signed in.`} onSign={(email, pw) => coSignRequisition(org.id, r, email, pw)} />
         </section>
       )}
       <ReceiptsBox org={org} req={r} receipts={receipts} />
