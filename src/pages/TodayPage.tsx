@@ -15,6 +15,7 @@ import { localDateKey } from '../../functions/src/shared/datetime';
 import type { GivingPart } from '../../functions/src/shared/reports';
 import type { Organization } from '../state/OrgContext';
 import { lookFor } from '../lib/look';
+import { AdiaIcon } from '../components/icons';
 
 /**
  * The home screen: search first, then the four big actions.
@@ -29,10 +30,10 @@ const ACTIONS = [
 
 /** ADIA Training Centre's four tiles. */
 const GLASS_ACTIONS = [
-  { label: 'Class register', to: '/attendance', icon: ACTIONS[0].icon },
-  { label: 'Add student', to: '/school/students/new', icon: ACTIONS[1].icon },
-  { label: 'Record fees', to: '/school/fees', icon: '' },
-  { label: 'Exam Records', to: '/school/exams', icon: 'M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5' },
+  { label: 'Class register', to: '/attendance', icon: '', adia: 'register' },
+  { label: 'Add student', to: '/school/students/new', icon: '', adia: 'addStudent' },
+  { label: 'Record fees', to: '/school/fees', icon: '', adia: 'fees' },
+  { label: 'Exam Records', to: '/school/exams', icon: '', adia: 'exams' },
 ] as const;
 
 /** Freedom Church's four tiles. An empty icon shows "Ksh." instead. */
@@ -87,7 +88,7 @@ export function TodayPage() {
             const ready = organizations.length > 0 && allowedTo(a.to);
             const inner = (
               <>
-                {a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">Ksh.</span>}
+                {'adia' in a ? <AdiaIcon name={a.adia} /> : a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">Ksh.</span>}
                 <span className="tile-text">
                   <span className="tile-label">{a.label}</span>
                   {a.to === '/school/exams' && <span className="tile-sub">Marks and result slips</span>}

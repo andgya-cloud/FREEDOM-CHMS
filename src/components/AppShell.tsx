@@ -9,8 +9,14 @@ import { useTemplates } from '../state/useFollowUps';
 import { LiveClock } from './LiveClock';
 import { lookFor } from '../lib/look';
 import { QuickSearch } from './QuickSearch';
+import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
+
+/** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
+function TabLabel({ full, short }: { full: string; short: string }) {
+  return <><span className="tab-full">{full}</span><span className="tab-short" aria-hidden="true">{short}</span></>;
+}
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
@@ -19,6 +25,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
   useTemplates();
   const look = lookFor(current);
+  const adia = look === 'glass';
   // The look changes the colours of every page, so it is set on the page root.
   useEffect(() => {
     document.documentElement.dataset.look = look;
@@ -27,21 +34,21 @@ export function AppShell({ children }: { children: ReactNode }) {
   const tabs = (
     <nav className="tabbar" aria-label="Main">
       <NavLink to="/" end className="tab">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+        {adia ? <AdiaIcon name="today" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>}
         Today
       </NavLink>
       <NavLink to="/people" className="tab">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19a3 3 0 0 0-4-2.8M17 11a2.5 2.5 0 1 0 0-5M3 19a3 3 0 0 1 4-2.8M7 11a2.5 2.5 0 1 1 0-5" /></svg>
+        {adia ? <AdiaIcon name="people" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19a3 3 0 0 0-4-2.8M17 11a2.5 2.5 0 1 0 0-5M3 19a3 3 0 0 1 4-2.8M7 11a2.5 2.5 0 1 1 0-5" /></svg>}
         People
       </NavLink>
       <NavLink to="/attendance" className="tab">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
-        Attendance
+        {adia ? <AdiaIcon name="attendance" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>}
+        {adia ? <TabLabel full="Attendance" short="Register" /> : 'Attendance'}
       </NavLink>
       {current?.type === 'college' ? (
         <NavLink to="/school" className={({ isActive }) => `tab${isActive && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>
-          {look === 'glass' ? 'Programmes' : 'School'}
+          {adia ? <AdiaIcon name="programmes" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>}
+          {adia ? <TabLabel full="Programmes" short="Courses" /> : 'School'}
         </NavLink>
       ) : current?.type === 'ministry' ? (
         <NavLink to="/hope" className={({ isActive }) => `tab${isActive && !location.pathname.startsWith('/hope/petty-cash') ? ' active' : ''}`}>
@@ -56,24 +63,24 @@ export function AppShell({ children }: { children: ReactNode }) {
       )}
       {current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type) && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
         <NavLink to={pettyCashBase(current.type)} className="tab">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
+          {adia ? <AdiaIcon name="pettyCash" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>}
           Petty Cash
         </NavLink>
       )}
       {current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
         <NavLink to="/school/payroll" className="tab">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" /></svg>
+          {adia ? <AdiaIcon name="payroll" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" /></svg>}
           Payroll
         </NavLink>
       )}
       {current?.type === 'college' && (can('exams.mark') || can('exams.manage') || can('users.manage')) && (
         <NavLink to="/school/exams" className="tab">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>
-          Exam Records
+          {adia ? <AdiaIcon name="exams" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>}
+          {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}
         </NavLink>
       )}
       <NavLink to="/settings" className="tab">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.6 6.5l1.6-1.6 1.6 1.1a7 7 0 0 1 1.7-.7l.4-1.9h2.2l.4 1.9a7 7 0 0 1 1.7.7l1.6-1.1 1.6 1.6-1.1 1.6a7 7 0 0 1 .7 1.7l1.9.4z" /></svg>
+        {adia ? <AdiaIcon name="settings" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.6 6.5l1.6-1.6 1.6 1.1a7 7 0 0 1 1.7-.7l.4-1.9h2.2l.4 1.9a7 7 0 0 1 1.7.7l1.6-1.1 1.6 1.6-1.1 1.6a7 7 0 0 1 .7 1.7l1.9.4z" /></svg>}
         Settings
       </NavLink>
     </nav>

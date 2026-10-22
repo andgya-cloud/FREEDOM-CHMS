@@ -935,3 +935,13 @@ a.kpi:hover { border-color: var(--primary); }
 .dept-group h3 { font-size: 0.95rem; margin: 0 0 6px; color: var(--primary); }
 .nowrap { white-space: nowrap; }
 .student-table td, .student-table th { padding: 6px 8px; }
+
+/* ADIA's line icons: thinner, round-ended strokes so the menu and Today tiles match. */
+.look-glass .adia-icon { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.look-glass .glass-tile .adia-icon { stroke: rgb(var(--acc)); stroke-width: 1.5; }
+.tab-short { display: none; }
+@media (max-width: 899px) {
+  .look-glass .tab-full { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .look-glass .tab-short { display: inline; }
+  .look-glass .tabbar .tab { white-space: normal; text-align: center; line-height: 1.1; overflow: visible; }
+}
