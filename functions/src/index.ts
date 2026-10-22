@@ -1,6 +1,6 @@
 import './options.js';
 
-export { createUser, updateUser, resetUserPassword, changeMyPassword, recordSignIn, listTeam } from './users.js';
+export { createUser, updateUser, resetUserPassword, deleteUser, changeMyPassword, recordSignIn, listTeam } from './users.js';
 export { auditOrganizations, auditOrganizationData, auditRoles, auditSettings } from './audit.js';
 export { syncRolePermissions } from './roles.js';
 export { onPersonWritten } from './people.js';

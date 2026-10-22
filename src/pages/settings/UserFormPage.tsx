@@ -56,6 +56,7 @@ export function UserFormPage() {
   const [error, setError] = useState('');
   const [resetPw, setResetPw] = useState('');
   const [confirmOff, setConfirmOff] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const tempPwId = useId();
 
   useEffect(() => {
@@ -117,6 +118,17 @@ export function UserFormPage() {
     try {
       await httpsCallable(functions, 'updateUser')({ uid, active });
       toast.show(active ? 'Account switched on.' : 'Account switched off and signed out everywhere.');
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
+  async function deleteAccount() {
+    setConfirmDelete(false);
+    try {
+      await httpsCallable(functions, 'deleteUser')({ uid });
+      toast.show(`${form.displayName}'s account was deleted.`);
+      navigate('/settings/users');
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -232,6 +244,9 @@ export function UserFormPage() {
           {form.active
             ? <button type="button" className="btn btn-danger" onClick={() => setConfirmOff(true)}>Switch off this account</button>
             : <button type="button" className="btn" onClick={() => setActive(true)}>Switch account back on</button>}
+          <h2>Delete staff member</h2>
+          <p className="hint">Removes their sign-in for good. What they recorded stays, with their name on it. To stop them only for a while, switch the account off instead.</p>
+          <button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete this account</button>
         </section>
       )}
 
@@ -243,6 +258,15 @@ export function UserFormPage() {
         danger
         onConfirm={() => void setActive(false)}
         onCancel={() => setConfirmOff(false)}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete ${form.displayName}'s account?`}
+        body="They will be signed out and can never sign in with this account again. This cannot be undone. Their past work stays."
+        confirmLabel="Delete account"
+        danger
+        onConfirm={() => void deleteAccount()}
+        onCancel={() => setConfirmDelete(false)}
       />
     </div>
   );

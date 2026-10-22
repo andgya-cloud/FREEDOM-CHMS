@@ -193,6 +193,34 @@ export const resetUserPassword = onCall(CALLABLE, async (request) => {
   return { ok: true };
 });
 
+/**
+ * Pastor (or a head, for their own Staff) deletes an account for good: the sign-in and the profile go, so the
+ * email can be used again. Records they made (attendance, gifts, signatures) stay, with their name on them.
+ */
+export const deleteUser = onCall(CALLABLE, async (request) => {
+  const { caller, teamOnly } = await requireAccountManager(request);
+  const uid = requireString(((request.data ?? {}) as Record<string, unknown>).uid, 'the user');
+  if (uid === caller.uid) throw new HttpsError('failed-precondition', 'You cannot delete your own account.');
+  const ref = db.doc(`users/${uid}`);
+  const snap = await ref.get();
+  if (!snap.exists) throw new HttpsError('not-found', 'That user does not exist.');
+  const current = snap.data() as UserProfile;
+  if (teamOnly && !canManageTeamAccount(caller.profile, current)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  // A role that no longer exists cannot be an owner role.
+  const roleDoc = await db.doc(`roles/${current.roleId}`).get();
+  const role = roleDoc.exists ? (roleDoc.data() as RoleDefinition) : isDefaultRoleId(current.roleId) ? DEFAULT_ROLES[current.roleId] : undefined;
+  if (role?.isOwner && current.active && (await countActiveOwners()) <= 1) {
+    throw new HttpsError('failed-precondition', 'There must always be at least one active pastor account.');
+  }
+  await auth.deleteUser(uid).catch((err: { code?: string }) => { if (err.code !== 'auth/user-not-found') throw err; });
+  await ref.delete();
+  await writeAudit({
+    actorUid: caller.uid, actorEmail: caller.email, action: 'delete', path: `users/${uid}`,
+    collection: 'users', docId: uid, orgId: null, note: `Deleted the account of ${current.displayName} (${current.email})`,
+  });
+  return { ok: true };
+});
+
 /** A user replaces their temporary password. Requires a sign-in within the last 10 minutes. */
 export const changeMyPassword = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
