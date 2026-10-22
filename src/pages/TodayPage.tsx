@@ -16,6 +16,7 @@ import type { GivingPart } from '../../functions/src/shared/reports';
 import type { Organization } from '../state/OrgContext';
 import { lookFor } from '../lib/look';
 import { AdiaIcon } from '../components/icons';
+import { AdiaToday } from './school/AdiaToday';
 
 /**
  * The home screen: search first, then the four big actions.
@@ -128,9 +129,10 @@ export function TodayPage() {
         })}
       </div>
 
-      {current && can('people.read') && <HomeScorecard org={current} />}
+      {current?.type === 'college' && can('people.read') ? <AdiaToday org={current} />
+        : current && can('people.read') && <HomeScorecard org={current} />}
 
-      {organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
+      {current?.type !== 'college' && organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
         <ul className="link-list">
           <li>
             <Link to="/giving">

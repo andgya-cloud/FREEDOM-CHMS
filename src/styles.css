@@ -945,3 +945,5 @@ a.kpi:hover { border-color: var(--primary); }
   .look-glass .tab-short { display: inline; }
   .look-glass .tabbar .tab { white-space: normal; text-align: center; line-height: 1.1; overflow: visible; }
 }
+/* ADIA Today: four gauges in one row on wide screens. */
+@container (min-width: 760px) { .adia-dash .gauges-3 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
