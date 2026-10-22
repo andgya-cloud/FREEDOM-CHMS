@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { usePeople } from '../../state/PeopleContext';
 import { useAuth } from '../../state/AuthContext';
+import { useOrg } from '../../state/OrgContext';
 import { PersonRow } from '../../components/PersonRow';
 import { matchesSearch, PERSON_STATUSES, PERSON_STATUS_LABELS, type PersonStatus } from '../../../functions/src/shared/people';
 
@@ -10,9 +11,12 @@ const PAGE = 100;
 export function PeoplePage() {
   const { people, loading } = usePeople();
   const { can } = useAuth();
+  const { current } = useOrg();
+  // ADIA lists everyone; church statuses such as Visitor or Member don't apply to a college.
+  const showStatus = current?.type !== 'college';
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
-  const status = (params.get('status') ?? '') as PersonStatus | '';
+  const status = showStatus ? (params.get('status') ?? '') as PersonStatus | '' : '';
   const [limit, setLimit] = useState(PAGE);
 
   const results = useMemo(
@@ -42,14 +46,14 @@ export function PeoplePage() {
         value={query}
         onChange={(e) => set('q', e.target.value)}
       />
-      <div className="chips" role="group" aria-label="Filter by status">
+      {showStatus && <div className="chips" role="group" aria-label="Filter by status">
         <button type="button" className={`chip ${!status ? 'chip-on' : ''}`} onClick={() => set('status', '')}>Everyone</button>
         {PERSON_STATUSES.map((s) => (
           <button key={s} type="button" className={`chip ${status === s ? 'chip-on' : ''}`} onClick={() => set('status', status === s ? '' : s)}>
             {PERSON_STATUS_LABELS[s]}
           </button>
         ))}
-      </div>
+      </div>}
       <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}`}</p>
       {results.length > 0 && (
         <ul className="row-list">
