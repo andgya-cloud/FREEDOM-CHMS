@@ -4,11 +4,11 @@ import { useAuth } from '../../state/AuthContext';
 import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { readStatementFile } from '../../lib/statementFile';
+import { readSpreadsheetSheets } from '../../lib/statementFile';
 import { importStudents } from '../../lib/schoolWrites';
 import { toCsv } from '../../lib/analytics';
 import { KpiCard, KpiRow } from '../../components/charts';
-import { IMPORT_TEMPLATE_HEAD, planStudentImport, type ImportCell, type ImportRow } from '../../../functions/src/shared/studentImport';
+import { IMPORT_TEMPLATE_HEAD, planStudentImport, type ImportRow, type ImportSheet } from '../../../functions/src/shared/studentImport';
 import { STUDENT_STATUS_LABELS } from '../../../functions/src/shared/school';
 import { SchoolGate, SchoolNav, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -39,7 +39,8 @@ function StudentImport({ org }: { org: Organization }) {
   const { people } = usePeople();
   const { can, profile } = useAuth();
   const toast = useToast();
-  const [file, setFile] = useState<{ name: string; rows: ImportCell[][] } | null>(null);
+  const [file, setFile] = useState<{ name: string; sheets: ImportSheet[] } | null>(null);
+  const [courseMap, setCourseMap] = useState<Record<string, string>>({});
   const [programme, setProgramme] = useState('');
   const [intake, setIntake] = useState('');
   const [error, setError] = useState('');
@@ -48,10 +49,10 @@ function StudentImport({ org }: { org: Organization }) {
   const [showAll, setShowAll] = useState(false);
 
   const plan = useMemo(() => (file ? planStudentImport(
-    file.rows,
+    file.sheets,
     { courses: s.courses, intakes: s.intakes, people: people.filter((p) => p.orgId === org.id), students: s.students },
-    { programme: programme || undefined, intake: intake.trim() || undefined, startDate: s.today },
-  ) : null), [file, s.courses, s.intakes, s.students, people, org.id, programme, intake, s.today]);
+    { programme: programme || undefined, intake: intake.trim() || undefined, startDate: s.today, courseMap },
+  ) : null), [file, s.courses, s.intakes, s.students, people, org.id, programme, intake, s.today, courseMap]);
 
   const needsSettings = !!plan && (plan.newCourses.length > 0 || plan.newIntakes.length > 0) && !can('settings.manage');
   const shown = plan ? (showAll ? plan.rows : plan.rows.slice(0, 50)) : [];
@@ -63,8 +64,9 @@ function StudentImport({ org }: { org: Organization }) {
     setError('');
     setDone(null);
     try {
-      const rows = await readStatementFile(f);
-      setFile({ name: f.name, rows });
+      const sheets = await readSpreadsheetSheets(f);
+      setFile({ name: f.name, sheets });
+      setCourseMap({});
     } catch (err) {
       setFile(null);
       const msg = err instanceof Error ? err.message : '';
@@ -79,7 +81,7 @@ function StudentImport({ org }: { org: Organization }) {
     setBusy(true);
     try {
       // Saved on this device at once and sent when online, like every other change.
-      importStudents(org.id, plan.ready, { courseIds: s.courses.map((c) => c.id), keepAdmissionNos: can('settings.manage') }, s.today, profile?.uid ?? null).catch((err) => toast.show(friendlyError(err)));
+      importStudents(org.id, plan.ready, { courseIds: s.courses.map((c) => c.id), keepAdmissionNos: can('settings.manage'), keepIdNumbers: can('pastoral.read') }, s.today, profile?.uid ?? null).catch((err) => toast.show(friendlyError(err)));
       setDone(plan.ready.length);
       setFile(null);
       toast.show(`${plan.ready.length} students added`);
@@ -104,8 +106,8 @@ function StudentImport({ org }: { org: Organization }) {
       )}
 
       <section className="card stack">
-        <p>Choose an Excel (.xlsx) or CSV class list. The first row should hold the column titles. Only <strong>Name</strong> is required; ADIA also reads
-          Admission no, Phone, Gender, Programme (or Course), Intake (or Cohort), Level, Status, Start date and a sponsor's name, phone and relation.</p>
+        <p>Choose an Excel (.xlsx) or CSV class list. Every worksheet is read, for example one sheet per programme; each needs a row of column titles at the top. Only <strong>Name</strong> is required; ADIA also reads
+          Admission no, Phone, Gender, Programme (or Course), Intake (or Cohort; a number such as 3 becomes "Cohort 3"), Level, Status, Start date and a sponsor's name, phone and relation.</p>
         <div className="row-actions">
           <label className="btn btn-primary">
             {file ? 'Choose a different file' : 'Choose the file'}
@@ -132,7 +134,7 @@ function StudentImport({ org }: { org: Organization }) {
         {error && <p className="error" role="alert">{error}</p>}
       </section>
 
-      {file && !plan && <p className="error" role="alert">No "Name" column was found in the first ten rows of {file.name}. Add a row of column titles at the top and try again.</p>}
+      {file && !plan && <p className="error" role="alert">No column of names was found in {file.name}. Each sheet needs a row of column titles near the top, with one called Name or Full names.</p>}
 
       {plan && (
         <>
@@ -142,6 +144,30 @@ function StudentImport({ org }: { org: Organization }) {
             <KpiCard label="Skipped" value={String(plan.rows.length - plan.ready.length)} note="See the reasons below" />
             <KpiCard label="New intakes" value={String(plan.newIntakes.length)} note={plan.newCourses.length ? `and ${plan.newCourses.length} new programme${plan.newCourses.length === 1 ? '' : 's'}` : undefined} />
           </KpiRow>
+          {plan.programmes.length > 0 && (
+            <section className="card stack">
+              <h2>Match the programmes</h2>
+              <p className="small muted">Check where each programme in your file goes. Choose "Add as a new programme" only if ADIA doesn't have it yet.</p>
+              <table className="table">
+                <thead><tr><th>In your file</th><th className="num">Students</th><th>Goes to</th></tr></thead>
+                <tbody>
+                  {plan.programmes.map((p) => (
+                    <tr key={p.key}>
+                      <td>{p.name}</td>
+                      <td className="num">{p.rows}</td>
+                      <td>
+                        <select value={p.courseId ?? ''} aria-label={`Programme for ${p.name}`} onChange={(e) => setCourseMap((m) => ({ ...m, [p.key]: e.target.value }))}>
+                          <option value="">Add as a new programme</option>
+                          {s.courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </section>
+          )}
+          {plan.sheetsSkipped.length > 0 && <p className="notice small">Left out because they have no name column: {plan.sheetsSkipped.join(', ')}.</p>}
           {plan.missingColumns.length > 0 && (
             <p className="notice small">The file has no {plan.missingColumns.join(' or ')} column. Fill it in above under "My file has no Programme or Intake column".</p>
           )}
@@ -152,11 +178,11 @@ function StudentImport({ org }: { org: Organization }) {
 
           <div className="card exam-table-wrap">
             <table className="table">
-              <thead><tr><th className="num">Row</th><th>Name</th><th>Adm no</th><th>Programme</th><th>Intake</th><th>Status</th><th>Result</th></tr></thead>
+              <thead><tr><th>Sheet · row</th><th>Name</th><th>Adm no</th><th>Programme</th><th>Intake</th><th>Status</th><th>Result</th></tr></thead>
               <tbody>
                 {shown.map((r) => (
-                  <tr key={r.line}>
-                    <td className="num">{r.line}</td>
+                  <tr key={`${r.sheet}:${r.line}`}>
+                    <td className="small">{r.sheet ? `${r.sheet} · ${r.line}` : r.line}</td>
                     <td>{r.name || <span className="muted">(blank)</span>}{r.phone && <div className="small muted">{r.phone}</div>}</td>
                     <td>{r.admissionNo ?? <span className="muted small">automatic</span>}</td>
                     <td>{r.programme}{r.newCourse && <span className="badge"> new</span>}</td>

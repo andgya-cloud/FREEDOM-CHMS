@@ -156,7 +156,7 @@ export function requestSchoolReport(orgId: string, uid: string, type: 'weekly' |
  * ADIA doesn't have yet, then each student (and their person record) in batches. Admission numbers
  * from the list are kept; students without one get the next number as usual.
  */
-export function importStudents(orgId: string, rows: readonly ImportRow[], have: { courseIds: readonly string[]; keepAdmissionNos: boolean }, today: string, recordedBy: string | null) {
+export function importStudents(orgId: string, rows: readonly ImportRow[], have: { courseIds: readonly string[]; keepAdmissionNos: boolean; keepIdNumbers: boolean }, today: string, recordedBy: string | null) {
   const writes: Promise<void>[] = [];
   const key = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
   const courseIds = new Map<string, string>();
@@ -180,9 +180,9 @@ export function importStudents(orgId: string, rows: readonly ImportRow[], have: 
     intakeIds.set(k, newRef.id);
     writes.push(trackWrite(setDoc(newRef, { orgId, courseId: courseOf(r), name: r.intake.slice(0, 80), startDate: starts[0] ?? today, capacity: null, active: true, ...createStamps() })));
   }
-  for (let i = 0; i < rows.length; i += 200) {
+  for (let i = 0; i < rows.length; i += 150) {
     const batch = writeBatch(db);
-    for (const r of rows.slice(i, i + 200)) {
+    for (const r of rows.slice(i, i + 150)) {
       let personId = r.personId;
       if (!personId) {
         const personRef = doc(collection(db, 'organizations', orgId, 'people'));
@@ -199,6 +199,7 @@ export function importStudents(orgId: string, rows: readonly ImportRow[], have: 
         sponsors: r.sponsor ? [{ ...r.sponsor, whatsapp: false }] : [], enrolledOn: r.status === 'enrolled' ? r.startDate ?? today : null,
         admissionNo: have.keepAdmissionNos ? r.admissionNo : null, ...createStamps(),
       });
+      if (have.keepIdNumbers && r.idNumber) batch.set(ref(orgId, 'studentPrivate', personId), { orgId, idNumber: r.idNumber, notes: '', ...createStamps() });
     }
     writes.push(trackWrite(batch.commit()));
   }

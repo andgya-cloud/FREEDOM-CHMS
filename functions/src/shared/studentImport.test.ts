@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findColumns, importDate, planStudentImport } from './studentImport';
+import { findColumns, importDate, planStudentImport, suggestCourse } from './studentImport';
 
 const have = {
   courses: [{ id: 'ict', name: 'ICT', levels: ['Level 1', 'Level 2'] }],
@@ -51,5 +51,27 @@ describe('student import', () => {
     const withDefault = planStudentImport([['Name'], ['Faith Akinyi']], have, { programme: 'ICT', intake: 'September 2026', startDate: '2026-10-22' })!;
     expect(withDefault.ready[0]).toMatchObject({ courseId: 'ict', intakeId: 'i1' });
     expect(withDefault.missingColumns).toEqual([]);
+  });
+  it('reads a workbook of one sheet per programme with cohort numbers', () => {
+    const courses = [
+      { id: 'food', name: 'Food and Beverage Production', levels: [] }, { id: 'ict', name: 'ICT', levels: [] },
+      { id: 'tailor', name: 'Dressmaking & Tailoring', levels: [] }, { id: 'beauty', name: 'Beauty Therapy & Cosmetology', levels: [] },
+    ];
+    expect(['CATERING', 'HOSPITALITY', 'IT', 'TAILORING', 'COSMETOLOGY', 'Plumbing'].map((n) => suggestCourse(n, courses)?.id ?? null))
+      .toEqual(['food', 'food', 'ict', 'tailor', 'beauty', null]);
+    const head = [' NO', 'FULL NAMES', 'GENDER', 'ID', 'CONTACT', 'ADMISSION NUMBER', 'COURSE', 'REGISTRATION FEE', 'COHORT'];
+    const plan = planStudentImport([
+      { name: 'CATERING', rows: [head, [1, 'MAGDALINE NDANU MUTUKU', 'FEMALE', 35886851, 768436056, 'ADIA/ CTR/2025/1/001', 'CATERING', null, 1], [54, 'VIVIENNE ANYANGO', 'FEMALE', null, 719342119, 'ADIA/CTR/2026/4/054', 'HOSPITALITY', null, null]] },
+      { name: 'IT', rows: [head, [1, 'ALICE TABANI MAROA', 'FEMALE', 1, 727653705, 'ADIA/IT/2025/1/001', 'IT', null, 1], [], []] },
+      { name: 'Notes', rows: [['Fees are due on the 5th']] },
+    ], { courses, intakes: [], people: [], students: [] }, { startDate: '2026-10-22', courseMap: { it: '' } })!;
+    expect(plan.ready.map((r) => [r.sheet, r.name, r.admissionNo, r.programme, r.intake, r.phone])).toEqual([
+      ['CATERING', 'Magdaline Ndanu Mutuku', 'ADIA/CTR/2025/1/001', 'Food and Beverage Production', 'Cohort 1', '+254768436056'],
+      ['CATERING', 'Vivienne Anyango', 'ADIA/CTR/2026/4/054', 'Food and Beverage Production', 'Cohort 4', '+254719342119'],
+      ['IT', 'Alice Tabani Maroa', 'ADIA/IT/2025/1/001', 'IT', 'Cohort 1', '+254727653705'],
+    ]);
+    expect(plan.programmes.map((p) => [p.name, p.courseId, p.rows])).toEqual([['Catering', 'food', 1], ['Hospitality', 'food', 1], ['IT', null, 1]]);
+    expect(plan.sheetsSkipped).toEqual(['Notes']);
+    expect(plan.newIntakes).toEqual([{ courseName: 'Food and Beverage Production', name: 'Cohort 1' }, { courseName: 'Food and Beverage Production', name: 'Cohort 4' }, { courseName: 'IT', name: 'Cohort 1' }]);
   });
 });

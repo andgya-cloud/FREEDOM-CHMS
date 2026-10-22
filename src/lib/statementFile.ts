@@ -22,3 +22,17 @@ export async function readStatementFile(file: File): Promise<Cell[][]> {
   }
   return parseCsv(await file.text());
 }
+
+/** Every worksheet of an Excel file (a class list often has one sheet per programme), or a CSV as one sheet. */
+export async function readSpreadsheetSheets(file: File): Promise<{ name: string; rows: Cell[][] }[]> {
+  const name = file.name.toLowerCase();
+  if (!name.endsWith('.xlsx')) return [{ name: '', rows: await readStatementFile(file) }];
+  const { default: readXlsxFile, readSheetNames } = await import('read-excel-file');
+  const names = await readSheetNames(file);
+  const out: { name: string; rows: Cell[][] }[] = [];
+  for (const sheet of names) {
+    const rows = await readXlsxFile(file, { sheet });
+    out.push({ name: sheet.trim(), rows: rows.map((r) => r.map((c) => (typeof c === 'boolean' ? String(c) : (c as Cell)))) });
+  }
+  return out;
+}
