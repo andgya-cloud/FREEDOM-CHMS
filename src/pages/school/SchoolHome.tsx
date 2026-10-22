@@ -8,7 +8,6 @@ import { useFunds } from '../../state/useGiving';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { arrearsList, attendanceAlerts, capacityOf, collectionRate, OUTCOME_LABELS, schoolMetrics, STUDENT_STATUSES, STUDENT_STATUS_LABELS } from '../../../functions/src/shared/school';
 import { Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
-import { Bars } from '../../components/Scorecard';
 import { ADIA_PROGRAMMES } from '../../../functions/src/shared/schoolSetup';
 import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -56,6 +55,11 @@ function Home({ org }: { org: Organization }) {
     <Gauge key={label} value={v ?? 0} max={100} label={label} display={pct(v)} caption={caption} bands={[0.5, 0.75]} />
   );
   const intakes = s.intakes.filter((i) => i.active !== false).map((i) => ({ i, c: capacityOf(i, s.students) }));
+  // Cohorts down the side, departments across: how many students hold a place in each class.
+  const cohortNames = [...new Set(intakes.map(({ i }) => i.name))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }));
+  const deptIds = s.courses.filter((c) => intakes.some(({ i }) => i.courseId === c.id)).map((c) => c.id);
+  const placeCell = (cohort: string, courseId: string) => intakes.filter(({ i }) => i.name === cohort && i.courseId === courseId);
+  const placesIn = (list: typeof intakes) => list.reduce((n, { c }) => n + c.taken, 0);
 
   return (
     <div className="page narrow">
@@ -95,9 +99,35 @@ function Home({ org }: { org: Organization }) {
         <Panel title="Where every student is">
           <Donut label="Students by status" rows={STUDENT_STATUSES.map((k) => ({ label: STUDENT_STATUS_LABELS[k], value: statusCount(k) }))} center={String(live.length)} centerNote="students" />
         </Panel>
-        <Panel title="Places taken in each intake" wide>
+        <Panel title="Students in each cohort and department" wide>
           {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Courses</Link>.</p> : (
-            <Bars rows={intakes.map(({ i, c }) => ({ label: `${s.courseName(i.courseId)} · ${i.name}`, value: c.taken, note: i.capacity != null ? `of ${i.capacity}${c.full ? ', full' : ''}` : undefined }))} />
+            <div className="exam-table-wrap">
+              <table className="table">
+                <thead><tr><th>Cohort</th>{deptIds.map((id) => <th key={id} className="num">{s.courseName(id)}</th>)}<th className="num">Total</th></tr></thead>
+                <tbody>
+                  {cohortNames.map((name) => {
+                    const row = intakes.filter(({ i }) => i.name === name);
+                    return (
+                      <tr key={name}>
+                        <td className="nowrap"><Link to="/school/students">{name}</Link></td>
+                        {deptIds.map((id) => {
+                          const cell = placeCell(name, id);
+                          const cap = cell.reduce((n, { i }) => (i.capacity != null ? n + i.capacity : n), 0);
+                          return <td key={id} className="num">{cell.length ? <>{placesIn(cell)}{cap > 0 && <span className="muted small"> of {cap}</span>}</> : <span className="muted">–</span>}</td>;
+                        })}
+                        <td className="num"><strong>{placesIn(row)}</strong></td>
+                      </tr>
+                    );
+                  })}
+                  <tr>
+                    <td><strong>Total</strong></td>
+                    {deptIds.map((id) => <td key={id} className="num"><strong>{placesIn(intakes.filter(({ i }) => i.courseId === id))}</strong></td>)}
+                    <td className="num"><strong>{placesIn(intakes)}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+              <p className="muted small">Counts enrolled students and applicants. Students who have graduated, withdrawn or deferred don't hold a place.</p>
+            </div>
           )}
         </Panel>
       </div>
