@@ -29,10 +29,10 @@ const ACTIONS = [
 
 /** ADIA Training Centre's four tiles. */
 const GLASS_ACTIONS = [
-  { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
+  { label: 'Class register', to: '/attendance', icon: ACTIONS[0].icon },
   { label: 'Add student', to: '/school/students/new', icon: ACTIONS[1].icon },
   { label: 'Record fees', to: '/school/fees', icon: '' },
-  { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
+  { label: 'Exam Records', to: '/school/exams', icon: 'M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5' },
 ] as const;
 
 /** Freedom Church's four tiles. An empty icon shows "Ksh." instead. */
@@ -63,6 +63,7 @@ export function TodayPage() {
     : to === '/attendance' ? can('attendance.write') || can('people.read')
     : to === '/giving/new' ? can('gifts.write')
     : to === '/follow-ups' ? can('followups.manage')
+    : to === '/school/exams' ? can('exams.mark') || can('exams.manage') || can('users.manage')
     : true);
 
   return (
@@ -89,6 +90,7 @@ export function TodayPage() {
                 {a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">Ksh.</span>}
                 <span className="tile-text">
                   <span className="tile-label">{a.label}</span>
+                  {a.to === '/school/exams' && <span className="tile-sub">Marks and result slips</span>}
                   {a.to === '/follow-ups' && current && <span className="tile-sub">{counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`}</span>}
                 </span>
               </>
