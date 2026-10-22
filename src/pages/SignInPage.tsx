@@ -2,13 +2,13 @@ import { useId, useState, type FormEvent } from 'react';
 import { useAuth } from '../state/AuthContext';
 import { friendlyError } from '../lib/errors';
 import { isSharedDevice } from '../lib/useIdleSignOut';
+import { PasswordInput } from '../components/PasswordInput';
 import { writePref } from '../lib/storage';
 
 export function SignInPage() {
   const { signIn } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [show, setShow] = useState(false);
   const [shared, setShared] = useState(isSharedDevice);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -41,10 +41,7 @@ export function SignInPage() {
         </label>
         <div className="field">
           <label htmlFor={passwordId}>Password</label>
-          <div className="input-with-button">
-            <input id={passwordId} type={show ? 'text' : 'password'} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            <button type="button" className="btn btn-quiet" onClick={() => setShow((s) => !s)} aria-label={show ? 'Hide password' : 'Show password'}>{show ? 'Hide' : 'Show'}</button>
-          </div>
+          <PasswordInput id={passwordId} autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         <label className="check">
           <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />

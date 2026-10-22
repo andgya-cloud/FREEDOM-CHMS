@@ -5,6 +5,7 @@ import { auth, functions } from '../firebase';
 import { useAuth } from '../state/AuthContext';
 import { friendlyError } from '../lib/errors';
 import { passwordProblems } from '../../functions/src/shared/password';
+import { PasswordInput } from '../components/PasswordInput';
 import { PasswordChecklist } from '../components/PasswordChecklist';
 
 export function ChangePasswordPage() {
@@ -39,12 +40,12 @@ export function ChangePasswordPage() {
       <form onSubmit={submit} className="form">
         <label className="field">
           <span>New password</span>
-          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
         </label>
         <PasswordChecklist password={password} email={email} />
         <label className="field">
           <span>Type it again</span>
-          <input type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+          <PasswordInput autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </label>
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary btn-block" disabled={busy}>{busy ? 'Saving…' : 'Save password'}</button>

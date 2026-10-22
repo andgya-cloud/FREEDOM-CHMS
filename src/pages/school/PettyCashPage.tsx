@@ -18,6 +18,7 @@ import { money } from './common';
 import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
+import { PasswordInput } from '../../components/PasswordInput';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -147,7 +148,7 @@ function CoSignForm({ label: title, onSign }: { label: string; onSign: (email: s
           <input type="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" disabled={busy} />
         </label>
         <label className="field"><span>Their Insight-IQ password</span>
-          <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
+          <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
         </label>
         <button type="button" className="btn btn-primary" disabled={!email.trim() || !password || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Confirm'}</button>
       </div>
@@ -230,7 +231,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
                     <label className="field"><span>Stakeholder</span><input value={name} readOnly /></label>
                     <div className="petty-signer-row">
                       <label className="field"><span>Your Insight-IQ password</span>
-                        <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password / signature" disabled={!ready || busy} />
+                        <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password / signature" disabled={!ready || busy} />
                       </label>
                       <button type="button" className="btn btn-primary" disabled={!ready || !password || busy} onClick={confirm}>{busy ? 'Checking…' : '✓ Confirm'}</button>
                     </div>
@@ -555,7 +556,7 @@ function Requisition({ org }: { org: Organization }) {
               <div className="field-row">
                 <label className="field"><span>Signing as</span><input value={`${name} (${p.signRole})`} readOnly /></label>
                 <label className="field"><span>Your Insight-IQ password</span>
-                  <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password is your signature" disabled={busy} />
+                  <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password is your signature" disabled={busy} />
                 </label>
               </div>
               <div className="row-actions">

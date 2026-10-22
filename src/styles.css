@@ -986,3 +986,15 @@ a.kpi:hover { border-color: var(--primary); }
 .petty-amount-ok { display: block; margin-top: 6px; color: #15803d; font-weight: 600; }
 .petty-amount-bad { display: block; margin-top: 6px; color: #b91c1c; font-weight: 600; }
 .petty-stat-pending { display: block; margin-top: 4px; font-size: 0.75rem; color: #b45309; font-weight: 600; }
+
+/* A password box with a show/hide eye inside its right edge. */
+.password-box { position: relative; display: block; width: 100%; }
+.password-box > input { width: 100%; padding-right: 2.75rem; }
+.password-eye {
+  position: absolute; top: 50%; right: 0.35rem; transform: translateY(-50%);
+  width: 2.25rem; height: 2.25rem; display: grid; place-items: center;
+  border: 0; border-radius: 8px; background: transparent; color: inherit; opacity: 0.65; cursor: pointer;
+}
+.password-eye:hover, .password-eye:focus-visible { opacity: 1; }
+.password-eye svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.input-with-button > .password-box, .petty-signer-row .password-box { flex: 1; min-width: 0; }

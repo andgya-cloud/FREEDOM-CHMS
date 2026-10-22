@@ -12,6 +12,7 @@ import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, SIGNATORY_ROLE_ID, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 
 interface FormState {
@@ -208,7 +209,7 @@ export function UserFormPage() {
           <div className="field">
             <label htmlFor={tempPwId}>Temporary password</label>
             <div className="input-with-button">
-              <input id={tempPwId} value={form.password} onChange={(e) => set('password', e.target.value)} />
+              <PasswordInput id={tempPwId} shown autoComplete="new-password" value={form.password} onChange={(e) => set('password', e.target.value)} />
               <button type="button" className="btn btn-quiet" onClick={() => set('password', generateTemporaryPassword(form.email))}>New</button>
             </div>
             <PasswordChecklist password={form.password} email={form.email} />
@@ -224,7 +225,7 @@ export function UserFormPage() {
         <section className="card">
           <h2>Password</h2>
           <div className="input-with-button">
-            <input placeholder="Leave empty to generate one" value={resetPw} onChange={(e) => setResetPw(e.target.value)} />
+            <PasswordInput shown autoComplete="new-password" placeholder="Leave empty to generate one" value={resetPw} onChange={(e) => setResetPw(e.target.value)} />
             <button type="button" className="btn" onClick={resetPassword}>Reset password</button>
           </div>
           <h2>Access</h2>
