@@ -1,7 +1,8 @@
 /**
- * ADIA petty cash: a requisition is submitted by the requester, checked by the accountant, then given
- * final approval by a board member. Nobody acts on their own request, and the final approver must be a
- * different person from the one who checked it. Firestore rules enforce the same steps.
+ * ADIA petty cash: a requisition is submitted by the requester, then any three stakeholders sign it, each
+ * from their own account with their own password; the third signature approves it. Nobody signs their own
+ * request. Requests made before signatures were introduced keep the old steps (accountant checks, then a
+ * board member approves). Firestore rules enforce the same.
  */
 
 /** ADIA Training Centre's categories, from its old petty cash app. */
@@ -28,7 +29,7 @@ export function pettyCashBase(orgType: string | undefined) {
 
 export type PettyCashStatus = 'submitted' | 'checked' | 'approved' | 'rejected';
 export const PETTY_CASH_STATUS_LABELS: Record<PettyCashStatus, string> = {
-  submitted: 'Waiting for the accountant',
+  submitted: 'Waiting for signatures',
   checked: 'Waiting for final approval',
   approved: 'Approved',
   rejected: 'Rejected',
@@ -36,7 +37,18 @@ export const PETTY_CASH_STATUS_LABELS: Record<PettyCashStatus, string> = {
 
 export const MAX_PETTY_CASH_ITEMS = 30;
 
-export interface PettyCashItem { description: string; amountCents: number }
+/** One line: what it is, how many and the price of one. `amountCents` is always quantity × unit price. */
+export interface PettyCashItem { description: string; amountCents: number; quantity?: number; unitPriceCents?: number }
+
+/** The amount of a line: quantity × unit price, rounded to the cent. */
+export function lineAmountCents(quantity: number, unitPriceCents: number): number {
+  return Math.round(quantity * unitPriceCents);
+}
+
+/** "Other: Fuel for the generator" when the requester said what Other means. */
+export function categoryLabel(r: { category: string; categoryNote?: string | null }): string {
+  return r.category === 'Other' && r.categoryNote ? `Other: ${r.categoryNote}` : r.category;
+}
 /** Who checked (accountant) or gave final approval (board member), and when. */
 export interface PettyCashSignOff { uid: string; name: string; role: string; at?: unknown }
 export interface PettyCashRequisition {
@@ -45,6 +57,8 @@ export interface PettyCashRequisition {
   requesterId: string;
   requesterName: string;
   category: PettyCashCategory;
+  /** What "Other" refers to; null for every other category. */
+  categoryNote?: string | null;
   items: PettyCashItem[];
   totalCents: number;
   /** The month it counts against, "2026-10". */
@@ -53,7 +67,15 @@ export interface PettyCashRequisition {
   checked: PettyCashSignOff | null;
   approved: PettyCashSignOff | null;
   rejection: { uid: string; name: string; reason: string; at?: unknown } | null;
+  /** Stakeholders who signed, keyed by their account. Absent on requests made before signatures. */
+  signatures?: Record<string, PettyCashSignature>;
 }
+
+/** A stakeholder's signature on a requisition. */
+export interface PettyCashSignature { name: string; role: string; at?: unknown }
+
+/** Signatures that approve a requisition. */
+export const REQUEST_SIGNATURES_NEEDED = 3;
 
 /** The requisition number the server gives the 15th request: "ADIA-00015". */
 export function pettyCashNumber(prefix: string, sequence: number): string {
@@ -64,11 +86,12 @@ export function itemsTotalCents(items: readonly { amountCents: number }[]): numb
   return items.reduce((sum, i) => sum + (Number.isFinite(i.amountCents) ? i.amountCents : 0), 0);
 }
 
-export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean }
+export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean; canSign?: boolean }
 
-/** What this person may do with a requisition right now: "check", "approve" or nothing. */
-export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked'>, actor: PettyCashActor): 'check' | 'approve' | null {
+/** What this person may do with a requisition right now: "sign", or on an older request "check" or "approve". */
+export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked' | 'signatures'>, actor: PettyCashActor): 'sign' | 'check' | 'approve' | null {
   if (r.requesterId === actor.uid) return null;
+  if (r.signatures) return r.status === 'submitted' && actor.canSign && !(actor.uid in r.signatures) ? 'sign' : null;
   if (r.status === 'submitted' && actor.canCheck) return 'check';
   if (r.status === 'checked' && actor.canApprove && r.checked?.uid !== actor.uid) return 'approve';
   return null;
@@ -134,3 +157,80 @@ export function parseAmountCents(text: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null;
   return Math.round(Number(clean) * 100);
 }
+
+/** A line of the petty cash balance sheet: money in (a signed top-up) or out (an approved request). */
+export interface LedgerLine {
+  id: string;
+  /** Milliseconds, for ordering. */
+  at: number;
+  kind: 'topup' | 'reset' | 'request';
+  description: string;
+  creditCents: number;
+  debitCents: number;
+  /** What is left after this line, within the budget period it belongs to. */
+  balanceCents: number;
+}
+
+/**
+ * The balance sheet, oldest first: every completed top-up adds to the balance, every approved request
+ * takes from it, and a completed reset starts the balance again from zero.
+ */
+export function pettyLedger(
+  funds: readonly Pick<PettyFund, 'id' | 'kind' | 'amountCents' | 'status' | 'doneAt'>[],
+  requisitions: readonly (Pick<PettyCashRequisition, 'id' | 'number' | 'status' | 'totalCents' | 'approved' | 'requesterName' | 'category'> & { categoryNote?: string | null })[],
+  millis: (t: unknown) => number | null,
+  now = Date.now(),
+): LedgerLine[] {
+  const at = (t: unknown) => millis(t) ?? now;
+  const lines: Omit<LedgerLine, 'balanceCents'>[] = [];
+  for (const f of funds) {
+    if (f.status !== 'done') continue;
+    lines.push(f.kind === 'topup'
+      ? { id: f.id, at: at(f.doneAt), kind: 'topup', description: 'Top-up signed by 3 stakeholders', creditCents: f.amountCents, debitCents: 0 }
+      : { id: f.id, at: at(f.doneAt), kind: 'reset', description: 'Budget reset to zero, signed by 3 stakeholders', creditCents: 0, debitCents: 0 });
+  }
+  for (const r of requisitions) {
+    if (r.status !== 'approved') continue;
+    lines.push({ id: r.id, at: at(r.approved?.at), kind: 'request', description: `${r.number ?? 'Request'} · ${categoryLabel(r)} · ${r.requesterName}`, creditCents: 0, debitCents: r.totalCents });
+  }
+  lines.sort((a, b) => a.at - b.at || (a.kind === 'request' ? 1 : 0) - (b.kind === 'request' ? 1 : 0));
+  let balance = 0;
+  return lines.map((l) => {
+    balance = l.kind === 'reset' ? 0 : balance + l.creditCents - l.debitCents;
+    return { ...l, balanceCents: balance };
+  });
+}
+
+/** Each category's allowance next to what was approved and what is waiting, since the last reset. */
+export interface CategoryBudgetRow { category: string; allocatedCents: number; spentCents: number; pendingCents: number }
+
+export function categoryBudgets(
+  categories: readonly string[],
+  allocations: Readonly<Record<string, number>>,
+  requisitions: readonly Pick<PettyCashRequisition, 'status' | 'totalCents' | 'approved' | 'category'>[],
+  periodStart: number,
+  millis: (t: unknown) => number | null,
+  now = Date.now(),
+): CategoryBudgetRow[] {
+  return categories.map((category) => {
+    let spentCents = 0;
+    let pendingCents = 0;
+    for (const r of requisitions) {
+      if (r.category !== category) continue;
+      if (r.status === 'approved' && (millis(r.approved?.at) ?? now) > periodStart) spentCents += r.totalCents;
+      else if (r.status === 'submitted' || r.status === 'checked') pendingCents += r.totalCents;
+    }
+    return { category, allocatedCents: allocations[category] ?? 0, spentCents, pendingCents };
+  });
+}
+
+/** When the current budget period began: the last completed reset, or the beginning of time. */
+export function periodStartOf(funds: readonly Pick<PettyFund, 'kind' | 'status' | 'doneAt'>[], millis: (t: unknown) => number | null, now = Date.now()): number {
+  let start = -Infinity;
+  for (const f of funds) if (f.kind === 'reset' && f.status === 'done') start = Math.max(start, millis(f.doneAt) ?? now);
+  return start;
+}
+
+/** Receipt files are kept in the database, so each must stay well under its 1 MB limit. */
+export const MAX_RECEIPT_BYTES = 700_000;
+export const MAX_RECEIPTS_PER_REQUEST = 10;

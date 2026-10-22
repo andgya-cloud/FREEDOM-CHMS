@@ -947,3 +947,37 @@ a.kpi:hover { border-color: var(--primary); }
 }
 /* ADIA Today: four gauges in one row on wide screens. */
 @container (min-width: 760px) { .adia-dash .gauges-3 { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+/* Petty cash: sections, item lines, budget bars, receipts and the ledger. */
+.petty-nav { margin-bottom: 16px; }
+.petty-lines { display: flex; flex-direction: column; gap: 10px; }
+.petty-line { display: grid; grid-template-columns: minmax(0, 1fr) 72px minmax(0, 130px) auto; grid-template-areas: 'desc desc desc desc' 'qty price amount del'; gap: 8px; align-items: end; padding-bottom: 10px; border-bottom: 1px dashed var(--border); }
+@media (min-width: 720px) { .petty-line { grid-template-columns: minmax(0, 1fr) 72px 140px 130px auto; grid-template-areas: 'desc qty price amount del'; } }
+.petty-line-desc { grid-area: desc; } .petty-line-qty { grid-area: qty; } .petty-line-price { grid-area: price; } .petty-line-del { grid-area: del; }
+.petty-line-amount { grid-area: amount; } .petty-line-amount strong { display: block; padding: 10px 0; white-space: nowrap; }
+.petty-health-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.petty-health-head { display: flex; justify-content: space-between; gap: 8px; font-size: 0.9rem; margin-bottom: 4px; }
+.petty-health-bar { display: flex; height: 10px; border-radius: 999px; overflow: hidden; background: rgba(148, 163, 184, 0.25); }
+.petty-health-used { background: #16a34a; } .petty-health-used.over { background: #dc2626; }
+.petty-health-wait { background: rgba(217, 119, 6, 0.45); }
+.petty-receipts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.petty-receipts li { display: flex; gap: 8px; align-items: center; }
+.petty-receipt { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'kind name' 'kind meta'; gap: 2px 10px; align-items: center; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.petty-receipt:hover { border-color: var(--blue, #1d4ed8); }
+.petty-receipt-kind { grid-area: kind; padding: 6px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; background: rgba(210, 167, 75, 0.18); color: #92651a; }
+.petty-receipt-name { grid-area: name; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.petty-receipt .small { grid-area: meta; }
+.petty-viewer { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: rgba(15, 23, 42, 0.75); }
+.petty-viewer-box { width: min(900px, 100%); max-height: 92vh; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 14px; background: #fff; color: #111827; }
+.petty-viewer-img { max-width: 100%; max-height: 78vh; object-fit: contain; margin: 0 auto; }
+.petty-viewer-pdf { width: 100%; height: 78vh; border: 0; }
+.petty-folders { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.petty-folder { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; text-align: left; padding: 0; border: 0; background: none; color: inherit; font: inherit; cursor: pointer; }
+.petty-folder .badge { grid-row: 1 / span 2; grid-column: 2; align-self: center; }
+.petty-folder-name { font-weight: 700; }
+.badge-warn { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
+.petty-ledger-reset td { background: rgba(210, 167, 75, 0.12); font-style: italic; }
+.ok-text { color: #16a34a; }
+.side-look .petty-light a.chip.chip-on, .petty-light .chip-on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.petty-viewer-box .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.petty-viewer-img { overflow: auto; }

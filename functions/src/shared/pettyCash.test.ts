@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, pettyCashNumber } from './pettyCash';
+import { categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, pettyCashNumber } from './pettyCash';
 
 describe('petty cash', () => {
   it('numbers requisitions like the old system', () => {
@@ -54,5 +54,41 @@ describe('petty cash', () => {
   it('completes a top-up at the third signature', () => {
     expect(fundStatusAfter(2)).toBe('collecting');
     expect(fundStatusAfter(3)).toBe('done');
+  });
+
+  it('works out a line from quantity and unit price', () => {
+    expect(lineAmountCents(3, 25050)).toBe(75150);
+    expect(lineAmountCents(1.5, 1000)).toBe(1500);
+    expect(categoryLabel({ category: 'Other', categoryNote: 'Generator fuel' })).toBe('Other: Generator fuel');
+    expect(categoryLabel({ category: 'Staff Payments', categoryNote: null })).toBe('Staff Payments');
+  });
+
+  it('keeps a running balance that a reset starts again from zero', () => {
+    const t = (ms: number) => ({ ms });
+    const millis = (x: unknown) => (x && typeof x === 'object' && 'ms' in x ? (x as { ms: number }).ms : null);
+    const req = (id: string, cents: number, ms: number, status: 'approved' | 'submitted' = 'approved') => ({
+      id, number: id, status, totalCents: cents, requesterName: 'Doreen', category: 'Other' as const, categoryNote: null,
+      approved: status === 'approved' ? { uid: 'e', name: 'E', role: 'Board member', at: t(ms) } : null,
+    });
+    const lines = pettyLedger(
+      [{ id: 'f1', kind: 'topup', amountCents: 10000, status: 'done', doneAt: t(1) }, { id: 'f2', kind: 'reset', amountCents: 0, status: 'done', doneAt: t(5) },
+        { id: 'f3', kind: 'topup', amountCents: 5000, status: 'done', doneAt: t(6) }, { id: 'f4', kind: 'topup', amountCents: 999, status: 'collecting', doneAt: null }],
+      [req('A', 3000, 2), req('B', 1000, 7), req('C', 500, 8, 'submitted')], millis,
+    );
+    expect(lines.map((l) => [l.id, l.balanceCents])).toEqual([['f1', 10000], ['A', 7000], ['f2', 0], ['f3', 5000], ['B', 4000]]);
+    const cats = categoryBudgets(['Other', 'Staff Payments'], { Other: 6000 }, [req('B', 1000, 7), req('C', 500, 8, 'submitted'), req('A', 3000, 2)], 5, millis);
+    expect(cats).toEqual([
+      { category: 'Other', allocatedCents: 6000, spentCents: 1000, pendingCents: 500 },
+      { category: 'Staff Payments', allocatedCents: 0, spentCents: 0, pendingCents: 0 },
+    ]);
+  });
+
+  it('lets any stakeholder sign once, never their own request', () => {
+    const r = { requesterId: 'doreen', checked: null, status: 'submitted' as const, signatures: { eliz: { name: 'E', role: 'Accountant' } } };
+    expect(nextStepFor(r, { uid: 'elias', canCheck: false, canApprove: false, canSign: true })).toBe('sign');
+    expect(nextStepFor(r, { uid: 'eliz', canCheck: true, canApprove: false, canSign: true })).toBeNull();
+    expect(nextStepFor({ ...r, requesterId: 'elias' }, { uid: 'elias', canCheck: false, canApprove: false, canSign: true })).toBeNull();
+    expect(nextStepFor(r, { uid: 'ronald', canCheck: false, canApprove: false, canSign: false })).toBeNull();
+    expect(nextStepFor({ ...r, status: 'approved' }, { uid: 'elias', canCheck: false, canApprove: false, canSign: true })).toBeNull();
   });
 });

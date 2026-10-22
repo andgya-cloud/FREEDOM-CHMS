@@ -1,16 +1,16 @@
 import { useMemo } from 'react';
-import { collection, query, where, type Timestamp } from 'firebase/firestore';
+import { collection, doc, query, where, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
-import { useLiveQuery } from '../lib/useQuery';
+import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import type { Permission } from '../../functions/src/shared/permissions';
-import { fundSummary, type PettyCashRequisition, type PettyFund } from '../../functions/src/shared/pettyCash';
+import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund } from '../../functions/src/shared/pettyCash';
 import type { Organization } from './OrgContext';
 
 export interface RequisitionRow extends PettyCashRequisition { createdAt?: Timestamp; deletedAt?: unknown }
 export interface FundRow extends PettyFund { createdAt?: Timestamp; createdBy?: string }
-const millis = (t: unknown) => (t && typeof (t as Timestamp).toMillis === 'function' ? (t as Timestamp).toMillis() : null);
+export const millis = (t: unknown) => (t && typeof (t as Timestamp).toMillis === 'function' ? (t as Timestamp).toMillis() : null);
 
 /** Petty cash permissions. The pastor holds every one of them (see the pettyCash rules). */
 export function usePettyCashAccess() {
@@ -20,7 +20,10 @@ export function usePettyCashAccess() {
   const canApprove = pc('pettycash.approve');
   const canAuthorize = pc('pettycash.authorize');
   const canRequest = pc('pettycash.request') || canCheck || canApprove;
-  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, seesAll: canCheck || canApprove || canAuthorize, any: canRequest || canAuthorize };
+  const canSign = canCheck || canApprove || canAuthorize;
+  // The title shown under a signature.
+  const signRole = can('pettycash.check') ? 'Accountant' : can('pettycash.approve') ? 'Board member' : can('pettycash.authorize') ? 'Stakeholder' : 'Pastor';
+  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, seesAll: canSign, any: canRequest || canAuthorize };
 }
 
 /** The organization's requisitions (or, for a requester, their own), the top-ups and resets, and the budget they add up to. */
@@ -44,5 +47,23 @@ export function usePettyCash(org: Organization) {
     [fundRows.rows],
   );
   const summary = useMemo(() => fundSummary(funds, requisitions, millis), [funds, requisitions]);
-  return { ...access, month, requisitions, funds, summary, loading: reqs.loading };
+  const periodStart = useMemo(() => periodStartOf(funds, millis), [funds]);
+  const budget = useLiveDoc<{ allocations?: Record<string, number> }>(() => (on ? doc(db, 'organizations', orgId, 'pettySettings', 'budget') : null), [orgId, on]);
+  const allocations = budget.data?.allocations ?? {};
+  return { ...access, month, requisitions, funds, summary, periodStart, allocations, loading: reqs.loading };
+}
+
+export interface ReceiptRow { id: string; reqId: string; name: string; type: string; size: number; uploadedByName: string; createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }
+
+/** Receipt records (not the files): all of them for those who see every requisition, or one requisition's. */
+export function useReceipts(org: Organization, reqId?: string) {
+  const access = usePettyCashAccess();
+  const on = !!org.id && access.any && !!access.uid && (access.seesAll || !!reqId);
+  const res = useLiveQuery<ReceiptRow>(() => {
+    if (!on) return null;
+    const col = collection(db, 'organizations', org.id, 'pettyReceipts');
+    return reqId ? query(col, where('reqId', '==', reqId)) : col;
+  }, [org.id, on, reqId]);
+  const receipts = useMemo(() => res.rows.filter((r) => !r.deletedAt).sort((a, b) => (a.createdAt?.toMillis() ?? Date.now()) - (b.createdAt?.toMillis() ?? Date.now())), [res.rows]);
+  return { receipts, loading: res.loading };
 }

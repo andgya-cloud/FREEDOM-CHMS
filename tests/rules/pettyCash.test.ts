@@ -115,4 +115,75 @@ describe('petty cash', () => {
     await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyFunds/f1')));
     await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyFunds/f1')));
   });
+
+  it('approves a request once any three stakeholders sign, never the requester, each only once', async () => {
+    await seedRequest('n1', { signatures: {} });
+    const sig = (uid: string) => ({ name: uid, role: 'Stakeholder', at: serverTimestamp() });
+    const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n1');
+    await assertFails(updateDoc(ref('doreen'), { 'signatures.doreen': sig('doreen'), ...touched('doreen') }));
+    await assertFails(updateDoc(ref('ronald'), { 'signatures.ronald': sig('ronald'), ...touched('ronald') }));
+    await assertFails(updateDoc(ref('s1'), { 'signatures.s2': sig('s2'), ...touched('s1') }));
+    await assertFails(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), status: 'approved', approved: stamp('s1', 'Stakeholder'), ...touched('s1') }));
+    await assertSucceeds(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), ...touched('s1') }));
+    await assertFails(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), ...touched('s1') }));
+    // The new-style request has no accountant step.
+    await assertFails(updateDoc(ref('eliz'), { status: 'checked', checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
+    await assertSucceeds(updateDoc(ref('eliz'), { 'signatures.eliz': sig('eliz'), ...touched('eliz') }));
+    // The third signature must approve it, with no change to the amount.
+    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), ...touched('elias') }));
+    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), totalCents: 1, ...touched('elias') }));
+    await assertSucceeds(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
+    await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
+  });
+
+  it('lets a signer reject a waiting request with a reason', async () => {
+    await seedRequest('n2', { signatures: {} });
+    const reject = (uid: string, reason: string) => updateDoc(doc(as(uid), 'organizations/adia/pettyCash/n2'), { status: 'rejected', rejection: { uid, name: uid, reason, at: serverTimestamp() }, ...touched(uid) });
+    await assertFails(reject('ronald', 'No'));
+    await assertFails(reject('s1', ''));
+    await assertSucceeds(reject('s1', 'Not in the budget'));
+  });
+
+  it('requires a note for Other and refuses one elsewhere', async () => {
+    const other = { ...newRequest('doreen'), category: 'Other', signatures: {} };
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/o1'), other));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/o2'), { ...other, categoryNote: '' }));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/o3'), { ...other, categoryNote: 'Generator fuel' }));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/o4'), { ...newRequest('doreen'), categoryNote: 'x', signatures: {} }));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/o5'), { ...newRequest('doreen'), signatures: { s1: { name: 's1', role: 'x', at: serverTimestamp() } } }));
+  });
+
+  it('keeps receipts with whoever may see the request', async () => {
+    await seedRequest('q1', { signatures: {} });
+    await seedRequest('q2', { signatures: {}, status: 'rejected' });
+    const stamps = (uid: string) => ({ deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: uid, updatedAt: serverTimestamp(), updatedBy: uid });
+    const meta = (uid: string, reqId = 'q1', extra: Record<string, unknown> = {}) => ({ orgId: 'adia', reqId, name: 'till.jpg', type: 'image/jpeg', size: 120000, uploadedByName: uid, ...stamps(uid), ...extra });
+    const file = (uid: string, reqId = 'q1', data = 'data:image/jpeg;base64,AAAA') => ({ orgId: 'adia', reqId, data, ...stamps(uid) });
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/a'), meta('doreen')));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/a'), file('doreen')));
+    await assertFails(setDoc(doc(as('ronald'), 'organizations/adia/pettyReceipts/b'), meta('ronald')));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/c'), meta('doreen', 'q2')));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/d'), meta('doreen', 'q1', { size: 900000 })));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/e'), file('doreen', 'q1', 'data:text/html;base64,AAAA')));
+    await assertSucceeds(setDoc(doc(as('eliz'), 'organizations/adia/pettyReceipts/f'), meta('eliz')));
+    await assertSucceeds(getDocs(query(collection(as('doreen'), 'organizations/adia/pettyReceipts'), where('reqId', '==', 'q1'))));
+    await assertFails(getDocs(query(collection(as('ronald'), 'organizations/adia/pettyReceipts'), where('reqId', '==', 'q1'))));
+    await assertSucceeds(getDocs(collection(as('s1'), 'organizations/adia/pettyReceipts')));
+    await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/a')));
+    await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyReceiptFiles/a')));
+    const remove = (uid: string, id: string) => updateDoc(doc(as(uid), `organizations/adia/pettyReceipts/${id}`), { deletedAt: serverTimestamp(), deletedBy: uid, ...touched(uid) });
+    await assertFails(remove('ronald', 'a'));
+    await assertFails(remove('eliz', 'a'));
+    await assertSucceeds(remove('doreen', 'a'));
+    await assertSucceeds(remove('s1', 'f'));
+  });
+
+  it('lets only the signing stakeholders set category budgets', async () => {
+    const budget = (uid: string) => ({ orgId: 'adia', allocations: { Other: 500000 }, updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertFails(setDoc(doc(as('eliz'), 'organizations/adia/pettySettings/budget'), budget('eliz')));
+    await assertFails(setDoc(doc(as('s1'), 'organizations/adia/pettySettings/other'), budget('s1')));
+    await assertSucceeds(setDoc(doc(as('s1'), 'organizations/adia/pettySettings/budget'), budget('s1')));
+    await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettySettings/budget')));
+    await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettySettings/budget')));
+  });
 });
