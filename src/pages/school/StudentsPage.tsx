@@ -29,7 +29,12 @@ function Students({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head">
         <h1>Students</h1>
-        {can('people.write') && <Link to="/school/students/new" className="btn btn-primary">Enrol a student</Link>}
+        {can('people.write') && (
+          <div className="row-actions">
+            <Link to="/school/students/import" className="btn btn-quiet">Import from Excel</Link>
+            <Link to="/school/students/new" className="btn btn-primary">Enrol a student</Link>
+          </div>
+        )}
       </div>
       <SchoolNav feesAllowed={s.feesAllowed} />
       <input type="search" className="search" placeholder="Find by name or admission number" aria-label="Find a student" value={q} onChange={(e) => setQ(e.target.value)} />

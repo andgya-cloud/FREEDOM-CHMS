@@ -849,7 +849,8 @@ service cloud.firestore {
           && shortText(request.resource.data.level, 60)
           && request.resource.data.status in ['applicant', 'enrolled', 'deferred', 'graduated', 'withdrawn']
           && (request.resource.data.status != 'graduated' || (resource != null && resource.data.status == 'graduated'))
-          && (resource == null ? request.resource.data.get('admissionNo', null) == null
+          && (resource == null ? (request.resource.data.get('admissionNo', null) == null
+                                  || (has('settings.manage') && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1))
                                : request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null))
           && listOf(request.resource.data.sponsors, 4);
         allow delete: if false;
