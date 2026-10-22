@@ -202,7 +202,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   }
 
   return (
-    <section className="petty-auth" aria-label={text.title}>
+    <section className={`petty-auth petty-auth-${kind}`} aria-label={text.title}>
       <div className="petty-auth-head">
         <div className="petty-auth-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d={kind === 'topup' ? 'M9 3h6l-1.5 3h-3zM6 10c0-2 2.7-4 6-4s6 2 6 4l1 8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3zM12 10v7M10 12.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5-1 1-2 1.3-2 .6-2 1.4.9 1.3 2 1.3 2-.6 2-1.3' : 'M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4'} /></svg>
@@ -298,7 +298,15 @@ function Home({ org }: { org: Organization }) {
         {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}
       </div>
       <PettyNav org={org} />
-      {p.seesAll && <Stats org={org} onReset={() => setShowReset(true)} />}
+      {p.seesAll && <Stats org={org} onReset={() => {
+        setShowReset(true);
+        // Bring the reset card into view and put the cursor in its password box, so the press clearly does something.
+        setTimeout(() => {
+          const card = document.querySelector<HTMLElement>('.petty-auth-reset');
+          card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          card?.querySelector<HTMLInputElement>('input[type="password"]')?.focus({ preventScroll: true });
+        }, 50);
+      }} />}
       {p.seesAll && (showReset || resetOpen) && <FundCard org={org} kind="reset" onClose={() => setShowReset(false)} />}
       {p.seesAll && <FundCard org={org} kind="topup" />}
       {p.canSign && (
