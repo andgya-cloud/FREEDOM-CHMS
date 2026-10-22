@@ -65,6 +65,8 @@ const RequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((
 const PayrollPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPage })));
 const PayrollStaffPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollStaffPage })));
 const PayrollPersonPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPersonPage })));
+const ExamsPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.ExamsPage })));
+const ExamSheetPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.ExamSheetPage })));
 const PayrollRunPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollRunPage })));
 const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage').then((m) => ({ default: m.SchoolSettingsPage })));
 const HopeHome = lazy(() => import('./pages/hope/HopeHome').then((m) => ({ default: m.HopeHome })));
@@ -152,6 +154,8 @@ function AppRoutes() {
         <Route path="/school/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/school/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
         <Route path="/school/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
+        <Route path="/school/exams" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><ExamsPage /></RequirePermission>} />
+        <Route path="/school/exams/sheet/:sheetId" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><ExamSheetPage /></RequirePermission>} />
         <Route path="/school/payroll" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPage /></RequirePermission>} />
         <Route path="/school/payroll/staff" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollStaffPage /></RequirePermission>} />
         <Route path="/school/payroll/staff/:staffId" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPersonPage /></RequirePermission>} />

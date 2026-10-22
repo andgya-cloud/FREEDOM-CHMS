@@ -39,7 +39,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         Attendance
       </NavLink>
       {current?.type === 'college' ? (
-        <NavLink to="/school" className={({ isActive }) => `tab${isActive && !/^\/school\/(petty-cash|payroll)/.test(location.pathname) ? ' active' : ''}`}>
+        <NavLink to="/school" className={({ isActive }) => `tab${isActive && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>
           {look === 'glass' ? 'Programmes' : 'School'}
         </NavLink>
@@ -64,6 +64,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/school/payroll" className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" /></svg>
           Payroll
+        </NavLink>
+      )}
+      {current?.type === 'college' && (can('exams.mark') || can('exams.manage') || can('users.manage')) && (
+        <NavLink to="/school/exams" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>
+          Exam Records
         </NavLink>
       )}
       <NavLink to="/settings" className="tab">

@@ -1315,6 +1315,73 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ADIA exam records. A trainer (exams.mark) sees and keys in only their own marks sheets, and only while
+      // they are drafts; submitting locks a sheet. The principal (exams.manage, and the pastor) sees every sheet,
+      // may change marks on a locked sheet, unlocks it, and keeps the remarks, attendance and grading. Every change
+      // the principal makes is written to the exam log by the app.
+      function ex(permission) {
+        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+      }
+      function examWeights(w) {
+        return w is map && w.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final']) && w.keys().hasAll(['cat1', 'cat2', 'cat3', 'final']);
+      }
+      function examSheetFields(d) {
+        return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'ownerUid', 'ownerName', 'courseName', 'teacherName', 'weights', 'status',
+               'submittedAt', 'marks', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.orgId == orgId && shortText(d.cohort, 80) && d.cohort.size() >= 1
+          && (d.courseId == null || shortText(d.courseId, 80))
+          && shortText(d.courseName, 120) && shortText(d.teacherName, 120) && shortText(d.ownerName, 120)
+          && examWeights(d.weights) && d.marks is map && d.marks.size() <= 400
+          && d.status in ['draft', 'submitted'];
+      }
+      match /examSheets/{sheetId} {
+        allow read: if ex('exams.manage') || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid);
+        allow create: if examSheetFields(request.resource.data) && stampedCreate() && freshRecord()
+          && request.resource.data.status == 'draft' && request.resource.data.submittedAt == null
+          && (ex('exams.manage') || (ex('exams.mark') && request.resource.data.ownerUid == request.auth.uid));
+        allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'weights', 'marks', 'status',
+               'submittedAt', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
+          && (request.resource.data.status == resource.data.status
+              || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)
+              || (request.resource.data.status == 'draft' && ex('exams.manage')))
+          && (ex('exams.manage')
+              || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid && resource.data.status == 'draft'));
+        allow delete: if false;
+      }
+      match /examMeta/{cohortKey} {
+        allow read: if ex('exams.manage');
+        allow create, update: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'remarks', 'attendance', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80)
+          && request.resource.data.remarks is map && request.resource.data.attendance is map
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /examSettings/{settingId} {
+        allow read: if ex('exams.manage') || ex('exams.mark');
+        allow create, update: if ex('exams.manage') && settingId == 'main'
+          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.passMark is number && request.resource.data.passMark >= 0 && request.resource.data.passMark <= 100
+          && request.resource.data.bands is list && request.resource.data.bands.size() >= 1 && request.resource.data.bands.size() <= 10
+          && shortText(request.resource.data.principalName, 120) && shortText(request.resource.data.principalTitle, 60)
+          && shortText(request.resource.data.directorName, 120) && shortText(request.resource.data.directorTitle, 60)
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /examLog/{entryId} {
+        allow read: if ex('exams.manage');
+        allow create: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'action', 'cohort', 'sheetId', 'detail', 'byUid', 'byName', 'at'])
+          && request.resource.data.orgId == orgId && request.resource.data.byUid == request.auth.uid && request.resource.data.at == request.time
+          && shortText(request.resource.data.action, 40) && shortText(request.resource.data.cohort, 80)
+          && shortText(request.resource.data.detail, 500) && shortText(request.resource.data.byName, 120)
+          && (request.resource.data.sheetId == null || shortText(request.resource.data.sheetId, 80));
+        allow update, delete: if false;
+      }
+
       match /dataRequests/{requestId} {
         allow read: if canAccessOrg(orgId) && has('data.export');
         allow create: if canAccessOrg(orgId) && has('data.export')

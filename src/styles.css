@@ -498,6 +498,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 .side-look .btn-quiet:hover { color: rgb(var(--acc)); border-color: rgb(var(--acc)); background: rgb(var(--acc) / 0.1); }
 .side-look .chip { border-color: rgb(var(--acc) / 0.5); }
 .side-look .chip-on { background: rgb(var(--acc) / 0.15); color: rgb(var(--acc-light)); border-color: rgb(var(--acc)); }
+.side-look a.chip.chip-on { color: rgb(var(--acc-light)); }
 
 /* Side panel: on phones it is the bar at the top, and the menu is a dock at the bottom */
 .side-look .adia-side { display: flex; align-items: center; gap: 12px; margin: 12px 12px 0; padding: 12px 14px; border-radius: 24px; backdrop-filter: none; -webkit-backdrop-filter: none; background-color: var(--surface); }
@@ -904,3 +905,25 @@ a.kpi:hover { border-color: var(--primary); }
 .gauges .gauge figcaption { font-size: 0.85rem; }
 .petty-insights .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); } @media (min-width: 900px) { .petty-light .petty-insights .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .gauges-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } @container (min-width: 560px) { .gauges-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Exam Records */
+.page.narrow.exams { max-width: 1100px; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; align-items: end; }
+.btn.btn-small { min-height: 36px; padding: 0 10px; font-size: 0.85rem; }
+.exam-cards { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.exam-card { display: flex; flex-direction: column; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); color: var(--text); text-decoration: none; }
+.exam-card:hover { border-color: var(--primary); }
+.exam-card-head { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.exam-bar { display: block; height: 8px; border-radius: 4px; background: var(--border); overflow: hidden; }
+.exam-bar > span { display: block; height: 100%; background: var(--c1, var(--primary)); }
+.exam-bar > span.done { background: var(--green, #2e7d32); }
+.exam-bar.small-bar { display: inline-block; width: 80px; vertical-align: middle; }
+.exam-table-wrap { overflow-x: auto; }
+.exam-table, .exam-marks { min-width: 100%; white-space: nowrap; }
+.exam-table th, .exam-table td, .exam-marks th, .exam-marks td { padding: 6px 8px; }
+.exam-mark, .exam-att { width: 4.5em; min-height: 36px; padding: 4px 6px; text-align: right; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.exam-mark:disabled, .exam-att:disabled { background: transparent; border-color: transparent; }
+.exam-remark { width: 100%; min-width: 220px; min-height: 36px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); font: inherit; }
+.exam-weights { max-width: 420px; }
+.exam-print-head { text-align: center; margin-bottom: 8px; }
+.exam-cards > li { display: grid; }

@@ -11,7 +11,7 @@ const GREY: [number, number, number] = [107, 114, 128];
 
 let crest: Promise<string | null> | null = null;
 /** The ADIA crest as a data URL, loaded once; the slip is still made without it when offline. */
-function crestImage(): Promise<string | null> {
+export function crestImage(): Promise<string | null> {
   crest ??= fetch('/org/adia-crest.png')
     .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('no crest'))))
     .then((b) => new Promise<string>((resolve, reject) => {
