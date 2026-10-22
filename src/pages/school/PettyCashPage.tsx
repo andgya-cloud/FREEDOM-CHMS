@@ -1,4 +1,4 @@
-import { useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -167,6 +167,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const { profile } = useAuth();
   const toast = useToast();
   const [amount, setAmount] = useState('');
+  const amountBox = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
@@ -178,7 +179,12 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const text = FUND_TEXT[kind];
 
   async function confirm() {
-    if (!ready || !password) return;
+    if (!password) return;
+    if (!ready) {
+      toast.show(amount.trim() ? 'Type the top-up amount in numbers, for example 500000.' : 'Type the top-up amount first, in the box at the top.');
+      amountBox.current?.focus();
+      return;
+    }
     setBusy(true);
     try {
       await confirmOwnPassword(password);
@@ -209,14 +215,14 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a stakeholder'}</p>
         ) : (
           <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount to top up e.g. 500000" disabled={!p.canAuthorize} />
+            <input ref={amountBox} inputMode="decimal" className={ready ? '' : 'petty-amount-empty'} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Type the amount here, e.g. 500000" disabled={!p.canAuthorize} />
             {amount.trim() && (cents != null && cents > 0
               ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget once {FUND_SIGNATURES_NEEDED} stakeholders sign below.</small>
               : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
           </label>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && !amount.trim() && <p className="petty-warn">Enter the top-up amount above before stakeholders can sign</p>}
+        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the top-up amount in the box above. Step 2: type your password below and press Confirm.</p>}
         <ol className="petty-signers">
           {Array.from({ length: FUND_SIGNATURES_NEEDED }, (_, n) => {
             const s = signed[n];
@@ -231,9 +237,9 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
                     <label className="field"><span>Stakeholder</span><input value={name} readOnly /></label>
                     <div className="petty-signer-row">
                       <label className="field"><span>Your Insight-IQ password</span>
-                        <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password / signature" disabled={!ready || busy} />
+                        <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password / signature" disabled={busy} />
                       </label>
-                      <button type="button" className="btn btn-primary" disabled={!ready || !password || busy} onClick={confirm}>{busy ? 'Checking…' : '✓ Confirm'}</button>
+                      <button type="button" className="btn btn-primary" disabled={!password || busy} onClick={confirm}>{busy ? 'Checking…' : '✓ Confirm'}</button>
                     </div>
                   </div>
                 ) : open && n === signed.length ? (
