@@ -981,3 +981,8 @@ a.kpi:hover { border-color: var(--primary); }
 .side-look .petty-light a.chip.chip-on, .petty-light .chip-on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
 .petty-viewer-box .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .petty-viewer-img { overflow: auto; }
+
+/* Petty cash: the top-up amount as read, and a top-up still collecting signatures. */
+.petty-amount-ok { display: block; margin-top: 6px; color: #15803d; font-weight: 600; }
+.petty-amount-bad { display: block; margin-top: 6px; color: #b91c1c; font-weight: 600; }
+.petty-stat-pending { display: block; margin-top: 4px; font-size: 0.75rem; color: #b45309; font-weight: 600; }

@@ -95,9 +95,14 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
 function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
   const p = usePettyCash(org);
   const s = p.summary;
+  // A top-up still collecting signatures is shown, but only counts once the third stakeholder signs.
+  const pending = p.funds.find((f) => f.kind === 'topup' && f.status === 'collecting');
+  const pendingLeft = pending ? FUND_SIGNATURES_NEEDED - Object.keys(pending.signatures).length : 0;
   return (
     <div className="petty-stats">
-      <div className="petty-stat petty-stat-budget"><span>Total budget</span><strong>{money(org, s.budgetCents)}</strong></div>
+      <div className="petty-stat petty-stat-budget"><span>Total budget</span><strong>{money(org, s.budgetCents)}</strong>
+        {pending && <small className="petty-stat-pending">+ {money(org, pending.amountCents)} once {pendingLeft} more sign{pendingLeft === 1 ? 's' : ''}</small>}
+      </div>
       <div className="petty-stat petty-stat-spent"><span>Total spent</span><strong>{money(org, s.spentCents)}</strong></div>
       <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Remaining</span><strong>{money(org, s.remainingCents)}</strong></div>
       <button type="button" className="petty-reset" onClick={onReset} disabled={!p.canAuthorize} title={p.canAuthorize ? undefined : 'Only the signing stakeholders can reset the budget'}>
@@ -204,10 +209,13 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
         ) : (
           <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
             <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Enter amount to top up e.g. 500000" disabled={!p.canAuthorize} />
+            {amount.trim() && (cents != null && cents > 0
+              ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget once {FUND_SIGNATURES_NEEDED} stakeholders sign below.</small>
+              : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
           </label>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && <p className="petty-warn">Enter the top-up amount above before stakeholders can sign</p>}
+        {!ready && !amount.trim() && <p className="petty-warn">Enter the top-up amount above before stakeholders can sign</p>}
         <ol className="petty-signers">
           {Array.from({ length: FUND_SIGNATURES_NEEDED }, (_, n) => {
             const s = signed[n];

@@ -167,7 +167,8 @@ export function fundSummary(
 
 /** Shillings typed in a box ("1,250.50") as cents, or null when it is not a valid amount. */
 export function parseAmountCents(text: string): number | null {
-  const clean = text.replace(/[,\s]/g, '');
+  // Accepts what people type: "500,000", "KES 500000", "Ksh 500 000/=".
+  const clean = text.replace(/^\s*(kes|kshs?|sh)\.?/i, '').replace(/(\/=|\/-)\s*$/, '').replace(/[,\s]/g, '');
   if (!/^\d+(\.\d{1,2})?$/.test(clean)) return null;
   return Math.round(Number(clean) * 100);
 }

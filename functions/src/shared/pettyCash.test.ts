@@ -17,6 +17,8 @@ describe('petty cash', () => {
     expect(parseAmountCents('12.345')).toBeNull();
     expect(parseAmountCents('-5')).toBeNull();
     expect(parseAmountCents('')).toBeNull();
+    expect(parseAmountCents('KES 500,000')).toBe(50000000);
+    expect(parseAmountCents('Ksh 500 000/=')).toBe(50000000);
   });
 
   it('lets the accountant check, then someone else give final approval, never on their own request', () => {
