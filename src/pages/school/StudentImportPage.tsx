@@ -178,12 +178,13 @@ function StudentImport({ org }: { org: Organization }) {
 
           <div className="card exam-table-wrap">
             <table className="table">
-              <thead><tr><th>Sheet · row</th><th>Name</th><th>Adm no</th><th>Programme</th><th>Intake</th><th>Status</th><th>Result</th></tr></thead>
+              <thead><tr><th>Sheet · row</th><th>Name</th><th>Phone</th><th>Adm no</th><th>Programme</th><th>Intake</th><th>Status</th><th>Result</th></tr></thead>
               <tbody>
                 {shown.map((r) => (
                   <tr key={`${r.sheet}:${r.line}`}>
                     <td className="small">{r.sheet ? `${r.sheet} · ${r.line}` : r.line}</td>
-                    <td>{r.name || <span className="muted">(blank)</span>}{r.phone && <div className="small muted">{r.phone}</div>}</td>
+                    <td>{r.name || <span className="muted">(blank)</span>}</td>
+                    <td className="nowrap">{r.phone ?? <span className="muted small">none</span>}</td>
                     <td>{r.admissionNo ?? <span className="muted small">automatic</span>}</td>
                     <td>{r.programme}{r.newCourse && <span className="badge"> new</span>}</td>
                     <td>{r.intake}{r.newIntake && !r.skip && <span className="badge"> new</span>}</td>

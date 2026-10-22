@@ -49,7 +49,7 @@ function Students({ org }: { org: Organization }) {
   }, [rows, s.intakeName, s.courses]);
 
   return (
-    <div className="page narrow">
+    <div className="page narrow wide-table">
       <div className="page-head">
         <h1>Students</h1>
         {can('people.write') && (
@@ -93,25 +93,29 @@ function Students({ org }: { org: Organization }) {
               {g.departments.map((d) => (
                 <section key={d.id} className="dept-group">
                   <h3>{s.courseName(d.id) || 'No department'} <span className="muted small">{d.list.length}</span></h3>
-                  <ul className="link-list">
-                    {d.list.map(({ st, name }) => {
-                      const course = s.courses.find((c) => c.id === st.courseId);
-                      const att = course ? studentAttendance(st.id, course.name, s.events, s.records, st.enrolledOn) : null;
-                      const bal = s.balances.find((b) => b.studentId === st.id);
-                      return (
-                        <li key={st.id}>
-                          <Link to={`/school/students/${st.id}`}>
-                            <span className="link-title">{name} <span className="muted small">{st.admissionNo ?? 'number pending'}</span></span>
-                            <span className="link-detail">
-                              {st.level ? `${st.level} · ` : ''}{STUDENT_STATUS_LABELS[st.status]}
-                              {att?.percent != null && ` · attendance ${pct(att.percent)}`}
-                              {bal && bal.balanceCents > 0 && ` · owes ${money(org, bal.balanceCents)}`}
-                            </span>
-                          </Link>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  <div className="exam-table-wrap">
+                    <table className="table student-table">
+                      <thead><tr><th>Name</th><th>Adm no</th><th>Phone</th><th>Status</th><th className="num">Attendance</th>{s.feesAllowed && <th className="num">Owes</th>}</tr></thead>
+                      <tbody>
+                        {d.list.map(({ st, name }) => {
+                          const course = s.courses.find((c) => c.id === st.courseId);
+                          const att = course ? studentAttendance(st.id, course.name, s.events, s.records, st.enrolledOn) : null;
+                          const bal = s.balances.find((b) => b.studentId === st.id);
+                          const phone = s.byId(st.id)?.phone;
+                          return (
+                            <tr key={st.id}>
+                              <td><Link to={`/school/students/${st.id}`}>{name}</Link>{st.level && <span className="muted small"> · {st.level}</span>}</td>
+                              <td className="nowrap">{st.admissionNo ?? <span className="muted small">pending</span>}</td>
+                              <td className="nowrap">{phone ? <a href={`tel:${phone}`}>{phone}</a> : <span className="muted small">none</span>}</td>
+                              <td>{STUDENT_STATUS_LABELS[st.status]}</td>
+                              <td className="num">{att?.percent != null ? pct(att.percent) : '–'}</td>
+                              {s.feesAllowed && <td className="num">{bal && bal.balanceCents > 0 ? money(org, bal.balanceCents) : '–'}</td>}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
                 </section>
               ))}
             </details>

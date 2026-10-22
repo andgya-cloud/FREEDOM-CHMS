@@ -933,3 +933,5 @@ a.kpi:hover { border-color: var(--primary); }
 .cohort-group[open] > summary { margin-bottom: 8px; }
 .dept-group { margin-top: 12px; }
 .dept-group h3 { font-size: 0.95rem; margin: 0 0 6px; color: var(--primary); }
+.nowrap { white-space: nowrap; }
+.student-table td, .student-table th { padding: 6px 8px; }
