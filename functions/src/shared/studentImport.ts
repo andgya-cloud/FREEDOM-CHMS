@@ -3,7 +3,7 @@
  * and checks every student against the programmes, intakes and people already in ADIA, so the
  * preview can say exactly what will be added, what is new and what is skipped.
  */
-import { normalizePhone } from './phone';
+import { normalizePhone } from './phone.js';
 
 export type ImportCell = string | number | Date | null | undefined;
 
