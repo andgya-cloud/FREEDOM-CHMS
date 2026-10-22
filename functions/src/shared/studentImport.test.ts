@@ -11,7 +11,11 @@ const have = {
 describe('student import', () => {
   it('finds the header under a title row and understands other column names', () => {
     const f = findColumns([['ADIA class list'], [], ['No.', 'Student Name', 'Reg No', 'Course', 'Cohort', 'Mobile']]);
-    expect(f).toEqual({ headerRow: 2, columns: { name: 1, admissionNo: 2, programme: 3, intake: 4, phone: 5 } });
+    expect(f).toEqual({ headerRow: 2, columns: { name: 1, admissionNo: 2, programme: 3, intake: 4, phone: 5 }, nameParts: [] });
+    expect(findColumns([['S/N', 'NAMES OF TRAINEES', 'Course']])?.columns.name).toBe(1);
+    expect(findColumns([['Guardian name', 'Course name']])).toBeNull();
+    const split = planStudentImport([['First Name', 'Other Names', 'Surname', 'Course', 'Intake'], ['Jane', '', 'Wanjiru', 'ICT', 'September 2026']], have, { startDate: '2026-10-22' })!;
+    expect(split.ready[0]!.name).toBe('Jane Wanjiru');
     expect(findColumns([['a', 'b']])).toBeNull();
   });
   it('reads Excel and typed dates', () => {

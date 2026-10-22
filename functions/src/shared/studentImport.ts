@@ -33,15 +33,30 @@ const key = (v: unknown) => String(v ?? '').toLowerCase().replace(/[^a-z0-9]/g, 
 const text = (v: ImportCell) => (v instanceof Date ? '' : String(v ?? '').replace(/\s+/g, ' ').trim());
 
 /** Which column holds each field, from the first row (of the first ten) that has a Name column. */
-export function findColumns(rows: readonly (readonly ImportCell[])[]): { headerRow: number; columns: Partial<Record<ImportField, number>> } | null {
+const NAME_PARTS = ['firstname', 'firstnames', 'givenname', 'fname', 'middlename', 'middlenames', 'othernames', 'othername', 'secondname', 'surname', 'lastname', 'familyname', 'lname'];
+const NOT_A_NAME = /sponsor|guardian|parent|kin|father|mother|course|programme|program|school|trainer|teacher|file|user/;
+
+/**
+ * Which column holds each field, from the first row (of the first ten) that has a name. A name split
+ * over columns (First name, Other names, Surname) is joined, and any other title with "name" in it
+ * (Names of student, Full names) counts when nothing matches exactly.
+ */
+export function findColumns(rows: readonly (readonly ImportCell[])[]): { headerRow: number; columns: Partial<Record<ImportField, number>>; nameParts: number[] } | null {
   for (let r = 0; r < Math.min(rows.length, 10); r++) {
     const columns: Partial<Record<ImportField, number>> = {};
-    (rows[r] ?? []).forEach((cell, c) => {
+    const nameParts: number[] = [];
+    const cells = rows[r] ?? [];
+    cells.forEach((cell, c) => {
       const k = key(cell);
       if (!k) return;
+      if (NAME_PARTS.includes(k)) { nameParts.push(c); return; }
       for (const f of IMPORT_FIELDS) if (columns[f] == null && ALIASES[f].includes(k)) { columns[f] = c; break; }
     });
-    if (columns.name != null) return { headerRow: r, columns };
+    if (columns.name == null && nameParts.length === 0) {
+      const loose = cells.findIndex((cell) => { const k = key(cell); return k.includes('name') && !NOT_A_NAME.test(k); });
+      if (loose >= 0) columns.name = loose;
+    }
+    if (columns.name != null || nameParts.length > 0) return { headerRow: r, columns, nameParts: columns.name != null ? [] : nameParts };
   }
   return null;
 }
@@ -140,7 +155,7 @@ export function planStudentImport(
 ): ImportPlan | null {
   const found = findColumns(rows);
   if (!found) return null;
-  const { headerRow, columns } = found;
+  const { headerRow, columns, nameParts } = found;
   const cell = (r: readonly ImportCell[], f: ImportField) => (columns[f] == null ? null : r[columns[f]!]);
   const studentIds = new Set(have.students.map((s) => s.id));
   const admissionNos = new Set(have.students.map((s) => key(s.admissionNo)).filter(Boolean));
@@ -152,7 +167,7 @@ export function planStudentImport(
 
   rows.forEach((r, i) => {
     if (i <= headerRow) return;
-    const name = text(cell(r, 'name')).slice(0, 120);
+    const name = (nameParts.length ? nameParts.map((c) => text(r[c])).filter(Boolean).join(' ') : text(cell(r, 'name'))).slice(0, 120);
     if (!name && r.every((c) => !text(c))) return;
     const notes: string[] = [];
     const rawPhone = cell(r, 'phone');
