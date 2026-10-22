@@ -1153,8 +1153,10 @@ service cloud.firestore {
       function pcSigner() {
         return pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize');
       }
+      // The title under a signature is the one on the signer's account; only the accountant signs as Accountant.
       function pcSignature(s) {
-        return s.keys().hasOnly(['name', 'role', 'at']) && s.at == request.time && shortText(s.name, 120) && shortText(s.role, 60);
+        return s.keys().hasOnly(['name', 'role', 'at']) && s.at == request.time && shortText(s.name, 120) && shortText(s.role, 60)
+          && (me().get('pettyTitle', '') != '' ? s.role == me().pettyTitle : s.role != 'Accountant');
       }
       function pcStep(fields) {
         return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields.concat(['updatedAt', 'updatedBy']))
@@ -1166,7 +1168,8 @@ service cloud.firestore {
       match /pettyCash/{reqId} {
         allow read: if pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize')
           || (pc('pettycash.request') && resource.data.requesterId == request.auth.uid);
-        allow create: if pcAny() && stampedCreate() && freshRecord()
+        // Only the signatories (pettycash.request) and the pastor raise requests.
+        allow create: if pc('pettycash.request') && stampedCreate() && freshRecord()
           && request.resource.data.keys().hasOnly(['orgId', 'number', 'requesterId', 'requesterName', 'category', 'categoryNote', 'items',
                'totalCents', 'month', 'status', 'checked', 'approved', 'rejection', 'signatures',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
@@ -1205,7 +1208,9 @@ service cloud.firestore {
                  && request.auth.uid in sigs
                  && pcSignature(sigs[request.auth.uid])
                  && (sigs.size() >= 3
-                      ? request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved)
+                      // One of the three must be the accountant's.
+                      ? (sigs.values()[0].role == 'Accountant' || sigs.values()[1].role == 'Accountant' || sigs.values()[2].role == 'Accountant')
+                        && request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved)
                       : request.resource.data.status == 'submitted' && request.resource.data.approved == null))
               || (pcStep(['status', 'rejection']) && pcRejection()));
         }

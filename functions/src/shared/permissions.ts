@@ -95,7 +95,19 @@ const TEAM_WORK = ['people.read', 'people.write', 'attendance.write', 'programs.
 /** The role an organization head gives to the staff they add. */
 export const TEAM_ROLE_ID = 'staff';
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff', RoleDefinition> = {
+/** The role for the petty cash signatories: they raise and sign requests, top-ups and resets, and see nothing else. */
+export const SIGNATORY_ROLE_ID = 'signatory';
+
+/** The title printed under each signature on a petty cash voucher. Every request needs the accountant's signature. */
+export const PETTY_TITLES = ['Chairman', 'Administrator', 'Accountant', 'Board member'] as const;
+export type PettyTitle = (typeof PETTY_TITLES)[number];
+export const ACCOUNTANT_TITLE: PettyTitle = 'Accountant';
+
+export function isPettyTitle(value: unknown): value is PettyTitle {
+  return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
+}
+
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -113,6 +125,7 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff', RoleDe
   // their organization's everyday work, no money, and they can add Staff for it.
   head: { name: 'Organization head', permissions: [...TEAM_WORK, 'team.manage'] },
   staff: { name: 'Staff', permissions: [...TEAM_WORK] },
+  signatory: { name: 'Petty cash signatory', permissions: ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'] },
 };
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {

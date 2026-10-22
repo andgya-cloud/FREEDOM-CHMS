@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { localDateKey } from '../../functions/src/shared/datetime';
-import type { Permission } from '../../functions/src/shared/permissions';
+import { ACCOUNTANT_TITLE, type Permission } from '../../functions/src/shared/permissions';
 import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund } from '../../functions/src/shared/pettyCash';
 import type { Organization } from './OrgContext';
 
@@ -14,16 +14,23 @@ export const millis = (t: unknown) => (t && typeof (t as Timestamp).toMillis ===
 
 /** Petty cash permissions. The pastor holds every one of them (see the pettyCash rules). */
 export function usePettyCashAccess() {
-  const { can, user } = useAuth();
+  const { can, user, profile } = useAuth();
   const pc = (p: Permission) => can(p) || can('users.manage');
   const canCheck = pc('pettycash.check');
   const canApprove = pc('pettycash.approve');
   const canAuthorize = pc('pettycash.authorize');
-  const canRequest = pc('pettycash.request') || canCheck || canApprove;
+  // Only the signatories (and the pastor) raise requests.
+  const canRequest = pc('pettycash.request');
   const canSign = canCheck || canApprove || canAuthorize;
-  // The title shown under a signature.
-  const signRole = can('pettycash.check') ? 'Accountant' : can('pettycash.approve') ? 'Board member' : can('pettycash.authorize') ? 'Stakeholder' : 'Pastor';
-  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, seesAll: canSign, any: canRequest || canAuthorize };
+  // The title printed under a signature, set on each signatory's account; the accountant's must be on every request.
+  const signRole = signTitle(profile?.pettyTitle, can('users.manage'));
+  const isAccountant = profile?.pettyTitle === ACCOUNTANT_TITLE;
+  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, seesAll: canSign, any: canRequest || canAuthorize };
+}
+
+/** The voucher title for a signer: the one on their account, otherwise Pastor or Stakeholder. */
+export function signTitle(pettyTitle: string | undefined, isPastor: boolean): string {
+  return pettyTitle || (isPastor ? 'Pastor' : 'Stakeholder');
 }
 
 /** The organization's requisitions (or, for a requester, their own), the top-ups and resets, and the budget they add up to. */

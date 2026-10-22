@@ -46,7 +46,7 @@ export function UsersPage() {
               <Link to={`/settings/users/${u.uid}`} className="row-main">
                 <span className="row-title">{u.displayName}{!u.active && <span className="badge badge-muted">Off</span>}</span>
                 <span className="row-detail">
-                  {roleName(u.roleId)} · {u.email}
+                  {roleName(u.roleId)}{u.pettyTitle ? ` (${u.pettyTitle})` : ''} · {u.email}
                   {u.lastSignInAt ? ` · Last in ${formatDateTime(u.lastSignInAt.toDate())}` : ' · Never signed in'}
                 </span>
               </Link>

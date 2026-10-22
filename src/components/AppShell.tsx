@@ -12,6 +12,7 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
+import { SIGNATORY_ROLE_ID } from '../../functions/src/shared/permissions';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
 function TabLabel({ full, short }: { full: string; short: string }) {
@@ -21,7 +22,9 @@ function TabLabel({ full, short }: { full: string; short: string }) {
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
   const { current } = useOrg();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
+  // The petty cash signatories see Petty Cash and Settings only.
+  const full = profile?.roleId !== SIGNATORY_ROLE_ID;
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
   useTemplates();
   const look = lookFor(current);
@@ -33,6 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   }, [look]);
   const tabs = (
     <nav className="tabbar" aria-label="Main">
+      {full && (<>
       <NavLink to="/" end className="tab">
         {adia ? <AdiaIcon name="today" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>}
         Today
@@ -61,19 +65,20 @@ export function AppShell({ children }: { children: ReactNode }) {
           Programmes
         </NavLink>
       )}
+      </>)}
       {current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type) && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
         <NavLink to={pettyCashBase(current.type)} className="tab">
           {adia ? <AdiaIcon name="pettyCash" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>}
           Petty Cash
         </NavLink>
       )}
-      {current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
+      {full && current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
         <NavLink to="/school/payroll" className="tab">
           {adia ? <AdiaIcon name="payroll" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" /></svg>}
           Payroll
         </NavLink>
       )}
-      {current?.type === 'college' && (can('exams.mark') || can('exams.manage') || can('users.manage')) && (
+      {full && current?.type === 'college' && (can('exams.mark') || can('exams.manage') || can('users.manage')) && (
         <NavLink to="/school/exams" className="tab">
           {adia ? <AdiaIcon name="exams" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>}
           {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}

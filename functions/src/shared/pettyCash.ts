@@ -2,8 +2,10 @@
  * ADIA petty cash: a requisition is submitted by the requester, then any three stakeholders sign it, each
  * from their own account with their own password; the third signature approves it. Nobody signs their own
  * request. Requests made before signatures were introduced keep the old steps (accountant checks, then a
- * board member approves). Firestore rules enforce the same.
+ * board member approves). One of the three signatures must be the accountant's. Firestore rules enforce the same.
  */
+
+import { ACCOUNTANT_TITLE } from './permissions.js';
 
 /** ADIA Training Centre's categories, from its old petty cash app. */
 export const PETTY_CASH_CATEGORIES = ['Freedom Hope Center', 'Staff Payments', 'Other'] as const;
@@ -86,12 +88,24 @@ export function itemsTotalCents(items: readonly { amountCents: number }[]): numb
   return items.reduce((sum, i) => sum + (Number.isFinite(i.amountCents) ? i.amountCents : 0), 0);
 }
 
-export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean; canSign?: boolean }
+export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean; canSign?: boolean; isAccountant?: boolean }
+
+
+/** True when only the accountant's signature can complete this request: two others have signed and the accountant has not. */
+export function waitingForAccountant(r: Pick<PettyCashRequisition, 'status' | 'signatures'>): boolean {
+  if (r.status !== 'submitted' || !r.signatures) return false;
+  const sigs = Object.values(r.signatures);
+  return sigs.length >= REQUEST_SIGNATURES_NEEDED - 1 && !sigs.some((s) => s.role === ACCOUNTANT_TITLE);
+}
 
 /** What this person may do with a requisition right now: "sign", or on an older request "check" or "approve". */
 export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked' | 'signatures'>, actor: PettyCashActor): 'sign' | 'check' | 'approve' | null {
   if (r.requesterId === actor.uid) return null;
-  if (r.signatures) return r.status === 'submitted' && actor.canSign && !(actor.uid in r.signatures) ? 'sign' : null;
+  if (r.signatures) {
+    if (r.status !== 'submitted' || !actor.canSign || actor.uid in r.signatures) return null;
+    // The accountant must be one of the three signatures, so the last place is kept for them.
+    return waitingForAccountant(r) && !actor.isAccountant ? null : 'sign';
+  }
   if (r.status === 'submitted' && actor.canCheck) return 'check';
   if (r.status === 'checked' && actor.canApprove && r.checked?.uid !== actor.uid) return 'approve';
   return null;

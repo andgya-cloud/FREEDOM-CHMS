@@ -11,7 +11,7 @@ import { friendlyError } from '../../lib/errors';
 import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, SIGNATORY_ROLE_ID, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { passwordProblems } from '../../../functions/src/shared/password';
 
 interface FormState {
@@ -23,15 +23,17 @@ interface FormState {
   extraPermissions: string[];
   password: string;
   active: boolean;
+  pettyTitle: string;
 }
 
 const ROLE_HINTS: Record<string, string> = {
   admin: ': everyday work, including recording gifts and receipts',
   head: ': runs one organization and adds its staff, never sees money',
   staff: ': everyday work in their organization, never sees money',
+  signatory: ': raises and signs petty cash requests, top-ups and resets, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '' };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -62,7 +64,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: u.extraPermissions ?? [], password: '', active: u.active,
+          extraPermissions: u.extraPermissions ?? [], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '',
         });
       }
       setLoaded(true);
@@ -70,6 +72,9 @@ export function UserFormPage() {
   }, [uid]);
 
   const role = roles.find((r) => r.id === form.roleId);
+  const signatory = form.roleId === SIGNATORY_ROLE_ID;
+  // The voucher title is for the petty cash signatories, the pastor included when they sign.
+  const showTitle = !teamOnly && (signatory || !!role?.isOwner);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const toggle = (k: 'orgIds' | 'extraPermissions', v: string) =>
     setForm((f) => ({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] }));
@@ -81,13 +86,15 @@ export function UserFormPage() {
     if (isNew && !/^\S+@\S+\.\S+$/.test(form.email)) return setError('Enter a valid email.');
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
+    if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
     setBusy(true);
     try {
       const payload = teamOnly
         ? { displayName: form.displayName.trim(), orgIds: form.orgIds }
         : {
           displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
-          extraPermissions: role?.isOwner ? [] : form.extraPermissions,
+          extraPermissions: role?.isOwner || signatory ? [] : form.extraPermissions,
+          pettyTitle: showTitle ? form.pettyTitle : '',
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -173,7 +180,7 @@ export function UserFormPage() {
                 </label>
               ))}
             </fieldset>
-            {!teamOnly && <fieldset className="field">
+            {!teamOnly && !signatory && <fieldset className="field">
               <legend>Also allow</legend>
               <p className="hint">Off by default for admins.</p>
               {GRANTABLE_PERMISSIONS.map((p) => (
@@ -184,6 +191,17 @@ export function UserFormPage() {
               ))}
             </fieldset>}
           </>
+        )}
+
+        {showTitle && (
+          <label className="field">
+            <span>Title on petty cash vouchers</span>
+            <select value={form.pettyTitle} onChange={(e) => set('pettyTitle', e.target.value)}>
+              <option value="">{signatory ? 'Choose a title' : 'None'}</option>
+              {PETTY_TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <small className="hint">Printed under their signature. Every request needs the Accountant's signature.</small>
+          </label>
         )}
 
         {isNew && (

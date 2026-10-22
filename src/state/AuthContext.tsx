@@ -17,6 +17,8 @@ export interface Profile {
   allOrgs: boolean;
   active: boolean;
   mustChangePassword?: boolean;
+  /** Petty cash voucher title, such as Accountant. */
+  pettyTitle?: string;
   lastSignInAt?: Timestamp;
 }
 

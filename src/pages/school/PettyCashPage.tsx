@@ -11,7 +11,7 @@ import { coSignFund, coSignRequisition } from '../../lib/coSign';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
-  FUND_SIGNATURES_NEEDED, itemsTotalCents, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
+  FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
@@ -268,7 +268,7 @@ export function PettyCashPage() {
 
 function Home({ org }: { org: Organization }) {
   const p = usePettyCash(org);
-  const actor = { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign };
+  const actor = { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant };
   const waiting = p.requisitions.filter((r) => nextStepFor(r, actor));
   const mine = p.requisitions.filter((r) => r.requesterId === p.uid);
   const approved = p.requisitions.filter((r) => r.status === 'approved');
@@ -448,7 +448,8 @@ function Requisition({ org }: { org: Organization }) {
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
   if (!r) return <div className="page narrow"><h1>Requisition</h1><p className="muted">{p.loading ? 'Loading…' : 'This requisition was not found.'}</p><Link to={pettyCashBase(org.type)}>Back to petty cash</Link></div>;
-  const step = nextStepFor(r, { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign });
+  const step = nextStepFor(r, { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant });
+  const needsAccountant = waitingForAccountant(r);
   const name = profile?.displayName ?? 'Staff';
   const act = (write: Promise<unknown>, done: string) => { write.catch((err) => toast.show(friendlyError(err))); toast.show(done); };
   const sigs = signaturesOf(r);
@@ -522,11 +523,12 @@ function Requisition({ org }: { org: Organization }) {
       </section>
       <section className="card stack">
         <h2>{r.signatures ? 'Authorization' : 'Approval history'}</h2>
-        {r.signatures && <p className="small muted">Any {REQUEST_SIGNATURES_NEEDED} stakeholders sign, each from their own account with their own password. The requester cannot sign their own request.</p>}
+        {r.signatures && <p className="small muted">{REQUEST_SIGNATURES_NEEDED} signatories sign, each with their own password, and one of them must be the accountant. The requester cannot sign their own request, and nobody signs twice.</p>}
+        {needsAccountant && <p className="notice">Waiting for the accountant's signature. It is the last one needed.</p>}
         <ol className="petty-steps">
           <li className="done"><strong>Requested by {r.requesterName}</strong><span className="small muted">{when(r.createdAt)}</span></li>
           {signOffs.map((s, n) => (
-            <li key={n} className={s.name ? 'done' : ''}><strong>{s.name ? `${s.role}: ${s.name}` : r.signatures ? `Signature ${n + 1}` : n === 0 ? 'Checked by the accountant' : 'Final approval by a board member'}</strong><span className="small muted">{s.when ?? 'Not yet'}</span></li>
+            <li key={n} className={s.name ? 'done' : ''}><strong>{s.name ? `${s.role}: ${s.name}` : r.signatures ? (needsAccountant ? 'Accountant' : `Signature ${n + 1}`) : n === 0 ? 'Checked by the accountant' : 'Final approval by a board member'}</strong><span className="small muted">{s.when ?? 'Not yet'}</span></li>
           ))}
         </ol>
         {r.rejection && <p className="notice">Rejected by {r.rejection.name} ({when(r.rejection.at)}): {r.rejection.reason}</p>}
@@ -566,7 +568,7 @@ function Requisition({ org }: { org: Organization }) {
       {r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
         <section className="card stack no-print">
           <h2>Another stakeholder signs on this device</h2>
-          <CoSignForm label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}. The stakeholder types their own email and password. You stay signed in.`} onSign={(email, pw) => coSignRequisition(org.id, r, email, pw)} />
+          <CoSignForm label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory types their own email and password. You stay signed in.`} onSign={(email, pw) => coSignRequisition(org.id, r, email, pw)} />
         </section>
       )}
       <ReceiptsBox org={org} req={r} receipts={receipts} />

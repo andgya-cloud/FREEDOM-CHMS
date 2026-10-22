@@ -20,6 +20,8 @@ export interface UserProfile extends AccessProfile {
   allOrgs: boolean;
   permissions: string[];
   mustChangePassword?: boolean;
+  /** Petty cash voucher title, such as Accountant; '' for none. */
+  pettyTitle?: string;
 }
 
 export interface Caller {

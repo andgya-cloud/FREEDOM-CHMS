@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useOrg } from '../state/OrgContext';
 import { formatDate } from '../../functions/src/shared/datetime';
@@ -17,6 +17,8 @@ import type { Organization } from '../state/OrgContext';
 import { lookFor } from '../lib/look';
 import { AdiaIcon } from '../components/icons';
 import { AdiaToday } from './school/AdiaToday';
+import { SIGNATORY_ROLE_ID } from '../../functions/src/shared/permissions';
+import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 
 /**
  * The home screen: search first, then the four big actions.
@@ -67,6 +69,11 @@ export function TodayPage() {
     : to === '/follow-ups' ? can('followups.manage')
     : to === '/school/exams' ? can('exams.mark') || can('exams.manage') || can('users.manage')
     : true);
+
+  // The petty cash signatories work in Petty Cash only, so it is their first page.
+  if (profile?.roleId === SIGNATORY_ROLE_ID && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type)) {
+    return <Navigate to={pettyCashBase(current.type)} replace />;
+  }
 
   return (
     <div className={`page${sided ? ' glass-today' : ''}`}>

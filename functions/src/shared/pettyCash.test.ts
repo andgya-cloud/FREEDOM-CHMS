@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, pettyCashNumber } from './pettyCash';
+import { categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, waitingForAccountant, pettyCashNumber } from './pettyCash';
 
 describe('petty cash', () => {
   it('numbers requisitions like the old system', () => {
@@ -30,6 +30,21 @@ describe('petty cash', () => {
     expect(nextStepFor(checked, elias)).toBe('approve');
     expect(nextStepFor(checked, { uid: 'eliz', canCheck: true, canApprove: true })).toBeNull();
     expect(nextStepFor({ ...checked, status: 'approved' }, elias)).toBeNull();
+  });
+
+  it('keeps the last of the three signatures for the accountant', () => {
+    const sig = (role: string) => ({ name: role, role });
+    const r = { requesterId: 'doreen', checked: null, status: 'submitted' as const, signatures: { elias: sig('Chairman'), eliz: sig('Administrator') } };
+    const ronald = { uid: 'ronald', canCheck: false, canApprove: true, canSign: true };
+    const daniel = { ...ronald, uid: 'daniel', isAccountant: true };
+    expect(waitingForAccountant(r)).toBe(true);
+    expect(nextStepFor(r, ronald)).toBeNull();
+    expect(nextStepFor(r, daniel)).toBe('sign');
+    expect(nextStepFor({ ...r, signatures: { elias: sig('Chairman') } }, ronald)).toBe('sign');
+    const withDaniel = { ...r, signatures: { daniel: sig('Accountant'), eliz: sig('Administrator') } };
+    expect(waitingForAccountant(withDaniel)).toBe(false);
+    expect(nextStepFor(withDaniel, ronald)).toBe('sign');
+    expect(nextStepFor(withDaniel, daniel)).toBeNull();
   });
 
   it('counts signed top-ups and approved spending since the last reset', () => {

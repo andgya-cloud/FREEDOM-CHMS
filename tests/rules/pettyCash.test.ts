@@ -32,6 +32,8 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users/elias'), user('staff', [...TEAM_WORK, 'pettycash.approve'], ['adia']));
     await setDoc(doc(db, 'users/plainHead'), user('head', [...TEAM_WORK, 'team.manage'], ['adia']));
     for (const s of ['s1', 's2', 's3']) await setDoc(doc(db, `users/${s}`), user('staff', [...TEAM_WORK, 'pettycash.authorize'], ['adia']));
+    await setDoc(doc(db, 'users/dan'), { ...user('signatory', ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'], ['adia']), pettyTitle: 'Accountant' });
+    await setDoc(doc(db, 'users/chair'), { ...user('signatory', ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'], ['adia']), pettyTitle: 'Chairman' });
     await setDoc(doc(db, 'users/fcnAcc'), user('staff', [...TEAM_WORK, 'pettycash.check'], ['fcn']));
   });
 });
@@ -129,11 +131,31 @@ describe('petty cash', () => {
     // The new-style request has no accountant step.
     await assertFails(updateDoc(ref('eliz'), { status: 'checked', checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
     await assertSucceeds(updateDoc(ref('eliz'), { 'signatures.eliz': sig('eliz'), ...touched('eliz') }));
-    // The third signature must approve it, with no change to the amount.
-    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), ...touched('elias') }));
-    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), totalCents: 1, ...touched('elias') }));
-    await assertSucceeds(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
+    // The third signature must be the accountant's.
+    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
+    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': { ...sig('elias'), role: 'Accountant' }, status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
+    // A titled signer signs under their own title only.
+    await assertFails(updateDoc(ref('dan'), { 'signatures.dan': sig('dan'), status: 'approved', approved: stamp('dan', 'Accountant'), ...touched('dan') }));
+    // It must approve it, with no change to the amount.
+    const dan = { name: 'dan', role: 'Accountant', at: serverTimestamp() };
+    await assertFails(updateDoc(ref('dan'), { 'signatures.dan': dan, ...touched('dan') }));
+    await assertFails(updateDoc(ref('dan'), { 'signatures.dan': dan, status: 'approved', approved: stamp('dan', 'Accountant'), totalCents: 1, ...touched('dan') }));
+    await assertSucceeds(updateDoc(ref('dan'), { 'signatures.dan': dan, status: 'approved', approved: stamp('dan', 'Accountant'), ...touched('dan') }));
     await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
+  });
+
+  it('approves once the accountant has signed early, whoever signs third', async () => {
+    await seedRequest('n3', { signatures: {} });
+    const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n3');
+    await assertSucceeds(updateDoc(ref('dan'), { 'signatures.dan': { name: 'dan', role: 'Accountant', at: serverTimestamp() }, ...touched('dan') }));
+    await assertFails(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Board member', at: serverTimestamp() }, ...touched('chair') }));
+    await assertSucceeds(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Chairman', at: serverTimestamp() }, ...touched('chair') }));
+    await assertSucceeds(updateDoc(ref('s1'), { 'signatures.s1': { name: 's1', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s1', 'Stakeholder'), ...touched('s1') }));
+  });
+
+  it('lets only those who may request raise one', async () => {
+    await assertFails(setDoc(doc(as('elias'), 'organizations/adia/pettyCash/x1'), { ...newRequest('elias'), signatures: {} }));
+    await assertSucceeds(setDoc(doc(as('dan'), 'organizations/adia/pettyCash/x2'), { ...newRequest('dan'), signatures: {} }));
   });
 
   it('lets a signer reject a waiting request with a reason', async () => {
