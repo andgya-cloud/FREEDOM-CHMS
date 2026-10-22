@@ -928,3 +928,8 @@ a.kpi:hover { border-color: var(--primary); }
 .exam-print-head { text-align: center; margin-bottom: 8px; }
 .exam-cards > li { display: grid; }
 .page.narrow.wide-table { max-width: 1100px; }
+.cohort-group > summary { cursor: pointer; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; list-style-position: inside; }
+.cohort-group > summary .cohort-name { font-weight: 700; font-size: 1.1rem; }
+.cohort-group[open] > summary { margin-bottom: 8px; }
+.dept-group { margin-top: 12px; }
+.dept-group h3 { font-size: 0.95rem; margin: 0 0 6px; color: var(--primary); }
