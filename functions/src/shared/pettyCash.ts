@@ -257,3 +257,15 @@ export function periodStartOf(funds: readonly Pick<PettyFund, 'kind' | 'status' 
 /** Receipt files are kept in the database, so each must stay well under its 1 MB limit. */
 export const MAX_RECEIPT_BYTES = 700_000;
 export const MAX_RECEIPTS_PER_REQUEST = 10;
+
+/** Wrong PIN tries before a stakeholder's signing PIN locks, and for how long. */
+export const PIN_MAX_TRIES = 5;
+export const PIN_LOCK_MINUTES = 15;
+
+/** A signing PIN: 4 to 6 digits, not all the same digit. Returns the PIN, or null when it will not do. */
+export function checkPin(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const pin = value.trim();
+  if (!/^\d{4,6}$/.test(pin) || /^(\d)\1+$/.test(pin)) return null;
+  return pin;
+}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, waitingForAccountant, pettyCashNumber } from './pettyCash';
+import { checkPin, categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, waitingForAccountant, pettyCashNumber } from './pettyCash';
 
 describe('petty cash', () => {
   it('numbers requisitions like the old system', () => {
@@ -102,5 +102,15 @@ describe('petty cash', () => {
     expect(nextStepFor({ ...r, requesterId: 'elias' }, { uid: 'elias', canCheck: false, canApprove: false, canSign: true })).toBeNull();
     expect(nextStepFor(r, { uid: 'ronald', canCheck: false, canApprove: false, canSign: false })).toBeNull();
     expect(nextStepFor({ ...r, status: 'approved' }, { uid: 'elias', canCheck: false, canApprove: false, canSign: true })).toBeNull();
+  });
+
+  it('accepts a signing PIN of 4 to 6 digits, not all the same', () => {
+    expect(checkPin('2580')).toBe('2580');
+    expect(checkPin(' 135790 ')).toBe('135790');
+    expect(checkPin('123')).toBeNull();
+    expect(checkPin('1234567')).toBeNull();
+    expect(checkPin('0000')).toBeNull();
+    expect(checkPin('12a4')).toBeNull();
+    expect(checkPin(1234)).toBeNull();
   });
 });

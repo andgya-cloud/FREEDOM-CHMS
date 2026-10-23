@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -7,11 +7,11 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, deleteFund, deleteRequisition, receiptData, rejectRequisition, removeReceipt, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { coSignFund, coSignRequisition } from '../../lib/coSign';
+import { listPettySigners, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
-  FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents,
+  FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, checkPin,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
@@ -20,7 +20,6 @@ import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { matchStakeholders, resolveStakeholderEmail, stakeholdersFor } from '../../lib/stakeholders';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -118,36 +117,56 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
 }
 
 /**
- * Another stakeholder signs on this device with their own email and password, like the old app's
- * signing boxes. Their signature is saved as them, and the person signed in here stays signed in.
+ * Another stakeholder signs on this device: they pick their name and type their own signing PIN
+ * (Andy, 2026-10-23). The server checks the PIN and writes the signature as them, so the person signed
+ * in here stays signed in. Someone without a PIN, or who forgot it, sets one with their password once.
  */
-function CoSignForm({ label: title, people = [], onSign }: { label: string; people?: readonly { name: string; email: string }[]; onSign: (email: string, password: string) => Promise<string> }) {
+function CoSignForm({ label: title, orgId, kind, docId, exclude }: { label: string; orgId: string; kind: 'request' | 'fund'; docId: string; exclude: string[] }) {
   const toast = useToast();
-  const [email, setEmail] = useState('');
-  const [open, setOpen] = useState(false);
-  const id = useId();
-  const resolved = resolveStakeholderEmail(people, email);
-  const picked = people.find((p) => p.email === resolved);
-  const suggestions = picked && picked.email === email.trim().toLowerCase() ? [] : matchStakeholders(people, email);
+  const [signers, setSigners] = useState<PettySigner[] | null>(null);
+  const [loadError, setLoadError] = useState('');
+  const [uid, setUid] = useState('');
+  const [pin, setPin] = useState('');
+  const [settingPin, setSettingPin] = useState(false);
   const [password, setPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [newPin2, setNewPin2] = useState('');
   const [busy, setBusy] = useState(false);
+  const [reload, setReload] = useState(0);
+  useEffect(() => {
+    let live = true;
+    listPettySigners(orgId).then((list) => { if (live) { setSigners(list); setLoadError(''); } })
+      .catch((err) => { if (live) setLoadError((err as { code?: string })?.code?.includes('unavailable') ? 'The name list needs a connection.' : friendlyError(err)); });
+    return () => { live = false; };
+  }, [orgId, reload]);
+  const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (kind === 'request' || s.canAuthorize));
+  const chosen = choices.find((s) => s.uid === uid);
+  const needsPin = !!chosen && (!chosen.hasPin || settingPin);
+  const pinOk = checkPin(newPin) && newPin === newPin2;
+  function done(name: string) {
+    setUid(''); setPin(''); setPassword(''); setNewPin(''); setNewPin2(''); setSettingPin(false);
+    toast.show(`Signed by ${name}.`);
+  }
   async function go() {
-    if (!email.trim() || !password) return;
-    const signWith = resolved ?? email.trim();
-    if (people.length && !signWith.includes('@')) {
-      toast.show('Pick the stakeholder from the list under the box, so their email is filled in.');
-      return;
-    }
+    if (!chosen) return;
     setBusy(true);
     try {
-      const name = await onSign(signWith, password);
-      setEmail(''); setPassword('');
-      toast.show(`Signed by ${name}.`);
+      if (needsPin) {
+        if (!checkPin(newPin)) { toast.show('Choose a PIN of 4 to 6 digits, not all the same digit.'); return; }
+        if (newPin !== newPin2) { toast.show('The two PINs are not the same.'); return; }
+        await setPinWithPassword(chosen.email, password, newPin);
+        setReload((n) => n + 1);
+        done(await signWithPin(orgId, kind, docId, chosen.uid, newPin));
+      } else {
+        done(await signWithPin(orgId, kind, docId, chosen.uid, pin.trim()));
+      }
     } catch (err) {
-      const code = (err as { code?: string })?.code ?? '';
-      toast.show(code.includes('permission-denied')
-        ? 'That person cannot sign this. They need petty cash signing ticked on their account, and cannot sign their own request or sign twice.'
-        : code === 'auth/network-request-failed' ? 'Signing here needs a connection. Try again when online.' : friendlyError(err));
+      const e = err as { code?: string; message?: string };
+      const code = e?.code ?? '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') toast.show('That password is not right for ' + chosen.name + '.');
+      else if (code.startsWith('functions/') && e.message) toast.show(e.message.replace(/\s*\[\d+\]$/, ''));
+      else toast.show(code === 'auth/network-request-failed' ? 'Signing here needs a connection. Try again when online.' : friendlyError(err));
+      setPin('');
     } finally {
       setBusy(false);
     }
@@ -155,31 +174,43 @@ function CoSignForm({ label: title, people = [], onSign }: { label: string; peop
   return (
     <div className="petty-signer-form">
       <p className="small muted">{title}</p>
+      {loadError && <p className="small danger-text">{loadError} <button type="button" className="btn btn-quiet" onClick={() => setReload((n) => n + 1)}>Try again</button></p>}
       <div className="petty-signer-row">
-        <div className="field petty-suggest">
-          <label htmlFor={`${id}-who`}><span>Stakeholder{people.length ? ' (type a name or tap one below)' : "'s email"}</span></label>
-          <input id={`${id}-who`} type="text" inputMode="email" autoComplete="off" spellCheck={false} autoCapitalize="off" autoCorrect="off" value={email}
-            onChange={(e) => { setEmail(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
-            placeholder={people.length ? 'Start typing a name, e.g. Daniel' : 'name@example.com'} disabled={busy}
-            role="combobox" aria-expanded={open && suggestions.length > 0} aria-autocomplete="list" />
-          {picked && <small className="petty-suggest-picked">✓ {picked.name} · {picked.email}</small>}
-          {people.length > 0 && (open || !email.trim()) && suggestions.length > 0 && (
-            <ul className="petty-suggest-list" role="listbox">
-              {suggestions.map((p) => (
-                <li key={p.email} role="option" aria-selected={false}>
-                  <button type="button" onClick={() => { setEmail(p.email); setOpen(false); }}>
-                    <strong>{p.name}</strong><span>{p.email}</span>
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-        <label className="field"><span>Their Insight-IQ password</span>
-          <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
+        <label className="field"><span>Stakeholder</span>
+          <select value={uid} onChange={(e) => { setUid(e.target.value); setPin(''); setSettingPin(false); }} disabled={busy || !signers}>
+            <option value="">{signers ? (choices.length ? 'Choose your name' : 'Nobody else can sign this') : 'Loading names…'}</option>
+            {choices.map((s) => <option key={s.uid} value={s.uid}>{s.name}{s.title ? ` (${s.title})` : ''}</option>)}
+          </select>
         </label>
-        <button type="button" className="btn btn-primary" disabled={!email.trim() || !password || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Confirm'}</button>
+        {!needsPin && (
+          <label className="field"><span>Your signing PIN</span>
+            <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+              onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4) void go(); }} placeholder="4 to 6 digits" disabled={busy || !chosen} />
+          </label>
+        )}
+        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || pin.length < 4 || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Confirm'}</button>}
       </div>
+      {chosen && !needsPin && (
+        <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>Forgot your PIN? Set a new one</button>
+      )}
+      {needsPin && (
+        <div className="petty-pin-setup">
+          <p className="small">{chosen!.hasPin ? `${chosen!.name}, set a new PIN.` : `${chosen!.name} has no PIN yet. Set one now; next time you will only need the PIN.`} Type your Insight-IQ password once to prove it is you.</p>
+          <div className="petty-signer-row">
+            <label className="field"><span>Your Insight-IQ password</span>
+              <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
+            </label>
+            <label className="field"><span>New PIN (4 to 6 digits)</span>
+              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
+            </label>
+            <label className="field"><span>Type the PIN again</span>
+              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin2} onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))} disabled={busy} />
+            </label>
+            <button type="button" className="btn btn-primary" disabled={!password || !pinOk || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Save PIN and sign'}</button>
+          </div>
+          {chosen!.hasPin && <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back to PIN</button>}
+        </div>
+      )}
     </div>
   );
 }
@@ -271,7 +302,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
                     </div>
                   </div>
                 ) : open && n === signed.length ? (
-                  <CoSignForm label="Another stakeholder signs here with their own email and password, or from their own account." people={stakeholdersFor(org.type)} onSign={(email, pw) => coSignFund(org.id, open, email, pw)} />
+                  <CoSignForm label="Another stakeholder picks their name and types their own PIN, or signs from their own account." orgId={org.id} kind="fund" docId={open.id} exclude={Object.keys(open.signatures)} />
                 ) : (
                   <p className="petty-signer-name muted">Waiting for the signature above</p>
                 )}
@@ -622,7 +653,7 @@ function Requisition({ org }: { org: Organization }) {
       {r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
         <section className="card stack no-print">
           <h2>Another stakeholder signs on this device</h2>
-          <CoSignForm label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory types their own email and password. You stay signed in.`} people={stakeholdersFor(org.type)} onSign={(email, pw) => coSignRequisition(org.id, r, email, pw)} />
+          <CoSignForm label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} kind="request" docId={r.id} exclude={[r.requesterId, ...Object.keys(r.signatures)]} />
         </section>
       )}
       <ReceiptsBox org={org} req={r} receipts={receipts} />
