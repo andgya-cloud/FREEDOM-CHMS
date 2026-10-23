@@ -26,6 +26,15 @@ import type { Timestamp } from 'firebase/firestore';
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'just now');
 const label = (r: RequisitionRow) => r.number ?? 'New request';
+/** What the stakeholders were sent about this request, and when. */
+function noticeLine(n: NonNullable<RequisitionRow['notice']>) {
+  const via = (email?: number, wa?: number) => [email ? `${email} by email` : '', wa ? `${wa} by WhatsApp` : ''].filter(Boolean).join(' and ') || 'nobody yet (email is not set up)';
+  const parts = [];
+  if (n.askedAt) parts.push(`Asked to approve ${when(n.askedAt)}: ${via(n.askEmailed, n.askWhatsapp)}.`);
+  if (n.remindedAt) parts.push(`Reminded ${when(n.remindedAt)}.`);
+  if (n.approvedAt) parts.push(`Signed voucher sent ${when(n.approvedAt)}: ${via(n.approvedEmailed, n.approvedWhatsapp)}.`);
+  return parts.join(' ');
+}
 const SUBMITTED_TEXT = `Request submitted. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`;
 /** Signatures in the order they were given. */
 const signaturesOf = (r: RequisitionRow) => Object.entries(r.signatures ?? {}).sort(([, a], [, b]) => (millis(a.at) ?? Date.now()) - (millis(b.at) ?? Date.now()));
@@ -515,7 +524,8 @@ function Requisition({ org }: { org: Organization }) {
       </section>
       <section className="card stack">
         <h2>{r.signatures ? 'Authorization' : 'Approval history'}</h2>
-        {r.signatures && <p className="small muted">Any two to approve. A stakeholder cannot approve twice, and the requester cannot approve their own request. Each signs with their own password.</p>}
+        {r.signatures && <p className="small muted">Any two to approve. A stakeholder cannot approve twice, and the requester cannot approve their own request. Each signs from their own account or with their name and PIN.</p>}
+        {r.notice && <p className="small muted petty-notice-line">{noticeLine(r.notice)}</p>}
         {needsAccountant && <p className="notice">Waiting for the accountant's signature. It is the last one needed.</p>}
         <ol className="petty-steps">
           <li className="done"><strong>Requested by {r.requesterName}</strong><span className="small muted">{when(r.createdAt)}</span></li>

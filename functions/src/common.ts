@@ -22,6 +22,8 @@ export interface UserProfile extends AccessProfile {
   mustChangePassword?: boolean;
   /** Petty cash voucher title, such as Accountant; '' for none. */
   pettyTitle?: string;
+  /** WhatsApp number (+2547…) for petty cash notices; '' for none. */
+  phone?: string;
 }
 
 export interface Caller {

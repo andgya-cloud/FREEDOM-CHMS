@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../firebase';
@@ -25,6 +26,7 @@ interface FormState {
   password: string;
   active: boolean;
   pettyTitle: string;
+  phone: string;
 }
 
 const ROLE_HINTS: Record<string, string> = {
@@ -34,7 +36,7 @@ const ROLE_HINTS: Record<string, string> = {
   signatory: ': raises and signs petty cash requests, top-ups and resets, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '' };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '' };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -66,7 +68,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: u.extraPermissions ?? [], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '',
+          extraPermissions: u.extraPermissions ?? [], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '',
         });
       }
       setLoaded(true);
@@ -89,14 +91,16 @@ export function UserFormPage() {
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
+    if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
     setBusy(true);
     try {
       const payload = teamOnly
-        ? { displayName: form.displayName.trim(), orgIds: form.orgIds }
+        ? { displayName: form.displayName.trim(), orgIds: form.orgIds, phone: form.phone.trim() }
         : {
           displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
           extraPermissions: role?.isOwner || signatory ? [] : form.extraPermissions,
           pettyTitle: showTitle ? form.pettyTitle : '',
+          phone: form.phone.trim(),
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -213,9 +217,15 @@ export function UserFormPage() {
               <option value="">{signatory ? 'Choose a title' : 'None'}</option>
               {PETTY_TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
-            <small className="hint">Printed under their signature. Every request needs the Accountant's signature.</small>
+            <small className="hint">Printed under their signature. Any two stakeholders approve a request.</small>
           </label>
         )}
+
+        <label className="field">
+          <span>WhatsApp number</span>
+          <input type="tel" inputMode="tel" autoComplete="off" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="e.g. 0712 345 678" />
+          <small className="hint">Petty cash notices (please approve, approved) go to this number and to their email.</small>
+        </label>
 
         {isNew && (
           <div className="field">

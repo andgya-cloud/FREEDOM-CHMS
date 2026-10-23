@@ -1,0 +1,267 @@
+import { readFile, mkdir, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import { logger } from 'firebase-functions';
+import { defineSecret } from 'firebase-functions/params';
+import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
+import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { jsPDF } from 'jspdf';
+import nodemailer from 'nodemailer';
+import { db, FieldValue, type UserProfile } from './common.js';
+import { canSign } from './pettyPins.js';
+import { isSendingHour, sendingReady, withWhatsAppDefaults, type WhatsAppSettings } from './shared/whatsapp.js';
+import { PETTY_CASH_STATUS_LABELS, pettyCashBase, type PettyCashSignature } from './shared/pettyCash.js';
+import { drawRequisition, letterheadFor, type Letterhead } from './shared/pettyVoucher.js';
+import {
+  noticeHtml, noticeSubject, noticeText, PETTY_WA_TEMPLATES, REMIND_AFTER_HOURS, waParams,
+  type NoticeInput, type NoticeRequest, type PettyNoticeKind,
+} from './shared/pettyNotices.js';
+
+/**
+ * Petty cash notices (Andy, 2026-10-23). When a request is submitted, every stakeholder who can sign
+ * (but not the requester) is asked by email and WhatsApp to approve it; after 24 hours those who have
+ * not signed are reminded; once two have approved, every stakeholder and the requester get the signed
+ * voucher as a PDF. Emails go from the organization's own Gmail (ADIA's), using an app password kept as
+ * the secret PETTY_EMAIL_APP_PASSWORD. WhatsApp messages are queued in pettyWhatsapp and sent by
+ * sendPettyWhatsapp, which is deployed once the WhatsApp Business number is set up.
+ */
+const PETTY_EMAIL_APP_PASSWORD = defineSecret('PETTY_EMAIL_APP_PASSWORD');
+const WHATSAPP_TOKEN = defineSecret('WHATSAPP_TOKEN');
+const appUrl = () => process.env.APP_URL || 'https://freedom-chms.web.app';
+const apiBase = () => process.env.WHATSAPP_API_BASE || 'https://graph.facebook.com/v21.0';
+
+interface Person { uid: string; name: string; email: string; phone: string }
+interface OrgInfo { id: string; name: string; type: string; currency: string; timeZone: string; lh: Letterhead }
+
+async function orgInfo(orgId: string): Promise<OrgInfo> {
+  const o = (await db.doc(`organizations/${orgId}`).get()).data() ?? {};
+  const base = { name: (o.name as string) ?? '', type: (o.type as string) ?? '' };
+  return { id: orgId, ...base, currency: (o.currency as string) || 'KES', timeZone: (o.timeZone as string) || 'Africa/Nairobi', lh: letterheadFor(base) };
+}
+
+/** Every active stakeholder who can sign petty cash here. */
+async function stakeholders(orgId: string): Promise<Person[]> {
+  const users = await db.collection('users').where('active', '==', true).get();
+  return users.docs
+    .filter((d) => canSign(d.data() as UserProfile, orgId, 'request'))
+    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, email: u.email, phone: u.phone ?? '' }; });
+}
+
+async function person(uid: string): Promise<Person | null> {
+  const u = (await db.doc(`users/${uid}`).get()).data() as UserProfile | undefined;
+  return u?.active ? { uid, name: u.displayName || u.email, email: u.email, phone: u.phone ?? '' } : null;
+}
+
+const sortedSigs = (sigs: Record<string, PettyCashSignature> | undefined) => Object.entries(sigs ?? {})
+  .sort(([, a], [, b]) => ((a.at as FirebaseFirestore.Timestamp)?.toMillis?.() ?? 0) - ((b.at as FirebaseFirestore.Timestamp)?.toMillis?.() ?? 0));
+
+function whenIn(org: OrgInfo, t: unknown) {
+  const d = (t as FirebaseFirestore.Timestamp)?.toDate?.() ?? new Date();
+  return d.toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: org.timeZone });
+}
+
+let crest: Promise<string | null> | null = null;
+function crestImage() {
+  crest ??= readFile(new URL('../assets/adia-crest.png', import.meta.url))
+    .then((b) => `data:image/png;base64,${b.toString('base64')}`)
+    .catch(() => null);
+  return crest;
+}
+
+/** The signed voucher PDF for an approved request. */
+export async function voucherPdf(org: OrgInfo, r: FirebaseFirestore.DocumentData): Promise<{ name: string; data: Buffer }> {
+  const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
+  const sigs = sortedSigs(r.signatures);
+  const signOffs = sigs.map(([, s]) => ({ role: s.role, name: s.name, when: whenIn(org, s.at) }));
+  drawRequisition(pdf, org.lh, org.lh.crest ? await crestImage() : null, org.currency, {
+    number: r.number ?? null, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote ?? null, items: r.items ?? [],
+    totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status as keyof typeof PETTY_CASH_STATUS_LABELS] ?? r.status,
+    date: whenIn(org, r.createdAt),
+  }, signOffs, (await db.collection(`organizations/${org.id}/pettyReceipts`).where('reqId', '==', r.id ?? '').get()).docs.filter((d) => !d.get('deletedAt')).length, whenIn(org, null));
+  return { name: `${r.number ?? 'Requisition'}-approved.pdf`, data: Buffer.from(pdf.output('arraybuffer')) };
+}
+
+/** Emails one notice to each person; returns how many went. Skipped (0) when the organization has no email set up. */
+async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeRequest, link: string, signers: string[], people: Person[],
+  attachment: { name: string; data: Buffer } | null): Promise<number> {
+  const from = org.lh.email;
+  const pass = process.env.PETTY_MAIL_TEST_DIR ? 'test' : PETTY_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
+  if (!from || !pass) { logger.info(`Petty cash email skipped for ${org.id}: no sending email or app password yet.`); return 0; }
+  // In local tests the emails are written to files (PETTY_MAIL_TEST_DIR) instead of being sent.
+  const transport = process.env.PETTY_MAIL_TEST_DIR
+    ? nodemailer.createTransport({ jsonTransport: true })
+    : nodemailer.createTransport({ service: 'gmail', auth: { user: from, pass } });
+  let sent = 0;
+  for (const p of people) {
+    if (!p.email) continue;
+    const n: NoticeInput = { kind, lh: org.lh, currency: org.currency, r: req, link, recipientName: p.name, signers };
+    try {
+      const info = await transport.sendMail({
+        from: `"${org.lh.name} Petty Cash" <${from}>`, to: `"${p.name}" <${p.email}>`, replyTo: from,
+        subject: noticeSubject(n), text: noticeText(n), html: noticeHtml(n),
+        attachments: attachment ? [{ filename: attachment.name, content: attachment.data, contentType: 'application/pdf' }] : [],
+      });
+      if (process.env.PETTY_MAIL_TEST_DIR) {
+        await mkdir(process.env.PETTY_MAIL_TEST_DIR, { recursive: true });
+        await writeFile(join(process.env.PETTY_MAIL_TEST_DIR, `${Date.now()}-${kind}-${p.uid}.json`), String((info as { message?: unknown }).message ?? ''));
+      }
+      sent += 1;
+    } catch (err) {
+      logger.warn(`Petty cash email to ${p.uid} failed`, err);
+    }
+  }
+  return sent;
+}
+
+/** Queues one WhatsApp notice per person with a number, when WhatsApp sending is switched on. */
+async function queueWhatsapp(org: OrgInfo, reqId: string, kind: PettyNoticeKind, req: NoticeRequest, link: string, signers: string[], people: Person[]): Promise<number> {
+  const settings = withWhatsAppDefaults((await db.doc('settings/whatsapp').get()).data() as Partial<WhatsAppSettings> | undefined);
+  if (!sendingReady(settings)) return 0;
+  const batch = db.batch();
+  let queued = 0;
+  for (const p of people) {
+    if (!p.phone) continue;
+    const params = waParams({ kind, lh: org.lh, currency: org.currency, r: req, link, recipientName: p.name, signers });
+    batch.set(db.collection(`organizations/${org.id}/pettyWhatsapp`).doc(), {
+      orgId: org.id, reqId, kind, toUid: p.uid, toName: p.name, phone: p.phone, params, status: 'queued',
+      wamid: null, error: null, createdAt: FieldValue.serverTimestamp(),
+    });
+    queued += 1;
+  }
+  if (queued) await batch.commit();
+  return queued;
+}
+
+function noticeRequest(r: FirebaseFirestore.DocumentData): NoticeRequest {
+  return { number: r.number, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote ?? null, totalCents: r.totalCents, items: r.items ?? [] };
+}
+
+/** Marks a notice as being sent, once; false when another run already took it. */
+async function claim(ref: FirebaseFirestore.DocumentReference, field: string, ready: (d: FirebaseFirestore.DocumentData) => boolean) {
+  return db.runTransaction(async (tx) => {
+    const d = (await tx.get(ref)).data();
+    if (!d || !ready(d) || d.notice?.[field]) return false;
+    tx.update(ref, { [`notice.${field}`]: FieldValue.serverTimestamp() });
+    return true;
+  });
+}
+
+export const onPettyCashNotify = onDocumentWritten(
+  { document: 'organizations/{orgId}/pettyCash/{reqId}', secrets: [PETTY_EMAIL_APP_PASSWORD] },
+  async (event) => {
+    const { orgId, reqId } = event.params;
+    const after = event.data?.after.data();
+    if (!after || after.deletedAt || !after.signatures || !after.number) return;
+    const ref = db.doc(`organizations/${orgId}/pettyCash/${reqId}`);
+    const org = await orgInfo(orgId);
+    const link = `${appUrl()}${pettyCashBase(org.type)}/${reqId}`;
+    const req = noticeRequest(after);
+
+    if (after.status === 'submitted' && !after.notice?.askedAt) {
+      if (!(await claim(ref, 'askedAt', (d) => d.status === 'submitted'))) return;
+      const people = (await stakeholders(orgId)).filter((p) => p.uid !== after.requesterId);
+      const emailed = await emailNotice(org, 'ask', req, link, [], people, null);
+      const whatsapp = await queueWhatsapp(org, reqId, 'ask', req, link, [], people);
+      await ref.update({ 'notice.askEmailed': emailed, 'notice.askWhatsapp': whatsapp });
+      return;
+    }
+
+    if (after.status === 'approved' && !after.notice?.approvedAt) {
+      if (!(await claim(ref, 'approvedAt', (d) => d.status === 'approved'))) return;
+      const all = await stakeholders(orgId);
+      const requester = all.some((p) => p.uid === after.requesterId) ? null : await person(after.requesterId);
+      const people = requester ? [...all, requester] : all;
+      const signers = sortedSigs(after.signatures).map(([, s]) => `${s.name} (${s.role})`);
+      const pdf = await voucherPdf(org, { ...after, id: reqId });
+      const emailed = await emailNotice(org, 'approved', req, link, signers, people, pdf);
+      const whatsapp = await queueWhatsapp(org, reqId, 'approved', req, link, sortedSigs(after.signatures).map(([, s]) => s.name), people);
+      await ref.update({ 'notice.approvedEmailed': emailed, 'notice.approvedWhatsapp': whatsapp });
+    }
+  },
+);
+
+/** Reminds the stakeholders who have not signed a request that has waited more than 24 hours (once a day, 08:00 to 20:00). */
+export async function remindPettyCash(now = new Date()): Promise<number> {
+  let reminded = 0;
+  const cutoff = now.getTime() - REMIND_AFTER_HOURS * 3600_000;
+  const orgs = await db.collection('organizations').get();
+  for (const o of orgs.docs) {
+    const waiting = await db.collection(`organizations/${o.id}/pettyCash`).where('status', '==', 'submitted').get();
+    if (waiting.empty) continue;
+    const org = await orgInfo(o.id);
+    if (!isSendingHour(now, org.timeZone)) continue;
+    let people: Person[] | null = null;
+    for (const d of waiting.docs) {
+      const r = d.data();
+      const last = (r.notice?.remindedAt ?? r.notice?.askedAt)?.toMillis?.() as number | undefined;
+      if (r.deletedAt || !r.signatures || !r.number || !last || last > cutoff) continue;
+      await d.ref.update({ 'notice.remindedAt': FieldValue.serverTimestamp() });
+      people ??= await stakeholders(o.id);
+      const signed = sortedSigs(r.signatures);
+      const due = people.filter((p) => p.uid !== r.requesterId && !(p.uid in r.signatures));
+      const link = `${appUrl()}${pettyCashBase(org.type)}/${d.id}`;
+      const req = noticeRequest(r);
+      const names = signed.map(([, s]) => `${s.name} (${s.role})`);
+      await emailNotice(org, 'reminder', req, link, names, due, null);
+      await queueWhatsapp(org, d.id, 'reminder', req, link, names, due);
+      reminded += 1;
+    }
+  }
+  return reminded;
+}
+
+export const pettyCashReminders = onSchedule(
+  // Cloud Scheduler isn't offered in africa-south1, so this job runs from Europe.
+  { schedule: 'every 60 minutes', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, secrets: [PETTY_EMAIL_APP_PASSWORD] },
+  async () => { await remindPettyCash(); },
+);
+
+/** Uploads the voucher to WhatsApp so the approved message can carry it; returns the media id. */
+async function uploadPdf(phoneNumberId: string, token: string, pdf: { name: string; data: Buffer }): Promise<string> {
+  const form = new FormData();
+  form.append('messaging_product', 'whatsapp');
+  form.append('type', 'application/pdf');
+  form.append('file', new Blob([new Uint8Array(pdf.data)], { type: 'application/pdf' }), pdf.name);
+  const res = await fetch(`${apiBase()}/${phoneNumberId}/media`, { method: 'POST', headers: { Authorization: `Bearer ${token}` }, body: form });
+  const body = (await res.json().catch(() => ({}))) as { id?: string };
+  if (!res.ok || !body.id) throw new Error(`WhatsApp media upload refused (${res.status})`);
+  return body.id;
+}
+
+/** Sends one queued petty cash WhatsApp notice through the Cloud API. */
+export const sendPettyWhatsapp = onDocumentCreated(
+  { document: 'organizations/{orgId}/pettyWhatsapp/{id}', secrets: [WHATSAPP_TOKEN] },
+  async (event) => {
+    const d = event.data?.data();
+    if (!d || d.status !== 'queued') return;
+    const ref = event.data!.ref;
+    const settings = withWhatsAppDefaults((await db.doc('settings/whatsapp').get()).data() as Partial<WhatsAppSettings> | undefined);
+    const t = PETTY_WA_TEMPLATES.find((x) => x.kind === d.kind);
+    if (!t || !sendingReady(settings)) { await ref.update({ status: 'failed', error: 'WhatsApp sending is switched off in Settings.' }); return; }
+    const token = WHATSAPP_TOKEN.value();
+    try {
+      const components: object[] = [];
+      if (t.header === 'DOCUMENT') {
+        const r = (await db.doc(`organizations/${d.orgId}/pettyCash/${d.reqId}`).get()).data();
+        if (!r) throw new Error('The request is no longer there.');
+        const pdf = await voucherPdf(await orgInfo(d.orgId), { ...r, id: d.reqId });
+        const id = await uploadPdf(settings.phoneNumberId, token, pdf);
+        components.push({ type: 'header', parameters: [{ type: 'document', document: { id, filename: pdf.name } }] });
+      }
+      components.push({ type: 'body', parameters: (d.params as string[]).map((text) => ({ type: 'text', text })) });
+      const res = await fetch(`${apiBase()}/${settings.phoneNumberId}/messages`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp', to: String(d.phone).replace(/\D/g, ''), type: 'template',
+          template: { name: settings.metaNames[`petty_${d.kind}`]?.trim() || t.metaName, language: { code: settings.language }, components },
+        }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { messages?: { id: string }[]; error?: { message?: string } };
+      if (!res.ok || !body.messages?.[0]?.id) throw new Error(body.error?.message ?? `WhatsApp refused the message (${res.status})`);
+      await ref.update({ status: 'sent', wamid: body.messages[0].id, sentAt: FieldValue.serverTimestamp() });
+    } catch (err) {
+      logger.warn('Petty cash WhatsApp failed', err);
+      await ref.update({ status: 'failed', error: String((err as Error).message ?? err).slice(0, 300) });
+    }
+  },
+);

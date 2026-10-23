@@ -2,6 +2,7 @@ import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
 import { DEFAULT_ROLES, TEAM_ROLE_ID, can, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
+import { normalizePhone } from './shared/phone.js';
 
 // The browser calls these directly, so anyone may reach them; each one checks
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
@@ -37,6 +38,14 @@ async function requireAccountManager(request: Parameters<typeof requireCaller>[0
 
 const OUTSIDE_TEAM = 'You can only manage Staff accounts for your own organization.';
 
+/** A WhatsApp number as +2547…, or '' for none; refuses one that is not a phone number. */
+function phoneFrom(value: unknown): string {
+  if (value == null || (typeof value === 'string' && !value.trim())) return '';
+  const phone = typeof value === 'string' ? normalizePhone(value) : null;
+  if (!phone) throw new HttpsError('invalid-argument', 'Please check the WhatsApp number.');
+  return phone;
+}
+
 /** The petty cash voucher title, or '' for none. */
 function pettyTitleFrom(value: unknown): string {
   if (value === undefined || value === null || value === '') return '';
@@ -70,6 +79,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
   const extraPermissions = teamOnly ? [] : requireStringArray(data.extraPermissions ?? [], 'the permissions');
   const password = checkPassword(data.password, email);
   const pettyTitle = teamOnly ? '' : pettyTitleFrom(data.pettyTitle);
+  const phone = phoneFrom(data.phone);
   const role = await loadRole(roleId, caller.uid);
   const allOrgs = role.isOwner ? true : !teamOnly && data.allOrgs === true;
   if (teamOnly && !canManageTeamAccount(caller.profile, { roleId, allOrgs, orgIds })) {
@@ -94,6 +104,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
     orgIds,
     allOrgs,
     pettyTitle,
+    phone,
     permissions: effectivePermissions(role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -131,6 +142,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   if (data.allOrgs !== undefined && !teamOnly) next.allOrgs = data.allOrgs === true;
   if (data.active !== undefined) next.active = data.active === true;
   if (data.pettyTitle !== undefined && !teamOnly) next.pettyTitle = pettyTitleFrom(data.pettyTitle);
+  if (data.phone !== undefined) next.phone = phoneFrom(data.phone);
 
   const merged = { ...current, ...next };
   if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
@@ -155,6 +167,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     allOrgs: merged.allOrgs,
     active: merged.active,
     pettyTitle: merged.pettyTitle ?? '',
+    phone: merged.phone ?? '',
     permissions: effectivePermissions(role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,

@@ -8,7 +8,11 @@ import { ACCOUNTANT_TITLE, type Permission } from '../../functions/src/shared/pe
 import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund } from '../../functions/src/shared/pettyCash';
 import type { Organization } from './OrgContext';
 
-export interface RequisitionRow extends PettyCashRequisition { createdAt?: Timestamp; deletedAt?: unknown }
+export interface RequisitionRow extends PettyCashRequisition {
+  createdAt?: Timestamp; deletedAt?: unknown;
+  /** Set by the server when it emails or messages the stakeholders. */
+  notice?: { askedAt?: Timestamp; askEmailed?: number; askWhatsapp?: number; remindedAt?: Timestamp; approvedAt?: Timestamp; approvedEmailed?: number; approvedWhatsapp?: number };
+}
 export interface FundRow extends PettyFund { createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }
 export const millis = (t: unknown) => (t && typeof (t as Timestamp).toMillis === 'function' ? (t as Timestamp).toMillis() : null);
 
