@@ -78,6 +78,16 @@ export function signFund(orgId: string, fund: Pick<PettyFund, 'id' | 'signatures
   });
 }
 
+/** Marks a requisition deleted: it leaves every list and total but stays on record. */
+export function deleteRequisition(orgId: string, id: string) {
+  return softDelete(doc(db, 'organizations', orgId, 'pettyCash', id));
+}
+
+/** Marks a top-up or reset deleted (pastor only): it no longer counts in the budget. */
+export function deleteFund(orgId: string, id: string) {
+  return softDelete(fundRef(orgId, id));
+}
+
 export function cancelFund(orgId: string, id: string) {
   return updateRecord(fundRef(orgId, id), { status: 'cancelled' });
 }

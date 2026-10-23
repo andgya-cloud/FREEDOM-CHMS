@@ -3,15 +3,16 @@ import { Link } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, useReceipts } from '../../state/usePettyCash';
-import { saveAllocations } from '../../lib/pettyCashWrites';
+import { deleteFund, saveAllocations } from '../../lib/pettyCashWrites';
 import { balanceSheetPdf } from '../../lib/pettyPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
-import { categoryBudgets, categoryLabel, parseAmountCents, pettyCashBase, pettyCashCategoriesFor, pettyLedger, PETTY_CASH_STATUS_LABELS } from '../../../functions/src/shared/pettyCash';
+import { type LedgerLine, categoryBudgets, categoryLabel, parseAmountCents, pettyCashBase, pettyCashCategoriesFor, pettyLedger, PETTY_CASH_STATUS_LABELS } from '../../../functions/src/shared/pettyCash';
 import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
 import { money } from './common';
 import { BudgetHealth, NoAccess, PettyGate, PettyNav, ReceiptsBox } from './PettyCashPage';
 import type { Organization } from '../../state/OrgContext';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 const day = (ms: number) => new Date(ms).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -73,6 +74,7 @@ function BalanceSheet({ org }: { org: Organization }) {
   const p = usePettyCash(org);
   const toast = useToast();
   const lines = useMemo(() => pettyLedger(p.funds, p.requisitions, millis), [p.funds, p.requisitions]);
+  const [deleting, setDeleting] = useState<LedgerLine | null>(null);
   if (!p.seesAll) return <NoAccess />;
   // Totals for the current budget period (since the last reset).
   const current = lines.filter((l) => l.at > p.periodStart);
@@ -109,7 +111,7 @@ function BalanceSheet({ org }: { org: Organization }) {
       {lines.length === 0 ? <p className="muted small">Nothing yet. Top-ups appear once 3 stakeholders sign them, and requests once they are approved.</p> : (
         <div className="card exam-table-wrap">
           <table className="table petty-ledger">
-            <thead><tr><th>Date</th><th>Description</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th></tr></thead>
+            <thead><tr><th>Date</th><th>Description</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th>{p.isPastor && <th className="no-print" aria-label="Delete" />}</tr></thead>
             <tbody>
               {lines.map((l) => (
                 <tr key={l.id} className={l.kind === 'reset' ? 'petty-ledger-reset' : ''}>
@@ -118,12 +120,32 @@ function BalanceSheet({ org }: { org: Organization }) {
                   <td className="num nowrap ok-text">{l.creditCents ? money(org, l.creditCents) : ''}</td>
                   <td className="num nowrap danger-text">{l.debitCents ? money(org, l.debitCents) : ''}</td>
                   <td className="num nowrap"><strong>{money(org, l.balanceCents)}</strong></td>
+                  {p.isPastor && (
+                    <td className="no-print">
+                      {l.kind === 'request'
+                        ? <Link to={`${pettyCashBase(org.type)}/${l.id}`} className="small">Open</Link>
+                        : <button type="button" className="btn btn-quiet danger-text btn-small" onClick={() => setDeleting(l)}>Delete</button>}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+      <ConfirmDialog
+        open={!!deleting}
+        title={deleting?.kind === 'reset' ? 'Delete this budget reset?' : 'Delete this top-up?'}
+        body={deleting ? `${day(deleting.at)} · ${deleting.kind === 'topup' ? money(org, deleting.creditCents) : 'Reset to zero'}. It will no longer count in the budget. It stays on record, marked deleted.` : ''}
+        confirmLabel="Delete"
+        danger
+        onConfirm={() => {
+          if (deleting) deleteFund(org.id, deleting.id).catch((err) => toast.show(friendlyError(err)));
+          setDeleting(null);
+          toast.show('Deleted');
+        }}
+        onCancel={() => setDeleting(null)}
+      />
     </div>
   );
 }

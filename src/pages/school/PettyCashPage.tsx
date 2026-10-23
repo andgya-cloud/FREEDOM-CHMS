@@ -5,7 +5,7 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
-import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, removeReceipt, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
+import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, deleteFund, deleteRequisition, receiptData, rejectRequisition, removeReceipt, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { coSignFund, coSignRequisition } from '../../lib/coSign';
 import { downloadFile } from '../../lib/givingPdf';
@@ -19,6 +19,7 @@ import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -252,6 +253,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           })}
         </ol>
         <div className="row-actions">
+          {open && open.createdBy !== p.uid && p.isPastor && <button type="button" className="btn btn-quiet danger-text" onClick={() => { deleteFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Deleted'); }}>Delete this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {onClose && !open && <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>}
         </div>
@@ -467,6 +469,8 @@ function Requisition({ org }: { org: Organization }) {
   const [reason, setReason] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const navigate = useNavigate();
   const { receipts } = useReceipts(org, reqId);
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
@@ -595,6 +599,27 @@ function Requisition({ org }: { org: Organization }) {
         </section>
       )}
       <ReceiptsBox org={org} req={r} receipts={receipts} />
+      {(p.isPastor || (r.requesterId === p.uid && r.status === 'submitted')) && (
+        <section className="card stack no-print">
+          <h2>Delete this request</h2>
+          <p className="small muted">{p.isPastor ? 'Removes it from every list and from the budget figures. It stays on record, marked deleted.' : 'You can delete your own request while it waits for signatures.'}</p>
+          <div className="row-actions"><button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete request</button></div>
+        </section>
+      )}
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete ${label(r)}?`}
+        body={`${money(org, r.totalCents)} · ${categoryLabel(r)}. It will no longer appear anywhere or count in the budget.`}
+        confirmLabel="Delete request"
+        danger
+        onConfirm={() => {
+          setConfirmDelete(false);
+          deleteRequisition(org.id, r.id).catch((err) => toast.show(friendlyError(err)));
+          toast.show(`${label(r)} deleted`);
+          navigate(pettyCashBase(org.type));
+        }}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

@@ -1224,8 +1224,11 @@ service cloud.firestore {
               && ((pcStep(['status', 'approved']) && request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved))
                 || (pcStep(['status', 'rejection']) && pcRejection())));
         }
-        allow update: if resource.data.deletedAt == null && resource.data.requesterId != request.auth.uid
-          && ('signatures' in resource.data ? pcSignedFlow() : pcOldFlow());
+        // Deleting (kept, marked deleted): the pastor any request, a requester their own while it waits for signatures.
+        allow update: if (softDeleteOnly() && canAccessOrg(orgId)
+            && (has('users.manage') || (pc('pettycash.request') && resource.data.requesterId == request.auth.uid && resource.data.status == 'submitted')))
+          || (resource.data.deletedAt == null && resource.data.requesterId != request.auth.uid
+            && ('signatures' in resource.data ? pcSignedFlow() : pcOldFlow()));
         allow delete: if false;
       }
 
@@ -1306,7 +1309,9 @@ service cloud.firestore {
           && request.resource.data.signatures.size() == 1
           && fundSignature(request.resource.data.signatures[request.auth.uid])
           && request.resource.data.status == 'collecting' && request.resource.data.doneAt == null;
-        allow update: if pc('pettycash.authorize') && stampedUpdate()
+        // The pastor may delete any top-up or reset, finished or not (it is kept, marked deleted).
+        allow update: if (has('users.manage') && canAccessOrg(orgId) && softDeleteOnly())
+          || (pc('pettycash.authorize') && stampedUpdate()
           && resource.data.status == 'collecting' && resource.data.deletedAt == null
           && (
             // A stakeholder who has not signed yet adds their signature.
@@ -1321,7 +1326,7 @@ service cloud.firestore {
             // Whoever started it may cancel it before it is complete.
             || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updatedBy'])
               && request.resource.data.status == 'cancelled' && resource.data.createdBy == request.auth.uid)
-          );
+          ));
         allow delete: if false;
       }
 

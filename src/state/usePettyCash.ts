@@ -9,7 +9,7 @@ import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund }
 import type { Organization } from './OrgContext';
 
 export interface RequisitionRow extends PettyCashRequisition { createdAt?: Timestamp; deletedAt?: unknown }
-export interface FundRow extends PettyFund { createdAt?: Timestamp; createdBy?: string }
+export interface FundRow extends PettyFund { createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }
 export const millis = (t: unknown) => (t && typeof (t as Timestamp).toMillis === 'function' ? (t as Timestamp).toMillis() : null);
 
 /** Petty cash permissions. The pastor holds every one of them (see the pettyCash rules). */
@@ -25,7 +25,8 @@ export function usePettyCashAccess() {
   // The title printed under a signature, set on each signatory's account; the accountant's must be on every request.
   const signRole = signTitle(profile?.pettyTitle, can('users.manage'));
   const isAccountant = profile?.pettyTitle === ACCOUNTANT_TITLE;
-  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, seesAll: canSign, any: canRequest || canAuthorize };
+  const isPastor = can('users.manage');
+  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, isPastor, seesAll: canSign, any: canRequest || canAuthorize };
 }
 
 /** The voucher title for a signer: the one on their account, otherwise Pastor or Stakeholder. */
@@ -50,7 +51,7 @@ export function usePettyCash(org: Organization) {
     [reqs.rows],
   );
   const funds = useMemo(
-    () => fundRows.rows.filter((f) => f.status !== 'cancelled').sort((a, b) => (b.createdAt?.toMillis() ?? Date.now()) - (a.createdAt?.toMillis() ?? Date.now())),
+    () => fundRows.rows.filter((f) => f.status !== 'cancelled' && !f.deletedAt).sort((a, b) => (b.createdAt?.toMillis() ?? Date.now()) - (a.createdAt?.toMillis() ?? Date.now())),
     [fundRows.rows],
   );
   const summary = useMemo(() => fundSummary(funds, requisitions, millis), [funds, requisitions]);

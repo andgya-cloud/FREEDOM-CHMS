@@ -153,6 +153,22 @@ describe('petty cash', () => {
     await assertSucceeds(updateDoc(ref('s1'), { 'signatures.s1': { name: 's1', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s1', 'Stakeholder'), ...touched('s1') }));
   });
 
+  it('lets the pastor delete any request or top-up, and a requester only their own waiting request', async () => {
+    const del = (uid: string) => ({ deletedAt: serverTimestamp(), deletedBy: uid, ...touched(uid) });
+    await seedRequest('d1', { signatures: {} });
+    await seedRequest('d2', { signatures: {}, status: 'approved' });
+    await assertFails(updateDoc(doc(as('ronald'), 'organizations/adia/pettyCash/d1'), del('ronald')));
+    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d2'), del('doreen')));
+    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d1'), { ...del('doreen'), totalCents: 1 }));
+    await assertSucceeds(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d1'), del('doreen')));
+    await assertSucceeds(updateDoc(doc(as('pastor'), 'organizations/adia/pettyCash/d2'), del('pastor')));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/pettyFunds/fd'), { orgId: 'adia', kind: 'topup', amountCents: 100, signatures: {}, status: 'done', doneAt: new Date(), deletedAt: null, deletedBy: null, createdAt: new Date(), createdBy: 's1', updatedAt: new Date(), updatedBy: 's1' });
+    });
+    await assertFails(updateDoc(doc(as('s1'), 'organizations/adia/pettyFunds/fd'), del('s1')));
+    await assertSucceeds(updateDoc(doc(as('pastor'), 'organizations/adia/pettyFunds/fd'), del('pastor')));
+  });
+
   it('lets only those who may request raise one', async () => {
     await assertFails(setDoc(doc(as('elias'), 'organizations/adia/pettyCash/x1'), { ...newRequest('elias'), signatures: {} }));
     await assertSucceeds(setDoc(doc(as('dan'), 'organizations/adia/pettyCash/x2'), { ...newRequest('dan'), signatures: {} }));
