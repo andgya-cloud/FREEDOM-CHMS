@@ -94,7 +94,7 @@ describe('petty cash', () => {
     await assertSucceeds(updateDoc(doc(as('elias'), 'organizations/adia/pettyCash/r2'), { status: 'rejected', rejection: { uid: 'elias', name: 'Elias', reason: 'No receipt', at: serverTimestamp() }, ...touched('elias') }));
   });
 
-  it('adds money only after three different stakeholders sign', async () => {
+  it('adds money only after two different stakeholders sign', async () => {
     const sig = (uid: string) => ({ name: uid, at: serverTimestamp() });
     const fund = (uid: string, extra: Record<string, unknown> = {}) => ({
       orgId: 'adia', kind: 'topup', amountCents: 50000000, signatures: { [uid]: sig(uid) }, status: 'collecting', doneAt: null,
@@ -107,21 +107,19 @@ describe('petty cash', () => {
     await assertFails(setDoc(ref('s1'), fund('s1', { signatures: { s1: sig('s1'), s2: sig('s2') } })));
     await assertFails(setDoc(ref('s1'), fund('s1', { kind: 'reset' })));
     await assertSucceeds(setDoc(ref('s1'), fund('s1')));
-    // Nobody signs twice, or for someone else, and the second signature does not complete it.
+    // Nobody signs twice, or for someone else, and the second signature must complete it.
     await assertFails(updateDoc(ref('s1'), { 'signatures.s1.name': 'again', ...touched('s1') }));
     await assertFails(updateDoc(ref('s2'), { 'signatures.s3': sig('s3'), ...touched('s2') }));
-    await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), status: 'done', doneAt: serverTimestamp(), ...touched('s2') }));
-    await assertSucceeds(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
-    // The third must complete it.
+    await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
+    await assertSucceeds(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), status: 'done', doneAt: serverTimestamp(), ...touched('s2') }));
     await assertFails(updateDoc(ref('s3'), { 'signatures.s3': sig('s3'), ...touched('s3') }));
-    await assertSucceeds(updateDoc(ref('s3'), { 'signatures.s3': sig('s3'), status: 'done', doneAt: serverTimestamp(), ...touched('s3') }));
     // A completed top-up cannot be changed.
     await assertFails(updateDoc(ref('s1'), { status: 'cancelled', ...touched('s1') }));
     await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyFunds/f1')));
     await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyFunds/f1')));
   });
 
-  it('approves a request once any three stakeholders sign, never the requester, each only once', async () => {
+  it('approves a request once any two stakeholders sign, never the requester, each only once', async () => {
     await seedRequest('n1', { signatures: {} });
     const sig = (uid: string) => ({ name: uid, role: 'Stakeholder', at: serverTimestamp() });
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n1');
@@ -133,24 +131,22 @@ describe('petty cash', () => {
     await assertFails(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), ...touched('s1') }));
     // The new-style request has no accountant step.
     await assertFails(updateDoc(ref('eliz'), { status: 'checked', checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
-    await assertSucceeds(updateDoc(ref('eliz'), { 'signatures.eliz': sig('eliz'), ...touched('eliz') }));
     // A titled signer signs under their own title only, and nobody but the accountant signs as Accountant.
     await assertFails(updateDoc(ref('elias'), { 'signatures.elias': { ...sig('elias'), role: 'Accountant' }, status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
     await assertFails(updateDoc(ref('dan'), { 'signatures.dan': sig('dan'), status: 'approved', approved: stamp('dan', 'Accountant'), ...touched('dan') }));
-    // The third signature, whoever it is, must approve it, with no change to the amount.
+    // The second signature, whoever it is, must approve it, with no change to the amount.
     await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), ...touched('elias') }));
     await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), totalCents: 1, ...touched('elias') }));
     await assertSucceeds(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
     await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
   });
 
-  it('takes each signer\'s own title, and approves on the third signature', async () => {
+  it('takes each signer\'s own title, and approves on the second signature', async () => {
     await seedRequest('n3', { signatures: {} });
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n3');
     await assertSucceeds(updateDoc(ref('dan'), { 'signatures.dan': { name: 'dan', role: 'Accountant', at: serverTimestamp() }, ...touched('dan') }));
     await assertFails(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Board member', at: serverTimestamp() }, ...touched('chair') }));
-    await assertSucceeds(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Chairman', at: serverTimestamp() }, ...touched('chair') }));
-    await assertSucceeds(updateDoc(ref('s1'), { 'signatures.s1': { name: 's1', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s1', 'Stakeholder'), ...touched('s1') }));
+    await assertSucceeds(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Chairman', at: serverTimestamp() }, status: 'approved', approved: stamp('chair', 'Chairman'), ...touched('chair') }));
   });
 
   it('lets the pastor delete any request or top-up, and a requester only their own waiting request', async () => {

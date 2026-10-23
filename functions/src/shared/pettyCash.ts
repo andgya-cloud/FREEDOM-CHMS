@@ -1,8 +1,8 @@
 /**
- * ADIA petty cash: a requisition is submitted by the requester, then any three stakeholders sign it, each
+ * ADIA petty cash: a requisition is submitted by the requester, then any two stakeholders sign it, each
  * from their own account with their own password; the third signature approves it. Nobody signs their own
  * request. Requests made before signatures were introduced keep the old steps (accountant checks, then a
- * board member approves). Any three may approve, nobody twice. Firestore rules enforce the same.
+ * board member approves). Any two may approve, nobody twice. Firestore rules enforce the same.
  */
 
 import { ACCOUNTANT_TITLE } from './permissions.js';
@@ -79,7 +79,7 @@ export interface PettyCashRequisition {
 export interface PettyCashSignature { name: string; role: string; at?: unknown }
 
 /** Signatures that approve a requisition. */
-export const REQUEST_SIGNATURES_NEEDED = 3;
+export const REQUEST_SIGNATURES_NEEDED = 2;
 
 /** The requisition number the server gives the 15th request: "ADIA-00015". */
 export function pettyCashNumber(prefix: string, sequence: number): string {
@@ -94,8 +94,8 @@ export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: bo
 
 
 /**
- * Whether the accountant must be one of the three signatures. Andy asked for it on 2026-10-22, then for
- * "Any three to approve" on 2026-10-23, so it is off; turning it back on also needs the check in firestore.rules.
+ * Whether the accountant must be one of the signatures. Andy asked for it on 2026-10-22, then for
+ * "Any three to approve" and later "any two" on 2026-10-23, so it is off; turning it back on also needs the check in firestore.rules.
  */
 export const ACCOUNTANT_REQUIRED = false;
 
@@ -111,7 +111,7 @@ export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterI
   if (r.requesterId === actor.uid) return null;
   if (r.signatures) {
     if (r.status !== 'submitted' || !actor.canSign || actor.uid in r.signatures) return null;
-    // The accountant must be one of the three signatures, so the last place is kept for them.
+    // The accountant must be one of the signatures, so the last place is kept for them.
     return waitingForAccountant(r) && !actor.isAccountant ? null : 'sign';
   }
   if (r.status === 'submitted' && actor.canCheck) return 'check';
@@ -120,11 +120,11 @@ export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterI
 }
 
 /** Signatures needed before money is added to petty cash, or the budget is reset. */
-export const FUND_SIGNATURES_NEEDED = 3;
+export const FUND_SIGNATURES_NEEDED = 2;
 export type PettyFundKind = 'topup' | 'reset';
 export type PettyFundStatus = 'collecting' | 'done' | 'cancelled';
 export interface PettyFundSignature { name: string; at?: unknown }
-/** A top-up (money added) or a reset (the budget starts again from zero), signed by three stakeholders. */
+/** A top-up (money added) or a reset (the budget starts again from zero), signed by two stakeholders. */
 export interface PettyFund {
   id: string;
   kind: PettyFundKind;

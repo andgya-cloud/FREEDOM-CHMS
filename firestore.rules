@@ -1197,7 +1197,7 @@ service cloud.firestore {
             && r.keys().hasOnly(['uid', 'name', 'reason', 'at']) && r.uid == request.auth.uid && r.at == request.time
             && shortText(r.name, 120) && shortText(r.reason, 500) && r.reason.size() >= 1;
         }
-        // A stakeholder signs a waiting request from their own account; the third signature approves it
+        // A stakeholder signs a waiting request from their own account; the second signature approves it
         // and records that signer as the approver. Any signer may instead turn it down.
         function pcSignedFlow() {
           let sigs = request.resource.data.signatures;
@@ -1207,9 +1207,9 @@ service cloud.firestore {
                  && sigs.diff(resource.data.signatures).affectedKeys().hasOnly([request.auth.uid])
                  && request.auth.uid in sigs
                  && pcSignature(sigs[request.auth.uid])
-                 && (sigs.size() >= 3
-                      // Any three approve (Andy, 2026-10-23). To require the accountant again, also check that one of
-                      // sigs.values()[0..2].role == 'Accountant' here and set ACCOUNTANT_REQUIRED in shared/pettyCash.ts.
+                 && (sigs.size() >= 2
+                      // Any two approve (Andy, 2026-10-23; was three). To require the accountant again, also check that one of
+                      // sigs.values()[0..1].role == 'Accountant' here and set ACCOUNTANT_REQUIRED in shared/pettyCash.ts.
                       ? request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved)
                       : request.resource.data.status == 'submitted' && request.resource.data.approved == null))
               || (pcStep(['status', 'rejection']) && pcRejection()));
@@ -1320,7 +1320,7 @@ service cloud.firestore {
               && request.resource.data.signatures.diff(resource.data.signatures).affectedKeys().hasOnly([request.auth.uid])
               && request.auth.uid in request.resource.data.signatures
               && fundSignature(request.resource.data.signatures[request.auth.uid])
-              && (request.resource.data.signatures.size() >= 3
+              && (request.resource.data.signatures.size() >= 2
                    ? request.resource.data.status == 'done' && request.resource.data.doneAt == request.time
                    : request.resource.data.status == 'collecting' && request.resource.data.doneAt == null))
             // Whoever started it may cancel it before it is complete.

@@ -111,7 +111,7 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
       <button type="button" className="petty-reset" onClick={onReset} disabled={!p.canAuthorize} title={p.canAuthorize ? undefined : 'Only the signing stakeholders can reset the budget'}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4" /></svg>
         <strong>Reset<br />Budget</strong>
-        <small>3-SIG AUTH</small>
+        <small>2-SIG AUTH</small>
       </button>
     </div>
   );
@@ -185,11 +185,11 @@ function CoSignForm({ label: title, people = [], onSign }: { label: string; peop
 }
 
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
-  topup: { title: 'Top-Up Authorization', sub: 'Any three to approve. A stakeholder cannot approve twice.', done: 'Top-up complete. The money is now in the budget.' },
-  reset: { title: 'Reset Budget Authorization', sub: 'Any three to approve the reset. A stakeholder cannot approve twice.', done: 'Budget reset. It now starts again from zero.' },
+  topup: { title: 'Top-Up Authorization', sub: 'Any two to approve. A stakeholder cannot approve twice.', done: 'Top-up complete. The money is now in the budget.' },
+  reset: { title: 'Reset Budget Authorization', sub: 'Any two to approve the reset. A stakeholder cannot approve twice.', done: 'Budget reset. It now starts again from zero.' },
 };
 
-/** A top-up or a reset collecting its three signatures. Each stakeholder signs from their own account with their own password. */
+/** A top-up or a reset collecting its two signatures. Each stakeholder signs from their own account with their own password. */
 function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKind; onClose?: () => void }) {
   const p = usePettyCash(org);
   const { profile } = useAuth();
@@ -577,7 +577,7 @@ function Requisition({ org }: { org: Organization }) {
       </section>
       <section className="card stack">
         <h2>{r.signatures ? 'Authorization' : 'Approval history'}</h2>
-        {r.signatures && <p className="small muted">Any three to approve. A stakeholder cannot approve twice, and the requester cannot approve their own request. Each signs with their own password.</p>}
+        {r.signatures && <p className="small muted">Any two to approve. A stakeholder cannot approve twice, and the requester cannot approve their own request. Each signs with their own password.</p>}
         {needsAccountant && <p className="notice">Waiting for the accountant's signature. It is the last one needed.</p>}
         <ol className="petty-steps">
           <li className="done"><strong>Requested by {r.requesterName}</strong><span className="small muted">{when(r.createdAt)}</span></li>

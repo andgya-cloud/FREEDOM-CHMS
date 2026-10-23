@@ -34,9 +34,9 @@ describe('petty cash', () => {
     expect(nextStepFor({ ...checked, status: 'approved' }, elias)).toBeNull();
   });
 
-  it('lets any three approve, nobody twice and never the requester', () => {
+  it('lets any two approve, nobody twice and never the requester', () => {
     const sig = (role: string) => ({ name: role, role });
-    const r = { requesterId: 'doreen', checked: null, status: 'submitted' as const, signatures: { elias: sig('Chairman'), eliz: sig('Administrator') } };
+    const r = { requesterId: 'doreen', checked: null, status: 'submitted' as const, signatures: { elias: sig('Chairman') } };
     const ronald = { uid: 'ronald', canCheck: false, canApprove: true, canSign: true };
     expect(waitingForAccountant(r)).toBe(false);
     expect(nextStepFor(r, ronald)).toBe('sign');
@@ -63,9 +63,9 @@ describe('petty cash', () => {
     expect(fundSummary([], [], millis).budgetCents).toBe(0);
   });
 
-  it('completes a top-up at the third signature', () => {
-    expect(fundStatusAfter(2)).toBe('collecting');
-    expect(fundStatusAfter(3)).toBe('done');
+  it('completes a top-up at the second signature', () => {
+    expect(fundStatusAfter(1)).toBe('collecting');
+    expect(fundStatusAfter(2)).toBe('done');
   });
 
   it('works out a line from quantity and unit price', () => {
