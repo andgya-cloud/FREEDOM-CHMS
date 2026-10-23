@@ -99,7 +99,7 @@ export const TEAM_ROLE_ID = 'staff';
 export const SIGNATORY_ROLE_ID = 'signatory';
 
 /** The title printed under each signature on a petty cash voucher. Every request needs the accountant's signature. */
-export const PETTY_TITLES = ['Chairman', 'Administrator', 'Accountant', 'Board member'] as const;
+export const PETTY_TITLES = ['Director', 'Chairman', 'Administrator', 'Accountant', 'Board member'] as const;
 export type PettyTitle = (typeof PETTY_TITLES)[number];
 export const ACCOUNTANT_TITLE: PettyTitle = 'Accountant';
 
