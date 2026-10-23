@@ -16,9 +16,29 @@ export function stakeholdersFor(orgType: string | undefined) {
   return orgType === 'college' ? ADIA_STAKEHOLDERS : [];
 }
 
-/** Stakeholders whose name or email contains what was typed (any word of the name may start it). */
+/** Lower case, straight apostrophes and single spaces, so "daniel Ojwang’" matches "Daniel Ojwang'". */
+function norm(text: string) {
+  return text.normalize('NFKC').toLowerCase().replace(/[\u2018\u2019\u02bc\u0060\u00b4]/g, "'").replace(/\s+/g, ' ').trim();
+}
+
+/** Stakeholders whose name or email contains what was typed. An empty box lists everyone. */
 export function matchStakeholders(people: readonly { name: string; email: string }[], typed: string) {
-  const q = typed.trim().toLowerCase().replace(/[’']/g, "'");
-  if (!q) return [];
-  return people.filter((p) => p.name.toLowerCase().includes(q) || p.email.toLowerCase().includes(q));
+  const q = norm(typed);
+  if (!q) return [...people];
+  return people.filter((p) => norm(p.name).includes(q) || p.email.toLowerCase().includes(q));
+}
+
+/**
+ * The email to sign with: the typed text if it is an email, otherwise the one stakeholder whose name
+ * matches it (stakeholders-remember-v56). Undefined when a name matches nobody or more than one person.
+ */
+export function resolveStakeholderEmail(people: readonly { name: string; email: string }[], typed: string) {
+  const t = typed.trim();
+  if (t.includes('@')) return t.toLowerCase();
+  const q = norm(t);
+  if (!q) return undefined;
+  const exact = people.filter((p) => norm(p.name) === q);
+  if (exact.length === 1) return exact[0].email;
+  const matches = matchStakeholders(people, t);
+  return matches.length === 1 ? matches[0].email : undefined;
 }

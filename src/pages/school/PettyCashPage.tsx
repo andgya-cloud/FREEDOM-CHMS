@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useId, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -20,7 +20,7 @@ import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { matchStakeholders, stakeholdersFor } from '../../lib/stakeholders';
+import { matchStakeholders, resolveStakeholderEmail, stakeholdersFor } from '../../lib/stakeholders';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -125,15 +125,22 @@ function CoSignForm({ label: title, people = [], onSign }: { label: string; peop
   const toast = useToast();
   const [email, setEmail] = useState('');
   const [open, setOpen] = useState(false);
-  const picked = people.find((p) => p.email === email.trim().toLowerCase());
-  const suggestions = picked ? [] : matchStakeholders(people, email);
+  const id = useId();
+  const resolved = resolveStakeholderEmail(people, email);
+  const picked = people.find((p) => p.email === resolved);
+  const suggestions = picked && picked.email === email.trim().toLowerCase() ? [] : matchStakeholders(people, email);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   async function go() {
     if (!email.trim() || !password) return;
+    const signWith = resolved ?? email.trim();
+    if (people.length && !signWith.includes('@')) {
+      toast.show('Pick the stakeholder from the list under the box, so their email is filled in.');
+      return;
+    }
     setBusy(true);
     try {
-      const name = await onSign(email, password);
+      const name = await onSign(signWith, password);
       setEmail(''); setPassword('');
       toast.show(`Signed by ${name}.`);
     } catch (err) {
@@ -149,24 +156,25 @@ function CoSignForm({ label: title, people = [], onSign }: { label: string; peop
     <div className="petty-signer-form">
       <p className="small muted">{title}</p>
       <div className="petty-signer-row">
-        <label className="field petty-suggest"><span>Stakeholder{people.length ? ' (type a name)' : "'s email"}</span>
-          <input type="text" inputMode="email" autoComplete="off" spellCheck={false} autoCapitalize="off" value={email}
-            onChange={(e) => { setEmail(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} onBlur={() => setOpen(false)}
+        <div className="field petty-suggest">
+          <label htmlFor={`${id}-who`}><span>Stakeholder{people.length ? ' (type a name or tap one below)' : "'s email"}</span></label>
+          <input id={`${id}-who`} type="text" inputMode="email" autoComplete="off" spellCheck={false} autoCapitalize="off" autoCorrect="off" value={email}
+            onChange={(e) => { setEmail(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)}
             placeholder={people.length ? 'Start typing a name, e.g. Daniel' : 'name@example.com'} disabled={busy}
             role="combobox" aria-expanded={open && suggestions.length > 0} aria-autocomplete="list" />
-          {picked && <small className="petty-suggest-picked">{picked.name}</small>}
-          {open && suggestions.length > 0 && (
+          {picked && <small className="petty-suggest-picked">✓ {picked.name} · {picked.email}</small>}
+          {people.length > 0 && (open || !email.trim()) && suggestions.length > 0 && (
             <ul className="petty-suggest-list" role="listbox">
               {suggestions.map((p) => (
                 <li key={p.email} role="option" aria-selected={false}>
-                  <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => { setEmail(p.email); setOpen(false); }}>
+                  <button type="button" onClick={() => { setEmail(p.email); setOpen(false); }}>
                     <strong>{p.name}</strong><span>{p.email}</span>
                   </button>
                 </li>
               ))}
             </ul>
           )}
-        </label>
+        </div>
         <label className="field"><span>Their Insight-IQ password</span>
           <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
         </label>

@@ -1003,9 +1003,10 @@ a.kpi:hover { border-color: var(--primary); }
 .petty-auth-reset .petty-auth-head { background: linear-gradient(135deg, #b45309, #d97706); }
 
 /* Stakeholder suggestions under the "signs on this device" email box. */
-.petty-suggest { position: relative; }
+.petty-suggest { display: flex; flex-direction: column; gap: 6px; }
 .petty-suggest-picked { display: block; margin-top: 4px; color: #15803d; font-weight: 600; }
-.petty-suggest-list { position: absolute; z-index: 20; left: 0; right: 0; top: 100%; margin: 4px 0 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.15); }
-.petty-suggest-list button { display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: #1f2937; text-align: left; cursor: pointer; }
+.petty-suggest-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 4px; margin: 6px 0 0; padding: 4px; list-style: none; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08); }
+.petty-suggest-list button { min-height: 44px; display: flex; flex-direction: column; align-items: flex-start; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: transparent; color: #1f2937; text-align: left; cursor: pointer; }
 .petty-suggest-list button:hover, .petty-suggest-list button:focus-visible { background: #eef2f7; }
 .petty-suggest-list span { font-size: 0.8rem; color: #6b7280; }
+.petty-signer-row .petty-suggest { flex: 1 1 100%; }
