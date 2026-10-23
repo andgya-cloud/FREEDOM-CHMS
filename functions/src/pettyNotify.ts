@@ -86,17 +86,27 @@ export async function voucherPdf(org: OrgInfo, r: FirebaseFirestore.DocumentData
   return { name: `${r.number ?? 'Requisition'}-approved.pdf`, data: Buffer.from(pdf.output('arraybuffer')) };
 }
 
-/** Emails one notice to each person; returns how many went. Skipped (0) when the organization has no email set up. */
+/** Why Gmail refused, in plain words, for the person who pressed Send Email. */
+function mailProblem(err: unknown): string {
+  const e = err as { code?: string; responseCode?: number; message?: string };
+  if (e?.code === 'EAUTH' || e?.responseCode === 535) return 'Gmail refused the app password for the sending address. Make a new app password on that Gmail account and save it again.';
+  if (e?.code === 'ETIMEDOUT' || e?.code === 'ECONNECTION' || e?.code === 'ESOCKET') return 'Gmail could not be reached. Please try again.';
+  if (e?.responseCode === 550 || e?.responseCode === 553) return 'Gmail refused one of the addresses.';
+  if (e?.responseCode === 421 || e?.responseCode === 454) return 'Gmail is limiting how many emails go out. Please try again later.';
+  return `Gmail said: ${String(e?.message ?? err).slice(0, 160)}`;
+}
+/** Emails one notice to each person; returns how many went and, when some failed, why. */
 async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeRequest, link: string, signers: string[], people: Person[],
-  attachment: { name: string; data: Buffer } | null): Promise<number> {
+  attachment: { name: string; data: Buffer } | null): Promise<{ sent: number; problem: string }> {
   const from = org.lh.email;
   const pass = process.env.PETTY_MAIL_TEST_DIR ? 'test' : PETTY_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
-  if (!from || !pass) { logger.info(`Petty cash email skipped for ${org.id}: no sending email or app password yet.`); return 0; }
+  if (!from || !pass) { logger.info(`Petty cash email skipped for ${org.id}: no sending email or app password yet.`); return { sent: 0, problem: 'No Gmail app password is saved yet.' }; }
   // In local tests the emails are written to files (PETTY_MAIL_TEST_DIR) instead of being sent.
   const transport = process.env.PETTY_MAIL_TEST_DIR
     ? nodemailer.createTransport({ jsonTransport: true })
     : nodemailer.createTransport({ service: 'gmail', auth: { user: from, pass } });
   let sent = 0;
+  let problem = '';
   for (const p of people) {
     if (!p.email) continue;
     const n: NoticeInput = { kind, lh: org.lh, currency: org.currency, r: req, link, recipientName: p.name, signers };
@@ -113,9 +123,12 @@ async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeReque
       sent += 1;
     } catch (err) {
       logger.warn(`Petty cash email to ${p.uid} failed`, err);
+      problem = mailProblem(err);
+      // A refused login fails every send the same way; stop rather than try each person.
+      if ((err as { code?: string })?.code === 'EAUTH') break;
     }
   }
-  return sent;
+  return { sent, problem };
 }
 
 /** Queues one WhatsApp notice per person with a number, when WhatsApp sending is switched on. */
@@ -166,7 +179,7 @@ export const onPettyCashNotify = onDocumentWritten(
     if (after.status === 'submitted' && !after.notice?.askedAt) {
       if (!(await claim(ref, 'askedAt', (d) => d.status === 'submitted'))) return;
       const people = (await stakeholders(orgId)).filter((p) => p.uid !== after.requesterId);
-      const emailed = await emailNotice(org, 'ask', req, link, [], people, null);
+      const emailed = (await emailNotice(org, 'ask', req, link, [], people, null)).sent;
       const whatsapp = await queueWhatsapp(org, reqId, 'ask', req, link, [], people);
       await ref.update({ 'notice.askEmailed': emailed, 'notice.askWhatsapp': whatsapp });
       return;
@@ -179,7 +192,7 @@ export const onPettyCashNotify = onDocumentWritten(
       const people = requester ? [...all, requester] : all;
       const signers = sortedSigs(after.signatures).map(([, s]) => `${s.name} (${s.role})`);
       const pdf = await voucherPdf(org, { ...after, id: reqId });
-      const emailed = await emailNotice(org, 'approved', req, link, signers, people, pdf);
+      const emailed = (await emailNotice(org, 'approved', req, link, signers, people, pdf)).sent;
       const whatsapp = await queueWhatsapp(org, reqId, 'approved', req, link, sortedSigs(after.signatures).map(([, s]) => s.name), people);
       await ref.update({ 'notice.approvedEmailed': emailed, 'notice.approvedWhatsapp': whatsapp });
     }
@@ -261,8 +274,8 @@ export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_
     signers = sortedSigs(r.signatures).map(([, s]) => `${s.name} (${s.role})`);
     pdf = await voucherPdf(org, { ...r, id: reqId });
   }
-  const sent = await emailNotice(org, kind, req, link, signers, people, pdf);
-  if (!sent) throw new HttpsError('unavailable', 'The emails could not be sent. Please try again, or tell the pastor.');
+  const { sent, problem } = await emailNotice(org, kind, req, link, signers, people, pdf);
+  if (!sent) throw new HttpsError('unavailable', `The emails could not be sent. ${problem || (people.length ? 'Please try again.' : 'Nobody has an email address to send to.')}`);
   await ref.update({ [`notice.${kind}EmailAt`]: FieldValue.serverTimestamp(), [`notice.${kind}Emailed`]: sent, [`notice.${kind}EmailBy`]: caller.profile.displayName || caller.profile.email });
   await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: `petty_email_${kind}`, path: ref.path, collection: 'pettyCash', docId: reqId, orgId, note: `${sent} sent` });
   return { sent, of: people.length };
