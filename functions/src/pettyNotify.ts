@@ -4,10 +4,11 @@ import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 import { onDocumentCreated, onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { jsPDF } from 'jspdf';
 import nodemailer from 'nodemailer';
-import { db, FieldValue, type UserProfile } from './common.js';
-import { canSign } from './pettyPins.js';
+import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
+import { canSign, requireMember } from './pettyPins.js';
 import { isSendingHour, sendingReady, withWhatsAppDefaults, type WhatsAppSettings } from './shared/whatsapp.js';
 import { PETTY_CASH_STATUS_LABELS, pettyCashBase, type PettyCashSignature } from './shared/pettyCash.js';
 import { drawRequisition, letterheadFor, type Letterhead } from './shared/pettyVoucher.js';
@@ -23,7 +24,12 @@ import {
  * voucher as a PDF. Emails go from the organization's own Gmail (ADIA's), using an app password kept as
  * the secret PETTY_EMAIL_APP_PASSWORD. WhatsApp messages are queued in pettyWhatsapp and sent by
  * sendPettyWhatsapp, which is deployed once the WhatsApp Business number is set up.
+ *
+ * Later the same day Andy asked for no automatic messages: the requester presses "Send Email" (below,
+ * sendPettyEmail) or "Send WhatsApp" (from their own phone, in the app). AUTO_NOTICES keeps the
+ * automatic notices and reminders switched off; they stay here in case he wants them back.
  */
+const AUTO_NOTICES = false;
 const PETTY_EMAIL_APP_PASSWORD = defineSecret('PETTY_EMAIL_APP_PASSWORD');
 const WHATSAPP_TOKEN = defineSecret('WHATSAPP_TOKEN');
 const appUrl = () => process.env.APP_URL || 'https://freedom-chms.web.app';
@@ -148,6 +154,7 @@ async function claim(ref: FirebaseFirestore.DocumentReference, field: string, re
 export const onPettyCashNotify = onDocumentWritten(
   { document: 'organizations/{orgId}/pettyCash/{reqId}', secrets: [PETTY_EMAIL_APP_PASSWORD] },
   async (event) => {
+    if (!AUTO_NOTICES) return;
     const { orgId, reqId } = event.params;
     const after = event.data?.after.data();
     if (!after || after.deletedAt || !after.signatures || !after.number) return;
@@ -212,8 +219,54 @@ export async function remindPettyCash(now = new Date()): Promise<number> {
 export const pettyCashReminders = onSchedule(
   // Cloud Scheduler isn't offered in africa-south1, so this job runs from Europe.
   { schedule: 'every 60 minutes', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, secrets: [PETTY_EMAIL_APP_PASSWORD] },
-  async () => { await remindPettyCash(); },
+  async () => { if (AUTO_NOTICES) await remindPettyCash(); },
 );
+
+const RESEND_AFTER_MS = 2 * 60_000;
+
+/**
+ * "Send Email" on a requisition: while it waits, asks every stakeholder who has not signed (never the
+ * requester) to approve it; once approved, sends the signed voucher PDF to every stakeholder and the requester.
+ */
+export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_APP_PASSWORD] }, async (request) => {
+  const caller = await requireCaller(request);
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const orgId = requireString(data.orgId, 'the organization', { max: 80 });
+  const reqId = requireString(data.reqId, 'the requisition', { max: 80 });
+  requireMember(caller.profile, orgId);
+  const ref = db.doc(`organizations/${orgId}/pettyCash/${reqId}`);
+  const r = (await ref.get()).data();
+  if (!r || r.deletedAt) throw new HttpsError('not-found', 'This requisition is no longer there.');
+  if (r.requesterId !== caller.uid && r.raisedBy !== caller.uid && !canSign(caller.profile, orgId, 'request')) {
+    throw new HttpsError('permission-denied', 'Only the requester or a stakeholder can send this.');
+  }
+  const kind: PettyNoticeKind | null = r.status === 'submitted' ? 'ask' : r.status === 'approved' ? 'approved' : null;
+  if (!kind || !r.signatures || !r.number) throw new HttpsError('failed-precondition', 'There is nothing to send for this requisition now.');
+  const last = (r.notice?.[`${kind}EmailAt`] as FirebaseFirestore.Timestamp | undefined)?.toMillis?.() ?? 0;
+  if (Date.now() - last < RESEND_AFTER_MS) throw new HttpsError('already-exists', 'This was emailed a moment ago. Please wait a couple of minutes before sending again.');
+
+  const org = await orgInfo(orgId);
+  if (!org.lh.email) throw new HttpsError('failed-precondition', 'Email is not set up for this organization yet.');
+  const link = `${appUrl()}${pettyCashBase(org.type)}/${reqId}`;
+  const req = noticeRequest(r);
+  const all = await stakeholders(orgId);
+  let people: Person[];
+  let signers: string[] = [];
+  let pdf: { name: string; data: Buffer } | null = null;
+  if (kind === 'ask') {
+    people = all.filter((p) => p.uid !== r.requesterId && !(p.uid in r.signatures));
+  } else {
+    const requester = all.some((p) => p.uid === r.requesterId) ? null : await person(r.requesterId);
+    people = requester ? [...all, requester] : all;
+    signers = sortedSigs(r.signatures).map(([, s]) => `${s.name} (${s.role})`);
+    pdf = await voucherPdf(org, { ...r, id: reqId });
+  }
+  const sent = await emailNotice(org, kind, req, link, signers, people, pdf);
+  if (!sent) throw new HttpsError('unavailable', 'The emails could not be sent. Please try again, or tell the pastor.');
+  await ref.update({ [`notice.${kind}EmailAt`]: FieldValue.serverTimestamp(), [`notice.${kind}Emailed`]: sent, [`notice.${kind}EmailBy`]: caller.profile.displayName || caller.profile.email });
+  await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: `petty_email_${kind}`, path: ref.path, collection: 'pettyCash', docId: reqId, orgId, note: `${sent} sent` });
+  return { sent, of: people.length };
+});
 
 /** Uploads the voucher to WhatsApp so the approved message can carry it; returns the media id. */
 async function uploadPdf(phoneNumberId: string, token: string, pdf: { name: string; data: Buffer }): Promise<string> {

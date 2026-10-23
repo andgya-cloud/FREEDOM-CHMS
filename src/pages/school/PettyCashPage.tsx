@@ -7,7 +7,7 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { listPettySigners, raisePettyRequest, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { AskDeleteDialog, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
@@ -26,15 +26,34 @@ import type { Timestamp } from 'firebase/firestore';
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'just now');
 const label = (r: RequisitionRow) => r.number ?? 'New request';
-/** What the stakeholders were sent about this request, and when. */
+/** What the stakeholders were emailed about this request, by whom and when. */
 function noticeLine(n: NonNullable<RequisitionRow['notice']>) {
-  const via = (email?: number, wa?: number) => [email ? `${email} by email` : '', wa ? `${wa} by WhatsApp` : ''].filter(Boolean).join(' and ') || 'nobody yet (email is not set up)';
   const parts = [];
-  if (n.askedAt) parts.push(`Asked to approve ${when(n.askedAt)}: ${via(n.askEmailed, n.askWhatsapp)}.`);
-  if (n.remindedAt) parts.push(`Reminded ${when(n.remindedAt)}.`);
-  if (n.approvedAt) parts.push(`Signed voucher sent ${when(n.approvedAt)}: ${via(n.approvedEmailed, n.approvedWhatsapp)}.`);
+  if (n.askEmailAt) parts.push(`Approval request emailed to ${n.askEmailed ?? 0} by ${n.askEmailBy ?? 'the requester'}, ${when(n.askEmailAt)}.`);
+  else if (n.askedAt && n.askEmailed) parts.push(`Asked to approve by email ${when(n.askedAt)}.`);
+  if (n.approvedEmailAt) parts.push(`Signed voucher emailed to ${n.approvedEmailed ?? 0} by ${n.approvedEmailBy ?? 'the requester'}, ${when(n.approvedEmailAt)}.`);
   return parts.join(' ');
 }
+
+/** The WhatsApp message the requester sends from their own phone. */
+function waText(org: Organization, r: RequisitionRow, approvedBy: string[]) {
+  const link = `${location.origin}${pettyCashBase(org.type)}/${r.id}`;
+  const head = `${label(r)} for ${money(org, r.totalCents)} (${categoryLabel(r)}), raised by ${r.requesterName}`;
+  return r.status === 'approved'
+    ? `*${org.name}: petty cash approved*\nRequisition ${head}, has been approved by ${approvedBy.join(' and ')}.\nThe signed payment voucher is attached.\n${link}`
+    : `*${org.name}: petty cash approval needed*\nRequisition ${head}.\nItems: ${r.items.map((i) => i.description).join('; ')}\nAny ${REQUEST_SIGNATURES_NEEDED} stakeholders please review and sign here:\n${link}`;
+}
+const waLink = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
+/** Phones share the PDF straight into WhatsApp; computers save it and open WhatsApp. */
+function canSharePdf() {
+  try {
+    return window.matchMedia('(pointer: coarse)').matches && typeof navigator.canShare === 'function'
+      && navigator.canShare({ files: [new File([''], 'voucher.pdf', { type: 'application/pdf' })] });
+  } catch {
+    return false;
+  }
+}
+
 const SUBMITTED_TEXT = `Request submitted. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`;
 /** Signatures in the order they were given. */
 const signaturesOf = (r: RequisitionRow) => Object.entries(r.signatures ?? {}).sort(([, a], [, b]) => (millis(a.at) ?? Date.now()) - (millis(b.at) ?? Date.now()));
@@ -530,6 +549,7 @@ function Requisition({ org }: { org: Organization }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [sending, setSending] = useState(false);
   const { receipts } = useReceipts(org, reqId);
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
@@ -564,15 +584,51 @@ function Requisition({ org }: { org: Organization }) {
     setPassword('');
     setBusy(false);
   }
+  const makePdf = () => requisitionPdf(org, {
+    number: r.number, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote, items: r.items,
+    totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status], date: when(r.createdAt),
+  }, signOffs, receipts.length);
   async function pdf() {
-    if (!r) return;
     try {
-      const file = await requisitionPdf(org, {
-        number: r.number, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote, items: r.items,
-        totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status], date: when(r.createdAt),
-      }, signOffs, receipts.length);
-      downloadFile(file);
+      downloadFile(await makePdf());
     } catch (err) {
+      toast.show(friendlyError(err));
+    }
+  }
+  // Send Email / Send WhatsApp (Andy, 2026-10-23): nothing goes out on its own; the requester sends it.
+  const canSend = !!r.number && !!r.signatures && (r.status === 'submitted' || r.status === 'approved')
+    && (r.requesterId === p.uid || r.raisedBy === p.uid || p.canSign);
+  async function sendEmail() {
+    setSending(true);
+    try {
+      const res = await sendPettyEmail(org.id, r!.id);
+      toast.show(`${r!.status === 'approved' ? 'Signed voucher' : 'Approval request'} emailed to ${res.sent} ${res.sent === 1 ? 'person' : 'people'}.`);
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      toast.show(e?.code?.startsWith('functions/') && e.message ? e.message.replace(/\s*\[\d+\]$/, '') : friendlyError(err));
+    } finally {
+      setSending(false);
+    }
+  }
+  async function sendWhatsapp() {
+    const text = waText(org, r!, sigs.map(([, s]) => `${s.name} (${s.role})`));
+    if (r!.status !== 'approved') { window.open(waLink(text), '_blank', 'noopener'); return; }
+    if (canSharePdf()) {
+      try {
+        await navigator.share({ files: [await makePdf()], text, title: `${label(r!)} approved` });
+      } catch (err) {
+        if ((err as Error)?.name !== 'AbortError') toast.show(friendlyError(err));
+      }
+      return;
+    }
+    // A computer: open WhatsApp now (before the PDF is made, so the browser allows it), then save the voucher to attach.
+    const w = window.open('about:blank', '_blank');
+    try {
+      downloadFile(await makePdf());
+      if (w) w.location.href = waLink(text); else window.location.href = waLink(text);
+      toast.show('The signed voucher PDF was saved to your Downloads. Attach it in WhatsApp.');
+    } catch (err) {
+      w?.close();
       toast.show(friendlyError(err));
     }
   }
@@ -620,6 +676,19 @@ function Requisition({ org }: { org: Organization }) {
         </ol>
         {r.rejection && <p className="notice">Rejected by {r.rejection.name} ({when(r.rejection.at)}): {r.rejection.reason}</p>}
       </section>
+      {canSend && (
+        <section className="card stack no-print">
+          <h2>{r.status === 'approved' ? 'Send the signed voucher' : 'Ask the stakeholders to approve'}</h2>
+          <p className="small muted">{r.status === 'approved'
+            ? `The petty cash voucher with its details and the ${REQUEST_SIGNATURES_NEEDED} signatures, to every stakeholder and ${r.requesterName}.`
+            : `Tells the stakeholders that any ${REQUEST_SIGNATURES_NEEDED} of them must sign, with a link to this request. ${r.requesterName} cannot sign it.`}</p>
+          <div className="row-actions">
+            <button type="button" className="btn btn-primary" disabled={sending} onClick={() => void sendEmail()}>{sending ? 'Sending…' : 'Send Email'}</button>
+            <button type="button" className="btn btn-whatsapp" onClick={() => void sendWhatsapp()}>Send WhatsApp</button>
+          </div>
+          <p className="small muted">WhatsApp opens on this device with the message ready{r.status === 'approved' ? ' and the voucher PDF' : ''}. Choose the stakeholders' group or each person, then send.</p>
+        </section>
+      )}
       {step && (
         <section className="card stack no-print">
           <h2>{step === 'sign' ? 'Sign this request' : step === 'check' ? 'Check this request' : 'Give final approval'}</h2>
@@ -663,7 +732,7 @@ function Requisition({ org }: { org: Organization }) {
       {(p.canSign || r.requesterId === p.uid) && (
         <section className="card stack no-print">
           <h2>Delete this request</h2>
-          <p className="small muted">Any two stakeholders must approve. It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
+          <p className="small muted">{p.isPastor ? "As the pastor you can delete it alone." : "Any two stakeholders must approve."} It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
           <div className="row-actions"><button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete request</button></div>
         </section>
       )}

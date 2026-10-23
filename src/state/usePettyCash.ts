@@ -11,7 +11,9 @@ import type { Organization } from './OrgContext';
 export interface RequisitionRow extends PettyCashRequisition {
   createdAt?: Timestamp; deletedAt?: unknown;
   /** Set by the server when it emails or messages the stakeholders. */
-  notice?: { askedAt?: Timestamp; askEmailed?: number; askWhatsapp?: number; remindedAt?: Timestamp; approvedAt?: Timestamp; approvedEmailed?: number; approvedWhatsapp?: number };
+  notice?: { askedAt?: Timestamp; askEmailed?: number; askWhatsapp?: number; remindedAt?: Timestamp; approvedAt?: Timestamp; approvedEmailed?: number; approvedWhatsapp?: number;
+    askEmailAt?: Timestamp; askEmailBy?: string; approvedEmailAt?: Timestamp; approvedEmailBy?: string };
+  raisedBy?: string;
 }
 export interface FundRow extends PettyFund { createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }
 export const millis = (t: unknown) => (t && typeof (t as Timestamp).toMillis === 'function' ? (t as Timestamp).toMillis() : null);

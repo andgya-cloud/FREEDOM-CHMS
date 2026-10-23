@@ -172,6 +172,7 @@ input[type='checkbox'], input[type='radio'] { width: 22px; height: 22px; min-hei
 .btn-primary { background: var(--primary); color: var(--primary-ink); border-color: transparent; }
 .btn-gold { background: var(--gold); color: #1a1300; border-color: transparent; }
 .btn-danger { background: var(--red); color: #fff; border-color: transparent; }
+.btn-whatsapp { background: #1a8f4c; color: #fff; border-color: transparent; }
 .btn-quiet { background: transparent; border-color: transparent; color: var(--primary); }
 .btn-block { width: 100%; }
 .btn:disabled { opacity: 0.6; cursor: default; }

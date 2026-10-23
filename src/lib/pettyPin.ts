@@ -55,3 +55,9 @@ export async function raisePettyRequest(args: {
   const res = await httpsCallable<object, { id: string; name: string }>(functions, 'raisePettyRequest')(args);
   return res.data;
 }
+
+/** "Send Email" on a requisition: asks for approval while it waits, or sends the signed voucher once approved. */
+export async function sendPettyEmail(orgId: string, reqId: string): Promise<{ sent: number; of: number }> {
+  const res = await httpsCallable<object, { sent: number; of: number }>(functions, 'sendPettyEmail')({ orgId, reqId });
+  return res.data;
+}
