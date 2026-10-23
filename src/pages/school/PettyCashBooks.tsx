@@ -4,7 +4,7 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, useReceipts } from '../../state/usePettyCash';
 import { saveAllocations } from '../../lib/pettyCashWrites';
-import { AskDeleteDialog } from './PettyBin';
+import { AskDeleteDialog, BinButton } from './PettyBin';
 import { balanceSheetPdf } from '../../lib/pettyPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
@@ -111,7 +111,7 @@ function BalanceSheet({ org }: { org: Organization }) {
       {lines.length === 0 ? <p className="muted small">Nothing yet. Top-ups appear once 3 stakeholders sign them, and requests once they are approved.</p> : (
         <div className="card exam-table-wrap">
           <table className="table petty-ledger">
-            <thead><tr><th>Date</th><th>Description</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th>{p.isPastor && <th className="no-print" aria-label="Delete" />}</tr></thead>
+            <thead><tr><th>Date</th><th>Description</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th>{p.canSign && <th className="no-print" aria-label="Delete" />}</tr></thead>
             <tbody>
               {lines.map((l) => (
                 <tr key={l.id} className={l.kind === 'reset' ? 'petty-ledger-reset' : ''}>
@@ -120,11 +120,9 @@ function BalanceSheet({ org }: { org: Organization }) {
                   <td className="num nowrap ok-text">{l.creditCents ? money(org, l.creditCents) : ''}</td>
                   <td className="num nowrap danger-text">{l.debitCents ? money(org, l.debitCents) : ''}</td>
                   <td className="num nowrap"><strong>{money(org, l.balanceCents)}</strong></td>
-                  {p.isPastor && (
+                  {p.canSign && (
                     <td className="no-print">
-                      {l.kind === 'request'
-                        ? <Link to={`${pettyCashBase(org.type)}/${l.id}`} className="small">Open</Link>
-                        : <button type="button" className="btn btn-quiet danger-text btn-small" onClick={() => setDeleting(l)}>Delete</button>}
+                      <BinButton label={`Delete ${l.description}`} onClick={() => setDeleting(l)} />
                     </td>
                   )}
                 </tr>
@@ -133,9 +131,9 @@ function BalanceSheet({ org }: { org: Organization }) {
           </table>
         </div>
       )}
-      <AskDeleteDialog org={org} kind="fund" targetId={deleting?.id ?? ''} open={!!deleting} onClose={() => setDeleting(null)}
-        title={deleting?.kind === 'reset' ? 'Delete this budget reset?' : 'Delete this top-up?'}
-        body={deleting ? `${day(deleting.at)} · ${deleting.kind === 'topup' ? money(org, deleting.creditCents) : 'Reset to zero'}.` : ''} />
+      <AskDeleteDialog org={org} kind={deleting?.kind === 'request' ? 'request' : 'fund'} targetId={deleting?.id ?? ''} open={!!deleting} onClose={() => setDeleting(null)}
+        title={deleting?.kind === 'request' ? 'Delete this requisition?' : deleting?.kind === 'reset' ? 'Delete this budget reset?' : 'Delete this top-up?'}
+        body={deleting ? `${day(deleting.at)} · ${deleting.kind === 'request' ? `${deleting.description} · ${money(org, deleting.debitCents)}` : deleting.kind === 'topup' ? money(org, deleting.creditCents) : 'Reset to zero'}.` : ''} />
     </div>
   );
 }

@@ -76,15 +76,24 @@ export function AskDeleteDialog({ org, kind, targetId, title, body, open, onClos
     <dialog ref={ref} className="dialog" onCancel={(e) => { e.preventDefault(); onClose(); }}>
       <h2>{title}</h2>
       <p>{body}</p>
-      <p className="small muted">{isPastor ? 'As the pastor, it moves to the Bin straight away and is recorded in the deletion register. It can be put back from there.' : 'You sign first. It moves to the Bin once one more stakeholder approves, and can be put back from there.'}</p>
-      <label className="field"><span>Reason for deleting</span>
+      <p className="small muted">{isPastor ? 'It moves to the Bin straight away and is recorded in the deletion register. You can put it back from the Bin.' : 'You sign first. It moves to the Bin once one more stakeholder approves, and can be put back from there.'}</p>
+      <label className="field"><span>{isPastor ? 'Reason (optional)' : 'Reason for deleting'}</span>
         <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Entered twice by mistake" disabled={busy} />
       </label>
       <div className="dialog-actions">
         <button type="button" className="btn btn-quiet" onClick={onClose} disabled={busy}>Cancel</button>
-        <button type="button" className="btn btn-danger" onClick={() => void go()} disabled={busy || reason.trim().length < 3}>{busy ? 'Signing…' : isPastor ? 'Move to bin' : 'Sign and ask'}</button>
+        <button type="button" className="btn btn-danger" onClick={() => void go()} disabled={busy || (!isPastor && reason.trim().length < 3)}>{busy ? (isPastor ? 'Deleting…' : 'Signing…') : isPastor ? 'Delete' : 'Sign and ask'}</button>
       </div>
     </dialog>
+  );
+}
+
+/** The small bin icon on a list row that starts a delete. */
+export function BinButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" className="petty-row-del no-print" aria-label={label} title={label} onClick={(e) => { e.preventDefault(); e.stopPropagation(); onClick(); }}>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" /></svg>
+    </button>
   );
 }
 
@@ -134,7 +143,7 @@ function BinView({ org }: { org: Organization }) {
         <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>
       </div>
       <PettyNav org={org} />
-      <p className="muted small no-print">Deleting, putting back and deleting forever each need any two stakeholders, or the pastor alone. Whoever asks signs first. Every step is recorded below.</p>
+      <p className="muted small no-print">{p.isPastor ? 'You can put back or delete forever on your own. For other stakeholders each step needs any two of them.' : 'Deleting, putting back and deleting forever each need any two stakeholders. Whoever asks signs first.'} Every step is recorded below.</p>
 
       <section className="card stack no-print">
         <h2>Waiting for a second stakeholder</h2>
@@ -179,7 +188,7 @@ function BinView({ org }: { org: Organization }) {
                   )}
                   {asking?.row.id === r.id && (
                     <div className="petty-bin-ask">
-                      <p className="small">{asking.action === 'purge' ? 'Deleting forever cannot be undone. The record below keeps its name, amount and who approved it.' : 'It comes back exactly as it was.'} {p.isPastor ? 'As the pastor, this happens straight away.' : 'You sign first; one more stakeholder must approve.'}</p>
+                      <p className="small">{asking.action === 'purge' ? 'Deleting forever cannot be undone. The record below keeps its name, amount and who approved it.' : 'It comes back exactly as it was.'} {p.isPastor ? 'This happens straight away.' : 'You sign first; one more stakeholder must approve.'}</p>
                       <label className="field"><span>Reason (optional)</span><input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} /></label>
                       <div className="row-actions">
                         <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>
@@ -208,7 +217,7 @@ function BinView({ org }: { org: Organization }) {
                     <td>{what(row)}</td>
                     <td>{BIN_DONE_LABELS[h.action]}</td>
                     <td>{h.reason || '—'}</td>
-                    <td>{h.signatures.map((s) => <div key={s.uid}>{s.name}, {s.title}<span className="small muted"> · {stamp(s.at)}</span></div>)}{h.sole && <div className="small muted">Pastor, sole approval</div>}</td>
+                    <td>{h.signatures.map((s) => <div key={s.uid}>{s.name}, {s.title}<span className="small muted"> · {stamp(s.at)}</span></div>)}{h.sole && <div className="small muted">Sole approval</div>}</td>
                   </tr>
                 ))}
               </tbody>

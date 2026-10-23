@@ -97,12 +97,14 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
     // Any petty cash signer may sign; whoever made the entry may also ask to delete it (and counts as the first).
     const mayAsk = !motion && action === 'delete' && ownerOf(kind, target) === signerUid && canAccessOrg(signer, orgId);
     if (!canSign(signer, orgId, 'request') && !mayAsk) throw new HttpsError('permission-denied', 'That person cannot sign this.');
-    if (!motion && action === 'delete' && reason.length < 3) throw new HttpsError('invalid-argument', 'Please give a reason for deleting.');
+    const pastor = (signer.permissions ?? []).includes('users.manage');
+    // The pastor (Director) may leave the reason out; everyone else gives one.
+    if (!motion && action === 'delete' && reason.length < 3 && !pastor) throw new HttpsError('invalid-argument', 'Please give a reason for deleting.');
 
     const sig: BinSignature = { uid: signerUid, name: signer.displayName || signer.email, title: titleOf(signer), at: Timestamp.now() };
     const next = { action, reason: motion?.reason ?? reason, startedBy: motion?.startedBy ?? signerUid, signatures: [...sigs, sig] };
     const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid };
-    const sole = (signer.permissions ?? []).includes('users.manage') && next.signatures.length < BIN_SIGNATURES_NEEDED;
+    const sole = pastor && next.signatures.length < BIN_SIGNATURES_NEEDED;
     if (next.signatures.length < BIN_SIGNATURES_NEEDED && !sole) {
       tx.set(binRef, { ...bin, motion: next, ...stamp });
       return { outcome: 'signed' as const, count: next.signatures.length, action };

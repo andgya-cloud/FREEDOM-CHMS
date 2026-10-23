@@ -1017,3 +1017,8 @@ a.kpi:hover { border-color: var(--primary); }
 .petty-register td { vertical-align: top; font-size: 0.88rem; }
 .petty-viewer-file { padding: 32px 16px; text-align: center; }
 .petty-bin-notice { display: block; padding: 14px 16px; border-color: #fdba74; background: #fff7ed; color: #9a3412; font-weight: 600; text-decoration: none; }
+.link-list li.petty-row { display: flex; align-items: center; gap: 4px; padding-right: 8px; }
+.link-list li.petty-row > a { flex: 1; min-width: 0; }
+.petty-row-del { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--red); cursor: pointer; }
+.petty-row-del:hover, .petty-row-del:focus-visible { background: rgba(180, 35, 24, 0.1); }
+.petty-row-del svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }

@@ -9,7 +9,7 @@ import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOw
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
-import { AskDeleteDialog, BinNotice } from './PettyBin';
+import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
@@ -256,18 +256,25 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
 }
 
 function RequisitionList({ org, rows, empty }: { org: Organization; rows: RequisitionRow[]; empty: string }) {
+  const p = usePettyCashAccess();
+  const [deleting, setDeleting] = useState<RequisitionRow | null>(null);
   if (rows.length === 0) return <p className="muted small">{empty}</p>;
   return (
-    <ul className="link-list">
-      {rows.map((r) => (
-        <li key={r.id}>
-          <Link to={`${pettyCashBase(org.type)}/${r.id}`}>
-            <span className="link-title">{label(r)} · {r.requesterName}</span>
-            <span className="link-detail">{money(org, r.totalCents)} · {r.signatures && r.status === 'submitted' ? `${Object.keys(r.signatures).length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : PETTY_CASH_STATUS_LABELS[r.status]} · {categoryLabel(r)}</span>
-          </Link>
-        </li>
-      ))}
-    </ul>
+    <>
+      <ul className="link-list">
+        {rows.map((r) => (
+          <li key={r.id} className="petty-row">
+            <Link to={`${pettyCashBase(org.type)}/${r.id}`}>
+              <span className="link-title">{label(r)} · {r.requesterName}</span>
+              <span className="link-detail">{money(org, r.totalCents)} · {r.signatures && r.status === 'submitted' ? `${Object.keys(r.signatures).length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : PETTY_CASH_STATUS_LABELS[r.status]} · {categoryLabel(r)}</span>
+            </Link>
+            {(p.canSign || r.requesterId === p.uid) && <BinButton label={`Delete ${label(r)}`} onClick={() => setDeleting(r)} />}
+          </li>
+        ))}
+      </ul>
+      <AskDeleteDialog org={org} kind="request" targetId={deleting?.id ?? ''} open={!!deleting} onClose={() => setDeleting(null)}
+        title={deleting ? `Delete ${label(deleting)}?` : ''} body={deleting ? `${money(org, deleting.totalCents)} · ${categoryLabel(deleting)} · ${deleting.requesterName}.` : ''} />
+    </>
   );
 }
 
@@ -732,7 +739,7 @@ function Requisition({ org }: { org: Organization }) {
       {(p.canSign || r.requesterId === p.uid) && (
         <section className="card stack no-print">
           <h2>Delete this request</h2>
-          <p className="small muted">{p.isPastor ? "As the pastor you can delete it alone." : "Any two stakeholders must approve."} It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
+          <p className="small muted">{p.isPastor ? 'You can delete it on your own.' : 'Any two stakeholders must approve.'} It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
           <div className="row-actions"><button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete request</button></div>
         </section>
       )}
@@ -809,14 +816,12 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
                 <span className="petty-receipt-name">{rc.name}</span>
                 <span className="small muted">{Math.max(1, Math.round(rc.size / 1024))} KB · {rc.uploadedByName} · {when(rc.createdAt)}</span>
               </button>
-              {(rc.createdBy === p.uid || p.canSign) && (
-                <button type="button" className="btn btn-quiet danger-text" onClick={() => setRemoving(rc)}>Remove</button>
-              )}
+              {(rc.createdBy === p.uid || p.canSign) && <BinButton label={`Remove ${rc.name}`} onClick={() => setRemoving(rc)} />}
             </li>
           ))}
         </ul>
       )}
-      <p className="small muted">Photos (JPG, PNG, HEIC and more), PDF, Word, Excel or CSV, up to 10 MB each and {MAX_RECEIPTS_PER_REQUEST} per requisition. Big photos are made smaller. Removing a receipt needs two stakeholders.</p>
+      <p className="small muted">Photos (JPG, PNG, HEIC and more), PDF, Word, Excel or CSV, up to 10 MB each and {MAX_RECEIPTS_PER_REQUEST} per requisition. Big photos are made smaller. {p.isPastor ? 'You can remove a receipt on your own; others need two stakeholders.' : 'Removing a receipt needs two stakeholders.'}</p>
       <AskDeleteDialog org={org} kind="receipt" targetId={removing?.id ?? ''} open={!!removing} onClose={() => setRemoving(null)}
         title="Remove this receipt?" body={removing ? `${removing.name}, added by ${removing.uploadedByName}.` : ''} />
       {viewing && createPortal(
