@@ -49,6 +49,9 @@ describe('petty cash', () => {
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/h1'), { ...newRequest('doreen'), category: "Children's needs" }));
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/c1'), { ...newRequest('doreen'), category: 'Hospitality' }));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/h2'), { ...newRequest('doreen'), category: 'Holiday' }));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/t1'), { ...newRequest('doreen'), category: 'Training materials' }));
+    // Retired: ADIA's old list had it, new requests may not use it.
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/t2'), { ...newRequest('doreen'), category: 'Freedom Hope Center' }));
   });
 
   it('lets a requester submit their own request only, and see only their own', async () => {

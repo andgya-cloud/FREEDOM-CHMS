@@ -1177,7 +1177,7 @@ service cloud.firestore {
           && request.resource.data.number == null
           && request.resource.data.requesterId == request.auth.uid
           && shortText(request.resource.data.requesterName, 120)
-          && request.resource.data.category in ['Freedom Hope Center', 'Staff Payments', 'Other',
+          && request.resource.data.category in ['Training materials', 'Office & supplies', 'Staff Payments', 'Transport', 'Repairs & maintenance', 'Utilities', 'Other',
                "Children's needs", 'Programmes & activities', 'Office & supplies', 'Ministry & programmes', 'Hospitality']
           && request.resource.data.items is list && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 30
           && request.resource.data.totalCents is int && request.resource.data.totalCents > 0 && request.resource.data.totalCents <= 100000000000

@@ -7,14 +7,16 @@
 
 import { ACCOUNTANT_TITLE } from './permissions.js';
 
-/** ADIA Training Centre's categories, from its old petty cash app. */
-export const PETTY_CASH_CATEGORIES = ['Freedom Hope Center', 'Staff Payments', 'Other'] as const;
+/** ADIA Training Centre's categories (Andy asked for ones that fit the college, 2026-10-23). */
+export const PETTY_CASH_CATEGORIES = ['Training materials', 'Office & supplies', 'Staff Payments', 'Transport', 'Repairs & maintenance', 'Utilities', 'Other'] as const;
+/** Categories no longer offered that older requests may still carry (ADIA's old app had "Freedom Hope Center"). */
+export const RETIRED_PETTY_CASH_CATEGORIES = ['Freedom Hope Center'] as const;
 /** Freedom Hope Center's categories. */
 export const HOPE_PETTY_CASH_CATEGORIES = ["Children's needs", 'Programmes & activities', 'Staff Payments', 'Office & supplies', 'Other'] as const;
 /** Freedom Church's categories. */
 export const CHURCH_PETTY_CASH_CATEGORIES = ['Ministry & programmes', 'Hospitality', 'Staff Payments', 'Office & supplies', 'Other'] as const;
 export type PettyCashCategory = (typeof PETTY_CASH_CATEGORIES)[number] | (typeof HOPE_PETTY_CASH_CATEGORIES)[number]
-  | (typeof CHURCH_PETTY_CASH_CATEGORIES)[number];
+  | (typeof CHURCH_PETTY_CASH_CATEGORIES)[number] | (typeof RETIRED_PETTY_CASH_CATEGORIES)[number];
 
 /** Organizations that keep petty cash: ADIA (a college), Freedom Hope Center (a ministry) and Freedom Church campuses. */
 export const PETTY_CASH_ORG_TYPES = ['college', 'ministry', 'church_campus'] as const;
