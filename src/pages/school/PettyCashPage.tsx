@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -7,12 +7,12 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { raisePettyRequest, signWithPin } from '../../lib/pettyPin';
+import { listPettySigners, raisePettyRequest, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { AskDeleteDialog, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
-  categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
+  categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
   FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
@@ -345,6 +345,25 @@ function NewRequisition({ org }: { org: Organization }) {
   const total = itemsTotalCents(parsed.map((i) => ({ amountCents: i.amountCents ?? 0 })));
   const previous = useMemo(() => p.requisitions.filter((r) => r.requesterId === p.uid || p.seesAll).slice(0, 30), [p.requisitions, p.uid, p.seesAll]);
   const cats = useMemo(() => categoryBudgets(pettyCashCategoriesFor(org.type), p.allocations, p.requisitions, p.periodStart, millis), [org.type, p.allocations, p.requisitions, p.periodStart]);
+  // ADIA (Andy, 2026-10-23): the requester is picked from the stakeholders; anyone but the person signed in types their PIN.
+  const isAdia = org.type === 'college';
+  const [signers, setSigners] = useState<PettySigner[] | null>(null);
+  const [requester, setRequester] = useState('');
+  const [pin, setPin] = useState('');
+  const [settingPin, setSettingPin] = useState(false);
+  const [password, setPassword] = useState('');
+  const [newPin, setNewPin] = useState('');
+  const [newPin2, setNewPin2] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!isAdia) return;
+    let live = true;
+    listPettySigners(org.id).then((list) => { if (live) setSigners(list); }).catch(() => { if (live) setSigners([]); });
+    return () => { live = false; };
+  }, [org.id, isAdia]);
+  const others = (signers ?? []).filter((x) => x.uid !== p.uid);
+  const chosen = others.find((x) => x.uid === requester);
+  const needsPinSetup = !!chosen && (!chosen.hasPin || settingPin);
   if (!p.any) return <NoAccess />;
 
   const update = (key: number, field: 'description' | 'quantity' | 'unitPrice', value: string) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
@@ -367,18 +386,35 @@ function NewRequisition({ org }: { org: Organization }) {
     category: category as PettyCashCategory, categoryNote: category === 'Other' ? note.trim().slice(0, 120) : null,
     items: parsed.map((i) => ({ description: i.description.slice(0, 200), quantity: i.quantity!, unitPriceCents: i.unitPriceCents!, amountCents: i.amountCents! })), month: p.month,
   });
-  /** ADIA: another stakeholder raises it as theirs on this device, with their name and PIN. */
-  async function raiseAs(uid: string, pin: string) {
-    const problem = missing();
-    // Shown by the signing box as it shows the server's own messages.
-    if (problem) throw Object.assign(new Error(problem), { code: 'functions/invalid-argument' });
-    const res = await raisePettyRequest({ orgId: org.id, requesterUid: uid, pin, ...input() });
-    navigate(`${pettyCashBase(org.type)}/${res.id}`);
-    return `Request raised for ${res.name}. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`;
+  /** ADIA: the chosen stakeholder raises it as theirs on this device, with their PIN. */
+  async function raiseForChosen() {
+    if (!chosen) return;
+    if (needsPinSetup) {
+      if (!checkPin(newPin)) { toast.show('Choose a PIN of 4 to 6 digits, not all the same digit.'); return; }
+      if (newPin !== newPin2) { toast.show('The two PINs are not the same.'); return; }
+      if (!password) { toast.show(`${chosen.name} types their Insight-IQ password once to set a PIN.`); return; }
+    } else if (pin.length < 4) { toast.show(`${chosen.name} types their signing PIN.`); return; }
+    setBusy(true);
+    try {
+      if (needsPinSetup) await setPinWithPassword(chosen.email, password, newPin);
+      const res = await raisePettyRequest({ orgId: org.id, requesterUid: chosen.uid, pin: needsPinSetup ? newPin : pin, ...input() });
+      toast.show(`Request raised for ${res.name}. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`);
+      navigate(`${pettyCashBase(org.type)}/${res.id}`);
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      const code = e?.code ?? '';
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') toast.show(`That password is not right for ${chosen.name}.`);
+      else if (code.startsWith('functions/') && e.message) toast.show(e.message.replace(/\s*\[\d+\]$/, ''));
+      else toast.show(code === 'auth/network-request-failed' || code.includes('unavailable') ? 'Raising a request for someone else needs a connection.' : friendlyError(err));
+      setPin('');
+    } finally {
+      setBusy(false);
+    }
   }
   function submit() {
     const problem = missing();
     if (problem) { toast.show(problem); return; }
+    if (chosen) { void raiseForChosen(); return; }
     const { id, saved } = submitRequisition(org.id, { requesterName: profile?.displayName ?? 'Staff', ...input() });
     saved.catch((err) => toast.show(friendlyError(err)));
     toast.show(SUBMITTED_TEXT);
@@ -408,7 +444,14 @@ function NewRequisition({ org }: { org: Organization }) {
       <section className="card stack">
         <div className="card-head"><h2>Request</h2><span className="petty-number">Number given when saved</span></div>
         <div className="field-row">
-          <label className="field"><span>Requester</span><input value={profile?.displayName ?? ''} readOnly /></label>
+          {isAdia ? (
+            <label className="field"><span>Requester</span>
+              <select value={chosen ? chosen.uid : ''} disabled={busy} onChange={(e) => { setRequester(e.target.value); setPin(''); setSettingPin(false); setPassword(''); setNewPin(''); setNewPin2(''); }}>
+                <option value="">{profile?.displayName ?? 'Me'} (me)</option>
+                {others.map((x) => <option key={x.uid} value={x.uid}>{x.name}{x.title ? ` (${x.title})` : ''}</option>)}
+              </select>
+            </label>
+          ) : <label className="field"><span>Requester</span><input value={profile?.displayName ?? ''} readOnly /></label>}
           <label className="field"><span>Category</span>
             <select value={category} onChange={(e) => setCategory(e.target.value as PettyCashCategory)}>
               <option value="">Choose a category…</option>
@@ -416,6 +459,32 @@ function NewRequisition({ org }: { org: Organization }) {
             </select>
           </label>
         </div>
+        {chosen && !needsPinSetup && (
+          <div className="petty-signer-row">
+            <label className="field"><span>{chosen.name}'s signing PIN</span>
+              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="4 to 6 digits" disabled={busy} />
+            </label>
+            <button type="button" className="btn btn-quiet petty-pin-link align-start" onClick={() => setSettingPin(true)}>Forgot the PIN? Set a new one</button>
+          </div>
+        )}
+        {needsPinSetup && (
+          <div className="petty-pin-setup">
+            <p className="small">{chosen!.hasPin ? `${chosen!.name}, set a new PIN.` : `${chosen!.name} has no PIN yet. Set one now; next time only the PIN is needed.`} Type your Insight-IQ password once to prove it is you.</p>
+            <div className="petty-signer-row">
+              <label className="field"><span>{chosen!.name}'s Insight-IQ password</span>
+                <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
+              </label>
+              <label className="field"><span>New PIN (4 to 6 digits)</span>
+                <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
+              </label>
+              <label className="field"><span>Type the PIN again</span>
+                <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin2} onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))} disabled={busy} />
+              </label>
+            </div>
+            {chosen!.hasPin && <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back to PIN</button>}
+          </div>
+        )}
+        {chosen && <p className="small muted">This is saved as {chosen.name}'s request, so {chosen.name} cannot sign it.</p>}
         {category === 'Other' && (
           <label className="field"><span>What is "Other" for?</span><input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="For example: generator fuel" /></label>
         )}
@@ -442,14 +511,7 @@ function NewRequisition({ org }: { org: Organization }) {
         <p className="petty-total">Total <strong>{money(org, total)}</strong></p>
       </section>
       {p.seesAll && <p className="petty-left">Remaining in the budget after this request: <strong>{money(org, p.summary.remainingCents - total)}</strong></p>}
-      <button type="button" className="btn btn-primary" onClick={submit}>Submit requisition as {profile?.displayName ?? 'me'}</button>
-      {org.type === 'college' && (
-        <section className="card stack">
-          <h2>Raise it for another stakeholder</h2>
-          <PettySignBox label="The requester picks their name and types their own PIN. It is saved as their request, so they cannot sign it." orgId={org.id} exclude={[p.uid]}
-            confirmLabel="✓ Submit as them" sign={raiseAs} />
-        </section>
-      )}
+      <button type="button" className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : chosen ? `Submit requisition for ${chosen.name}` : 'Submit requisition'}</button>
     </div>
   );
 }
