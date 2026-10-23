@@ -13,6 +13,7 @@ import {
  * forever needs two stakeholders: whoever asks signs first (from their own account), and a second
  * signs from their own account or picks their name and types their PIN on the same device. Every
  * finished step is kept on the entry's bin record with the signers' names, titles, times and reason.
+ * The pastor (Andy, 2026-10-23) carries out any step alone; it is still recorded, marked as sole approval.
  */
 const CALLABLE = { invoker: 'public' } as const;
 const COLLECTIONS: Record<BinKind, string> = { request: 'pettyCash', fund: 'pettyFunds', receipt: 'pettyReceipts' };
@@ -101,7 +102,8 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
     const sig: BinSignature = { uid: signerUid, name: signer.displayName || signer.email, title: titleOf(signer), at: Timestamp.now() };
     const next = { action, reason: motion?.reason ?? reason, startedBy: motion?.startedBy ?? signerUid, signatures: [...sigs, sig] };
     const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid };
-    if (next.signatures.length < BIN_SIGNATURES_NEEDED) {
+    const sole = (signer.permissions ?? []).includes('users.manage') && next.signatures.length < BIN_SIGNATURES_NEEDED;
+    if (next.signatures.length < BIN_SIGNATURES_NEEDED && !sole) {
       tx.set(binRef, { ...bin, motion: next, ...stamp });
       return { outcome: 'signed' as const, count: next.signatures.length, action };
     }
@@ -112,7 +114,7 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
     else tx.delete(targetRef);
     tx.set(binRef, {
       ...bin, state: binStateAfter(action), motion: null,
-      history: [...bin.history, { action, reason: next.reason, signatures: next.signatures, doneAt: Timestamp.now() }], ...stamp,
+      history: [...bin.history, { action, reason: next.reason, signatures: next.signatures, doneAt: Timestamp.now(), ...(sole ? { sole: true } : {}) }], ...stamp,
     });
     return { outcome: 'done' as const, count: next.signatures.length, action };
   });
@@ -130,7 +132,7 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
   }
   await writeAudit({
     actorUid: signerUid, actorEmail: signer.email, action: `petty_bin_${result.outcome}`, path: targetRef.path, collection: COLLECTIONS[kind], docId: targetId, orgId,
-    note: result.outcome === 'done' ? BIN_DONE_LABELS[action] : `${action} (${result.count} of ${BIN_SIGNATURES_NEEDED})`,
+    note: result.outcome === 'done' ? `${BIN_DONE_LABELS[action]}${result.count === 1 ? ' (pastor alone)' : ''}` : `${action} (${result.count} of ${BIN_SIGNATURES_NEEDED})`,
   });
   return result;
 });

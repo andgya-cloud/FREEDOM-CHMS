@@ -312,7 +312,8 @@ export const BIN_ACTION_LABELS: Record<BinAction, string> = { delete: 'Move to b
 export const BIN_DONE_LABELS: Record<BinAction, string> = { delete: 'Moved to bin', restore: 'Put back', purge: 'Deleted forever' };
 export interface BinSignature { uid: string; name: string; title: string; at: unknown }
 export interface BinMotion { action: BinAction; reason: string; startedBy: string; signatures: BinSignature[] }
-export interface BinHistoryEntry { action: BinAction; reason: string; signatures: BinSignature[]; doneAt: unknown }
+/** `sole` marks a step the pastor carried out alone (Andy, 2026-10-23: the pastor needs no second signature). */
+export interface BinHistoryEntry { action: BinAction; reason: string; signatures: BinSignature[]; doneAt: unknown; sole?: boolean }
 export interface BinEntry {
   orgId: string; kind: BinKind; targetId: string; label: string; amountCents: number | null; reqId: string | null;
   state: BinState; motion: BinMotion | null; history: BinHistoryEntry[];

@@ -7,7 +7,7 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { signWithPin } from '../../lib/pettyPin';
+import { raisePettyRequest, signWithPin } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { AskDeleteDialog, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
@@ -356,14 +356,30 @@ function NewRequisition({ org }: { org: Organization }) {
     setLines(r.items.map((i, n) => ({ key: n + 1, description: i.description, quantity: String(i.quantity ?? 1), unitPrice: String((i.unitPriceCents ?? i.amountCents) / 100) })));
     toast.show(`${label(r)} copied. Change anything, then submit it as a new request.`);
   }
+  /** What is still missing, or null when the request is ready. */
+  function missing() {
+    if (!category) return 'Choose a category.';
+    if (category === 'Other' && !note.trim()) return 'Say what "Other" is for.';
+    if (parsed.some((i) => !i.description || i.quantity == null || i.unitPriceCents == null || !i.amountCents)) return 'Fill in a description, quantity and unit price for every item.';
+    return null;
+  }
+  const input = () => ({
+    category: category as PettyCashCategory, categoryNote: category === 'Other' ? note.trim().slice(0, 120) : null,
+    items: parsed.map((i) => ({ description: i.description.slice(0, 200), quantity: i.quantity!, unitPriceCents: i.unitPriceCents!, amountCents: i.amountCents! })), month: p.month,
+  });
+  /** ADIA: another stakeholder raises it as theirs on this device, with their name and PIN. */
+  async function raiseAs(uid: string, pin: string) {
+    const problem = missing();
+    // Shown by the signing box as it shows the server's own messages.
+    if (problem) throw Object.assign(new Error(problem), { code: 'functions/invalid-argument' });
+    const res = await raisePettyRequest({ orgId: org.id, requesterUid: uid, pin, ...input() });
+    navigate(`${pettyCashBase(org.type)}/${res.id}`);
+    return `Request raised for ${res.name}. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`;
+  }
   function submit() {
-    if (!category) { toast.show('Choose a category.'); return; }
-    if (category === 'Other' && !note.trim()) { toast.show('Say what "Other" is for.'); return; }
-    if (parsed.some((i) => !i.description || i.quantity == null || i.unitPriceCents == null || !i.amountCents)) { toast.show('Fill in a description, quantity and unit price for every item.'); return; }
-    const { id, saved } = submitRequisition(org.id, {
-      requesterName: profile?.displayName ?? 'Staff', category, categoryNote: category === 'Other' ? note.trim().slice(0, 120) : null,
-      items: parsed.map((i) => ({ description: i.description.slice(0, 200), quantity: i.quantity!, unitPriceCents: i.unitPriceCents!, amountCents: i.amountCents! })), month: p.month,
-    });
+    const problem = missing();
+    if (problem) { toast.show(problem); return; }
+    const { id, saved } = submitRequisition(org.id, { requesterName: profile?.displayName ?? 'Staff', ...input() });
     saved.catch((err) => toast.show(friendlyError(err)));
     toast.show(SUBMITTED_TEXT);
     navigate(`${pettyCashBase(org.type)}/${id}`);
@@ -426,7 +442,14 @@ function NewRequisition({ org }: { org: Organization }) {
         <p className="petty-total">Total <strong>{money(org, total)}</strong></p>
       </section>
       {p.seesAll && <p className="petty-left">Remaining in the budget after this request: <strong>{money(org, p.summary.remainingCents - total)}</strong></p>}
-      <button type="button" className="btn btn-primary" onClick={submit}>Submit requisition</button>
+      <button type="button" className="btn btn-primary" onClick={submit}>Submit requisition as {profile?.displayName ?? 'me'}</button>
+      {org.type === 'college' && (
+        <section className="card stack">
+          <h2>Raise it for another stakeholder</h2>
+          <PettySignBox label="The requester picks their name and types their own PIN. It is saved as their request, so they cannot sign it." orgId={org.id} exclude={[p.uid]}
+            confirmLabel="✓ Submit as them" sign={raiseAs} />
+        </section>
+      )}
     </div>
   );
 }
