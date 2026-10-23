@@ -606,7 +606,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 .row-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .petty-light {
   --bg: #f8fafc; --surface: rgba(255, 255, 255, 0.72); --surface-2: #eef2f7; --text: #1f2937; --muted: #6b7280;
-  --border: #e5e7eb; --primary: #1d4ed8; --primary-ink: #fff; --red: #dc2626; --blue: #1d4ed8;
+  --border: #e5e7eb; --primary: #14284b; --primary-ink: #fff; --red: #dc2626; --blue: #14284b;
   color-scheme: light; color: var(--text);
   background: linear-gradient(135deg, #f8fafc 0%, #dbeafe 100%);
   border-radius: 24px; padding: 16px 12px; margin: 12px 12px 96px; min-height: calc(100vh - 140px);
@@ -650,7 +650,7 @@ a.chip.chip-on { color: var(--primary-ink); }
 .petty-stat span { font-size: 0.75rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af; }
 .petty-stat strong { font-size: clamp(1.05rem, 1.6vw + 0.6rem, 1.5rem); font-weight: 800; white-space: nowrap; }
 .petty-stat::after { content: ''; position: absolute; bottom: 0; left: 25%; width: 50%; height: 4px; border-radius: 4px 4px 0 0; background: currentColor; }
-.petty-stat-budget { color: #2563eb; }
+.petty-stat-budget { color: #14284b; }
 .petty-stat-spent { color: #dc2626; }
 .petty-stat-left { color: #16a34a; }
 .petty-stat-over { color: #dc2626; }
@@ -661,12 +661,12 @@ a.chip.chip-on { color: var(--primary-ink); }
 }
 .petty-reset:hover:not(:disabled) { box-shadow: 0 8px 20px rgba(0, 0, 0, 0.14); transform: translateY(-1px); }
 .petty-reset:disabled { cursor: default; opacity: 0.6; }
-.petty-reset svg { width: 40px; height: 40px; padding: 9px; box-sizing: border-box; border-radius: 50%; background: rgba(29, 78, 216, 0.1); fill: none; stroke: #1d4ed8; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.petty-reset svg { width: 40px; height: 40px; padding: 9px; box-sizing: border-box; border-radius: 50%; background: rgba(20, 40, 75, 0.1); fill: none; stroke: #14284b; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .petty-reset strong { font-size: 0.9rem; line-height: 1.15; }
 .petty-reset small { font-size: 0.65rem; font-weight: 700; color: #4b5563; }
 
 .petty-auth { margin-bottom: 24px; border-radius: 18px; overflow: hidden; background: rgba(255, 255, 255, 0.72); border: 1px solid rgba(255, 255, 255, 0.6); box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); }
-.petty-auth-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: #1d4ed8; color: #fff; }
+.petty-auth-head { display: flex; align-items: center; gap: 14px; padding: 18px 20px; background: #14284b; color: #fff; }
 .petty-auth-icon { flex: none; display: grid; place-items: center; width: 42px; height: 42px; border-radius: 12px; background: rgba(255, 255, 255, 0.2); border: 1px solid rgba(255, 255, 255, 0.1); }
 .petty-auth-icon svg { width: 22px; height: 22px; fill: none; stroke: #D2A74B; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .petty-auth-title { flex: 1; min-width: 0; }
@@ -963,7 +963,7 @@ a.kpi:hover { border-color: var(--primary); }
 .petty-receipts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .petty-receipts li { display: flex; gap: 8px; align-items: center; }
 .petty-receipt { flex: 1; min-width: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-areas: 'kind name' 'kind meta'; gap: 2px 10px; align-items: center; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.petty-receipt:hover { border-color: var(--blue, #1d4ed8); }
+.petty-receipt:hover { border-color: var(--blue, #14284b); }
 .petty-receipt-kind { grid-area: kind; padding: 6px 8px; border-radius: 8px; font-size: 0.72rem; font-weight: 700; background: rgba(210, 167, 75, 0.18); color: #92651a; }
 .petty-receipt-name { grid-area: name; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .petty-receipt .small { grid-area: meta; }
@@ -978,7 +978,7 @@ a.kpi:hover { border-color: var(--primary); }
 .badge-warn { background: rgba(220, 38, 38, 0.12); color: #b91c1c; }
 .petty-ledger-reset td { background: rgba(210, 167, 75, 0.12); font-style: italic; }
 .ok-text { color: #16a34a; }
-.side-look .petty-light a.chip.chip-on, .petty-light .chip-on { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+.side-look .petty-light a.chip.chip-on, .petty-light .chip-on { background: #14284b; border-color: #14284b; color: #fff; }
 .petty-viewer-box .card-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .petty-viewer-img { overflow: auto; }
 
