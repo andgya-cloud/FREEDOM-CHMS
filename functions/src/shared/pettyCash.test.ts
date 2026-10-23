@@ -34,19 +34,14 @@ describe('petty cash', () => {
     expect(nextStepFor({ ...checked, status: 'approved' }, elias)).toBeNull();
   });
 
-  it('keeps the last of the three signatures for the accountant', () => {
+  it('lets any three approve, nobody twice and never the requester', () => {
     const sig = (role: string) => ({ name: role, role });
     const r = { requesterId: 'doreen', checked: null, status: 'submitted' as const, signatures: { elias: sig('Chairman'), eliz: sig('Administrator') } };
     const ronald = { uid: 'ronald', canCheck: false, canApprove: true, canSign: true };
-    const daniel = { ...ronald, uid: 'daniel', isAccountant: true };
-    expect(waitingForAccountant(r)).toBe(true);
-    expect(nextStepFor(r, ronald)).toBeNull();
-    expect(nextStepFor(r, daniel)).toBe('sign');
-    expect(nextStepFor({ ...r, signatures: { elias: sig('Chairman') } }, ronald)).toBe('sign');
-    const withDaniel = { ...r, signatures: { daniel: sig('Accountant'), eliz: sig('Administrator') } };
-    expect(waitingForAccountant(withDaniel)).toBe(false);
-    expect(nextStepFor(withDaniel, ronald)).toBe('sign');
-    expect(nextStepFor(withDaniel, daniel)).toBeNull();
+    expect(waitingForAccountant(r)).toBe(false);
+    expect(nextStepFor(r, ronald)).toBe('sign');
+    expect(nextStepFor(r, { ...ronald, uid: 'elias' })).toBeNull();
+    expect(nextStepFor(r, { ...ronald, uid: 'doreen' })).toBeNull();
   });
 
   it('counts signed top-ups and approved spending since the last reset', () => {

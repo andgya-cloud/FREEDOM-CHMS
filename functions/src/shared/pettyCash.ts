@@ -2,7 +2,7 @@
  * ADIA petty cash: a requisition is submitted by the requester, then any three stakeholders sign it, each
  * from their own account with their own password; the third signature approves it. Nobody signs their own
  * request. Requests made before signatures were introduced keep the old steps (accountant checks, then a
- * board member approves). One of the three signatures must be the accountant's. Firestore rules enforce the same.
+ * board member approves). Any three may approve, nobody twice. Firestore rules enforce the same.
  */
 
 import { ACCOUNTANT_TITLE } from './permissions.js';
@@ -93,9 +93,15 @@ export function itemsTotalCents(items: readonly { amountCents: number }[]): numb
 export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean; canSign?: boolean; isAccountant?: boolean }
 
 
+/**
+ * Whether the accountant must be one of the three signatures. Andy asked for it on 2026-10-22, then for
+ * "Any three to approve" on 2026-10-23, so it is off; turning it back on also needs the check in firestore.rules.
+ */
+export const ACCOUNTANT_REQUIRED = false;
+
 /** True when only the accountant's signature can complete this request: two others have signed and the accountant has not. */
 export function waitingForAccountant(r: Pick<PettyCashRequisition, 'status' | 'signatures'>): boolean {
-  if (r.status !== 'submitted' || !r.signatures) return false;
+  if (!ACCOUNTANT_REQUIRED || r.status !== 'submitted' || !r.signatures) return false;
   const sigs = Object.values(r.signatures);
   return sigs.length >= REQUEST_SIGNATURES_NEEDED - 1 && !sigs.some((s) => s.role === ACCOUNTANT_TITLE);
 }

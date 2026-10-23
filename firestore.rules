@@ -1208,9 +1208,9 @@ service cloud.firestore {
                  && request.auth.uid in sigs
                  && pcSignature(sigs[request.auth.uid])
                  && (sigs.size() >= 3
-                      // One of the three must be the accountant's.
-                      ? (sigs.values()[0].role == 'Accountant' || sigs.values()[1].role == 'Accountant' || sigs.values()[2].role == 'Accountant')
-                        && request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved)
+                      // Any three approve (Andy, 2026-10-23). To require the accountant again, also check that one of
+                      // sigs.values()[0..2].role == 'Accountant' here and set ACCOUNTANT_REQUIRED in shared/pettyCash.ts.
+                      ? request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved)
                       : request.resource.data.status == 'submitted' && request.resource.data.approved == null))
               || (pcStep(['status', 'rejection']) && pcRejection()));
         }
