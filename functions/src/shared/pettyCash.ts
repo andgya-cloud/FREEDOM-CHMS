@@ -254,9 +254,79 @@ export function periodStartOf(funds: readonly Pick<PettyFund, 'kind' | 'status' 
   return start;
 }
 
-/** Receipt files are kept in the database, so each must stay well under its 1 MB limit. */
-export const MAX_RECEIPT_BYTES = 700_000;
+/**
+ * Receipt files are kept in the database in parts of up to RECEIPT_PART_CHARS characters each, so a
+ * file of up to 10 MB fits (Andy, 2026-10-23). Big photos are still made smaller before saving.
+ */
+export const MAX_RECEIPT_BYTES = 10_000_000;
+export const RECEIPT_PART_CHARS = 900_000;
+export const MAX_RECEIPT_PARTS = 16;
 export const MAX_RECEIPTS_PER_REQUEST = 10;
+/** Photos above this size are made smaller (as JPEG); smaller ones keep their own format. */
+export const SHRINK_PHOTOS_OVER_BYTES = 1_500_000;
+
+/** The receipt formats accepted, by file extension, and the type each is saved as. */
+export const RECEIPT_TYPES: Readonly<Record<string, string>> = {
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', gif: 'image/gif', webp: 'image/webp', heic: 'image/heic', heif: 'image/heif',
+  tif: 'image/tiff', tiff: 'image/tiff', bmp: 'image/bmp', pdf: 'application/pdf', doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', csv: 'text/csv', txt: 'text/plain', rtf: 'application/rtf',
+  odt: 'application/vnd.oasis.opendocument.text', ods: 'application/vnd.oasis.opendocument.spreadsheet',
+};
+export const RECEIPT_ACCEPT = Object.keys(RECEIPT_TYPES).map((x) => `.${x}`).join(',') + ',image/*,application/pdf';
+
+/** The saved type of a receipt file, from its extension or the type the device reports; null when not accepted. */
+export function receiptTypeOf(name: string, reported: string): string | null {
+  const ext = /\.([a-z0-9]+)$/i.exec(name)?.[1]?.toLowerCase() ?? '';
+  if (RECEIPT_TYPES[ext]) return RECEIPT_TYPES[ext];
+  const known = Object.values(RECEIPT_TYPES);
+  return known.includes(reported) ? reported : null;
+}
+
+/** A short word for a receipt's kind, shown on its card. */
+export function receiptKindLabel(type: string): string {
+  if (type === 'application/pdf') return 'PDF';
+  if (type.startsWith('image/')) return 'Photo';
+  if (type.includes('word') || type.includes('opendocument.text') || type === 'application/rtf') return 'Word';
+  if (type.includes('excel') || type.includes('spreadsheet')) return 'Excel';
+  if (type === 'text/csv') return 'CSV';
+  return 'File';
+}
+
+/** Splits a file's data URL into the parts saved in the database. */
+export function splitReceiptData(data: string): string[] {
+  const parts: string[] = [];
+  for (let i = 0; i < data.length; i += RECEIPT_PART_CHARS) parts.push(data.slice(i, i + RECEIPT_PART_CHARS));
+  return parts;
+}
+
+/*
+ * The bin (Andy, 2026-10-23): deleting any petty cash entry, putting it back, or deleting it forever
+ * each needs two stakeholders. The one who asks signs first. Every step is kept as a record.
+ */
+export type BinKind = 'request' | 'fund' | 'receipt';
+export type BinAction = 'delete' | 'restore' | 'purge';
+export type BinState = 'live' | 'in-bin' | 'purged';
+export const BIN_SIGNATURES_NEEDED = 2;
+export const BIN_ACTION_LABELS: Record<BinAction, string> = { delete: 'Move to bin', restore: 'Put back', purge: 'Delete forever' };
+export const BIN_DONE_LABELS: Record<BinAction, string> = { delete: 'Moved to bin', restore: 'Put back', purge: 'Deleted forever' };
+export interface BinSignature { uid: string; name: string; title: string; at: unknown }
+export interface BinMotion { action: BinAction; reason: string; startedBy: string; signatures: BinSignature[] }
+export interface BinHistoryEntry { action: BinAction; reason: string; signatures: BinSignature[]; doneAt: unknown }
+export interface BinEntry {
+  orgId: string; kind: BinKind; targetId: string; label: string; amountCents: number | null; reqId: string | null;
+  state: BinState; motion: BinMotion | null; history: BinHistoryEntry[];
+}
+
+/** Which actions an entry in this state may be asked for. */
+export function binActionsFor(state: BinState): BinAction[] {
+  return state === 'live' ? ['delete'] : state === 'in-bin' ? ['restore', 'purge'] : [];
+}
+
+/** The entry's state once an action is complete. */
+export function binStateAfter(action: BinAction): BinState {
+  return action === 'delete' ? 'in-bin' : action === 'restore' ? 'live' : 'purged';
+}
 
 /** Wrong PIN tries before a stakeholder's signing PIN locks, and for how long. */
 export const PIN_MAX_TRIES = 5;

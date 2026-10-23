@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import { makeEnv, seed } from './helpers';
 
 let env: RulesTestEnvironment;
@@ -149,20 +149,21 @@ describe('petty cash', () => {
     await assertSucceeds(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Chairman', at: serverTimestamp() }, status: 'approved', approved: stamp('chair', 'Chairman'), ...touched('chair') }));
   });
 
-  it('lets the pastor delete any request or top-up, and a requester only their own waiting request', async () => {
+  it('lets nobody delete directly: deleting goes through the two-signature bin', async () => {
     const del = (uid: string) => ({ deletedAt: serverTimestamp(), deletedBy: uid, ...touched(uid) });
     await seedRequest('d1', { signatures: {} });
-    await seedRequest('d2', { signatures: {}, status: 'approved' });
-    await assertFails(updateDoc(doc(as('ronald'), 'organizations/adia/pettyCash/d1'), del('ronald')));
-    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d2'), del('doreen')));
-    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d1'), { ...del('doreen'), totalCents: 1 }));
-    await assertSucceeds(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d1'), del('doreen')));
-    await assertSucceeds(updateDoc(doc(as('pastor'), 'organizations/adia/pettyCash/d2'), del('pastor')));
+    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/d1'), del('doreen')));
+    await assertFails(updateDoc(doc(as('pastor'), 'organizations/adia/pettyCash/d1'), del('pastor')));
+    await assertFails(deleteDoc(doc(as('pastor'), 'organizations/adia/pettyCash/d1')));
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'organizations/adia/pettyFunds/fd'), { orgId: 'adia', kind: 'topup', amountCents: 100, signatures: {}, status: 'done', doneAt: new Date(), deletedAt: null, deletedBy: null, createdAt: new Date(), createdBy: 's1', updatedAt: new Date(), updatedBy: 's1' });
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/pettyBin/fund_fd'), { orgId: 'adia', kind: 'fund', targetId: 'fd', state: 'live', motion: null, history: [] });
     });
-    await assertFails(updateDoc(doc(as('s1'), 'organizations/adia/pettyFunds/fd'), del('s1')));
-    await assertSucceeds(updateDoc(doc(as('pastor'), 'organizations/adia/pettyFunds/fd'), del('pastor')));
+    await assertFails(updateDoc(doc(as('pastor'), 'organizations/adia/pettyFunds/fd'), del('pastor')));
+    // The bin's records are read by petty cash people and written only by the server.
+    await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyBin/fund_fd')));
+    await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyBin/fund_fd')));
+    await assertFails(updateDoc(doc(as('pastor'), 'organizations/adia/pettyBin/fund_fd'), { state: 'purged' }));
   });
 
   it('lets only those who may request raise one', async () => {
@@ -192,24 +193,37 @@ describe('petty cash', () => {
     await seedRequest('q2', { signatures: {}, status: 'rejected' });
     const stamps = (uid: string) => ({ deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: uid, updatedAt: serverTimestamp(), updatedBy: uid });
     const meta = (uid: string, reqId = 'q1', extra: Record<string, unknown> = {}) => ({ orgId: 'adia', reqId, name: 'till.jpg', type: 'image/jpeg', size: 120000, uploadedByName: uid, ...stamps(uid), ...extra });
-    const file = (uid: string, reqId = 'q1', data = 'data:image/jpeg;base64,AAAA') => ({ orgId: 'adia', reqId, data, ...stamps(uid) });
+    const file = (uid: string, reqId = 'q1', parts = 1) => ({ orgId: 'adia', reqId, parts, ...stamps(uid) });
+    const part = (uid: string, id: string, index: number, data: string, reqId = 'q1') => ({ orgId: 'adia', reqId, receiptId: id, index, data, createdAt: serverTimestamp(), createdBy: uid });
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/a'), meta('doreen')));
-    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/a'), file('doreen')));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/a'), file('doreen', 'q1', 2)));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/a_0'), part('doreen', 'a', 0, 'data:image/jpeg;base64,AAAA')));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/a_1'), part('doreen', 'a', 1, 'AAAA')));
+    // Word, Excel, CSV and iPhone photos are taken, up to 10 MB; a web page is not.
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/w'), meta('doreen', 'q1', { name: 'quote.docx', type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', size: 9000000 })));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/x'), meta('doreen', 'q1', { name: 'sheet.xlsx', type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/h'), meta('doreen', 'q1', { name: 'IMG.HEIC', type: 'image/heic' })));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/p'), meta('doreen', 'q1', { name: 'till.png', type: 'image/png' })));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/t'), meta('doreen', 'q1', { type: 'text/html' })));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/d'), meta('doreen', 'q1', { size: 10000001 })));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/e_0'), part('doreen', 'e', 0, 'data:text/html;base64,AAAA')));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/wrong'), part('doreen', 'e', 0, 'data:image/png;base64,AAAA')));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/g'), { ...file('doreen'), data: 'data:image/jpeg;base64,AAAA' }));
     await assertFails(setDoc(doc(as('ronald'), 'organizations/adia/pettyReceipts/b'), meta('ronald')));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/c'), meta('doreen', 'q2')));
-    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/d'), meta('doreen', 'q1', { size: 900000 })));
-    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/e'), file('doreen', 'q1', 'data:text/html;base64,AAAA')));
+    await assertFails(setDoc(doc(as('ronald'), 'organizations/adia/pettyReceiptParts/a_2'), part('ronald', 'a', 2, 'AAAA')));
     await assertSucceeds(setDoc(doc(as('eliz'), 'organizations/adia/pettyReceipts/f'), meta('eliz')));
     await assertSucceeds(getDocs(query(collection(as('doreen'), 'organizations/adia/pettyReceipts'), where('reqId', '==', 'q1'))));
     await assertFails(getDocs(query(collection(as('ronald'), 'organizations/adia/pettyReceipts'), where('reqId', '==', 'q1'))));
     await assertSucceeds(getDocs(collection(as('s1'), 'organizations/adia/pettyReceipts')));
     await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/a')));
+    await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/a_1')));
     await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyReceiptFiles/a')));
+    await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyReceiptParts/a_0')));
+    // Removing a receipt goes through the two-signature bin.
     const remove = (uid: string, id: string) => updateDoc(doc(as(uid), `organizations/adia/pettyReceipts/${id}`), { deletedAt: serverTimestamp(), deletedBy: uid, ...touched(uid) });
-    await assertFails(remove('ronald', 'a'));
-    await assertFails(remove('eliz', 'a'));
-    await assertSucceeds(remove('doreen', 'a'));
-    await assertSucceeds(remove('s1', 'f'));
+    await assertFails(remove('doreen', 'a'));
+    await assertFails(remove('s1', 'f'));
   });
 
   it('lets only the signing stakeholders set category budgets', async () => {

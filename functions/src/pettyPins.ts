@@ -20,14 +20,14 @@ async function hashPin(pin: string, salt: Buffer) {
 }
 
 /** Who may sign in this organization: requests need check/approve/authorize, top-ups and resets authorize. */
-function canSign(profile: UserProfile | undefined, orgId: string, kind: 'request' | 'fund') {
+export function canSign(profile: UserProfile | undefined, orgId: string, kind: 'request' | 'fund') {
   if (!profile?.active || !canAccessOrg(profile, orgId)) return false;
   const p = profile.permissions ?? [];
   if (p.includes('users.manage')) return true;
   return kind === 'fund' ? p.includes('pettycash.authorize') : p.some((x) => ['pettycash.check', 'pettycash.approve', 'pettycash.authorize'].includes(x));
 }
 
-function requireMember(profile: UserProfile, orgId: string) {
+export function requireMember(profile: UserProfile, orgId: string) {
   if (!canSign(profile, orgId, 'request') && !(profile.permissions ?? []).includes('pettycash.request')) {
     throw new HttpsError('permission-denied', 'You do not have petty cash access here.');
   }
@@ -63,7 +63,7 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
 });
 
 /** Checks a signer's PIN, counting wrong tries and locking after too many. */
-async function verifyPin(uid: string, pin: string) {
+export async function verifyPin(uid: string, pin: string) {
   const ref = db.doc(`pettyPins/${uid}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('failed-precondition', 'This person has not set a PIN yet.');

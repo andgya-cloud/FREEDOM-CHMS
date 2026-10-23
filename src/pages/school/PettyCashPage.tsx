@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
-import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, deleteFund, deleteRequisition, receiptData, rejectRequisition, removeReceipt, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
+import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { listPettySigners, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
+import { signWithPin } from '../../lib/pettyPin';
+import { PettySignBox } from './PettySignBox';
+import { AskDeleteDialog, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
-  FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, checkPin,
+  FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
@@ -19,7 +21,6 @@ import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -56,7 +57,7 @@ export function PettyNav({ org }: { org: Organization }) {
   const base = pettyCashBase(org.type);
   const items: [string, string, boolean][] = [
     [base, 'Overview', true], [`${base}/new`, 'New requisition', p.canRequest], [`${base}/receipts`, 'Receipts', p.seesAll],
-    [`${base}/balance-sheet`, 'Balance sheet', p.seesAll], [`${base}/budget`, 'Budget tracker', p.seesAll],
+    [`${base}/balance-sheet`, 'Balance sheet', p.seesAll], [`${base}/budget`, 'Budget tracker', p.seesAll], [`${base}/bin`, 'Bin', p.seesAll],
   ];
   return (
     <nav className="chips petty-nav no-print" aria-label="Petty cash">
@@ -116,104 +117,6 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
   );
 }
 
-/**
- * Another stakeholder signs on this device: they pick their name and type their own signing PIN
- * (Andy, 2026-10-23). The server checks the PIN and writes the signature as them, so the person signed
- * in here stays signed in. Someone without a PIN, or who forgot it, sets one with their password once.
- */
-function CoSignForm({ label: title, orgId, kind, docId, exclude }: { label: string; orgId: string; kind: 'request' | 'fund'; docId: string; exclude: string[] }) {
-  const toast = useToast();
-  const [signers, setSigners] = useState<PettySigner[] | null>(null);
-  const [loadError, setLoadError] = useState('');
-  const [uid, setUid] = useState('');
-  const [pin, setPin] = useState('');
-  const [settingPin, setSettingPin] = useState(false);
-  const [password, setPassword] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [newPin2, setNewPin2] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [reload, setReload] = useState(0);
-  useEffect(() => {
-    let live = true;
-    listPettySigners(orgId).then((list) => { if (live) { setSigners(list); setLoadError(''); } })
-      .catch((err) => { if (live) setLoadError((err as { code?: string })?.code?.includes('unavailable') ? 'The name list needs a connection.' : friendlyError(err)); });
-    return () => { live = false; };
-  }, [orgId, reload]);
-  const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (kind === 'request' || s.canAuthorize));
-  const chosen = choices.find((s) => s.uid === uid);
-  const needsPin = !!chosen && (!chosen.hasPin || settingPin);
-  const pinOk = checkPin(newPin) && newPin === newPin2;
-  function done(name: string) {
-    setUid(''); setPin(''); setPassword(''); setNewPin(''); setNewPin2(''); setSettingPin(false);
-    toast.show(`Signed by ${name}.`);
-  }
-  async function go() {
-    if (!chosen) return;
-    setBusy(true);
-    try {
-      if (needsPin) {
-        if (!checkPin(newPin)) { toast.show('Choose a PIN of 4 to 6 digits, not all the same digit.'); return; }
-        if (newPin !== newPin2) { toast.show('The two PINs are not the same.'); return; }
-        await setPinWithPassword(chosen.email, password, newPin);
-        setReload((n) => n + 1);
-        done(await signWithPin(orgId, kind, docId, chosen.uid, newPin));
-      } else {
-        done(await signWithPin(orgId, kind, docId, chosen.uid, pin.trim()));
-      }
-    } catch (err) {
-      const e = err as { code?: string; message?: string };
-      const code = e?.code ?? '';
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') toast.show('That password is not right for ' + chosen.name + '.');
-      else if (code.startsWith('functions/') && e.message) toast.show(e.message.replace(/\s*\[\d+\]$/, ''));
-      else toast.show(code === 'auth/network-request-failed' ? 'Signing here needs a connection. Try again when online.' : friendlyError(err));
-      setPin('');
-    } finally {
-      setBusy(false);
-    }
-  }
-  return (
-    <div className="petty-signer-form">
-      <p className="small muted">{title}</p>
-      {loadError && <p className="small danger-text">{loadError} <button type="button" className="btn btn-quiet" onClick={() => setReload((n) => n + 1)}>Try again</button></p>}
-      <div className="petty-signer-row">
-        <label className="field"><span>Stakeholder</span>
-          <select value={uid} onChange={(e) => { setUid(e.target.value); setPin(''); setSettingPin(false); }} disabled={busy || !signers}>
-            <option value="">{signers ? (choices.length ? 'Choose your name' : 'Nobody else can sign this') : 'Loading names…'}</option>
-            {choices.map((s) => <option key={s.uid} value={s.uid}>{s.name}{s.title ? ` (${s.title})` : ''}</option>)}
-          </select>
-        </label>
-        {!needsPin && (
-          <label className="field"><span>Your signing PIN</span>
-            <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4) void go(); }} placeholder="4 to 6 digits" disabled={busy || !chosen} />
-          </label>
-        )}
-        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || pin.length < 4 || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Confirm'}</button>}
-      </div>
-      {chosen && !needsPin && (
-        <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>Forgot your PIN? Set a new one</button>
-      )}
-      {needsPin && (
-        <div className="petty-pin-setup">
-          <p className="small">{chosen!.hasPin ? `${chosen!.name}, set a new PIN.` : `${chosen!.name} has no PIN yet. Set one now; next time you will only need the PIN.`} Type your Insight-IQ password once to prove it is you.</p>
-          <div className="petty-signer-row">
-            <label className="field"><span>Your Insight-IQ password</span>
-              <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
-            </label>
-            <label className="field"><span>New PIN (4 to 6 digits)</span>
-              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
-            </label>
-            <label className="field"><span>Type the PIN again</span>
-              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin2} onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))} disabled={busy} />
-            </label>
-            <button type="button" className="btn btn-primary" disabled={!password || !pinOk || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Save PIN and sign'}</button>
-          </div>
-          {chosen!.hasPin && <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back to PIN</button>}
-        </div>
-      )}
-    </div>
-  );
-}
 
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
   topup: { title: 'Top-Up Authorization', sub: 'Any two to approve. A stakeholder cannot approve twice.', done: 'Top-up complete. The money is now in the budget.' },
@@ -229,6 +132,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const amountBox = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
+  const [askDelete, setAskDelete] = useState(false);
   const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
   const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
   const iSigned = !!open && p.uid in open.signatures;
@@ -302,7 +206,8 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
                     </div>
                   </div>
                 ) : open && n === signed.length ? (
-                  <CoSignForm label="Another stakeholder picks their name and types their own PIN, or signs from their own account." orgId={org.id} kind="fund" docId={open.id} exclude={Object.keys(open.signatures)} />
+                  <PettySignBox label="Another stakeholder picks their name and types their own PIN, or signs from their own account." orgId={org.id} fundOnly exclude={Object.keys(open.signatures)}
+                    sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'fund', open.id, uid, pin)}.`} />
                 ) : (
                   <p className="petty-signer-name muted">Waiting for the signature above</p>
                 )}
@@ -311,10 +216,12 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           })}
         </ol>
         <div className="row-actions">
-          {open && open.createdBy !== p.uid && p.isPastor && <button type="button" className="btn btn-quiet danger-text" onClick={() => { deleteFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Deleted'); }}>Delete this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
+          {open && open.createdBy !== p.uid && p.canSign && <button type="button" className="btn btn-quiet danger-text" onClick={() => setAskDelete(true)}>Delete this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {onClose && !open && <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>}
         </div>
+        {open && <AskDeleteDialog org={org} kind="fund" targetId={open.id} open={askDelete} onClose={() => setAskDelete(false)}
+          title={`Delete this ${kind === 'topup' ? 'top-up' : 'reset'}?`} body={kind === 'topup' ? `Top-up of ${money(org, open.amountCents)}.` : 'Budget reset.'} />}
       </div>
     </section>
   );
@@ -369,6 +276,7 @@ function Home({ org }: { org: Organization }) {
       }} />}
       {p.seesAll && (showReset || resetOpen) && <FundCard org={org} kind="reset" onClose={() => setShowReset(false)} />}
       {p.seesAll && <FundCard org={org} kind="topup" />}
+      {p.canSign && <BinNotice org={org} />}
       {p.canSign && (
         <section className="card stack">
           <h2>Waiting for you</h2>
@@ -528,7 +436,6 @@ function Requisition({ org }: { org: Organization }) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const navigate = useNavigate();
   const { receipts } = useReceipts(org, reqId);
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
@@ -653,31 +560,20 @@ function Requisition({ org }: { org: Organization }) {
       {r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
         <section className="card stack no-print">
           <h2>Another stakeholder signs on this device</h2>
-          <CoSignForm label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} kind="request" docId={r.id} exclude={[r.requesterId, ...Object.keys(r.signatures)]} />
+          <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} exclude={[r.requesterId, ...Object.keys(r.signatures)]}
+            sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
         </section>
       )}
       <ReceiptsBox org={org} req={r} receipts={receipts} />
-      {(p.isPastor || (r.requesterId === p.uid && r.status === 'submitted')) && (
+      {(p.canSign || r.requesterId === p.uid) && (
         <section className="card stack no-print">
           <h2>Delete this request</h2>
-          <p className="small muted">{p.isPastor ? 'Removes it from every list and from the budget figures. It stays on record, marked deleted.' : 'You can delete your own request while it waits for signatures.'}</p>
+          <p className="small muted">Any two stakeholders must approve. It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
           <div className="row-actions"><button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete request</button></div>
         </section>
       )}
-      <ConfirmDialog
-        open={confirmDelete}
-        title={`Delete ${label(r)}?`}
-        body={`${money(org, r.totalCents)} · ${categoryLabel(r)}. It will no longer appear anywhere or count in the budget.`}
-        confirmLabel="Delete request"
-        danger
-        onConfirm={() => {
-          setConfirmDelete(false);
-          deleteRequisition(org.id, r.id).catch((err) => toast.show(friendlyError(err)));
-          toast.show(`${label(r)} deleted`);
-          navigate(pettyCashBase(org.type));
-        }}
-        onCancel={() => setConfirmDelete(false)}
-      />
+      <AskDeleteDialog org={org} kind="request" targetId={r.id} open={confirmDelete} onClose={() => setConfirmDelete(false)}
+        title={`Delete ${label(r)}?`} body={`${money(org, r.totalCents)} · ${categoryLabel(r)}.`} />
     </div>
   );
 }
@@ -689,6 +585,7 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<{ name: string; type: string; data: string } | null>(null);
+  const [removing, setRemoving] = useState<ReceiptRow | null>(null);
   const canAdd = req.status !== 'rejected' && (p.seesAll || req.requesterId === p.uid) && receipts.length < MAX_RECEIPTS_PER_REQUEST;
 
   async function add(e: ChangeEvent<HTMLInputElement>) {
@@ -724,7 +621,7 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
     if (!viewing) return;
     const a = document.createElement('a');
     a.href = viewing.data;
-    a.download = viewing.type === 'application/pdf' ? viewing.name.replace(/(\.pdf)?$/i, '.pdf') : viewing.name.replace(/\.[a-z0-9]+$/i, '') + '.jpg';
+    a.download = /\.[a-z0-9]+$/i.test(viewing.name) && !(viewing.type === 'image/jpeg' && !/\.jpe?g$/i.test(viewing.name)) ? viewing.name : viewing.name.replace(/\.[a-z0-9]+$/i, '') + (viewing.type === 'image/jpeg' ? '.jpg' : '');
     a.click();
   }
 
@@ -735,7 +632,7 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
         {canAdd && (
           <label className="btn btn-quiet">
             {busy ? 'Adding…' : 'Add receipts'}
-            <input type="file" accept="image/*,application/pdf" multiple className="visually-hidden" onChange={(e) => void add(e)} disabled={busy} />
+            <input type="file" accept={RECEIPT_ACCEPT} multiple className="visually-hidden" onChange={(e) => void add(e)} disabled={busy} />
           </label>
         )}
       </div>
@@ -744,25 +641,29 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
           {receipts.map((rc) => (
             <li key={rc.id}>
               <button type="button" className="petty-receipt" onClick={() => void open(rc)}>
-                <span className="petty-receipt-kind">{rc.type === 'application/pdf' ? 'PDF' : 'Photo'}</span>
+                <span className="petty-receipt-kind">{receiptKindLabel(rc.type)}</span>
                 <span className="petty-receipt-name">{rc.name}</span>
                 <span className="small muted">{Math.max(1, Math.round(rc.size / 1024))} KB · {rc.uploadedByName} · {when(rc.createdAt)}</span>
               </button>
-              {(rc.createdBy === p.uid || p.canAuthorize) && (
-                <button type="button" className="btn btn-quiet danger-text" onClick={() => { removeReceipt(org.id, rc.id).catch((err) => toast.show(friendlyError(err))); toast.show('Receipt removed'); }}>Remove</button>
+              {(rc.createdBy === p.uid || p.canSign) && (
+                <button type="button" className="btn btn-quiet danger-text" onClick={() => setRemoving(rc)}>Remove</button>
               )}
             </li>
           ))}
         </ul>
       )}
-      <p className="small muted">Photos are made smaller before saving. PDFs must be under 700 KB. Up to {MAX_RECEIPTS_PER_REQUEST} per requisition.</p>
+      <p className="small muted">Photos (JPG, PNG, HEIC and more), PDF, Word, Excel or CSV, up to 10 MB each and {MAX_RECEIPTS_PER_REQUEST} per requisition. Big photos are made smaller. Removing a receipt needs two stakeholders.</p>
+      <AskDeleteDialog org={org} kind="receipt" targetId={removing?.id ?? ''} open={!!removing} onClose={() => setRemoving(null)}
+        title="Remove this receipt?" body={removing ? `${removing.name}, added by ${removing.uploadedByName}.` : ''} />
       {viewing && createPortal(
         <div className="petty-viewer" role="dialog" aria-modal="true" aria-label={viewing.name} onClick={() => setViewing(null)}>
           <div className="petty-viewer-box" onClick={(e) => e.stopPropagation()}>
             <div className="card-head"><strong>{viewing.name}</strong><span className="row-actions"><button type="button" className="btn btn-quiet" onClick={save}>Download</button><button type="button" className="btn btn-primary" onClick={() => setViewing(null)}>Close</button></span></div>
             {viewing.type === 'application/pdf'
               ? <iframe title={viewing.name} src={viewing.data} className="petty-viewer-pdf" />
-              : <img src={viewing.data} alt={viewing.name} className="petty-viewer-img" />}
+              : ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/bmp'].includes(viewing.type)
+                ? <img src={viewing.data} alt={viewing.name} className="petty-viewer-img" />
+                : <p className="petty-viewer-file">This {receiptKindLabel(viewing.type)} file cannot be shown here. Use Download to open it on this device.</p>}
           </div>
         </div>,
         document.body,

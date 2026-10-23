@@ -1224,26 +1224,22 @@ service cloud.firestore {
               && ((pcStep(['status', 'approved']) && request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved))
                 || (pcStep(['status', 'rejection']) && pcRejection())));
         }
-        // Deleting (kept, marked deleted): the pastor any request, a requester their own while it waits for signatures.
-        allow update: if (softDeleteOnly() && canAccessOrg(orgId)
-            && (has('users.manage') || (pc('pettycash.request') && resource.data.requesterId == request.auth.uid && resource.data.status == 'submitted')))
-          || (resource.data.deletedAt == null && resource.data.requesterId != request.auth.uid
-            && ('signatures' in resource.data ? pcSignedFlow() : pcOldFlow()));
+        // Deleting goes through the bin (pettyBinSign), which needs two stakeholders, so nobody deletes here.
+        allow update: if resource.data.deletedAt == null && resource.data.requesterId != request.auth.uid
+            && ('signatures' in resource.data ? pcSignedFlow() : pcOldFlow());
         allow delete: if false;
       }
 
       // Receipts for a requisition: a small record (name, type, size) and, separately, the file itself, so
-      // the list of receipts loads quickly. Seen and added by whoever may see the requisition; removed by
-      // whoever added it or a signing stakeholder.
+      // the list of receipts loads quickly. Seen and added by whoever may see the requisition; removed
+      // only through the bin, with two stakeholders.
       function pcSeesRequest(reqId) {
         return pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize')
           || (pc('pettycash.request')
               && get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.requesterId == request.auth.uid);
       }
-      function softDeleteOnly() {
-        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
-          && resource.data.deletedAt == null
-          && request.resource.data.deletedAt == request.time && request.resource.data.deletedBy == request.auth.uid;
+      function pcReceiptTypes() {
+        return '(image/(jpeg|png|gif|webp|heic|heif|tiff|bmp)|application/(pdf|msword|rtf|vnd[.]ms-excel|vnd[.]openxmlformats-officedocument[.](wordprocessingml[.]document|spreadsheetml[.]sheet)|vnd[.]oasis[.]opendocument[.](text|spreadsheet))|text/(csv|plain))';
       }
       function pcRequestOpen(reqId) {
         return exists(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId))
@@ -1258,24 +1254,44 @@ service cloud.firestore {
           && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
           && pcSeesRequest(request.resource.data.reqId)
           && shortText(request.resource.data.name, 200) && shortText(request.resource.data.type, 100)
-          && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 700000
+          && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 10000000
+          && request.resource.data.type.matches(pcReceiptTypes())
           && shortText(request.resource.data.uploadedByName, 120);
-        allow update: if stampedUpdate() && softDeleteOnly()
-          && (resource.data.createdBy == request.auth.uid || pc('pettycash.authorize'));
-        allow delete: if false;
+        // Deleting goes through the bin (pettyBinSign), which needs two stakeholders.
+        allow update, delete: if false;
       }
+      // The file itself: older receipts hold it in `data`; newer ones are split into `parts` saved as
+      // pettyReceiptParts/{receiptId}_{n}, so files of up to 10 MB fit.
       match /pettyReceiptFiles/{receiptId} {
         allow read: if pcSeesRequest(resource.data.reqId);
         allow create: if stampedCreate() && freshRecord()
-          && request.resource.data.keys().hasOnly(['orgId', 'reqId', 'data', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.keys().hasOnly(['orgId', 'reqId', 'parts', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId
           && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
           && pcSeesRequest(request.resource.data.reqId)
-          && request.resource.data.data is string && request.resource.data.data.size() <= 950000
-          && request.resource.data.data.matches('^data:(image/(jpeg|png|webp)|application/pdf);base64,.*');
-        allow update: if stampedUpdate() && softDeleteOnly()
-          && (resource.data.createdBy == request.auth.uid || pc('pettycash.authorize'));
-        allow delete: if false;
+          && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 16;
+        allow update, delete: if false;
+      }
+      match /pettyReceiptParts/{partId} {
+        allow read: if pcSeesRequest(resource.data.reqId);
+        allow create: if request.resource.data.keys().hasOnly(['orgId', 'reqId', 'receiptId', 'index', 'data', 'createdAt', 'createdBy'])
+          && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+          && request.resource.data.orgId == orgId
+          && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
+          && pcSeesRequest(request.resource.data.reqId)
+          && request.resource.data.receiptId is string && request.resource.data.index is int
+          && request.resource.data.index >= 0 && request.resource.data.index < 16
+          && partId == request.resource.data.receiptId + '_' + string(request.resource.data.index)
+          && request.resource.data.data is string && request.resource.data.data.size() <= 900000
+          && (request.resource.data.index != 0 || request.resource.data.data.matches('^data:' + pcReceiptTypes() + ';base64,.*'));
+        allow update, delete: if false;
+      }
+
+      // The bin: a record per deleted (or once deleted) entry, with who asked, who signed and why.
+      // Written only by pettyBinSign; read by everyone with petty cash access here.
+      match /pettyBin/{entryId} {
+        allow read: if pcAny() || pc('pettycash.authorize');
+        allow write: if false;
       }
 
       // How much of the budget each category may use. Set by the signing stakeholders.
@@ -1309,9 +1325,8 @@ service cloud.firestore {
           && request.resource.data.signatures.size() == 1
           && fundSignature(request.resource.data.signatures[request.auth.uid])
           && request.resource.data.status == 'collecting' && request.resource.data.doneAt == null;
-        // The pastor may delete any top-up or reset, finished or not (it is kept, marked deleted).
-        allow update: if (has('users.manage') && canAccessOrg(orgId) && softDeleteOnly())
-          || (pc('pettycash.authorize') && stampedUpdate()
+        // Deleting goes through the bin (pettyBinSign), which needs two stakeholders.
+        allow update: if (pc('pettycash.authorize') && stampedUpdate()
           && resource.data.status == 'collecting' && resource.data.deletedAt == null
           && (
             // A stakeholder who has not signed yet adds their signature.

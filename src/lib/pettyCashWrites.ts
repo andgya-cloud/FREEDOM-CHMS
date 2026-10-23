@@ -1,9 +1,9 @@
 import { collection, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { createStamps, softDelete, updateRecord, updateStamps } from './records';
+import { createStamps, updateRecord, updateStamps } from './records';
 import { trackWrite } from './sync';
-import { fundStatusAfter, itemsTotalCents, MAX_RECEIPT_BYTES, REQUEST_SIGNATURES_NEEDED, type PettyCashCategory, type PettyCashItem, type PettyFund, type PettyFundKind } from '../../functions/src/shared/pettyCash';
+import { fundStatusAfter, itemsTotalCents, MAX_RECEIPT_BYTES, MAX_RECEIPT_PARTS, receiptTypeOf, REQUEST_SIGNATURES_NEEDED, SHRINK_PHOTOS_OVER_BYTES, splitReceiptData, type PettyCashCategory, type PettyCashItem, type PettyFund, type PettyFundKind } from '../../functions/src/shared/pettyCash';
 
 const me = () => {
   const u = auth.currentUser;
@@ -79,14 +79,6 @@ export function signFund(orgId: string, fund: Pick<PettyFund, 'id' | 'signatures
 }
 
 /** Marks a requisition deleted: it leaves every list and total but stays on record. */
-export function deleteRequisition(orgId: string, id: string) {
-  return softDelete(doc(db, 'organizations', orgId, 'pettyCash', id));
-}
-
-/** Marks a top-up or reset deleted (pastor only): it no longer counts in the budget. */
-export function deleteFund(orgId: string, id: string) {
-  return softDelete(fundRef(orgId, id));
-}
 
 export function cancelFund(orgId: string, id: string) {
   return updateRecord(fundRef(orgId, id), { status: 'cancelled' });
@@ -128,7 +120,7 @@ async function shrinkPhoto(file: File): Promise<string> {
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       const data = canvas.toDataURL('image/jpeg', attempt < 3 ? 0.72 : 0.6);
-      if (data.length * 0.75 <= MAX_RECEIPT_BYTES) return data;
+      if (data.length * 0.75 <= 900_000) return data;
       side = Math.round(side * 0.75);
     }
     throw new Error('That photo is too large. Take it again a little further away.');
@@ -137,38 +129,40 @@ async function shrinkPhoto(file: File): Promise<string> {
   }
 }
 
-/** Adds a receipt (a photo or a PDF) to a requisition. Photos are made smaller first; PDFs must be under 700 KB. */
+/** Adds a receipt to a requisition: photos, PDF, Word, Excel or CSV up to 10 MB. Big photos are made smaller first. */
 export async function addReceipt(orgId: string, reqId: string, file: File, uploadedByName: string) {
+  const type = receiptTypeOf(file.name, file.type);
+  if (!type) throw new Error(`${file.name} is not a receipt format this app takes. Use a photo, PDF, Word, Excel or CSV file.`);
+  if (file.size > MAX_RECEIPT_BYTES) throw new Error(`${file.name} is larger than 10 MB.`);
   let data: string;
-  let type = file.type;
-  if (file.type === 'application/pdf') {
-    if (file.size > MAX_RECEIPT_BYTES) throw new Error(`${file.name} is larger than 700 KB. Take a photo of the receipt instead.`);
-    data = await readAsDataUrl(file);
-  } else if (file.type.startsWith('image/')) {
+  let savedType = type;
+  if (['image/jpeg', 'image/png', 'image/webp'].includes(type) && file.size > SHRINK_PHOTOS_OVER_BYTES) {
     data = await shrinkPhoto(file);
-    type = 'image/jpeg';
+    savedType = 'image/jpeg';
   } else {
-    throw new Error(`${file.name} is not a photo or a PDF.`);
+    data = (await readAsDataUrl(file)).replace(/^data:[^;,]*(;base64)?,/, `data:${type};base64,`);
   }
+  const parts = splitReceiptData(data);
+  if (parts.length > MAX_RECEIPT_PARTS) throw new Error(`${file.name} is larger than 10 MB.`);
   const size = Math.round((data.length - data.indexOf(',') - 1) * 0.75);
   const ref = doc(collection(db, 'organizations', orgId, 'pettyReceipts'));
   const stamps = createStamps();
   const name = file.name.slice(0, 200) || 'Receipt';
   return Promise.all([
-    trackWrite(setDoc(doc(db, 'organizations', orgId, 'pettyReceiptFiles', ref.id), { orgId, reqId, data, ...stamps })),
-    trackWrite(setDoc(ref, { orgId, reqId, name, type, size, uploadedByName, ...stamps })),
+    ...parts.map((part, index) => trackWrite(setDoc(doc(db, 'organizations', orgId, 'pettyReceiptParts', `${ref.id}_${index}`),
+      { orgId, reqId, receiptId: ref.id, index, data: part, createdAt: stamps.createdAt, createdBy: stamps.createdBy }))),
+    trackWrite(setDoc(doc(db, 'organizations', orgId, 'pettyReceiptFiles', ref.id), { orgId, reqId, parts: parts.length, ...stamps })),
+    trackWrite(setDoc(ref, { orgId, reqId, name, type: savedType, size, uploadedByName, ...stamps })),
   ]);
 }
 
 /** A receipt's file as a data URL, read when someone opens it. */
 export async function receiptData(orgId: string, id: string): Promise<string | null> {
   const snap = await getDoc(doc(db, 'organizations', orgId, 'pettyReceiptFiles', id));
-  return (snap.data()?.data as string | undefined) ?? null;
-}
-
-export function removeReceipt(orgId: string, id: string) {
-  return Promise.all([
-    softDelete(doc(db, 'organizations', orgId, 'pettyReceipts', id)),
-    softDelete(doc(db, 'organizations', orgId, 'pettyReceiptFiles', id)),
-  ]);
+  const file = snap.data();
+  if (!file) return null;
+  if (typeof file.data === 'string') return file.data;
+  const parts = await Promise.all(Array.from({ length: (file.parts as number) ?? 0 }, (_, i) => getDoc(doc(db, 'organizations', orgId, 'pettyReceiptParts', `${id}_${i}`))));
+  if (parts.some((p) => !p.exists())) return null;
+  return parts.map((p) => p.data()!.data as string).join('');
 }

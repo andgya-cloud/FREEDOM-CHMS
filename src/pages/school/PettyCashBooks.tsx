@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, useReceipts } from '../../state/usePettyCash';
-import { deleteFund, saveAllocations } from '../../lib/pettyCashWrites';
+import { saveAllocations } from '../../lib/pettyCashWrites';
+import { AskDeleteDialog } from './PettyBin';
 import { balanceSheetPdf } from '../../lib/pettyPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
@@ -12,7 +13,6 @@ import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
 import { money } from './common';
 import { BudgetHealth, NoAccess, PettyGate, PettyNav, ReceiptsBox } from './PettyCashPage';
 import type { Organization } from '../../state/OrgContext';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 
 const day = (ms: number) => new Date(ms).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -133,19 +133,9 @@ function BalanceSheet({ org }: { org: Organization }) {
           </table>
         </div>
       )}
-      <ConfirmDialog
-        open={!!deleting}
+      <AskDeleteDialog org={org} kind="fund" targetId={deleting?.id ?? ''} open={!!deleting} onClose={() => setDeleting(null)}
         title={deleting?.kind === 'reset' ? 'Delete this budget reset?' : 'Delete this top-up?'}
-        body={deleting ? `${day(deleting.at)} · ${deleting.kind === 'topup' ? money(org, deleting.creditCents) : 'Reset to zero'}. It will no longer count in the budget. It stays on record, marked deleted.` : ''}
-        confirmLabel="Delete"
-        danger
-        onConfirm={() => {
-          if (deleting) deleteFund(org.id, deleting.id).catch((err) => toast.show(friendlyError(err)));
-          setDeleting(null);
-          toast.show('Deleted');
-        }}
-        onCancel={() => setDeleting(null)}
-      />
+        body={deleting ? `${day(deleting.at)} · ${deleting.kind === 'topup' ? money(org, deleting.creditCents) : 'Reset to zero'}.` : ''} />
     </div>
   );
 }

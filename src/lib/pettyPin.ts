@@ -37,3 +37,12 @@ export async function setPinWithPassword(email: string, password: string, pin: s
     await deleteApp(second).catch(() => undefined);
   }
 }
+
+/** Asks for, signs, or withdraws a bin step (move to bin, put back, delete forever). */
+export async function binSign(args: {
+  orgId: string; kind: 'request' | 'fund' | 'receipt'; targetId: string; action: 'delete' | 'restore' | 'purge';
+  reason?: string; signerUid?: string; pin?: string; withdraw?: boolean;
+}): Promise<{ outcome: 'signed' | 'done' | 'withdrawn'; count: number }> {
+  const res = await httpsCallable<object, { outcome: 'signed' | 'done' | 'withdrawn'; count: number }>(functions, 'pettyBinSign')(args);
+  return res.data;
+}
