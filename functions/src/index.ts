@@ -16,6 +16,6 @@ export { setPettyPin, listPettySigners, signWithPin, topUpWithPin } from './pett
 export { pettyBinSign } from './pettyBin.js';
 export { raisePettyRequest } from './pettyRaise.js';
 export { mergeMyAccount } from './pettyMerge.js';
-export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail } from './pettyNotify.js';
+export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail, listPettyContacts } from './pettyNotify.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';

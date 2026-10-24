@@ -7,7 +7,7 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
@@ -546,6 +546,8 @@ function Requisition({ org }: { org: Organization }) {
   const [reason, setReason] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [sending, setSending] = useState(false);
+  const [waPeople, setWaPeople] = useState<{ name: string; phone: string }[] | null>(null);
+  const [waOpen, setWaOpen] = useState(false);
   const { receipts } = useReceipts(org, reqId);
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
@@ -583,12 +585,31 @@ function Requisition({ org }: { org: Organization }) {
     setSending(true);
     try {
       const res = await sendPettyEmail(org.id, r!.id);
-      toast.show(`${r!.status === 'approved' ? 'Signed voucher' : 'Approval request'} emailed to ${res.sent} ${res.sent === 1 ? 'person' : 'people'}.`);
+      const who = res.names?.length ? `: ${res.names.join(', ')}` : '';
+      toast.show(`${r!.status === 'approved' ? 'Signed voucher' : 'Approval request'} emailed to ${res.sent} ${res.sent === 1 ? 'person' : 'people'}${who}.`);
     } catch (err) {
       const e = err as { code?: string; message?: string };
       toast.show(e?.code?.startsWith('functions/') && e.message ? e.message.replace(/\s*\[\d+\]$/, '') : friendlyError(err));
     } finally {
       setSending(false);
+    }
+  }
+  // Send WhatsApp to one stakeholder at a time, straight to their number (Andy, 2026-10-24).
+  function openWhatsapp() {
+    setWaOpen((o) => !o);
+    if (!waPeople) listPettyContacts(org.id).then(setWaPeople).catch((err) => { setWaPeople([]); toast.show(friendlyError(err)); });
+  }
+  async function whatsappTo(phone: string) {
+    const link = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(waText(org, r!, sigs.map(([, s]) => `${s.name} (${s.role})`)))}`;
+    if (r!.status !== 'approved') { window.open(link, '_blank', 'noopener'); return; }
+    const w = window.open('about:blank', '_blank');
+    try {
+      downloadFile(await makePdf());
+      if (w) w.location.href = link; else window.location.href = link;
+      toast.show('The signed voucher PDF was saved to this device. Attach it in WhatsApp.');
+    } catch (err) {
+      w?.close();
+      toast.show(friendlyError(err));
     }
   }
   async function sendWhatsapp() {
@@ -665,9 +686,19 @@ function Requisition({ org }: { org: Organization }) {
             : `Tells the stakeholders that any ${REQUEST_SIGNATURES_NEEDED} of them must sign, with a link to this request. ${r.requesterName} cannot sign it.`}</p>
           <div className="row-actions">
             <button type="button" className="btn btn-primary" disabled={sending} onClick={() => void sendEmail()}>{sending ? 'Sending…' : 'Send Email'}</button>
-            <button type="button" className="btn btn-whatsapp" onClick={() => void sendWhatsapp()}>Send WhatsApp</button>
+            <button type="button" className="btn btn-whatsapp" onClick={openWhatsapp}>Send WhatsApp</button>
           </div>
-          <p className="small muted">WhatsApp opens on this device with the message ready{r.status === 'approved' ? ' and the voucher PDF' : ''}. Choose the stakeholders' group or each person, then send.</p>
+          {waOpen && (
+            <div className="stack">
+              <p className="small muted">Tap a name. WhatsApp opens their chat with the message ready{r.status === 'approved' ? ', and the voucher PDF is saved for you to attach' : ''}. Press send there, then come back for the next person.</p>
+              <div className="row-actions">
+                {waPeople === null ? <span className="small muted">Loading…</span> : waPeople.map((c) => (
+                  <button key={c.phone} type="button" className="btn btn-whatsapp" onClick={() => void whatsappTo(c.phone)}>{c.name}</button>
+                ))}
+                <button type="button" className="btn btn-quiet" onClick={() => void sendWhatsapp()}>A group or someone else</button>
+              </div>
+            </div>
+          )}
         </section>
       )}
       {step && (

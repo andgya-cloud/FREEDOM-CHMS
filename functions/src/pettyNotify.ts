@@ -9,6 +9,7 @@ import { jsPDF } from 'jspdf';
 import nodemailer from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canSign, requireMember } from './pettyPins.js';
+import { contactsFor, plainName, withContacts } from './pettyContacts.js';
 import { isSendingHour, sendingReady, withWhatsAppDefaults, type WhatsAppSettings } from './shared/whatsapp.js';
 import { PETTY_CASH_STATUS_LABELS, pettyCashBase, type PettyCashSignature } from './shared/pettyCash.js';
 import { drawRequisition, letterheadFor, type Letterhead } from './shared/pettyVoucher.js';
@@ -44,17 +45,32 @@ async function orgInfo(orgId: string): Promise<OrgInfo> {
   return { id: orgId, ...base, currency: (o.currency as string) || 'KES', timeZone: (o.timeZone as string) || 'Africa/Nairobi', lh: letterheadFor(base) };
 }
 
-/** Every active stakeholder who can sign petty cash here. */
-async function stakeholders(orgId: string): Promise<Person[]> {
+/** Every active stakeholder who can sign petty cash here, reached at their built-in contacts where known. */
+async function stakeholders(org: OrgInfo): Promise<Person[]> {
   const users = await db.collection('users').where('active', '==', true).get();
-  return users.docs
-    .filter((d) => canSign(d.data() as UserProfile, orgId, 'request'))
-    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, email: u.email, phone: u.phone ?? '' }; });
+  return withContacts(org.type, users.docs
+    .filter((d) => canSign(d.data() as UserProfile, org.id, 'request'))
+    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, email: u.email, phone: u.phone ?? '' }; }));
 }
 
-async function person(uid: string): Promise<Person | null> {
+async function person(org: OrgInfo, uid: string): Promise<Person | null> {
   const u = (await db.doc(`users/${uid}`).get()).data() as UserProfile | undefined;
-  return u?.active ? { uid, name: u.displayName || u.email, email: u.email, phone: u.phone ?? '' } : null;
+  if (!u?.active) return null;
+  const name = u.displayName || u.email;
+  const c = contactsFor(org.type).find((x) => plainName(x.name) === plainName(name));
+  return { uid, name, email: c?.email || u.email, phone: c?.phone || u.phone || '' };
+}
+
+/** Whether this person is the requester or has already signed (matched by account or by name). */
+function asksAlreadyAnswered(p: Person, r: FirebaseFirestore.DocumentData) {
+  if (p.uid === r.requesterId || plainName(p.name) === plainName(String(r.requesterName ?? ''))) return true;
+  const sigs = (r.signatures ?? {}) as Record<string, PettyCashSignature>;
+  return p.uid in sigs || Object.values(sigs).some((s) => plainName(s.name ?? '') === plainName(p.name));
+}
+
+/** Leaves out the requester when they are already among the stakeholders. */
+function requesterIn(all: Person[], r: FirebaseFirestore.DocumentData) {
+  return all.some((p) => p.uid === r.requesterId || plainName(p.name) === plainName(String(r.requesterName ?? '')));
 }
 
 const sortedSigs = (sigs: Record<string, PettyCashSignature> | undefined) => Object.entries(sigs ?? {})
@@ -97,16 +113,17 @@ function mailProblem(err: unknown): string {
 }
 /** Emails one notice to each person; returns how many went and, when some failed, why. */
 async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeRequest, link: string, signers: string[], people: Person[],
-  attachment: { name: string; data: Buffer } | null): Promise<{ sent: number; problem: string }> {
+  attachment: { name: string; data: Buffer } | null): Promise<{ sent: number; problem: string; names: string[] }> {
   const from = org.lh.email;
   const pass = process.env.PETTY_MAIL_TEST_DIR ? 'test' : PETTY_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
-  if (!from || !pass) { logger.info(`Petty cash email skipped for ${org.id}: no sending email or app password yet.`); return { sent: 0, problem: 'No Gmail app password is saved yet.' }; }
+  if (!from || !pass) { logger.info(`Petty cash email skipped for ${org.id}: no sending email or app password yet.`); return { sent: 0, problem: 'No Gmail app password is saved yet.', names: [] }; }
   // In local tests the emails are written to files (PETTY_MAIL_TEST_DIR) instead of being sent.
   const transport = process.env.PETTY_MAIL_TEST_DIR
     ? nodemailer.createTransport({ jsonTransport: true })
     : nodemailer.createTransport({ service: 'gmail', auth: { user: from, pass } });
   let sent = 0;
   let problem = '';
+  const names: string[] = [];
   for (const p of people) {
     if (!p.email) continue;
     const n: NoticeInput = { kind, lh: org.lh, currency: org.currency, r: req, link, recipientName: p.name, signers };
@@ -121,6 +138,7 @@ async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeReque
         await writeFile(join(process.env.PETTY_MAIL_TEST_DIR, `${Date.now()}-${kind}-${p.uid}.json`), String((info as { message?: unknown }).message ?? ''));
       }
       sent += 1;
+      names.push(p.name);
     } catch (err) {
       logger.warn(`Petty cash email to ${p.uid} failed`, err);
       problem = mailProblem(err);
@@ -128,7 +146,7 @@ async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeReque
       if ((err as { code?: string })?.code === 'EAUTH') break;
     }
   }
-  return { sent, problem };
+  return { sent, problem, names };
 }
 
 /** Queues one WhatsApp notice per person with a number, when WhatsApp sending is switched on. */
@@ -178,7 +196,7 @@ export const onPettyCashNotify = onDocumentWritten(
 
     if (after.status === 'submitted' && !after.notice?.askedAt) {
       if (!(await claim(ref, 'askedAt', (d) => d.status === 'submitted'))) return;
-      const people = (await stakeholders(orgId)).filter((p) => p.uid !== after.requesterId);
+      const people = (await stakeholders(org)).filter((p) => !asksAlreadyAnswered(p, after));
       const emailed = (await emailNotice(org, 'ask', req, link, [], people, null)).sent;
       const whatsapp = await queueWhatsapp(org, reqId, 'ask', req, link, [], people);
       await ref.update({ 'notice.askEmailed': emailed, 'notice.askWhatsapp': whatsapp });
@@ -187,8 +205,8 @@ export const onPettyCashNotify = onDocumentWritten(
 
     if (after.status === 'approved' && !after.notice?.approvedAt) {
       if (!(await claim(ref, 'approvedAt', (d) => d.status === 'approved'))) return;
-      const all = await stakeholders(orgId);
-      const requester = all.some((p) => p.uid === after.requesterId) ? null : await person(after.requesterId);
+      const all = await stakeholders(org);
+      const requester = requesterIn(all, after) ? null : await person(org, after.requesterId);
       const people = requester ? [...all, requester] : all;
       const signers = sortedSigs(after.signatures).map(([, s]) => `${s.name} (${s.role})`);
       const pdf = await voucherPdf(org, { ...after, id: reqId });
@@ -215,9 +233,9 @@ export async function remindPettyCash(now = new Date()): Promise<number> {
       const last = (r.notice?.remindedAt ?? r.notice?.askedAt)?.toMillis?.() as number | undefined;
       if (r.deletedAt || !r.signatures || !r.number || !last || last > cutoff) continue;
       await d.ref.update({ 'notice.remindedAt': FieldValue.serverTimestamp() });
-      people ??= await stakeholders(o.id);
+      people ??= await stakeholders(org);
       const signed = sortedSigs(r.signatures);
-      const due = people.filter((p) => p.uid !== r.requesterId && !(p.uid in r.signatures));
+      const due = people.filter((p) => !asksAlreadyAnswered(p, r));
       const link = `${appUrl()}${pettyCashBase(org.type)}/${d.id}`;
       const req = noticeRequest(r);
       const names = signed.map(([, s]) => `${s.name} (${s.role})`);
@@ -262,23 +280,32 @@ export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_
   if (!org.lh.email) throw new HttpsError('failed-precondition', 'Email is not set up for this organization yet.');
   const link = `${appUrl()}${pettyCashBase(org.type)}/${reqId}`;
   const req = noticeRequest(r);
-  const all = await stakeholders(orgId);
+  const all = await stakeholders(org);
   let people: Person[];
   let signers: string[] = [];
   let pdf: { name: string; data: Buffer } | null = null;
   if (kind === 'ask') {
-    people = all.filter((p) => p.uid !== r.requesterId && !(p.uid in r.signatures));
+    people = all.filter((p) => !asksAlreadyAnswered(p, r));
   } else {
-    const requester = all.some((p) => p.uid === r.requesterId) ? null : await person(r.requesterId);
+    const requester = requesterIn(all, r) ? null : await person(org, r.requesterId);
     people = requester ? [...all, requester] : all;
     signers = sortedSigs(r.signatures).map(([, s]) => `${s.name} (${s.role})`);
     pdf = await voucherPdf(org, { ...r, id: reqId });
   }
-  const { sent, problem } = await emailNotice(org, kind, req, link, signers, people, pdf);
+  const { sent, problem, names } = await emailNotice(org, kind, req, link, signers, people, pdf);
   if (!sent) throw new HttpsError('unavailable', `The emails could not be sent. ${problem || (people.length ? 'Please try again.' : 'Nobody has an email address to send to.')}`);
   await ref.update({ [`notice.${kind}EmailAt`]: FieldValue.serverTimestamp(), [`notice.${kind}Emailed`]: sent, [`notice.${kind}EmailBy`]: caller.profile.displayName || caller.profile.email });
   await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: `petty_email_${kind}`, path: ref.path, collection: 'pettyCash', docId: reqId, orgId, note: `${sent} sent` });
-  return { sent, of: people.length };
+  return { sent, of: people.length, names };
+});
+
+/** Names and WhatsApp numbers of this organization's stakeholders, for "Send WhatsApp" (Andy, 2026-10-24). */
+export const listPettyContacts = onCall({ invoker: 'public' }, async (request) => {
+  const caller = await requireCaller(request);
+  const orgId = requireString((request.data as Record<string, unknown> | null)?.orgId, 'the organization', { max: 80 });
+  requireMember(caller.profile, orgId);
+  const people = await stakeholders(await orgInfo(orgId));
+  return { contacts: people.filter((p) => p.phone).map((p) => ({ name: p.name, phone: p.phone })).sort((a, b) => a.name.localeCompare(b.name)) };
 });
 
 /** Uploads the voucher to WhatsApp so the approved message can carry it; returns the media id. */

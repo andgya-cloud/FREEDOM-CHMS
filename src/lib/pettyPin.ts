@@ -63,9 +63,15 @@ export async function raisePettyRequest(args: {
 }
 
 /** "Send Email" on a requisition: asks for approval while it waits, or sends the signed voucher once approved. */
-export async function sendPettyEmail(orgId: string, reqId: string): Promise<{ sent: number; of: number }> {
-  const res = await httpsCallable<object, { sent: number; of: number }>(functions, 'sendPettyEmail')({ orgId, reqId });
+export async function sendPettyEmail(orgId: string, reqId: string): Promise<{ sent: number; of: number; names?: string[] }> {
+  const res = await httpsCallable<object, { sent: number; of: number; names?: string[] }>(functions, 'sendPettyEmail')({ orgId, reqId });
   return res.data;
+}
+
+/** The stakeholders' names and WhatsApp numbers, for sending a requisition to each one. */
+export async function listPettyContacts(orgId: string): Promise<{ name: string; phone: string }[]> {
+  const res = await httpsCallable<{ orgId: string }, { contacts: { name: string; phone: string }[] }>(functions, 'listPettyContacts')({ orgId });
+  return res.data.contacts;
 }
 
 /**
