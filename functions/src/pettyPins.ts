@@ -1,4 +1,4 @@
-import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
@@ -120,6 +120,51 @@ async function sameSigner(uid: string, proofUid: string, proofEmail: string | un
   if (email && email === contactEmail(signer.displayName || '').toLowerCase()) return true;
   return !!other?.active && !!signer.displayName && personKey(other.displayName || '') === personKey(signer.displayName);
 }
+
+/** Whether another account already uses this password (each person's password must be their own). */
+export async function passwordInUse(password: string, exceptUid: string) {
+  const all = await db.collection('pettyPins').where('pwHash', '!=', null).get();
+  for (const d of all.docs) {
+    if (d.id === exceptUid) continue;
+    const { pwSalt, pwHash } = d.data() as { pwSalt?: string; pwHash?: string };
+    if (pwSalt && pwHash && timingSafeEqual(await hashPin(password, Buffer.from(pwSalt, 'base64')), Buffer.from(pwHash, 'base64'))) return true;
+  }
+  return false;
+}
+
+/**
+ * Sign-in with the password only (Andy, 2026-10-24): finds the one account whose password this is and
+ * returns its sign-in email, so the device then signs in normally with that email and password. Wrong
+ * passwords are counted per network address and locked out for 15 minutes after ten.
+ */
+const SIGNIN_MAX_FAILS = 10;
+export const findPasswordAccount = onCall(CALLABLE, async (request) => {
+  const password = typeof (request.data as Record<string, unknown> | null)?.password === 'string' ? String((request.data as Record<string, unknown>).password) : '';
+  if (password.length < 4 || password.length > 200) throw new HttpsError('invalid-argument', 'Type your password.');
+  const ip = String(request.rawRequest?.ip ?? 'unknown');
+  const limitRef = db.doc(`signInLimits/${createHash('sha256').update(ip).digest('hex').slice(0, 40)}`);
+  const limit = (await limitRef.get()).data() as { fails?: number; lockedUntil?: FirebaseFirestore.Timestamp | null } | undefined;
+  if (limit?.lockedUntil && limit.lockedUntil.toMillis() > Date.now()) {
+    throw new HttpsError('resource-exhausted', `Too many wrong passwords. Try again in ${PIN_LOCK_MINUTES} minutes.`);
+  }
+  const all = await db.collection('pettyPins').where('pwHash', '!=', null).get();
+  const matches: string[] = [];
+  for (const d of all.docs) {
+    const { pwSalt, pwHash } = d.data() as { pwSalt?: string; pwHash?: string };
+    if (pwSalt && pwHash && timingSafeEqual(await hashPin(password, Buffer.from(pwSalt, 'base64')), Buffer.from(pwHash, 'base64'))) matches.push(d.id);
+  }
+  const users = matches.length ? (await db.getAll(...matches.map((uid) => db.doc(`users/${uid}`)))).filter((u) => u.get('active') === true) : [];
+  if (users.length !== 1) {
+    const fails = (limit?.fails ?? 0) + 1;
+    const lock = fails >= SIGNIN_MAX_FAILS;
+    await limitRef.set({ fails: lock ? 0 : fails, lockedUntil: lock ? new Date(Date.now() + PIN_LOCK_MINUTES * 60_000) : null, at: FieldValue.serverTimestamp() });
+    if (users.length > 1) throw new HttpsError('failed-precondition', 'More than one person has this password. Sign in with your email instead, and ask the pastor to give you a new password.');
+    throw new HttpsError('not-found', 'That password is not recognised. Check it, or sign in with your email.');
+  }
+  if (limit?.fails) await limitRef.set({ fails: 0, lockedUntil: null, at: FieldValue.serverTimestamp() });
+  const email = (await auth.getUser(users[0].id)).email ?? (users[0].get('email') as string);
+  return { email };
+});
 
 /** Checks a signer's PIN (or password proof), counting wrong PIN tries and locking after too many. */
 export async function verifyPin(uid: string, pin: string) {

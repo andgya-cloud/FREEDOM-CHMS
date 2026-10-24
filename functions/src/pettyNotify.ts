@@ -268,9 +268,6 @@ export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_
   const ref = db.doc(`organizations/${orgId}/pettyCash/${reqId}`);
   const r = (await ref.get()).data();
   if (!r || r.deletedAt) throw new HttpsError('not-found', 'This requisition is no longer there.');
-  if (r.requesterId !== caller.uid && r.raisedBy !== caller.uid && !canSign(caller.profile, orgId, 'request')) {
-    throw new HttpsError('permission-denied', 'Only the requester or a stakeholder can send this.');
-  }
   const kind: PettyNoticeKind | null = r.status === 'submitted' ? 'ask' : r.status === 'approved' ? 'approved' : null;
   if (!kind || !r.signatures || !r.number) throw new HttpsError('failed-precondition', 'There is nothing to send for this requisition now.');
   const last = (r.notice?.[`${kind}EmailAt`] as FirebaseFirestore.Timestamp | undefined)?.toMillis?.() ?? 0;

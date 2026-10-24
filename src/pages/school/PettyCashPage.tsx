@@ -579,8 +579,9 @@ function Requisition({ org }: { org: Organization }) {
     }
   }
   // Send Email / Send WhatsApp (Andy, 2026-10-23): nothing goes out on its own; the requester sends it.
-  const canSend = !!r.number && !!r.signatures && (r.status === 'submitted' || r.status === 'approved')
-    && (r.requesterId === p.uid || r.raisedBy === p.uid || p.canSign);
+  // Shown at the top for anyone with petty cash access, straight after a requisition is raised (Andy, 2026-10-24).
+  const canSend = !!r.signatures && (r.status === 'submitted' || r.status === 'approved') && p.any;
+  const numbered = !!r.number;
   async function sendEmail() {
     setSending(true);
     try {
@@ -645,6 +646,28 @@ function Requisition({ org }: { org: Organization }) {
         </div>
       </div>
       <PettyNav org={org} />
+      {canSend && (
+        <section className="card stack no-print">
+          <h2>{r.status === 'approved' ? 'Send the signed voucher' : 'Ask the stakeholders to approve'}</h2>
+          <p className="small muted">{r.status === 'approved'
+            ? `The petty cash voucher with its details and the ${REQUEST_SIGNATURES_NEEDED} signatures, to every stakeholder and ${r.requesterName}.`
+            : `Tells the stakeholders that any ${REQUEST_SIGNATURES_NEEDED} of them must sign, with a link to this request. ${r.requesterName} cannot sign it.`}</p>
+          {!numbered && <p className="small muted">Giving this requisition its number… The buttons work in a moment{navigator.onLine ? '' : ', once this device is online'}.</p>}
+          <div className="row-actions">
+            <button type="button" className="btn btn-primary" disabled={sending || !numbered} onClick={() => void sendEmail()}>{sending ? 'Sending…' : 'Send Email'}</button>
+            <button type="button" className="btn btn-whatsapp" disabled={!numbered} onClick={openWhatsapp}>Send WhatsApp</button>
+          </div>
+          {waOpen && (
+            <div className="stack">
+              <p className="small muted">Tap a name. WhatsApp opens their chat with the message ready{r.status === 'approved' ? ', and the voucher PDF is saved for you to attach' : ''}. Press send there, then come back for the next person.</p>
+              <div className="row-actions">
+                {waPeople === null ? <span className="small muted">Loading…</span> : waPeople.map((c) => (
+                  <button key={c.phone} type="button" className="btn btn-whatsapp" onClick={() => void whatsappTo(c.phone)}>{c.name}</button>
+                ))}
+                <button type="button" className="btn btn-quiet" onClick={() => void sendWhatsapp()}>A group or someone else</button>
+              </div>
+            </div>
+          )}
       <section className="card stack">
         <ul className="petty-figures petty-details">
           <li><span>Requester</span><strong>{r.requesterName}</strong></li>
@@ -678,27 +701,6 @@ function Requisition({ org }: { org: Organization }) {
         </ol>
         {r.rejection && <p className="notice">Rejected by {r.rejection.name} ({when(r.rejection.at)}): {r.rejection.reason}</p>}
       </section>
-      {canSend && (
-        <section className="card stack no-print">
-          <h2>{r.status === 'approved' ? 'Send the signed voucher' : 'Ask the stakeholders to approve'}</h2>
-          <p className="small muted">{r.status === 'approved'
-            ? `The petty cash voucher with its details and the ${REQUEST_SIGNATURES_NEEDED} signatures, to every stakeholder and ${r.requesterName}.`
-            : `Tells the stakeholders that any ${REQUEST_SIGNATURES_NEEDED} of them must sign, with a link to this request. ${r.requesterName} cannot sign it.`}</p>
-          <div className="row-actions">
-            <button type="button" className="btn btn-primary" disabled={sending} onClick={() => void sendEmail()}>{sending ? 'Sending…' : 'Send Email'}</button>
-            <button type="button" className="btn btn-whatsapp" onClick={openWhatsapp}>Send WhatsApp</button>
-          </div>
-          {waOpen && (
-            <div className="stack">
-              <p className="small muted">Tap a name. WhatsApp opens their chat with the message ready{r.status === 'approved' ? ', and the voucher PDF is saved for you to attach' : ''}. Press send there, then come back for the next person.</p>
-              <div className="row-actions">
-                {waPeople === null ? <span className="small muted">Loading…</span> : waPeople.map((c) => (
-                  <button key={c.phone} type="button" className="btn btn-whatsapp" onClick={() => void whatsappTo(c.phone)}>{c.name}</button>
-                ))}
-                <button type="button" className="btn btn-quiet" onClick={() => void sendWhatsapp()}>A group or someone else</button>
-              </div>
-            </div>
-          )}
         </section>
       )}
       {step && (
