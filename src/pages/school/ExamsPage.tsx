@@ -1,6 +1,5 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import {
@@ -19,7 +18,7 @@ import {
   type ExamComponent, type ExamSettings, type ExamSheetStatus, type ExamStudent, type ExamWeights, type GradeBand,
 } from '../../../functions/src/shared/exams';
 import { studentAttendance } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, useSchoolPage } from './common';
+import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 /**
@@ -64,7 +63,6 @@ const semesterText = (n: number | null | undefined) => (n ? `Semester ${n}` : 'N
 
 function Exams({ org }: { org: Organization }) {
   const a = useExamAccess();
-  const { can } = useAuth();
   const { s, cohorts, studentsOf, allStudents, attendance } = useCohorts(org);
   const [params, setParams] = useSearchParams();
   const cohort = params.get('cohort') && cohorts.includes(params.get('cohort')!) ? params.get('cohort')! : cohorts[0] ?? '';
@@ -77,28 +75,27 @@ function Exams({ org }: { org: Organization }) {
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} courseName={s.courseName} />;
-  const tabs: [Tab, string][] = [['overview', 'Overview'], ['results', 'Results'], ['setup', 'Setup'], ['log', 'Change log']];
+  // Three tabs (Andy, 2026-10-24); the change log opens from a link at the bottom of Setup.
+  const tabs: [Tab, string][] = [['overview', 'Overview'], ['results', 'Results'], ['setup', 'Setup']];
+  const shown: Tab = tab === 'log' ? 'setup' : tab;
 
   return (
     <div className="page narrow exams">
       <div className="page-head"><h1>Exam Records</h1></div>
-      {can('people.read') && <SchoolNav feesAllowed={s.feesAllowed} />}
       {cohorts.length === 0 ? (
         <div className="notice">Exam records follow the intakes. Add a cohort under <Link to="/school/courses">Programmes</Link> first, such as "Cohort 4".</div>
       ) : (
         <>
-          <div className="dash-controls no-print">
-            <label className="field"><span>Cohort</span>
-              <select value={cohort} onChange={(e) => set('cohort', e.target.value)}>{cohorts.map((c) => <option key={c}>{c}</option>)}</select>
-            </label>
+          <div className="exam-cohorts no-print" role="group" aria-label="Cohort">
+            {[...cohorts].sort((x, y) => x.localeCompare(y, undefined, { numeric: true })).map((c) => <button key={c} type="button" aria-pressed={cohort === c} className={`chip${cohort === c ? ' chip-on' : ''}`} onClick={() => set('cohort', c)}>{c}</button>)}
           </div>
           <div className="segmented wrap no-print" role="tablist" aria-label="Exam Records">
-            {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => set('tab', k)}>{label}</button>)}
+            {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={shown === k} className={shown === k ? 'on' : ''} onClick={() => set('tab', k)}>{label}</button>)}
           </div>
           {tab === 'overview' && <Overview org={org} cohort={cohort} sheets={sheets} students={students} courseName={s.courseName} onSetup={() => set('tab', 'setup')} />}
           {tab === 'results' && <Results org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} />}
-          {tab === 'setup' && <Setup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} allStudents={allStudents} />}
-          {tab === 'log' && <ChangeLog org={org} cohort={cohort} />}
+          {tab === 'setup' && <Setup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} allStudents={allStudents} onLog={() => set('tab', 'log')} />}
+          {tab === 'log' && <><button type="button" className="btn btn-quiet btn-small align-start" onClick={() => set('tab', 'setup')}>← Back to Setup</button><ChangeLog org={org} cohort={cohort} /></>}
         </>
       )}
     </div>
@@ -181,46 +178,38 @@ function Overview({ org, cohort, sheets, students, courseName, onSetup }: { org:
   const rows = sheets.map((sh) => ({ sh, roster: rosterFor(students, sh.courseId).length, pct: sheetProgress(sh, rosterFor(students, sh.courseId).map((x) => x.id)) }))
     .sort((x, y) => (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || x.pct - y.pct);
   const count = (st: string) => sheets.filter((s) => s.status === st).length;
-  const overall = rows.length ? Math.round(rows.reduce((t, r) => t + r.pct, 0) / rows.length) : 0;
   const phoneOf = (uid: string) => trainers.find((t) => t.uid === uid)?.phone ?? '';
   const remind = (sh: ExamSheetRow, pctDone: number) => waLink(phoneOf(sh.ownerUid), `Hello ${sh.teacherName}, a reminder from ADIA: your ${sh.courseName} marks for ${cohort} are ${pctDone}% entered. Please key in the rest and tap Submit for approval in Insight-IQ, Exam Records. Thank you.`);
+  const waiting = count('submitted');
   return (
     <section className="stack">
-      <KpiRow label="Where marking stands">
-        <KpiCard label="Courses" value={String(sheets.length)} tone="gold" note={`${students.length} students in ${cohort}`} />
-        <KpiCard label="Still marking" value={String(count('draft'))} note={`${overall}% of marks entered`} />
-        <KpiCard label="Waiting for you" value={String(count('submitted'))} tone={count('submitted') ? 'warn' : undefined} note="Submitted, to approve" />
-        <KpiCard label="Approved" value={`${count('approved')} of ${sheets.length}`} tone={sheets.length && count('approved') === sheets.length ? 'ok' : undefined} />
-      </KpiRow>
       {rows.length === 0 ? (
         <div className="notice stack">
-          <p>No courses are set up for {cohort} yet. Add each course in Setup and give it to its trainer; it then shows in that trainer's "My classes".</p>
+          <p>No courses are set up for {cohort} yet. Add each course in Setup and give it to its trainer.</p>
           <button type="button" className="btn btn-primary align-start" onClick={onSetup}>Set up courses</button>
         </div>
       ) : (
-        <div className="card exam-table-wrap">
-          <table className="table">
-            <thead><tr><th>Course</th><th>Trainer</th><th>Entered</th><th>Status</th><th className="no-print" /></tr></thead>
-            <tbody>
-              {rows.map(({ sh, roster, pct }) => (
-                <tr key={sh.id}>
-                  <td><Link to={`${BASE}/sheet/${sh.id}`}>{sh.courseName || 'Untitled'}</Link><div className="muted small">{programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster} students</div></td>
-                  <td>{sh.teacherName}</td>
-                  <td><span className="exam-bar small-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span> <span className="small">{pct}%</span></td>
-                  <td><StatusPill status={sh.status} />{sh.status === 'draft' && sh.returnNote && <div className="muted small">Sent back</div>}</td>
-                  <td className="no-print">
-                    <span className="row-actions">
-                      {sh.status === 'submitted' && <><Link className="btn btn-quiet btn-small" to={`${BASE}/sheet/${sh.id}`}>Check</Link><button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button><button type="button" className="btn btn-quiet btn-small" onClick={() => act.sendBack(sh)}>Send back</button></>}
-                      {sh.status === 'draft' && <a className="btn btn-quiet btn-small" href={remind(sh, pct)} target="_blank" rel="noreferrer">WhatsApp reminder</a>}
-                      {sh.status === 'approved' && <button type="button" className="btn btn-quiet btn-small" onClick={() => act.sendBack(sh)}>Reopen</button>}
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <p className="muted small">Tap <strong>Check</strong> to look over a submitted course before approving it. A course counts as final only once approved; until then its results show as provisional.</p>
-        </div>
+        <>
+          <p className="muted">{sheets.length} {sheets.length === 1 ? 'course' : 'courses'} · {count('approved')} approved{waiting ? <> · <strong className="up-bad">{waiting} waiting for you</strong></> : ''} · {students.length} students</p>
+          <ul className="exam-list">
+            {rows.map(({ sh, roster, pct }) => (
+              <li key={sh.id}>
+                <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
+                  <strong>{sh.courseName || 'Untitled'}</strong>
+                  <span className="muted small">{sh.teacherName} · {programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster} students</span>
+                  <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
+                </Link>
+                <span className="exam-list-side">
+                  <StatusPill status={sh.status} />
+                  {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
+                  {sh.status === 'draft' && <a className="btn btn-quiet btn-small" href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
+                  {sh.status === 'approved' && <Link className="btn btn-quiet btn-small" to={`${BASE}/sheet/${sh.id}`}>Open</Link>}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="muted small">Tap a course to see its marks. To send one back, open it and tap Send back.</p>
+        </>
       )}
     </section>
   );
@@ -369,17 +358,30 @@ function Reports({ org, cohort, period, sheets, students, courses, attendance }:
 
 /* ---------- Setup ---------- */
 
-function Setup({ org, cohort, cohorts, sheets, students, courses, allStudents }: {
+function Setup({ org, cohort, cohorts, sheets, students, courses, allStudents, onLog }: {
   org: Organization; cohort: string; cohorts: string[]; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[];
-  allStudents: Parameters<typeof ResultsUpload>[0]['allStudents'];
+  allStudents: Parameters<typeof ResultsUpload>[0]['allStudents']; onLog: () => void;
 }) {
+  const { settings } = useExamSettings(org.id);
+  const w = settings.weights;
   return (
     <section className="stack">
       <CourseSetup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} />
-      <Weighting org={org} />
-      <Grading org={org} />
-      <ResultsUpload org={org} allStudents={allStudents} />
+      {/* Set once and seldom changed, so folded away (Andy, 2026-10-24). */}
+      <Fold title="Weighting" note={EXAM_COMPONENTS.filter((c) => w[c].wt > 0).map((c) => `${EXAM_COMPONENT_LABELS[c]} ${w[c].wt}%`).join(' · ')}><Weighting org={org} /></Fold>
+      <Fold title="Grading and signatures" note={`Pass mark ${settings.passMark}%`}><Grading org={org} /></Fold>
+      <Fold title="Upload past results" note="From your Excel cohort files"><ResultsUpload org={org} allStudents={allStudents} /></Fold>
+      <button type="button" className="btn-link align-start small" onClick={onLog}>See the change log</button>
     </section>
+  );
+}
+
+function Fold({ title, note, children }: { title: string; note: string; children: ReactNode }) {
+  return (
+    <details className="card exam-fold">
+      <summary><strong>{title}</strong><span className="muted small">{note}</span></summary>
+      {children}
+    </details>
   );
 }
 
@@ -490,7 +492,7 @@ function CourseSetup({ org, cohort, cohorts, sheets, students, courses }: { org:
         </div>
       ) : (
         <div className="exam-table-wrap">
-          <table className="table">
+          <table className="table exam-setup-table">
             <thead><tr><th>Course</th><th>Semester</th><th>Trainer</th><th>Status</th><th /></tr></thead>
             <tbody>
               {sheets.map((sh) => (

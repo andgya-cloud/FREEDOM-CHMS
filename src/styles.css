@@ -1032,3 +1032,25 @@ a.kpi:hover { border-color: var(--primary); }
 .exam-add { padding: 12px; border: 1px dashed var(--border); border-radius: 10px; }
 .exam-mark { text-transform: uppercase; }
 .exams .badge { white-space: nowrap; }
+/* Exam Records, simple layout (Andy, 2026-10-24): cohort buttons, plain course list, folded setup sections. */
+.exam-cohorts { display: flex; flex-wrap: wrap; gap: 8px; }
+.exam-cohorts .chip { cursor: pointer; font: inherit; }
+.exam-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.exam-list > li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.exam-list-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; color: var(--text); text-decoration: none; }
+.exam-list-side { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
+.exam-fold > summary { cursor: pointer; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; list-style: none; }
+.exam-fold > summary::before { content: '▸'; color: var(--muted); }
+.exam-fold[open] > summary::before { content: '▾'; }
+.exam-fold > section.card { border: 0; padding: 12px 0 0; margin: 0; background: none; box-shadow: none; }
+.exam-fold > section > h2:first-child, .exam-fold > section > .card-head:first-child { display: none; }
+.btn-link { background: none; border: 0; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; }
+@media (max-width: 640px) {
+  .exam-setup-table thead { display: none; }
+  .exam-setup-table, .exam-setup-table tbody, .exam-setup-table tr, .exam-setup-table td { display: block; width: 100%; }
+  .exam-setup-table tr { padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .exam-setup-table td { padding: 4px 0; border: 0; }
+  .exam-setup-table select { width: 100%; }
+  .exam-list > li { flex-direction: column; align-items: stretch; }
+  .exam-list-side { flex-direction: row; justify-content: space-between; align-items: center; }
+}
