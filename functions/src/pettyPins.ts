@@ -60,7 +60,7 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
       const u = d.data() as UserProfile;
       const name = u.displayName || u.email;
       const canAuthorize = canSign(u, orgId, 'fund');
-      return { uid: d.id, name, title: u.pettyTitle ?? '', email: u.email, canAuthorize, canTopUp: canAuthorize && canTopUpAlone(orgType, name, (u.permissions ?? []).includes('users.manage')) };
+      return { uid: d.id, name, title: u.pettyTitle ?? '', email: u.email, canAuthorize, isPastor: (u.permissions ?? []).includes('users.manage'), canTopUp: canAuthorize && canTopUpAlone(orgType, name, (u.permissions ?? []).includes('users.manage')) };
     });
   const pins = people.length ? await db.getAll(...people.map((p) => db.doc(`pettyPins/${p.uid}`))) : [];
   // Signing with a password uses the sign-in email, which can differ from the profile's.
@@ -76,6 +76,14 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
  * for a moment and sends proof in place of a PIN, so the password itself never reaches the server.
  */
 const TOKEN_PREFIX = 'idtoken:';
+
+/**
+ * The Director (the pastor account) signing as himself, from his own signed-in account, needs no PIN or
+ * password for top-ups and resets (Andy, 2026-10-24): being signed in is the proof.
+ */
+function directorSelf(callerUid: string, signerUid: string, signer: UserProfile | undefined) {
+  return callerUid === signerUid && (signer?.permissions ?? []).includes('users.manage');
+}
 
 /** Checks a signer's PIN (or password proof), counting wrong PIN tries and locking after too many. */
 export async function verifyPin(uid: string, pin: string) {
@@ -115,7 +123,7 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
   requireMember(caller.profile, orgId);
   const signer = (await db.doc(`users/${signerUid}`).get()).data() as UserProfile | undefined;
   if (!canSign(signer, orgId, kind)) throw new HttpsError('permission-denied', 'That person cannot sign this.');
-  await verifyPin(signerUid, pin);
+  if (!(kind === 'fund' && directorSelf(caller.uid, signerUid, signer))) await verifyPin(signerUid, pin);
   const name = signer!.displayName || signer!.email;
   const ref = db.doc(`organizations/${orgId}/${kind === 'fund' ? 'pettyFunds' : 'pettyCash'}/${docId}`);
   await db.runTransaction(async (tx) => {
@@ -177,7 +185,7 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   if (!canSign(signer, orgId, 'fund') || (kind === 'topup' && !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage')))) {
     throw new HttpsError('permission-denied', kind === 'topup' ? 'That person cannot top up here.' : 'That person cannot sign a reset.');
   }
-  await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
+  if (!directorSelf(caller.uid, signerUid, signer)) await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
   const funds = db.collection(`organizations/${orgId}/pettyFunds`);
   if (kind === 'reset') {
     const waiting = await funds.where('kind', '==', 'reset').where('status', '==', 'collecting').get();

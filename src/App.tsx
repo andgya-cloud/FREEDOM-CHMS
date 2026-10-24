@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './state/AuthContext';
 import { useAppSettings } from './state/useAppSettings';
-import { isSharedDevice, useIdleSignOut } from './lib/useIdleSignOut';
+import { isSharedDevice, MONEY_IDLE_MINUTES, useIdleSignOut } from './lib/useIdleSignOut';
 import { AppShell } from './components/AppShell';
 import { RequirePermission } from './components/RequirePermission';
 import { SignInPage } from './pages/SignInPage';
@@ -85,7 +85,11 @@ export function App() {
   const { user, profile, loading, signOut } = useAuth();
   const settings = useAppSettings();
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
-  useIdleSignOut(settings.inactivityMinutes, !!user && isSharedDevice(), onIdle);
+  // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
+  const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
+  const shared = isSharedDevice() && settings.inactivityMinutes > 0;
+  const idleMinutes = handlesMoney ? Math.min(MONEY_IDLE_MINUTES, shared ? settings.inactivityMinutes : MONEY_IDLE_MINUTES) : settings.inactivityMinutes;
+  useIdleSignOut(idleMinutes, !!user && (shared || handlesMoney), onIdle);
 
   if (loading) {
     return <div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>;

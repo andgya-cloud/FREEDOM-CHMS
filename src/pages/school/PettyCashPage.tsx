@@ -21,6 +21,7 @@ import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -169,6 +170,10 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const needed = fundSignaturesNeeded(kind);
   const slots = Math.max(needed, signed.length + (open ? 1 : 0));
   const quickTopUp = kind === 'topup' && !open;
+  // "Add KES … to the budget?" before any money moves, to catch a mistyped amount.
+  const [confirming, setConfirming] = useState<((yes: boolean) => void) | null>(null);
+  const askConfirm = () => new Promise<boolean>((resolve) => setConfirming(() => resolve));
+  const answer = (yes: boolean) => { confirming?.(yes); setConfirming(null); };
   const topUpWho = org.type === 'college' ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
 
   return (
@@ -187,15 +192,16 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
             <input ref={amountBox} inputMode="decimal" className={ready ? '' : 'petty-amount-empty'} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Type the amount here, e.g. 500000" disabled={!p.canAuthorize} />
             {amount.trim() && (cents != null && cents > 0
-              ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget as soon as you confirm with your PIN below.</small>
+              ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget as soon as you confirm below.</small>
               : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
           </label>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the top-up amount in the box above. Step 2: choose your name, type your PIN and press Top up.</p>}
+        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the top-up amount in the box above. Step 2: choose your name, type your PIN or password and press Top up.</p>}
         {quickTopUp ? (
-          <PettySignBox label="Choose your name and type your own signing PIN." orgId={org.id} topUpOnly ready={ready} exclude={[]} confirmLabel="✓ Top up"
+          <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Top up"
             sign={async (uid, pin) => {
+              if (!(await askConfirm())) return 'Top-up cancelled. Nothing was added.';
               const who = await topUpWithPin(org.id, cents ?? 0, uid, pin);
               setAmount('');
               return `Top-up of ${money(org, cents ?? 0)} by ${who} is done. The money is now in the budget.`;
@@ -210,7 +216,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
                 {s ? (
                   <p className="petty-signer-name">Signed by {s[1].name}</p>
                 ) : n === signed.length && (open || p.canAuthorize) ? (
-                  <PettySignBox label="Choose your name and type your own signing PIN." orgId={org.id} fundOnly exclude={open ? Object.keys(open.signatures) : []}
+                  <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} fundOnly directorMode exclude={open ? Object.keys(open.signatures) : []}
                     sign={async (uid, pin) => {
                       if (!open) return `Signed by ${await topUpWithPin(org.id, 0, uid, pin, kind)}. ${needed - 1} more signature${needed - 1 === 1 ? '' : 's'} needed.`;
                       const who = await signWithPin(org.id, 'fund', open.id, uid, pin);
@@ -231,6 +237,8 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {onClose && !open && <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>}
         </div>
+        <ConfirmDialog open={!!confirming} title={`Add ${money(org, cents ?? 0)} to the budget?`} body={`The ${org.name} petty cash budget goes up by ${money(org, cents ?? 0)} straight away.`}
+          confirmLabel="Confirm" onConfirm={() => answer(true)} onCancel={() => answer(false)} />
         {open && <AskDeleteDialog org={org} kind="fund" targetId={open.id} open={askDelete} onClose={() => setAskDelete(false)}
           title={`Delete this ${kind === 'topup' ? 'top-up' : 'reset'}?`} body={kind === 'topup' ? `Top-up of ${money(org, open.amountCents)}.` : 'Budget reset.'} />}
       </div>

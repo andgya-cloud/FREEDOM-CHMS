@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { PasswordInput } from '../../components/PasswordInput';
 import { useToast } from '../../state/ToastContext';
+import { useAuth } from '../../state/AuthContext';
 import { friendlyError } from '../../lib/errors';
 import { listPettySigners, passwordProof, setPinWithPassword, type PettySigner } from '../../lib/pettyPin';
 import { checkPin } from '../../../functions/src/shared/pettyCash';
@@ -10,14 +11,17 @@ import { checkPin } from '../../../functions/src/shared/pettyCash';
  * (Andy, 2026-10-23). The server checks the PIN and writes the signature as them, so the person signed
  * in here stays signed in. Someone without a PIN, or who forgot it, sets one with their password once.
  */
-export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly = false, ready = true, exclude, sign, confirmLabel = '✓ Confirm' }: {
+export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly = false, directorMode = false, ready = true, exclude, sign, confirmLabel = '✓ Confirm' }: {
   label: string; orgId: string; fundOnly?: boolean; exclude: string[]; confirmLabel?: string;
   /** Only the people who may top up alone; `ready` is false until the amount is typed. */
   topUpOnly?: boolean; ready?: boolean;
+  /** The Director signs only from his own account, with no PIN or password (Andy, 2026-10-24). */
+  directorMode?: boolean;
   /** Signs as the chosen stakeholder with their PIN; returns the name to show. */
   sign: (signerUid: string, pin: string) => Promise<string>;
 }) {
   const toast = useToast();
+  const { user } = useAuth();
   const [signers, setSigners] = useState<PettySigner[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [uid, setUid] = useState('');
@@ -35,8 +39,12 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
     return () => { live = false; };
   }, [orgId, reload]);
   const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
-  const chosen = choices.find((s) => s.uid === uid);
-  const needsPin = !!chosen && settingPin;
+  const lockedOut = (s: PettySigner) => directorMode && !!s.isPastor && s.uid !== user?.uid;
+  const iAmDirector = directorMode && choices.some((s) => s.isPastor && s.uid === user?.uid);
+  // The Director signed in here is chosen for him, and signs with one tap.
+  const chosen = choices.find((s) => s.uid === (uid || (iAmDirector ? user?.uid : '')) && !lockedOut(s));
+  const noSecret = !!chosen && iAmDirector && chosen.uid === user?.uid;
+  const needsPin = !!chosen && settingPin && !noSecret;
   const pinOk = checkPin(newPin) && newPin === newPin2;
   function done(name: string) {
     setUid(''); setPin(''); setPassword(''); setNewPin(''); setNewPin2(''); setSettingPin(false);
@@ -52,6 +60,8 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
         await setPinWithPassword(chosen.email, password, newPin);
         setReload((n) => n + 1);
         done(await sign(chosen.uid, newPin));
+      } else if (noSecret) {
+        done(await sign(chosen.uid, ''));
       } else {
         // Four to six digits is a PIN; anything else is their Insight-IQ password.
         const secret = pin.trim();
@@ -75,20 +85,21 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
       {loadError && <p className="small danger-text">{loadError} <button type="button" className="btn btn-quiet" onClick={() => setReload((n) => n + 1)}>Try again</button></p>}
       <div className="petty-signer-row">
         <label className="field"><span>Stakeholder</span>
-          <select value={uid} onChange={(e) => { setUid(e.target.value); setPin(''); setSettingPin(false); }} disabled={busy || !signers}>
+          <select value={chosen?.uid ?? ''} onChange={(e) => { setUid(e.target.value); setPin(''); setSettingPin(false); }} disabled={busy || !signers}>
             <option value="">{signers ? (choices.length ? 'Choose your name' : 'Nobody else can sign this') : 'Loading names…'}</option>
-            {choices.map((s) => <option key={s.uid} value={s.uid}>{s.name}{s.title ? ` (${s.title})` : ''}</option>)}
+            {choices.map((s) => <option key={s.uid} value={s.uid} disabled={lockedOut(s)}>{s.name}{lockedOut(s) ? ' (signs from his own account)' : s.title ? ` (${s.title})` : ''}</option>)}
           </select>
         </label>
-        {!needsPin && (
+        {!needsPin && !noSecret && (
           <label className="field"><span>Your PIN or password</span>
             <PasswordInput autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4 && ready) void go(); }} placeholder={chosen ? 'Type your PIN or password' : 'Choose your name first'} disabled={busy || !chosen} />
           </label>
         )}
-        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || pin.length < 4 || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
+        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || (!noSecret && pin.length < 4) || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
       </div>
-      {chosen && !needsPin && (
+      {noSecret && <p className="small muted">Signed in as {chosen!.name}: no password needed.</p>}
+      {chosen && !needsPin && !noSecret && (
         <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>{chosen.hasPin ? 'Forgot your PIN? Set a new one' : 'Set a PIN for next time'}</button>
       )}
       {needsPin && (

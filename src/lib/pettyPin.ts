@@ -4,7 +4,7 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/
 import { app, auth, functions, usingEmulators } from '../firebase';
 
 /** A stakeholder on the signing name list. */
-export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; canTopUp?: boolean; hasPin: boolean }
+export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; canTopUp?: boolean; isPastor?: boolean; hasPin: boolean }
 
 /** The people who can sign petty cash in this organization, with whether each has set a PIN. */
 export async function listPettySigners(orgId: string): Promise<PettySigner[]> {
