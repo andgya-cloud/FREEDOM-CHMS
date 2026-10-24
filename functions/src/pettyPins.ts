@@ -2,7 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
+import { canAccessOrg, canKeepAccounts, isPettyTitle } from './shared/permissions.js';
 import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
@@ -102,6 +102,22 @@ const TOKEN_PREFIX = 'idtoken:';
  * The Director (the pastor account) signing as himself, from his own signed-in account, needs no PIN or
  * password for top-ups and resets (Andy, 2026-10-24): being signed in is the proof.
  */
+/**
+ * Only Andrew Guya and Doreen Mayaka may pick another stakeholder's name and type that person's password or
+ * PIN (Andy, 2026-10-24). Everyone else signs only as themselves. Returns who typed it in, for the record.
+ */
+export async function requireSelfOrKeeper(caller: { uid: string; profile: UserProfile }, signerUid: string, orgId: string): Promise<{ enteredBy?: string }> {
+  if (signerUid === caller.uid) return {};
+  const enteredBy = { enteredBy: caller.profile.displayName || caller.profile.email };
+  // ADIA only (Andy, 2026-10-24); Hope and the church keep the shared-device name list.
+  const orgType = (await db.doc(`organizations/${orgId}`).get()).get('type') as string | undefined;
+  if (orgType !== 'college') return enteredBy;
+  if (!canKeepAccounts(caller.profile)) {
+    throw new HttpsError('permission-denied', 'You can only sign as yourself. Only Andrew Guya and Doreen Mayaka can sign in for someone else.');
+  }
+  return enteredBy;
+}
+
 function directorSelf(callerUid: string, signerUid: string, signer: UserProfile | undefined) {
   return callerUid === signerUid && isDirector(signer);
 }
@@ -211,6 +227,7 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
   requireMember(caller.profile, orgId);
   const signer = (await db.doc(`users/${signerUid}`).get()).data() as UserProfile | undefined;
   if (!canSign(signer, orgId, kind)) throw new HttpsError('permission-denied', 'That person cannot sign this.');
+  const proxy = await requireSelfOrKeeper(caller, signerUid, orgId);
   if (!(kind === 'fund' && directorSelf(caller.uid, signerUid, signer))) await verifyPin(signerUid, pin);
   const name = signer!.displayName || signer!.email;
   const ref = db.doc(`organizations/${orgId}/${kind === 'fund' ? 'pettyFunds' : 'pettyCash'}/${docId}`);
@@ -225,7 +242,7 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     if (kind === 'fund') {
       if (r.status !== 'collecting') throw new HttpsError('failed-precondition', 'This is no longer waiting for signatures.');
       const status = fundStatusAfter(Object.keys(sigs).length + 1, r.kind === 'topup' ? 'topup' : 'reset');
-      tx.update(ref, { [`signatures.${signerUid}`]: { name, at: FieldValue.serverTimestamp() }, status, ...(status === 'done' ? { doneAt: FieldValue.serverTimestamp() } : {}), ...stamp });
+      tx.update(ref, { [`signatures.${signerUid}`]: { name, at: FieldValue.serverTimestamp(), ...proxy }, status, ...(status === 'done' ? { doneAt: FieldValue.serverTimestamp() } : {}), ...stamp });
       return;
     }
     if (r.status !== 'submitted') throw new HttpsError('failed-precondition', 'This request is no longer waiting for signatures.');
@@ -237,7 +254,7 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     const role = title || ((signer!.permissions ?? []).includes('users.manage') ? 'Pastor' : 'Stakeholder');
     const approved = Object.keys(sigs).length + 1 >= REQUEST_SIGNATURES_NEEDED;
     tx.update(ref, {
-      [`signatures.${signerUid}`]: { name, role, at: FieldValue.serverTimestamp() },
+      [`signatures.${signerUid}`]: { name, role, at: FieldValue.serverTimestamp(), ...proxy },
       ...(approved ? { status: 'approved', approved: { uid: signerUid, name, role, at: FieldValue.serverTimestamp() } } : {}),
       ...stamp,
     });
@@ -273,6 +290,7 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   if (!canSign(signer, orgId, 'fund') || (kind === 'topup' && !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage')))) {
     throw new HttpsError('permission-denied', kind === 'topup' ? 'That person cannot top up here.' : 'That person cannot sign a reset.');
   }
+  const proxy = await requireSelfOrKeeper(caller, signerUid, orgId);
   if (!directorSelf(caller.uid, signerUid, signer)) await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
   const funds = db.collection(`organizations/${orgId}/pettyFunds`);
   if (kind === 'reset') {
@@ -283,7 +301,7 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   const status = fundStatusAfter(1, kind);
   await ref.set({
     orgId, kind, amountCents, status, doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
-    signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp() } },
+    signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp(), ...proxy } },
     deletedAt: null, deletedBy: null,
     createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
   });

@@ -1,7 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { canSign, requireMember, verifyPin } from './pettyPins.js';
+import { canSign, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
 import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
 import {
   BIN_DONE_LABELS, BIN_SIGNATURES_NEEDED, binActionsFor, binStateAfter, categoryLabel,
@@ -59,7 +59,9 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
   // Who signs: the person signed in, or a stakeholder picked on this device who types their PIN.
   let signerUid = caller.uid;
   let signer = caller.profile;
+  let proxy: { enteredBy?: string } = {};
   if (typeof data.signerUid === 'string' && data.signerUid !== caller.uid) {
+    proxy = await requireSelfOrKeeper(caller, data.signerUid, orgId);
     signerUid = data.signerUid;
     signer = (await db.doc(`users/${signerUid}`).get()).data() as UserProfile;
     if (!signer?.active) throw new HttpsError('permission-denied', 'That person cannot sign this.');
@@ -107,7 +109,7 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
     // The pastor (Director) may leave the reason out; everyone else gives one.
     if (!motion && action === 'delete' && reason.length < 3 && !pastor) throw new HttpsError('invalid-argument', 'Please give a reason for deleting.');
 
-    const sig: BinSignature = { uid: signerUid, name: signer.displayName || signer.email, title: titleOf(signer), at: Timestamp.now() };
+    const sig: BinSignature = { uid: signerUid, name: signer.displayName || signer.email, title: titleOf(signer), at: Timestamp.now(), ...proxy };
     const next = { action, reason: motion?.reason ?? reason, startedBy: motion?.startedBy ?? signerUid, signatures: [...sigs, sig] };
     const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid };
     const sole = pastor && next.signatures.length < BIN_SIGNATURES_NEEDED;

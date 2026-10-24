@@ -76,7 +76,7 @@ export interface PettyCashRequisition {
 }
 
 /** A stakeholder's signature on a requisition. */
-export interface PettyCashSignature { name: string; role: string; at?: unknown }
+export interface PettyCashSignature { name: string; role: string; at?: unknown; enteredBy?: string }
 
 /** Signatures that approve a requisition. */
 export const REQUEST_SIGNATURES_NEEDED = 2;
@@ -327,7 +327,7 @@ export type BinState = 'live' | 'in-bin' | 'purged';
 export const BIN_SIGNATURES_NEEDED = 2;
 export const BIN_ACTION_LABELS: Record<BinAction, string> = { delete: 'Move to bin', restore: 'Put back', purge: 'Delete forever' };
 export const BIN_DONE_LABELS: Record<BinAction, string> = { delete: 'Moved to bin', restore: 'Put back', purge: 'Deleted forever' };
-export interface BinSignature { uid: string; name: string; title: string; at: unknown }
+export interface BinSignature { uid: string; name: string; title: string; at: unknown; enteredBy?: string }
 export interface BinMotion { action: BinAction; reason: string; startedBy: string; signatures: BinSignature[] }
 /** `sole` marks a step the pastor carried out alone (Andy, 2026-10-23: the pastor needs no second signature). */
 export interface BinHistoryEntry { action: BinAction; reason: string; signatures: BinSignature[]; doneAt: unknown; sole?: boolean }

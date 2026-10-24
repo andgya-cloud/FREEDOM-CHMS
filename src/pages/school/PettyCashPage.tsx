@@ -9,6 +9,7 @@ import { addReceipt, approveRequisition, cancelFund, checkRequisition, receiptDa
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
@@ -214,7 +215,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
               <li key={n} className={s ? 'signed' : ''}>
                 <div className="petty-signer-head"><span className="petty-signer-no">{s ? '✓' : n + 1}</span><h3>Authorizer {n + 1}</h3>{s && <span className="petty-signer-when">{when(s[1].at)}</span>}</div>
                 {s ? (
-                  <p className="petty-signer-name">Signed by {s[1].name}</p>
+                  <p className="petty-signer-name">Signed by {s[1].name}{(s[1] as { enteredBy?: string }).enteredBy ? ` (entered by ${(s[1] as { enteredBy?: string }).enteredBy})` : ''}</p>
                 ) : n === signed.length && (open || p.canAuthorize) ? (
                   <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} fundOnly directorMode exclude={open ? Object.keys(open.signatures) : []}
                     sign={async (uid, pin) => {
@@ -378,7 +379,8 @@ function NewRequisition({ org }: { org: Organization }) {
     listPettySigners(org.id).then((list) => { if (live) setSigners(list); }).catch(() => { if (live) setSigners([]); });
     return () => { live = false; };
   }, [org.id, isAdia]);
-  const others = (signers ?? []).filter((x) => x.uid !== p.uid);
+  // Only Andrew Guya and Doreen Mayaka raise a request in someone else's name (Andy, 2026-10-24).
+  const others = canKeepAccounts(profile) || !isAdia ? (signers ?? []).filter((x) => x.uid !== p.uid) : [];
   const chosen = others.find((x) => x.uid === requester);
   const needsPinSetup = !!chosen && (!chosen.hasPin || settingPin);
   if (!p.any) return <NoAccess />;
@@ -560,7 +562,7 @@ function Requisition({ org }: { org: Organization }) {
   const signOffs = r.signatures
     ? Array.from({ length: REQUEST_SIGNATURES_NEEDED }, (_, n) => {
       const s = sigs[n];
-      return { role: s ? s[1].role : `Signature ${n + 1}`, name: s ? s[1].name : null, when: s ? when(s[1].at) : null };
+      return { role: s ? s[1].role : `Signature ${n + 1}`, name: s ? `${s[1].name}${s[1].enteredBy ? ` (entered by ${s[1].enteredBy})` : ''}` : null, when: s ? when(s[1].at) : null };
     })
     : [
       { role: 'Accountant', name: r.checked?.name ?? null, when: r.checked ? when(r.checked.at) : null },

@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react';
 import { PasswordInput } from '../../components/PasswordInput';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
+import { useOrg } from '../../state/OrgContext';
 import { friendlyError } from '../../lib/errors';
 import { listPettySigners, passwordProof, setPinWithPassword, type PettySigner } from '../../lib/pettyPin';
 import { checkPin } from '../../../functions/src/shared/pettyCash';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 
 /**
  * Another stakeholder signs on this device: they pick their name and type their own signing PIN
@@ -21,7 +23,10 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
   sign: (signerUid: string, pin: string) => Promise<string>;
 }) {
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  // Only Andrew Guya and Doreen Mayaka pick another stakeholder's name (Andy, 2026-10-24); everyone else signs as themselves.
+  const { organizations } = useOrg();
+  const keeper = organizations.find((o) => o.id === orgId)?.type !== 'college' || canKeepAccounts(profile);
   const [signers, setSigners] = useState<PettySigner[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [uid, setUid] = useState('');
@@ -38,12 +43,12 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
       .catch((err) => { if (live) setLoadError((err as { code?: string })?.code?.includes('unavailable') ? 'The name list needs a connection.' : friendlyError(err)); });
     return () => { live = false; };
   }, [orgId, reload]);
-  const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
+  const choices = (signers ?? []).filter((s) => (keeper || s.uid === user?.uid) && !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
   const director = (s: PettySigner) => s.isDirector ?? !!s.isPastor;
   const lockedOut = (s: PettySigner) => directorMode && director(s) && s.uid !== user?.uid;
   const iAmDirector = directorMode && choices.some((s) => director(s) && s.uid === user?.uid);
   // The Director signed in here is chosen for him, and signs with one tap.
-  const chosen = choices.find((s) => s.uid === (uid || (iAmDirector ? user?.uid : '')) && !lockedOut(s));
+  const chosen = choices.find((s) => s.uid === (uid || (iAmDirector || !keeper ? user?.uid : '')) && !lockedOut(s));
   const noSecret = !!chosen && iAmDirector && chosen.uid === user?.uid;
   const needsPin = !!chosen && settingPin && !noSecret;
   const pinOk = checkPin(newPin) && newPin === newPin2;
@@ -99,15 +104,21 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
   }
   return (
     <div className="petty-signer-form">
-      <p className="small muted">{title}</p>
+      <p className="small muted">{keeper ? title : 'Sign as yourself: type your own password or PIN.'}</p>
       {loadError && <p className="small danger-text">{loadError} <button type="button" className="btn btn-quiet" onClick={() => setReload((n) => n + 1)}>Try again</button></p>}
       <div className="petty-signer-row">
+        {!keeper ? (
+          <label className="field"><span>Stakeholder</span>
+            <input value={signers ? (chosen ? chosen.name : 'You have already signed this, or you cannot sign it') : 'Loading…'} readOnly disabled />
+          </label>
+        ) : (
         <label className="field"><span>Stakeholder</span>
           <select value={chosen?.uid ?? ''} onChange={(e) => { setUid(e.target.value); setPin(''); setSettingPin(false); }} disabled={busy || !signers}>
             <option value="">{signers ? (choices.length ? 'Choose your name' : 'Nobody else can sign this') : 'Loading names…'}</option>
             {choices.map((s) => <option key={s.uid} value={s.uid} disabled={lockedOut(s)}>{s.name}{lockedOut(s) ? ' (signs from his own account)' : s.title ? ` (${s.title})` : ''}</option>)}
           </select>
         </label>
+        )}
         {!needsPin && !noSecret && (
           <label className="field"><span>Your PIN or password</span>
             <PasswordInput autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)}

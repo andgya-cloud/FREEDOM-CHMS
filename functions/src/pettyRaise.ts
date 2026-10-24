@@ -1,6 +1,6 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { canSign, requireMember, verifyPin } from './pettyPins.js';
+import { canSign, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
 import { canAccessOrg } from './shared/permissions.js';
 import { itemsTotalCents, lineAmountCents, MAX_PETTY_CASH_ITEMS, pettyCashCategoriesFor, type PettyCashItem } from './shared/pettyCash.js';
 
@@ -39,6 +39,7 @@ export const raisePettyRequest = onCall(CALLABLE, async (request) => {
   const mayRequest = !!requester?.active && canAccessOrg(requester, orgId)
     && (canSign(requester, orgId, 'request') || (requester.permissions ?? []).includes('pettycash.request'));
   if (!mayRequest) throw new HttpsError('permission-denied', 'That person cannot raise petty cash requests here.');
+  await requireSelfOrKeeper(caller, requesterUid, orgId);
   await verifyPin(requesterUid, typeof data.pin === 'string' ? data.pin.trim() : '');
 
   const category = data.category as string;
