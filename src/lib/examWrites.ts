@@ -1,13 +1,14 @@
-import { addDoc, collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { createRecord, createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
-import type { ExamComponent, ExamSettings, ExamWeights } from '../../functions/src/shared/exams';
+import type { ExamComponent, ExamSettings, ExamWeights, StudentMarks } from '../../functions/src/shared/exams';
+import type { ExamResult } from '../../functions/src/shared/examResults';
 
 const sheetRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'examSheets', id);
 
 /** A new marks sheet for one course, owned by the trainer who keys it in. */
-export function createExamSheet(orgId: string, input: { cohort: string; courseId: string | null; courseName: string; teacherName: string; weights: ExamWeights; ownerUid: string; ownerName: string }) {
+export function createExamSheet(orgId: string, input: { cohort: string; courseId: string | null; courseName: string; teacherName: string; weights: ExamWeights; ownerUid: string; ownerName: string; semester: 1 | 2 | null }) {
   return createRecord(collection(db, 'organizations', orgId, 'examSheets'), { orgId, ...input, status: 'draft', submittedAt: null, marks: {} });
 }
 
@@ -16,8 +17,13 @@ export function saveExamMark(orgId: string, sheetId: string, studentId: string, 
   return updateRecord(sheetRef(orgId, sheetId), { [`marks.${studentId}.${field}`]: value });
 }
 
-export function saveExamSheetDetails(orgId: string, sheetId: string, changes: { courseName?: string; teacherName?: string; weights?: ExamWeights }) {
+export function saveExamSheetDetails(orgId: string, sheetId: string, changes: { courseName?: string; teacherName?: string; weights?: ExamWeights; semester?: 1 | 2 | null }) {
   return updateRecord(sheetRef(orgId, sheetId), changes);
+}
+
+/** Every mark from a trainer's Excel file in one save (Andy, 2026-10-24). */
+export function saveExamMarks(orgId: string, sheetId: string, marks: Record<string, StudentMarks>) {
+  return updateRecord(sheetRef(orgId, sheetId), { marks });
 }
 
 /** Submitting locks the sheet; only the principal can open it again. */
@@ -63,3 +69,25 @@ export function saveExamSettings(orgId: string, exists: boolean, settings: ExamS
 }
 
 export { metaId as examMetaId };
+
+/** organizations/{org}/examResults/{studentId}_{cohort}: one student's semester results for one cohort. */
+export const examResultId = (studentId: string, cohort: string) => `${studentId}_${metaId(cohort)}`;
+
+/** Saves past semester results from Excel, 400 at a time; a student's earlier upload for the cohort is replaced. */
+export async function saveExamResults(orgId: string, results: ExamResult[], existing: ReadonlySet<string>) {
+  const stamps = createStamps();
+  for (let i = 0; i < results.length; i += 400) {
+    const batch = writeBatch(db);
+    for (const r of results.slice(i, i + 400)) {
+      const id = examResultId(r.studentId, r.cohort);
+      const data = {
+        orgId, cohort: r.cohort, studentId: r.studentId, admissionNo: r.admissionNo.slice(0, 80), studentName: r.studentName.slice(0, 160), courseId: r.courseId,
+        semesters: r.semesters, printed: r.printed, notes: r.notes.slice(0, 20).map((n) => n.slice(0, 200)),
+      };
+      const ref = doc(db, 'organizations', orgId, 'examResults', id);
+      if (existing.has(id)) batch.update(ref, { ...data, deletedAt: null, deletedBy: null, updatedAt: stamps.updatedAt, updatedBy: stamps.updatedBy });
+      else batch.set(ref, { ...data, ...stamps });
+    }
+    await trackWrite(batch.commit());
+  }
+}

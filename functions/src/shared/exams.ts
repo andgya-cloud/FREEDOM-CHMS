@@ -31,6 +31,8 @@ export interface ExamSheet {
   weights: ExamWeights;
   status: ExamSheetStatus;
   marks: Record<string, StudentMarks>;
+  /** Which semester the course belongs to; its totals make up that semester's points. */
+  semester?: 1 | 2 | null;
   deletedAt?: unknown;
 }
 
@@ -44,14 +46,16 @@ export interface ExamSettings {
   directorName: string;
   directorTitle: string;
 }
+/** ADIA's grade bands (Andy, 2026-10-24): Distinction 79 and above, Credit above 59, Pass 39 to 59, Fail below 39. */
+export const ADIA_BANDS: GradeBand[] = [
+  { min: 79, grade: 'Distinction', remark: 'Outstanding performance' },
+  { min: 59.01, grade: 'Credit', remark: 'Very good performance' },
+  { min: 39, grade: 'Pass', remark: 'Satisfactory performance' },
+  { min: 0, grade: 'Fail', remark: 'Below pass mark; resit required' },
+];
 export const DEFAULT_EXAM_SETTINGS: ExamSettings = {
-  passMark: 70,
-  bands: [
-    { min: 85, grade: 'Distinction', remark: 'Outstanding performance' },
-    { min: 78, grade: 'Credit', remark: 'Very good performance' },
-    { min: 70, grade: 'Pass', remark: 'Satisfactory performance' },
-    { min: 0, grade: 'Fail', remark: 'Below pass mark; resit required' },
-  ],
+  passMark: 39,
+  bands: ADIA_BANDS,
   principalName: 'Flavier Akinyichange',
   principalTitle: 'Principal',
   directorName: 'Andrew Guya',

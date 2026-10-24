@@ -65,4 +65,26 @@ describe('exam records rules', () => {
     await assertFails(addDoc(collection(as('principal'), 'organizations/adia/examLog'), entry('grace')));
     await assertSucceeds(addDoc(collection(as('principal'), 'organizations/adia/examLog'), entry('principal')));
   });
+  it('takes a semester on a sheet, and a whole Excel upload of marks', async () => {
+    const ref = (uid: string) => doc(as(uid), 'organizations/adia/examSheets/sem');
+    await assertFails(setDoc(ref('grace'), { ...sheet('grace'), semester: 3 }));
+    await assertSucceeds(setDoc(ref('grace'), { ...sheet('grace'), semester: 1 }));
+    await assertSucceeds(updateDoc(ref('grace'), { semester: 2, marks: { s1: { cat1: 50, cat2: 60 }, s2: { final: 70 } }, ...touched('grace') }));
+  });
+
+  it('keeps past semester results to the principal', async () => {
+    const result = (uid: string, extra: Record<string, unknown> = {}) => ({
+      orgId: 'adia', cohort: 'Cohort 1', studentId: 's1', admissionNo: 'ADIA/CTR/2025/1/001', studentName: 'Magdaline', courseId: 'ctr',
+      semesters: { 1: { points: 62.51, grade: 'CREDIT' }, 2: { points: 62.38, grade: null } }, printed: { points: 65.38, grade: 'CREDIT' }, notes: [], ...stamps(uid), ...extra,
+    });
+    const ref = (uid: string, id = 's1_Cohort-1') => doc(as(uid), `organizations/adia/examResults/${id}`);
+    await assertFails(setDoc(ref('grace'), result('grace')));
+    await assertFails(setDoc(ref('principal', 's2_Cohort-1'), result('principal')));
+    await assertFails(setDoc(ref('principal'), result('principal', { semesters: { 3: { points: 50, grade: null } } })));
+    await assertFails(setDoc(ref('principal'), result('principal', { semesters: { 1: { points: 150, grade: null } } })));
+    await assertSucceeds(setDoc(ref('principal'), result('principal')));
+    await assertSucceeds(updateDoc(ref('principal'), { 'semesters.2': { points: 63, grade: 'CREDIT' }, ...touched('principal') }));
+    await assertFails(getDoc(ref('grace')));
+    await assertSucceeds(getDoc(ref('principal')));
+  });
 });

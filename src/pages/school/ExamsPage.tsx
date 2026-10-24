@@ -7,12 +7,13 @@ import { useExamAccess, useExamLog, useExamMeta, useExamSettings, useExamSheet, 
 import {
   createExamSheet, deleteExamSheet, logExam, saveExamAttendance, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails, submitExamSheet, unlockExamSheet,
 } from '../../lib/examWrites';
-import { resultSlipsPdf } from '../../lib/examPdf';
+import { bandsText, resultSlipsPdf } from '../../lib/examPdf';
+import { MarksUpload, ResultsAndTranscripts } from './ExamResults';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
 import {
-  buildExamReport, DEFAULT_EXAM_WEIGHTS, EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, markProblem, scopeKey, sheetProgress, unitTotal, weightsProblem,
+  ADIA_BANDS, buildExamReport, DEFAULT_EXAM_WEIGHTS, EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, markProblem, scopeKey, sheetProgress, unitTotal, weightsProblem,
   type ExamComponent, type ExamSettings, type ExamStudent, type ExamWeights, type GradeBand,
 } from '../../../functions/src/shared/exams';
 import { SchoolGate, SchoolNav, useSchoolPage } from './common';
@@ -32,7 +33,7 @@ export function ExamSheetPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type Tab = 'sheets' | 'progress' | 'reports' | 'log' | 'grading';
+type Tab = 'sheets' | 'progress' | 'reports' | 'transcripts' | 'log' | 'grading';
 
 /** The intakes, by name, newest first: every programme's intake of the same name is one cohort. */
 function useCohorts(org: Organization) {
@@ -42,7 +43,10 @@ function useCohorts(org: Organization) {
   const studentsOf = (cohort: string): ExamStudent[] => s.students
     .filter((st) => !st.deletedAt && (st.status === 'enrolled' || st.status === 'graduated') && s.intakeName(st.intakeId) === cohort)
     .map((st) => ({ id: st.id, name: s.nameOf(st.id), admissionNo: st.admissionNo ?? '', courseId: st.courseId, courseName: s.courseName(st.courseId) }));
-  return { s, cohorts, studentsOf };
+  /** Every student, for matching uploaded results by admission number. */
+  const allStudents = useMemo(() => s.students.filter((st) => !st.deletedAt)
+    .map((st) => ({ id: st.id, admissionNo: st.admissionNo ?? '', name: s.nameOf(st.id), courseId: st.courseId, cohort: s.intakeName(st.intakeId) })), [s.students, s.intakes, s.peopleLoading]); // eslint-disable-line react-hooks/exhaustive-deps
+  return { s, cohorts, studentsOf, allStudents };
 }
 
 const rosterFor = (students: ExamStudent[], courseId: string | null) =>
@@ -51,7 +55,7 @@ const rosterFor = (students: ExamStudent[], courseId: string | null) =>
 function Exams({ org }: { org: Organization }) {
   const a = useExamAccess();
   const { can } = useAuth();
-  const { s, cohorts, studentsOf } = useCohorts(org);
+  const { s, cohorts, studentsOf, allStudents } = useCohorts(org);
   const [params, setParams] = useSearchParams();
   const cohort = params.get('cohort') && cohorts.includes(params.get('cohort')!) ? params.get('cohort')! : cohorts[0] ?? '';
   const tab = (params.get('tab') as Tab | null) ?? (a.canManage ? 'progress' : 'sheets');
@@ -60,7 +64,7 @@ function Exams({ org }: { org: Organization }) {
   const students = useMemo(() => studentsOf(cohort), [cohort, s.students, s.intakes, s.peopleLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
-  const tabs: [Tab, string, boolean][] = [['sheets', a.canManage ? 'All sheets' : 'My sheets', true], ['progress', 'Progress', a.canManage], ['reports', 'Reports', a.canManage], ['log', 'Change log', a.canManage], ['grading', 'Grading', a.canManage]];
+  const tabs: [Tab, string, boolean][] = [['sheets', a.canManage ? 'All sheets' : 'My sheets', true], ['progress', 'Progress', a.canManage], ['reports', 'Reports', a.canManage], ['transcripts', 'Results & transcripts', a.canManage], ['log', 'Change log', a.canManage], ['grading', 'Grading', a.canManage]];
 
   return (
     <div className="page narrow exams">
@@ -81,6 +85,7 @@ function Exams({ org }: { org: Organization }) {
           {tab === 'sheets' && <SheetList org={org} cohort={cohort} sheets={sheets} students={students} courses={s.courses.map((c) => ({ id: c.id, name: c.name }))} />}
           {tab === 'progress' && a.canManage && <Progress cohort={cohort} sheets={sheets} students={students} courseName={s.courseName} />}
           {tab === 'reports' && a.canManage && <Reports org={org} cohort={cohort} sheets={sheets} students={students} courses={s.courses.map((c) => ({ id: c.id, name: c.name }))} />}
+          {tab === 'transcripts' && a.canManage && <ResultsAndTranscripts org={org} cohort={cohort} sheets={sheets} students={students} allStudents={allStudents} courseName={s.courseName} />}
           {tab === 'log' && a.canManage && <ChangeLog org={org} cohort={cohort} />}
           {tab === 'grading' && a.canManage && <Grading org={org} />}
         </>
@@ -96,7 +101,7 @@ function SheetList({ org, cohort, sheets, students, courses }: { org: Organizati
   const toast = useToast();
   const navigate = useNavigate();
   const [adding, setAdding] = useState(false);
-  const [f, setF] = useState({ scope: courses[0]?.id ?? COMMON, courseName: '', teacherName: a.myName });
+  const [f, setF] = useState({ scope: courses[0]?.id ?? COMMON, courseName: '', teacherName: a.myName, semester: '1' });
   const name = (id: string) => courses.find((c) => c.id === id)?.name ?? '';
 
   function create() {
@@ -105,7 +110,7 @@ function SheetList({ org, cohort, sheets, students, courses }: { org: Organizati
     try {
       const { ref, synced } = createExamSheet(org.id, {
         cohort, courseId: f.scope === COMMON ? null : f.scope, courseName: f.courseName.trim().slice(0, 120), teacherName: f.teacherName.trim().slice(0, 120),
-        weights: DEFAULT_EXAM_WEIGHTS, ownerUid: a.uid, ownerName: a.myName.slice(0, 120),
+        weights: DEFAULT_EXAM_WEIGHTS, ownerUid: a.uid, ownerName: a.myName.slice(0, 120), semester: f.semester === '1' ? 1 : f.semester === '2' ? 2 : null,
       });
       synced.catch((err) => toast.show(friendlyError(err)));
       navigate(`${BASE}/sheet/${ref.id}`);
@@ -129,6 +134,11 @@ function SheetList({ org, cohort, sheets, students, courses }: { org: Organizati
           </label>
           <label className="field"><span>Course name</span><input value={f.courseName} maxLength={120} placeholder="e.g. Computer Networking" onChange={(e) => setF({ ...f, courseName: e.target.value })} /></label>
           <label className="field"><span>Trainer's name</span><input value={f.teacherName} maxLength={120} onChange={(e) => setF({ ...f, teacherName: e.target.value })} /></label>
+          <label className="field"><span>Semester</span>
+            <select value={f.semester} onChange={(e) => setF({ ...f, semester: e.target.value })}>
+              <option value="1">Semester 1</option><option value="2">Semester 2</option><option value="">Not part of a semester</option>
+            </select>
+          </label>
           <p className="muted small">You set the CAT and Final percentages on the next screen. The default is 10, 10, 10 and 70.</p>
           <div className="row-actions"><button type="button" className="btn btn-primary" onClick={create}>Create sheet</button><button type="button" className="btn btn-quiet" onClick={() => setAdding(false)}>Cancel</button></div>
         </div>
@@ -141,7 +151,7 @@ function SheetList({ org, cohort, sheets, students, courses }: { org: Organizati
               <li key={sh.id}>
                 <Link to={`${BASE}/sheet/${sh.id}`} className="exam-card">
                   <span className="exam-card-head"><strong>{sh.courseName || 'Untitled course'}</strong><StatusPill status={sh.status} /></span>
-                  <span className="muted small">{programmeOf(sh.courseId, name)} · {sh.teacherName} · {rosterFor(students, sh.courseId).length} students</span>
+                  <span className="muted small">{programmeOf(sh.courseId, name)}{sh.semester ? ` · Semester ${sh.semester}` : ''} · {sh.teacherName} · {rosterFor(students, sh.courseId).length} students</span>
                   <span className="exam-bar"><span style={{ width: `${pctDone}%` }} className={pctDone >= 100 ? 'done' : ''} /></span>
                   <span className="muted small">{pctDone}% of marks entered</span>
                 </Link>
@@ -363,7 +373,11 @@ function Grading({ org }: { org: Organization }) {
           ))}
         </tbody>
       </table>
-      <button type="button" className="btn btn-quiet align-start" onClick={() => setF({ ...v, bands: [...v.bands, { min: 0, grade: '', remark: '' }] })}>Add a grade</button>
+      <p className="small muted">Grades now: {bandsText(v)}. A minimum of 59.01 means "above 59".</p>
+      <div className="row-actions">
+        <button type="button" className="btn btn-quiet" onClick={() => setF({ ...v, bands: [...v.bands, { min: 0, grade: '', remark: '' }] })}>Add a grade</button>
+        {bandsText(v) !== bandsText({ bands: ADIA_BANDS }) && <button type="button" className="btn btn-quiet" onClick={() => setF({ ...v, passMark: 39, bands: ADIA_BANDS })}>Use ADIA's bands (79 / above 59 / 39)</button>}
+      </div>
       <div className="form-grid">
         <label className="field"><span>Principal's name</span><input value={v.principalName} onChange={(e) => setF({ ...v, principalName: e.target.value })} /></label>
         <label className="field"><span>Title</span><input value={v.principalTitle} onChange={(e) => setF({ ...v, principalTitle: e.target.value })} /></label>
@@ -385,7 +399,7 @@ function SheetEditor({ org }: { org: Organization }) {
   const { s, studentsOf } = useCohorts(org);
   const { sheet, loading } = useExamSheet(org.id, sheetId);
   const { settings } = useExamSettings(org.id);
-  const [details, setDetails] = useState<{ courseName: string; teacherName: string; weights: ExamWeights } | null>(null);
+  const [details, setDetails] = useState<{ courseName: string; teacherName: string; weights: ExamWeights; semester: 1 | 2 | null } | null>(null);
 
   if (!a.canMark) return <div className="page narrow"><h1>Marks sheet</h1><p>Exam Records are for trainers and the principal.</p></div>;
   if (!sheet) return <div className="page narrow"><h1>Marks sheet</h1><p className="muted">{loading ? 'Loading…' : 'This sheet was not found.'}</p><Link to={BASE}>Back to Exam Records</Link></div>;
@@ -395,7 +409,7 @@ function SheetEditor({ org }: { org: Organization }) {
   const editable = a.canManage || (isOwner && sheet.status === 'draft');
   const loggedEdit = a.canManage && (sheet.status === 'submitted' || !isOwner);
   const used = EXAM_COMPONENTS.filter((c) => sheet.weights[c].wt > 0);
-  const d = details ?? { courseName: sheet.courseName, teacherName: sheet.teacherName, weights: sheet.weights };
+  const d = details ?? { courseName: sheet.courseName, teacherName: sheet.teacherName, weights: sheet.weights, semester: sheet.semester ?? null };
   const wtSum = EXAM_COMPONENTS.reduce((t, c) => t + (d.weights[c].wt || 0), 0);
   const done = roster.filter((st) => unitTotal(sheet.weights, sheet.marks?.[st.id]).complete).length;
   const back = `${BASE}?cohort=${encodeURIComponent(sheet.cohort)}`;
@@ -420,7 +434,7 @@ function SheetEditor({ org }: { org: Organization }) {
     if (!d.courseName.trim() || !d.teacherName.trim()) return toast.show('The course name and the trainer are both needed.');
     const problem = weightsProblem(d.weights);
     if (problem) return toast.show(problem);
-    saveExamSheetDetails(org.id, sheet!.id, { courseName: d.courseName.trim().slice(0, 120), teacherName: d.teacherName.trim().slice(0, 120), weights: d.weights }).catch((err) => toast.show(friendlyError(err)));
+    saveExamSheetDetails(org.id, sheet!.id, { courseName: d.courseName.trim().slice(0, 120), teacherName: d.teacherName.trim().slice(0, 120), weights: d.weights, semester: d.semester }).catch((err) => toast.show(friendlyError(err)));
     log('details', `${d.teacherName}, ${EXAM_COMPONENTS.map((c) => `${EXAM_COMPONENT_LABELS[c]} ${d.weights[c].wt}% of ${d.weights[c].max}`).join(', ')}`);
     setDetails(null);
     toast.show('Saved.');
@@ -459,6 +473,11 @@ function SheetEditor({ org }: { org: Organization }) {
         <div className="form-grid">
           <label className="field"><span>Course name</span><input value={d.courseName} disabled={!editable} maxLength={120} onChange={(e) => setDetails({ ...d, courseName: e.target.value })} /></label>
           <label className="field"><span>Trainer's name</span><input value={d.teacherName} disabled={!editable} maxLength={120} onChange={(e) => setDetails({ ...d, teacherName: e.target.value })} /></label>
+          <label className="field"><span>Semester</span>
+            <select value={d.semester ?? ''} disabled={!editable} onChange={(e) => setDetails({ ...d, semester: e.target.value === '1' ? 1 : e.target.value === '2' ? 2 : null })}>
+              <option value="1">Semester 1</option><option value="2">Semester 2</option><option value="">Not part of a semester</option>
+            </select>
+          </label>
         </div>
         <table className="table exam-weights">
           <thead><tr><th>Paper</th><th className="num">Marked out of</th><th className="num">Worth (%)</th></tr></thead>
@@ -507,6 +526,8 @@ function SheetEditor({ org }: { org: Organization }) {
         )}
         <p className="muted small">Marks save as you leave each box, even without internet; they send when you are back online.</p>
       </section>
+
+      <MarksUpload org={org} sheet={sheet} roster={roster} editable={editable} onSaved={(detail) => log('upload', detail)} />
 
       <div className="row-actions no-print">
         {sheet.status === 'draft' && (isOwner || a.canManage) && <button type="button" className="btn btn-primary" onClick={submit}>Submit and lock</button>}

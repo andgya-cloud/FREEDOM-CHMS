@@ -6,6 +6,11 @@ const sheet = (id: string, courseId: string | null, marks: ExamSheet['marks'], w
 });
 const st = (id: string, name: string, courseId: string): ExamStudent => ({ id, name, admissionNo: id.toUpperCase(), courseId, courseName: courseId.toUpperCase() });
 
+// The bands these tests were written with (before ADIA's 79 / 59 / 39, Andy 2026-10-24).
+const OLD = { ...DEFAULT_EXAM_SETTINGS, passMark: 70, bands: [
+  { min: 85, grade: 'Distinction', remark: 'Outstanding performance' }, { min: 78, grade: 'Credit', remark: 'Very good performance' },
+  { min: 70, grade: 'Pass', remark: 'Satisfactory performance' }, { min: 0, grade: 'Fail', remark: 'Below pass mark; resit required' }] };
+
 describe('exam records', () => {
   it('weights each paper by its percentage and its own out-of', () => {
     // CAT 1 8/10 at 10%, CAT 2 15/20 at 10%, CAT 3 9/10 at 10%, Final 56/70 at 70% -> 80+75+90 = 24.5, + 56 = 80.5
@@ -16,8 +21,8 @@ describe('exam records', () => {
     expect(unitTotal({ ...w, cat3: { max: 10, wt: 0 } }, { cat1: 10, cat2: 20, final: 70 })).toMatchObject({ total: 100, needed: 3 });
   });
   it('grades, ranks with shared positions and checks typed values', () => {
-    expect(gradeFor(85, DEFAULT_EXAM_SETTINGS).grade).toBe('Distinction');
-    expect(gradeFor(69.9, DEFAULT_EXAM_SETTINGS).grade).toBe('Fail');
+    expect(gradeFor(85, OLD).grade).toBe('Distinction');
+    expect(gradeFor(69.9, OLD).grade).toBe('Fail');
     expect(rankOf([70, 90, 70, null, 60])).toEqual([2, 1, 2, null, 4]);
     expect(markProblem(11, 10)).toMatch(/most/);
     expect(markProblem(-1, 10)).toMatch(/negative/);
@@ -33,14 +38,14 @@ describe('exam records', () => {
       sheet('Cookery', 'catering', { c: full(80) }),
       sheet('Entrepreneurship', null, { a: full(80), b: { cat1: 50 }, c: full(60) }),
     ];
-    const r = buildExamReport('ict', sheets, students, DEFAULT_EXAM_SETTINGS, { remarks: { ict: { b: 'See me' } }, attendance: { a: 96 } });
+    const r = buildExamReport('ict', sheets, students, OLD, { remarks: { ict: { b: 'See me' } }, attendance: { a: 96 } });
     expect(r.units.map((u) => [u.courseName, u.common])).toEqual([['Networking', false], ['Entrepreneurship', true]]);
     expect(r.rows.map((x) => x.name)).toEqual(['Amina', 'Brian']);
     const [a, b] = r.rows;
     expect(a).toMatchObject({ average: 85, total: 170, grade: 'Distinction', position: 1, attendance: 96, missing: 0, remarks: 'Outstanding performance' });
     expect(b).toMatchObject({ average: 70, grade: 'Pass', position: 2, missing: 1, remarks: 'See me', remarksEdited: true });
     expect(b!.remarksAuto).toBe('Satisfactory performance. 1 unit not yet marked');
-    const common = buildExamReport(null, sheets, students, DEFAULT_EXAM_SETTINGS);
+    const common = buildExamReport(null, sheets, students, OLD);
     expect(common.rows.map((x) => [x.name, x.average])).toEqual([['Amina', 80], ['Brian', null], ['Cate', 60]]);
   });
   it('measures how much of a sheet is keyed in', () => {

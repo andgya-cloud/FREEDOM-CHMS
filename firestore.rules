@@ -1442,12 +1442,13 @@ service cloud.firestore {
       }
       function examSheetFields(d) {
         return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'ownerUid', 'ownerName', 'courseName', 'teacherName', 'weights', 'status',
-               'submittedAt', 'marks', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'submittedAt', 'marks', 'semester', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && d.orgId == orgId && shortText(d.cohort, 80) && d.cohort.size() >= 1
           && (d.courseId == null || shortText(d.courseId, 80))
           && shortText(d.courseName, 120) && shortText(d.teacherName, 120) && shortText(d.ownerName, 120)
           && examWeights(d.weights) && d.marks is map && d.marks.size() <= 400
-          && d.status in ['draft', 'submitted'];
+          && d.status in ['draft', 'submitted']
+          && (!('semester' in d) || d.semester == null || d.semester in [1, 2]);
       }
       match /examSheets/{sheetId} {
         allow read: if ex('exams.manage') || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid);
@@ -1455,13 +1456,36 @@ service cloud.firestore {
           && request.resource.data.status == 'draft' && request.resource.data.submittedAt == null
           && (ex('exams.manage') || (ex('exams.mark') && request.resource.data.ownerUid == request.auth.uid));
         allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'weights', 'marks', 'status',
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'weights', 'marks', 'semester', 'status',
                'submittedAt', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
           && (request.resource.data.status == resource.data.status
               || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)
               || (request.resource.data.status == 'draft' && ex('exams.manage')))
           && (ex('exams.manage')
               || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid && resource.data.status == 'draft'));
+        allow delete: if false;
+      }
+      // Semester results from Excel (Andy, 2026-10-24): one student's past results for one cohort, kept by
+      // the principal only; every save and change is written to the exam log by the app.
+      function examScore(v) {
+        return v is map && v.keys().hasOnly(['points', 'grade']) && v.points is number && v.points >= 0 && v.points <= 100
+          && (v.grade == null || shortText(v.grade, 40));
+      }
+      match /examResults/{resultId} {
+        allow read: if ex('exams.manage');
+        allow create, update: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'studentId', 'admissionNo', 'studentName', 'courseId', 'semesters', 'printed', 'notes',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && shortText(request.resource.data.studentId, 128) && resultId.matches('^' + request.resource.data.studentId + '_.+')
+          && shortText(request.resource.data.admissionNo, 80) && shortText(request.resource.data.studentName, 160)
+          && (request.resource.data.courseId == null || shortText(request.resource.data.courseId, 80))
+          && request.resource.data.semesters is map && request.resource.data.semesters.keys().hasOnly(['1', '2'])
+          && (!('1' in request.resource.data.semesters) || examScore(request.resource.data.semesters['1']))
+          && (!('2' in request.resource.data.semesters) || examScore(request.resource.data.semesters['2']))
+          && (request.resource.data.printed == null || examScore(request.resource.data.printed))
+          && request.resource.data.notes is list && request.resource.data.notes.size() <= 20
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
         allow delete: if false;
       }
       match /examMeta/{cohortKey} {
