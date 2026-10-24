@@ -60,6 +60,11 @@ describe('ADIA students', () => {
     await assertSucceeds(setDoc(ref, student('adiaAdmin')));
     await assertFails(setDoc(doc(as('adiaAdmin'), `${O}/students/ghost`), student('adiaAdmin')));
   });
+  it('keeps an admission number from an imported class list only for staff with Settings', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/s3`), { orgId: 'adia', fullName: 'Student Three', firstName: 'Student', status: 'student', whatsappConsent: {}, ...stamps }); });
+    await assertFails(setDoc(doc(as('pastor'), `${O}/students/s3`), student('pastor', { admissionNo: 'x'.repeat(41) })));
+    await assertSucceeds(setDoc(doc(as('pastor'), `${O}/students/s3`), student('pastor', { admissionNo: 'ADIA/045' })));
+  });
   it('lets an admin withdraw a student, but not change the admission number', async () => {
     const ref = doc(as('adiaAdmin'), `${O}/students/s1`);
     await assertFails(updateDoc(ref, { admissionNo: 'ADIA/2026/0002', updatedAt: serverTimestamp(), updatedBy: 'adiaAdmin' }));

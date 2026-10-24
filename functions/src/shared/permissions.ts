@@ -19,6 +19,19 @@ export const PERMISSIONS = [
   'giving.person.read',
   'finance.reports',
   'settings.manage',
+  // ADIA petty cash: make requests, check them (accountant), give final approval and set the budget (board)
+  'pettycash.request',
+  'pettycash.check',
+  'pettycash.approve',
+  'pettycash.authorize',
+  // ADIA payroll: keep staff pay details and prepare pay runs; approve pay runs and set the deduction rates
+  'payroll.manage',
+  'payroll.approve',
+  // ADIA exam records: trainers key in their own marks sheets; the principal compiles, edits and unlocks
+  'exams.mark',
+  'exams.manage',
+  // An organization head adds and manages Staff accounts for their own organization only
+  'team.manage',
   // Pastor only
   'users.manage',
   'audit.read',
@@ -33,6 +46,14 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'giving.person.read',
   'finance.reports',
   'settings.manage',
+  'pettycash.request',
+  'pettycash.check',
+  'pettycash.approve',
+  'pettycash.authorize',
+  'payroll.manage',
+  'payroll.approve',
+  'exams.mark',
+  'exams.manage',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -47,6 +68,15 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'giving.person.read': 'Giving history per person',
   'finance.reports': 'Financial reports',
   'settings.manage': 'Settings and organizations',
+  'pettycash.request': 'Petty cash: make requests',
+  'pettycash.check': 'Petty cash: check requests (accountant)',
+  'pettycash.approve': 'Petty cash: final approval',
+  'pettycash.authorize': 'Petty cash: sign top-ups and resets (3 signatures needed)',
+  'payroll.manage': 'Payroll: staff pay details and preparing pay runs',
+  'payroll.approve': 'Payroll: approving pay runs and deduction rates',
+  'exams.mark': 'Exam records: key in my own marks sheets (trainer)',
+  'exams.manage': 'Exam records: compile reports, edit and unlock sheets (principal)',
+  'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',
   'data.export': 'Export and erase data',
@@ -59,7 +89,25 @@ export interface RoleDefinition {
   permissions: string[];
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin', RoleDefinition> = {
+/** The day-to-day work of an organization, without any money. */
+const TEAM_WORK = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'followups.manage'];
+
+/** The role an organization head gives to the staff they add. */
+export const TEAM_ROLE_ID = 'staff';
+
+/** The role for the petty cash signatories: they raise and sign requests, top-ups and resets, and see nothing else. */
+export const SIGNATORY_ROLE_ID = 'signatory';
+
+/** The title printed under each signature on a petty cash voucher. Every request needs the accountant's signature. */
+export const PETTY_TITLES = ['Director', 'Chairman', 'Administrator', 'Accountant', 'Board member'] as const;
+export type PettyTitle = (typeof PETTY_TITLES)[number];
+export const ACCOUNTANT_TITLE: PettyTitle = 'Accountant';
+
+export function isPettyTitle(value: unknown): value is PettyTitle {
+  return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
+}
+
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -73,7 +121,16 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin', RoleDefinition> = {
       'followups.manage',
     ],
   },
+  // For the person in charge of one organization, such as ADIA or Freedom Hope Center:
+  // their organization's everyday work, no money, and they can add Staff for it.
+  head: { name: 'Organization head', permissions: [...TEAM_WORK, 'team.manage'] },
+  staff: { name: 'Staff', permissions: [...TEAM_WORK] },
+  signatory: { name: 'Petty cash signatory', permissions: ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'] },
 };
+
+export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {
+  return Object.prototype.hasOwnProperty.call(DEFAULT_ROLES, id);
+}
 
 export function isPermission(value: string): value is Permission {
   return (PERMISSIONS as readonly string[]).includes(value);
@@ -109,7 +166,39 @@ export function can(profile: AccessProfile | null | undefined, permission: Permi
   return !!profile?.active && !!profile.permissions?.includes(permission);
 }
 
+/**
+ * Only Andrew Guya and Doreen Mayaka (also "Doreen Guya") may open Staff accounts and set anyone's
+ * password (Andy, 2026-10-24), and only while their account manages users.
+ */
+export const ACCOUNT_KEEPER_NAMES = ['Andrew Guya', 'Doreen Mayaka', 'Doreen Guya'] as const;
+export function canKeepAccounts(profile: (AccessProfile & { displayName?: string }) | null | undefined): boolean {
+  const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
+  return can(profile, 'users.manage') && ACCOUNT_KEEPER_NAMES.some((n) => plain(n) === plain(profile?.displayName ?? ''));
+}
+
+/** The Director: Andrew Guya's pastor account. Only he deletes alone, sees the deletion register and puts entries back (Andy, 2026-10-24). */
+export function isDirectorProfile(profile: (AccessProfile & { displayName?: string }) | null | undefined): boolean {
+  return can(profile, 'users.manage') && (profile?.displayName ?? '').toLowerCase().replace(/[^a-z]/g, '') === 'andrewguya';
+}
+
 export function canAccessOrg(profile: AccessProfile | null | undefined, orgId: string): boolean {
   if (!profile?.active) return false;
   return !!profile.allOrgs || !!profile.orgIds?.includes(orgId);
+}
+
+export interface TeamAccount {
+  roleId: string;
+  allOrgs?: boolean;
+  orgIds?: readonly string[];
+}
+
+/**
+ * Whether an organization head (team.manage, not the pastor) may create or change this account:
+ * only Staff accounts whose organizations are all among the head's own.
+ */
+export function canManageTeamAccount(head: AccessProfile | null | undefined, account: TeamAccount): boolean {
+  if (!can(head, 'team.manage') || head?.allOrgs) return false;
+  if (account.roleId !== TEAM_ROLE_ID || account.allOrgs) return false;
+  const orgIds = account.orgIds ?? [];
+  return orgIds.length > 0 && orgIds.every((id) => !!head?.orgIds?.includes(id));
 }

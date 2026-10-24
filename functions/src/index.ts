@@ -1,6 +1,6 @@
 import './options.js';
 
-export { createUser, updateUser, resetUserPassword, changeMyPassword, recordSignIn } from './users.js';
+export { createUser, updateUser, resetUserPassword, deleteUser, changeMyPassword, recordSignIn, listTeam } from './users.js';
 export { auditOrganizations, auditOrganizationData, auditRoles, auditSettings } from './audit.js';
 export { syncRolePermissions } from './roles.js';
 export { onPersonWritten } from './people.js';
@@ -11,5 +11,11 @@ export { syncStaffDirectory, onPipelineWritten, dailyFollowUps } from './followu
 export { onReportRequested, scheduledReports } from './reports.js';
 export { onDataRequested, weeklyBackup } from './data.js';
 export { onStudentCreated, onInvoiceWritten, onFeePaymentWritten, onCertificateCreated, onSchoolReportRequested, scheduledSchoolReports } from './school.js';
+export { onPettyCashCreated } from './pettyCash.js';
+export { setPettyPin, listPettySigners, signWithPin, topUpWithPin, findPasswordAccount } from './pettyPins.js';
+export { pettyBinSign } from './pettyBin.js';
+export { raisePettyRequest } from './pettyRaise.js';
+export { mergeMyAccount } from './pettyMerge.js';
+export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail, listPettyContacts } from './pettyNotify.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';

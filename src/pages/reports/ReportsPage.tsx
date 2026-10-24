@@ -23,7 +23,10 @@ function Archive({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head">
         <h1>Reports</h1>
-        <Link to="/settings/reports" className="btn btn-quiet">Report settings</Link>
+        <span className="row-actions">
+          <Link to="/dashboard" className="btn btn-primary">Dashboard</Link>
+          <Link to="/settings/reports" className="btn btn-quiet">Report settings</Link>
+        </span>
       </div>
       <p className="lead">{org.name}</p>
       <p className="muted small">A weekly report is made every Monday at 07:00 for the week before (Monday to Sunday), and a monthly report on the 1st at 07:00 for the month before.</p>

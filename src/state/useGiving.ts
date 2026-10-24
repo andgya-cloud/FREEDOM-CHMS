@@ -1,4 +1,4 @@
-import { collection, doc, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
+import { collection, doc, documentId, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { db } from '../firebase';
 import { useLiveQuery } from '../lib/useQuery';
@@ -182,6 +182,15 @@ export function useLedgerMonth(orgId: string, month: string) {
     }, () => setLoading(false));
   }, [orgId, month]);
   return { ledger, loading };
+}
+
+/** The ledger months from `from` to `to` (YYYY-MM, both included), for the dashboards. */
+export function useLedgerMonths(orgId: string, from: string, to: string) {
+  const { rows, loading } = useLiveQuery<LedgerMonth>(
+    () => (orgId ? query(collection(db, 'organizations', orgId, 'ledger'), where(documentId(), '>=', from), where(documentId(), '<=', to)) : null),
+    [orgId, from, to],
+  );
+  return { months: rows, loading };
 }
 
 /** Statement lines imported for a date range, by M-Pesa code. */

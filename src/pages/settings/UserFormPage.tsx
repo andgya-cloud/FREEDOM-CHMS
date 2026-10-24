@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../firebase';
@@ -11,8 +12,10 @@ import { friendlyError } from '../../lib/errors';
 import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, SIGNATORY_ROLE_ID, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
+import { passwordProof } from '../../lib/pettyPin';
 
 interface FormState {
   displayName: string;
@@ -23,24 +26,41 @@ interface FormState {
   extraPermissions: string[];
   password: string;
   active: boolean;
+  pettyTitle: string;
+  phone: string;
 }
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true };
+const ROLE_HINTS: Record<string, string> = {
+  admin: ': everyday work, including recording gifts and receipts',
+  head: ': runs one organization and adds its staff, never sees money',
+  staff: ': everyday work in their organization, never sees money',
+  signatory: ': raises and signs petty cash requests, top-ups and resets, and sees nothing else',
+};
+
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '' };
 
 export function UserFormPage() {
   const { uid } = useParams();
   const isNew = !uid;
-  const { profile: me } = useAuth();
+  const { profile: me, can } = useAuth();
   const { organizations } = useOrg();
+  // An organization head (not the pastor) adds Staff for their own organizations only; the server checks this too.
+  const teamOnly = !can('users.manage');
+  const myOrgs = teamOnly ? organizations.filter((o) => me?.orgIds?.includes(o.id)) : organizations;
   const roles = useRoles();
   const toast = useToast();
   const navigate = useNavigate();
-  const [form, setForm] = useState<FormState>(() => ({ ...EMPTY, password: generateTemporaryPassword() }));
+  const [form, setForm] = useState<FormState>(() => ({
+    ...EMPTY, password: generateTemporaryPassword(),
+    ...(teamOnly ? { roleId: TEAM_ROLE_ID, orgIds: me?.orgIds?.length === 1 ? [...me.orgIds] : [] } : {}),
+  }));
   const [loaded, setLoaded] = useState(isNew);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [resetPw, setResetPw] = useState('');
+  const [pwDone, setPwDone] = useState<{ email: string; works: boolean; temporary: string } | null>(null);
   const [confirmOff, setConfirmOff] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const tempPwId = useId();
 
   useEffect(() => {
@@ -50,7 +70,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: u.extraPermissions ?? [], password: '', active: u.active,
+          extraPermissions: u.extraPermissions ?? [], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '',
         });
       }
       setLoaded(true);
@@ -58,6 +78,9 @@ export function UserFormPage() {
   }, [uid]);
 
   const role = roles.find((r) => r.id === form.roleId);
+  const signatory = form.roleId === SIGNATORY_ROLE_ID;
+  // The voucher title is for the petty cash signatories, the pastor included when they sign.
+  const showTitle = !teamOnly && (signatory || !!role?.isOwner);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const toggle = (k: 'orgIds' | 'extraPermissions', v: string) =>
     setForm((f) => ({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] }));
@@ -69,12 +92,18 @@ export function UserFormPage() {
     if (isNew && !/^\S+@\S+\.\S+$/.test(form.email)) return setError('Enter a valid email.');
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
+    if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
+    if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
     setBusy(true);
     try {
-      const payload = {
-        displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
-        extraPermissions: role?.isOwner ? [] : form.extraPermissions,
-      };
+      const payload = teamOnly
+        ? { displayName: form.displayName.trim(), orgIds: form.orgIds, phone: form.phone.trim() }
+        : {
+          displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
+          extraPermissions: role?.isOwner || signatory ? [] : form.extraPermissions,
+          pettyTitle: showTitle ? form.pettyTitle : '',
+          phone: form.phone.trim(),
+        };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
         toast.show(`Account created. Give ${form.displayName.split(' ')[0]} the temporary password: ${form.password}`);
@@ -100,14 +129,29 @@ export function UserFormPage() {
     }
   }
 
+  async function deleteAccount() {
+    setConfirmDelete(false);
+    try {
+      await httpsCallable(functions, 'deleteUser')({ uid });
+      toast.show(`${form.displayName}'s account was deleted.`);
+      navigate('/settings/users');
+    } catch (err) {
+      setError(friendlyError(err));
+    }
+  }
+
   async function resetPassword() {
     setError('');
     const pw = resetPw || generateTemporaryPassword(form.email);
     if (passwordProblems(pw, form.email).length) return setError('The new password is not strong enough.');
     try {
-      await httpsCallable(functions, 'resetUserPassword')({ uid, password: pw });
+      const keep = !!resetPw;
+      const res = await httpsCallable<object, { ok: boolean; loginEmail?: string }>(functions, 'resetUserPassword')({ uid, password: pw, keep });
       setResetPw('');
-      toast.show(`Password reset. New temporary password: ${pw}`);
+      const loginEmail = res.data.loginEmail || form.email;
+      // Prove it at once with a real sign-in, so a problem shows here and not later at the signing box.
+      const works = await passwordProof('', loginEmail, pw).then(() => true).catch(() => false);
+      setPwDone({ email: loginEmail, works, temporary: keep ? '' : pw });
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -128,32 +172,38 @@ export function UserFormPage() {
           <span>Email</span>
           <input type="email" value={form.email} disabled={!isNew} onChange={(e) => set('email', e.target.value)} />
         </label>
-        <fieldset className="field">
-          <legend>Role</legend>
-          {roles.map((r) => (
-            <label key={r.id} className="check">
-              <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => set('roleId', r.id)} disabled={uid === me?.uid} />
-              <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ''}</span>
-            </label>
-          ))}
-        </fieldset>
+        {teamOnly ? (
+          <p className="hint">Role: <strong>Staff</strong>. They can record people, attendance, programmes and follow-ups, and never see money.</p>
+        ) : (
+          <fieldset className="field">
+            <legend>Role</legend>
+            {roles.map((r) => (
+              <label key={r.id} className="check">
+                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => set('roleId', r.id)} disabled={uid === me?.uid} />
+                <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ROLE_HINTS[r.id] ?? ''}</span>
+              </label>
+            ))}
+          </fieldset>
+        )}
 
         {!role?.isOwner && (
           <>
             <fieldset className="field">
               <legend>Organizations</legend>
-              <label className="check">
-                <input type="checkbox" checked={form.allOrgs} onChange={(e) => set('allOrgs', e.target.checked)} />
-                <span>All organizations, including new ones</span>
-              </label>
-              {!form.allOrgs && organizations.map((o) => (
+              {!teamOnly && (
+                <label className="check">
+                  <input type="checkbox" checked={form.allOrgs} onChange={(e) => set('allOrgs', e.target.checked)} />
+                  <span>All organizations, including new ones</span>
+                </label>
+              )}
+              {!form.allOrgs && myOrgs.map((o) => (
                 <label key={o.id} className="check">
                   <input type="checkbox" checked={form.orgIds.includes(o.id)} onChange={() => toggle('orgIds', o.id)} />
                   <span>{o.name}</span>
                 </label>
               ))}
             </fieldset>
-            <fieldset className="field">
+            {!teamOnly && !signatory && <fieldset className="field">
               <legend>Also allow</legend>
               <p className="hint">Off by default for admins.</p>
               {GRANTABLE_PERMISSIONS.map((p) => (
@@ -162,15 +212,32 @@ export function UserFormPage() {
                   <span>{PERMISSION_LABELS[p]}</span>
                 </label>
               ))}
-            </fieldset>
+            </fieldset>}
           </>
         )}
+
+        {showTitle && (
+          <label className="field">
+            <span>Title on petty cash vouchers</span>
+            <select value={form.pettyTitle} onChange={(e) => set('pettyTitle', e.target.value)}>
+              <option value="">{signatory ? 'Choose a title' : 'None'}</option>
+              {PETTY_TITLES.map((t) => <option key={t} value={t}>{t}</option>)}
+            </select>
+            <small className="hint">Printed under their signature. Any two stakeholders approve a request.</small>
+          </label>
+        )}
+
+        <label className="field">
+          <span>WhatsApp number</span>
+          <input type="tel" inputMode="tel" autoComplete="off" value={form.phone} onChange={(e) => set('phone', e.target.value)} placeholder="e.g. 0712 345 678" />
+          <small className="hint">Petty cash notices (please approve, approved) go to this number and to their email.</small>
+        </label>
 
         {isNew && (
           <div className="field">
             <label htmlFor={tempPwId}>Temporary password</label>
             <div className="input-with-button">
-              <input id={tempPwId} value={form.password} onChange={(e) => set('password', e.target.value)} />
+              <PasswordInput id={tempPwId} shown autoComplete="new-password" value={form.password} onChange={(e) => set('password', e.target.value)} />
               <button type="button" className="btn btn-quiet" onClick={() => set('password', generateTemporaryPassword(form.email))}>New</button>
             </div>
             <PasswordChecklist password={form.password} email={form.email} />
@@ -186,13 +253,20 @@ export function UserFormPage() {
         <section className="card">
           <h2>Password</h2>
           <div className="input-with-button">
-            <input placeholder="Leave empty to generate one" value={resetPw} onChange={(e) => setResetPw(e.target.value)} />
-            <button type="button" className="btn" onClick={resetPassword}>Reset password</button>
+            <PasswordInput shown autoComplete="new-password" placeholder="Leave empty to generate one" value={resetPw} onChange={(e) => setResetPw(e.target.value)} />
+            <button type="button" className="btn" onClick={() => { setPwDone(null); void resetPassword(); }}>Set password</button>
           </div>
+          <small className="hint">Type the password you want {form.displayName.split(' ')[0] || 'them'} to use. It works for signing in and for signing petty cash.</small>
+          {pwDone && (pwDone.works
+            ? <p className="small" role="status">✓ Saved and checked. {form.displayName.split(' ')[0]} signs in with <strong>{pwDone.email}</strong>{pwDone.temporary ? <> and the temporary password <strong>{pwDone.temporary}</strong> (they will choose their own)</> : ' and the password you typed'}. The same password signs petty cash.</p>
+            : <p className="error" role="alert">The password was saved for petty cash signing, but a test sign-in with {pwDone.email} failed. Check that this is their sign-in email.</p>)}
           <h2>Access</h2>
           {form.active
             ? <button type="button" className="btn btn-danger" onClick={() => setConfirmOff(true)}>Switch off this account</button>
             : <button type="button" className="btn" onClick={() => setActive(true)}>Switch account back on</button>}
+          <h2>Delete staff member</h2>
+          <p className="hint">Removes their sign-in for good. What they recorded stays, with their name on it. To stop them only for a while, switch the account off instead.</p>
+          <button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete this account</button>
         </section>
       )}
 
@@ -204,6 +278,15 @@ export function UserFormPage() {
         danger
         onConfirm={() => void setActive(false)}
         onCancel={() => setConfirmOff(false)}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        title={`Delete ${form.displayName}'s account?`}
+        body="They will be signed out and can never sign in with this account again. This cannot be undone. Their past work stays."
+        confirmLabel="Delete account"
+        danger
+        onConfirm={() => void deleteAccount()}
+        onCancel={() => setConfirmDelete(false)}
       />
     </div>
   );

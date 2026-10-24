@@ -1,14 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState } from 'react';
+import { Link, Navigate } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useOrg } from '../state/OrgContext';
-import { usePeople } from '../state/PeopleContext';
 import { formatDate } from '../../functions/src/shared/datetime';
-import { matchesSearch } from '../../functions/src/shared/people';
 import { FirstRunChecklist } from '../components/FirstRunChecklist';
 import { OrgButtons } from '../components/OrgButtons';
 import { HopeAlerts } from '../components/HopeAlerts';
-import { PersonRow } from '../components/PersonRow';
+import { QuickSearch } from '../components/QuickSearch';
 import { useFollowUpCounts } from '../state/useFollowUps';
 import { requestReport, useLatestReport, useReportPart } from '../state/useReports';
 import { Scorecard } from '../components/Scorecard';
@@ -16,6 +14,11 @@ import { lastCompletePeriod } from '../../functions/src/shared/metrics';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import type { GivingPart } from '../../functions/src/shared/reports';
 import type { Organization } from '../state/OrgContext';
+import { lookFor } from '../lib/look';
+import { AdiaIcon } from '../components/icons';
+import { AdiaToday } from './school/AdiaToday';
+import { SIGNATORY_ROLE_ID } from '../../functions/src/shared/permissions';
+import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 
 /**
  * The home screen: search first, then the four big actions.
@@ -28,53 +31,89 @@ const ACTIONS = [
   { label: 'Follow-ups', to: '/follow-ups', icon: 'M21 12a8 8 0 0 1-11.8 7L3 21l2-6A8 8 0 1 1 21 12Z' },
 ] as const;
 
+/** ADIA Training Centre's four tiles. */
+const GLASS_ACTIONS = [
+  { label: 'Class register', to: '/attendance', icon: '', adia: 'register' },
+  { label: 'Add student', to: '/school/students/new', icon: '', adia: 'addStudent' },
+  { label: 'Record fees', to: '/school/fees', icon: '', adia: 'fees' },
+  { label: 'Exam Records', to: '/school/exams', icon: '', adia: 'exams' },
+] as const;
+
+/** Freedom Church's four tiles. An empty icon shows "Ksh." instead. */
+const CHURCH_ACTIONS = [ACTIONS[0], ACTIONS[1], { label: 'Record gift', to: '/giving/new', icon: '' }, ACTIONS[3]] as const;
+
+/** Freedom Hope Center's four tiles. */
+const HOPE_ACTIONS = [
+  { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
+  { label: 'Register child', to: '/hope/children/new', icon: ACTIONS[1].icon },
+  { label: 'Record gift', to: '/giving/new', icon: '' },
+  { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
+] as const;
+
 export function TodayPage() {
   const { profile, can } = useAuth();
   const { current, isCombined, organizations, loading } = useOrg();
-  const { people } = usePeople();
   const counts = useFollowUpCounts(current?.id ?? '', current?.timeZone ?? 'Africa/Nairobi');
-  const navigate = useNavigate();
-  const [query, setQuery] = useState('');
   const firstName = profile?.displayName.split(' ')[0] ?? '';
-  const results = useMemo(() => (query.trim().length >= 2 ? people.filter((p) => matchesSearch(p, query)).slice(0, 8) : []), [people, query]);
+  const look = lookFor(current);
+  const cockpit = look === 'cockpit';
+  const glass = look === 'glass';
+  const aurora = look === 'aurora';
+  // ADIA, Freedom Church and Hope Center share the side-panel layout; the page underneath is the same.
+  const sided = glass || cockpit || aurora;
+  const tileActions = aurora ? HOPE_ACTIONS : cockpit ? CHURCH_ACTIONS : GLASS_ACTIONS;
+  const allowedTo = (to: string) => (to === '/visitors/new' || to === '/school/students/new' || to === '/hope/children/new' ? can('people.write')
+    : to === '/school/fees' ? can('gifts.write') || can('finance.reports') || can('giving.person.read')
+    : to === '/attendance' ? can('attendance.write') || can('people.read')
+    : to === '/giving/new' ? can('gifts.write')
+    : to === '/follow-ups' ? can('followups.manage')
+    : to === '/school/exams' ? can('exams.mark') || can('exams.manage') || can('users.manage')
+    : true);
+
+  // The petty cash signatories work in Petty Cash only, so it is their first page.
+  if (profile?.roleId === SIGNATORY_ROLE_ID && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type)) {
+    return <Navigate to={pettyCashBase(current.type)} replace />;
+  }
 
   return (
-    <div className="page">
+    <div className={`page${sided ? ' glass-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
-      <h1>Hello{firstName ? `, ${firstName}` : ''}</h1>
+      <h1>{sided ? 'Insight-IQ' : `Hello${firstName ? `, ${firstName}` : ''}`}</h1>
       {!loading && organizations.length > 0 && (
         <p className="lead">{isCombined ? 'All organizations' : current?.name}</p>
       )}
 
       <OrgButtons />
 
-      {can('people.read') && organizations.length > 0 && (
-        <form role="search" onSubmit={(e) => { e.preventDefault(); navigate(`/people?q=${encodeURIComponent(query)}`); }}>
-          <input
-            type="search"
-            className="search"
-            placeholder="Find anyone by name or phone"
-            aria-label="Find a person"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-        </form>
-      )}
-      {results.length > 0 && <ul className="row-list">{results.map((p) => <PersonRow key={`${p.orgId}/${p.id}`} person={p} />)}</ul>}
-      {query.trim().length >= 2 && results.length === 0 && (
-        <p className="muted">Nobody matches. <Link to="/visitors/new">Add as a visitor</Link></p>
-      )}
+      {!sided && can('people.read') && organizations.length > 0 && <QuickSearch />}
 
       <HopeAlerts />
       <FirstRunChecklist />
 
+      {sided && (
+        <div className="glass-tiles">
+          {tileActions.map((a) => {
+            const ready = organizations.length > 0 && allowedTo(a.to);
+            const inner = (
+              <>
+                {'adia' in a ? <AdiaIcon name={a.adia} /> : a.icon ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d={a.icon} /></svg> : <span className="tile-dollar" aria-hidden="true">Ksh.</span>}
+                <span className="tile-text">
+                  <span className="tile-label">{a.label}</span>
+                  {a.to === '/school/exams' && <span className="tile-sub">Marks and result slips</span>}
+                  {a.to === '/follow-ups' && current && <span className="tile-sub">{counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`}</span>}
+                </span>
+              </>
+            );
+            return ready
+              ? <Link key={a.label} to={a.to} className="glass-tile">{inner}</Link>
+              : <button key={a.label} type="button" className="glass-tile" disabled>{inner}</button>;
+          })}
+        </div>
+      )}
+
       <div className="big-actions">
-        {ACTIONS.map((a) => {
-          const allowed = a.to === '/visitors/new' ? can('people.write')
-            : a.to === '/attendance' ? can('attendance.write') || can('people.read')
-            : a.to === '/giving/new' ? can('gifts.write')
-            : a.to === '/follow-ups' ? can('followups.manage')
-            : true;
+        {!sided && ACTIONS.map((a) => {
+          const allowed = allowedTo(a.to);
           const ready = organizations.length > 0 && allowed;
           return ready ? (
             <Link key={a.label} to={a.to} className="big-action">
@@ -97,9 +136,10 @@ export function TodayPage() {
         })}
       </div>
 
-      {current && can('people.read') && <HomeScorecard org={current} />}
+      {current?.type === 'college' && can('people.read') ? <AdiaToday org={current} />
+        : current && can('people.read') && <HomeScorecard org={current} />}
 
-      {organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
+      {current?.type !== 'college' && organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
         <ul className="link-list">
           <li>
             <Link to="/giving">
@@ -133,7 +173,10 @@ function HomeScorecard({ org }: { org: Organization }) {
     <section className="stack">
       <div className="page-head">
         <h2>{report ? report.label : 'Scorecard'}</h2>
-        <Link to="/reports" className="btn btn-quiet">All reports</Link>
+        <span className="row-actions">
+          {report && <Link to="/dashboard" className="btn btn-primary">Dashboard</Link>}
+          <Link to="/reports" className="btn btn-quiet">All reports</Link>
+        </span>
       </div>
       {report ? <Scorecard report={report} giving={giving} base={`/reports/${org.id}/${report.id}`} /> : (
         <div className="card stack">

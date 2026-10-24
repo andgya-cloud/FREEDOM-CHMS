@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_ROLES, GRANTABLE_PERMISSIONS, PERMISSIONS, can, canAccessOrg, effectivePermissions } from './permissions';
+import { DEFAULT_ROLES, GRANTABLE_PERMISSIONS, PERMISSIONS, can, canAccessOrg, canManageTeamAccount, effectivePermissions } from './permissions';
 
 describe('effectivePermissions', () => {
   it('gives an owner role every permission', () => {
@@ -56,5 +56,29 @@ describe('can and canAccessOrg', () => {
     expect(canAccessOrg(admin, 'adia')).toBe(false);
     expect(canAccessOrg({ ...admin, allOrgs: true }, 'adia')).toBe(true);
     expect(canAccessOrg({ ...admin, active: false }, 'fcn')).toBe(false);
+  });
+});
+
+describe('organization heads', () => {
+  const head = { active: true, orgIds: ['adia'], permissions: effectivePermissions(DEFAULT_ROLES.head) };
+
+  it('see no money, and can only add staff', () => {
+    for (const p of ['gifts.write', 'receipts.issue', 'giving.person.read', 'finance.reports', 'users.manage', 'settings.manage'] as const) {
+      expect(head.permissions).not.toContain(p);
+    }
+    expect(head.permissions).toContain('team.manage');
+    expect(effectivePermissions(DEFAULT_ROLES.staff)).not.toContain('team.manage');
+    expect(effectivePermissions(DEFAULT_ROLES.staff)).not.toContain('gifts.write');
+  });
+
+  it('manage only Staff accounts inside their own organizations', () => {
+    expect(canManageTeamAccount(head, { roleId: 'staff', orgIds: ['adia'] })).toBe(true);
+    expect(canManageTeamAccount(head, { roleId: 'staff', orgIds: ['adia', 'hope'] })).toBe(false);
+    expect(canManageTeamAccount(head, { roleId: 'staff', orgIds: [] })).toBe(false);
+    expect(canManageTeamAccount(head, { roleId: 'staff', orgIds: ['adia'], allOrgs: true })).toBe(false);
+    expect(canManageTeamAccount(head, { roleId: 'admin', orgIds: ['adia'] })).toBe(false);
+    expect(canManageTeamAccount(head, { roleId: 'head', orgIds: ['adia'] })).toBe(false);
+    expect(canManageTeamAccount({ ...head, active: false }, { roleId: 'staff', orgIds: ['adia'] })).toBe(false);
+    expect(canManageTeamAccount({ ...head, allOrgs: true }, { roleId: 'staff', orgIds: ['adia'] })).toBe(false);
   });
 });

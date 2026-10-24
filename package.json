@@ -13,6 +13,7 @@
     "test:all": "npm test && npm run test:rules",
     "emulators": "firebase emulators:start --project demo-freedom-chms --import=.emulator-data --export-on-exit",
     "bootstrap": "node scripts/bootstrap.mjs",
+    "set-password": "node scripts/set-password.mjs",
     "icons": "python3 scripts/make-icons.py"
   },
   "dependencies": {

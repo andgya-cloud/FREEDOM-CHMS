@@ -4,6 +4,7 @@ import { createStamps, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { firstName } from '../../functions/src/shared/people';
 import { DEFAULT_SCHOOL_SETTINGS, FEES_FUND_ID, invoiceTotal, outcomeId, unitId, type AssessmentType, type CourseUnit, type FeeItem, type OutcomeStatus, type SchoolSettings, type StudentStatus } from '../../functions/src/shared/school';
+import type { ImportRow } from '../../functions/src/shared/studentImport';
 import { ADIA_PROGRAMMES } from '../../functions/src/shared/schoolSetup';
 import type { WhatsAppConsent } from '../state/PeopleContext';
 import type { Sponsor } from '../state/useSchool';
@@ -148,4 +149,59 @@ export function requestSchoolReport(orgId: string, uid: string, type: 'weekly' |
   const r = doc(collection(db, 'organizations', orgId, 'schoolReportRequests'));
   void trackWrite(setDoc(r, { orgId, type, from, status: 'pending', createdAt: serverTimestamp(), createdBy: uid }));
   return r.id;
+}
+
+/**
+ * Adds the students from a checked class list: first any programmes and intakes the list names that
+ * ADIA doesn't have yet, then each student (and their person record) in batches. Admission numbers
+ * from the list are kept; students without one get the next number as usual.
+ */
+export function importStudents(orgId: string, rows: readonly ImportRow[], have: { courseIds: readonly string[]; keepAdmissionNos: boolean; keepIdNumbers: boolean }, today: string, recordedBy: string | null) {
+  const writes: Promise<void>[] = [];
+  const key = (v: string) => v.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const courseIds = new Map<string, string>();
+  const taken = new Set(have.courseIds);
+  for (const r of rows) {
+    if (r.courseId || courseIds.has(key(r.programme))) continue;
+    let id = slug(r.programme).slice(0, 36) || 'programme';
+    if (id.length < 2) id = `${id}_p`;
+    for (let n = 2; taken.has(id); n++) id = `${slug(r.programme).slice(0, 34)}_${n}`;
+    taken.add(id);
+    courseIds.set(key(r.programme), id);
+    writes.push(trackWrite(setDoc(ref(orgId, 'courses', id), { orgId, name: r.programme.slice(0, 120), levels: [], units: [], timetable: [], active: true, ...createStamps() })));
+  }
+  const courseOf = (r: ImportRow) => r.courseId ?? courseIds.get(key(r.programme))!;
+  const intakeIds = new Map<string, string>();
+  for (const r of rows) {
+    const k = `${courseOf(r)}|${key(r.intake)}`;
+    if (r.intakeId || intakeIds.has(k)) continue;
+    const starts = rows.filter((x) => !x.intakeId && `${courseOf(x)}|${key(x.intake)}` === k).map((x) => x.startDate).filter((d): d is string => !!d).sort();
+    const newRef = doc(collection(db, 'organizations', orgId, 'intakes'));
+    intakeIds.set(k, newRef.id);
+    writes.push(trackWrite(setDoc(newRef, { orgId, courseId: courseOf(r), name: r.intake.slice(0, 80), startDate: starts[0] ?? today, capacity: null, active: true, ...createStamps() })));
+  }
+  for (let i = 0; i < rows.length; i += 150) {
+    const batch = writeBatch(db);
+    for (const r of rows.slice(i, i + 150)) {
+      let personId = r.personId;
+      if (!personId) {
+        const personRef = doc(collection(db, 'organizations', orgId, 'people'));
+        personId = personRef.id;
+        batch.set(personRef, {
+          orgId, fullName: r.name, firstName: firstName(r.name), phone: r.phone, whatsapp: null, email: null, status: 'student',
+          whatsappConsent: { given: false, date: today, recordedBy, stoppedAt: null },
+          firstVisitDate: null, gender: r.gender, possibleDuplicateIds: [], customFields: {}, ...createStamps(),
+        });
+      }
+      const courseId = courseOf(r);
+      batch.set(ref(orgId, 'students', personId), {
+        orgId, courseId, intakeId: r.intakeId ?? intakeIds.get(`${courseId}|${key(r.intake)}`)!, level: r.level, status: r.status,
+        sponsors: r.sponsor ? [{ ...r.sponsor, whatsapp: false }] : [], enrolledOn: r.status === 'enrolled' ? r.startDate ?? today : null,
+        admissionNo: have.keepAdmissionNos ? r.admissionNo : null, ...createStamps(),
+      });
+      if (have.keepIdNumbers && r.idNumber) batch.set(ref(orgId, 'studentPrivate', personId), { orgId, idNumber: r.idNumber, notes: '', ...createStamps() });
+    }
+    writes.push(trackWrite(batch.commit()));
+  }
+  return Promise.all(writes).then(() => undefined);
 }

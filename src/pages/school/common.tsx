@@ -33,7 +33,7 @@ export function SchoolNav({ feesAllowed }: { feesAllowed: boolean }) {
   const { can } = useAuth();
   const items: [string, string, boolean][] = [
     ['/school', 'Overview', true], ['/school/students', 'Students', true], ['/school/courses', 'Courses', true],
-    ['/school/results', 'Results', true], ['/school/fees', 'Fees', feesAllowed], ['/school/graduation', 'Graduation', true],
+    ['/school/results', 'Results', true], ['/school/exams', 'Exam Records', can('exams.mark') || can('exams.manage') || can('users.manage')], ['/school/fees', 'Fees', feesAllowed], ['/school/graduation', 'Graduation', true],
     ['/school/reports', 'Reports', can('finance.reports')],
   ];
   return (

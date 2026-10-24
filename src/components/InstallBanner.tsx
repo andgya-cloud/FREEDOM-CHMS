@@ -43,7 +43,7 @@ export function InstallBanner() {
     <div className="install-banner">
       {deferred ? (
         <>
-          <span>Install Freedom ChMS on this device so it opens without internet.</span>
+          <span>Install Insight-IQ on this device so it opens without internet.</span>
           <button type="button" className="btn btn-gold" onClick={async () => {
             await deferred.prompt();
             await deferred.userChoice;
