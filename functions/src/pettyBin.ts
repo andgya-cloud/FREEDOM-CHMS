@@ -2,6 +2,8 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canSign, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
+import { isDirector } from './pettyContacts.js';
+import { canKeepAccounts } from './shared/permissions.js';
 import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
 import {
   BIN_DONE_LABELS, BIN_SIGNATURES_NEEDED, binActionsFor, binStateAfter, categoryLabel,
@@ -87,7 +89,7 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
 
     if (withdraw) {
       if (!motion) throw new HttpsError('failed-precondition', 'Nothing is waiting here.');
-      if (motion.startedBy !== caller.uid && !(caller.profile.permissions ?? []).includes('users.manage')) {
+      if (motion.startedBy !== caller.uid && !isDirector(caller.profile)) {
         throw new HttpsError('permission-denied', 'Only whoever asked, or the pastor, can withdraw this.');
       }
       tx.set(binRef, { ...bin, motion: null, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
@@ -95,17 +97,22 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
     }
 
     // Only the Director (the pastor account), signed in as himself, puts entries back (Andy, 2026-10-24).
-    if (action === 'restore' && !(signerUid === caller.uid && (caller.profile.permissions ?? []).includes('users.manage'))) {
+    if (action === 'restore' && !(signerUid === caller.uid && isDirector(caller.profile))) {
       throw new HttpsError('permission-denied', 'Only the Director can put entries back.');
     }
     if (motion && motion.action !== action) throw new HttpsError('failed-precondition', `This is already waiting for "${motion.action}". Sign or withdraw that first.`);
     if (!motion && !binActionsFor(bin.state).includes(action)) throw new HttpsError('failed-precondition', 'That cannot be done to this entry now.');
+    // An approved (paid) requisition can only be put up for deleting by Andrew Guya or Doreen (Andy, 2026-10-24).
+    if (!motion && action === 'delete' && kind === 'request' && target?.status === 'approved' && !canKeepAccounts(caller.profile)) {
+      throw new HttpsError('permission-denied', 'An approved requisition can only be deleted by Andrew Guya or Doreen.');
+    }
     const sigs = motion?.signatures ?? [];
     if (sigs.some((s) => s.uid === signerUid)) throw new HttpsError('already-exists', `${signer.displayName || signer.email} has already signed this.`);
     // Any petty cash signer may sign; whoever made the entry may also ask to delete it (and counts as the first).
     const mayAsk = !motion && action === 'delete' && ownerOf(kind, target) === signerUid && canAccessOrg(signer, orgId);
     if (!canSign(signer, orgId, 'request') && !mayAsk) throw new HttpsError('permission-denied', 'That person cannot sign this.');
-    const pastor = (signer.permissions ?? []).includes('users.manage');
+    // Only the Director acts alone (Andy, 2026-10-24); Doreen and everyone else need two signatures.
+    const pastor = isDirector(signer);
     // The pastor (Director) may leave the reason out; everyone else gives one.
     if (!motion && action === 'delete' && reason.length < 3 && !pastor) throw new HttpsError('invalid-argument', 'Please give a reason for deleting.');
 

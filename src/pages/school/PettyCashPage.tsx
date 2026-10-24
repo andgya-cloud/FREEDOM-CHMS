@@ -14,7 +14,7 @@ import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
-  ADIA_TOPUP_NAMES, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
+  ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
@@ -260,7 +260,7 @@ function RequisitionList({ org, rows, empty }: { org: Organization; rows: Requis
               <span className="link-title">{label(r)} · {r.requesterName}</span>
               <span className="link-detail">{money(org, r.totalCents)} · {r.signatures && r.status === 'submitted' ? `${Object.keys(r.signatures).length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : PETTY_CASH_STATUS_LABELS[r.status]} · {categoryLabel(r)}</span>
             </Link>
-            {(p.canSign || r.requesterId === p.uid) && <BinButton label={`Delete ${label(r)}`} onClick={() => setDeleting(r)} />}
+            {(p.canSign || r.requesterId === p.uid) && (r.status !== 'approved' || p.isKeeper) && <BinButton label={`Delete ${label(r)}`} onClick={() => setDeleting(r)} />}
           </li>
         ))}
       </ul>
@@ -284,6 +284,9 @@ function Home({ org }: { org: Organization }) {
   const resetOpen = p.funds.some((f) => f.kind === 'reset' && f.status === 'collecting');
   const [showReset, setShowReset] = useState(false);
   const inProgress = p.requisitions.filter((r) => r.status === 'submitted' || r.status === 'checked');
+  const { profile } = useAuth();
+  // At ADIA the top-up box shows only to the four who may top up (and Andrew Guya and Doreen) (Andy, 2026-10-24).
+  const canTopUpHere = org.type !== 'college' || p.isKeeper || (p.canAuthorize && canTopUpAlone('college', profile?.displayName ?? '', p.isPastor));
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
@@ -302,7 +305,7 @@ function Home({ org }: { org: Organization }) {
         }, 50);
       }} />}
       {p.seesAll && (showReset || resetOpen) && <FundCard org={org} kind="reset" onClose={() => setShowReset(false)} />}
-      {p.seesAll && <FundCard org={org} kind="topup" />}
+      {p.seesAll && canTopUpHere && <FundCard org={org} kind="topup" />}
       {p.canSign && <BinNotice org={org} />}
       {p.canSign && (
         <section className="card stack">
@@ -740,7 +743,7 @@ function Requisition({ org }: { org: Organization }) {
         </section>
       )}
       <ReceiptsBox org={org} req={r} receipts={receipts} />
-      {(p.canSign || r.requesterId === p.uid) && (
+      {(p.canSign || r.requesterId === p.uid) && (r.status !== 'approved' || p.isKeeper) && (
         <section className="card stack no-print">
           <h2>Delete this request</h2>
           <p className="small muted">{p.isPastor ? 'You can delete it on your own.' : 'Any two stakeholders must approve.'} It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>

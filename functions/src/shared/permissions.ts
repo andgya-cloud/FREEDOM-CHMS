@@ -176,6 +176,11 @@ export function canKeepAccounts(profile: (AccessProfile & { displayName?: string
   return can(profile, 'users.manage') && ACCOUNT_KEEPER_NAMES.some((n) => plain(n) === plain(profile?.displayName ?? ''));
 }
 
+/** The Director: Andrew Guya's pastor account. Only he deletes alone, sees the deletion register and puts entries back (Andy, 2026-10-24). */
+export function isDirectorProfile(profile: (AccessProfile & { displayName?: string }) | null | undefined): boolean {
+  return can(profile, 'users.manage') && (profile?.displayName ?? '').toLowerCase().replace(/[^a-z]/g, '') === 'andrewguya';
+}
+
 export function canAccessOrg(profile: AccessProfile | null | undefined, orgId: string): boolean {
   if (!profile?.active) return false;
   return !!profile.allOrgs || !!profile.orgIds?.includes(orgId);

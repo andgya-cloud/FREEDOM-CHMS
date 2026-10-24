@@ -4,7 +4,7 @@ import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { localDateKey } from '../../functions/src/shared/datetime';
-import { ACCOUNTANT_TITLE, type Permission } from '../../functions/src/shared/permissions';
+import { ACCOUNTANT_TITLE, canKeepAccounts, isDirectorProfile, type Permission } from '../../functions/src/shared/permissions';
 import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund } from '../../functions/src/shared/pettyCash';
 import type { Organization } from './OrgContext';
 
@@ -31,8 +31,9 @@ export function usePettyCashAccess() {
   // The title printed under a signature, set on each signatory's account; the accountant's must be on every request.
   const signRole = signTitle(profile?.pettyTitle, can('users.manage'));
   const isAccountant = profile?.pettyTitle === ACCOUNTANT_TITLE;
-  const isPastor = can('users.manage');
-  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, isPastor, seesAll: canSign, any: canRequest || canAuthorize };
+  // "Pastor" powers in petty cash (delete alone, the register, put back) are the Director's only (Andy, 2026-10-24).
+  const isPastor = isDirectorProfile(profile);
+  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, isPastor, isKeeper: canKeepAccounts(profile), seesAll: canSign, any: canRequest || canAuthorize };
 }
 
 /** The voucher title for a signer: the one on their account, otherwise Pastor or Stakeholder. */
