@@ -336,7 +336,8 @@ export interface BinEntry {
 
 /** Which actions an entry in this state may be asked for. */
 export function binActionsFor(state: BinState): BinAction[] {
-  return state === 'live' ? ['delete'] : state === 'in-bin' ? ['restore', 'purge'] : [];
+  // A deleted-forever entry keeps a safety copy the Director can put back (Andy, 2026-10-24).
+  return state === 'live' ? ['delete'] : state === 'in-bin' ? ['restore', 'purge'] : ['restore'];
 }
 
 /** The entry's state once an action is complete. */

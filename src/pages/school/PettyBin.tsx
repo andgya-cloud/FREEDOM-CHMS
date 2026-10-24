@@ -1,3 +1,4 @@
+import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { collection, type Timestamp } from 'firebase/firestore';
@@ -120,6 +121,7 @@ function BinView({ org }: { org: Organization }) {
   const { rows, loading } = usePettyBin(org);
   const [asking, setAsking] = useState<{ row: BinRow; action: BinAction } | null>(null);
   const [reason, setReason] = useState('');
+  const [restoring, setRestoring] = useState<BinRow | null>(null);
   const waiting = useMemo(() => rows.filter((r) => r.motion), [rows]);
   const inBin = useMemo(() => rows.filter((r) => r.state === 'in-bin' && !r.motion), [rows]);
   const register = useMemo(() => rows.flatMap((r) => r.history.map((h) => ({ row: r, h })))
@@ -143,7 +145,7 @@ function BinView({ org }: { org: Organization }) {
         {p.isPastor && <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>}
       </div>
       <PettyNav org={org} />
-      <p className="muted small no-print">{p.isPastor ? 'You can put back or delete forever on your own. For other stakeholders each step needs any two of them.' : 'Deleting, putting back and deleting forever each need any two stakeholders. Whoever asks signs first.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
+      <p className="muted small no-print">{p.isPastor ? 'You can delete, delete forever and put back on your own. Only you can put entries back, even ones deleted forever, from the register below. Other stakeholders need any two of them to delete.' : 'Deleting and deleting forever each need any two stakeholders. Whoever asks signs first. Only the Director can put an entry back.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
 
       <section className="card stack no-print">
         <h2>Waiting for a second stakeholder</h2>
@@ -182,13 +184,13 @@ function BinView({ org }: { org: Organization }) {
                   {last && <p className="small muted">Deleted {stamp(last.doneAt)} by {signers(last.signatures)}. Reason: {last.reason}</p>}
                   {p.canSign && (
                     <div className="row-actions">
-                      <button type="button" className="btn btn-quiet" onClick={() => { setReason(''); setAsking({ row: r, action: 'restore' }); }}>Put back</button>
+                      {p.isPastor && <button type="button" className="btn btn-quiet" onClick={() => { setReason(''); setAsking({ row: r, action: 'restore' }); }}>Put back</button>}
                       <button type="button" className="btn btn-quiet danger-text" onClick={() => { setReason(''); setAsking({ row: r, action: 'purge' }); }}>Delete forever</button>
                     </div>
                   )}
                   {asking?.row.id === r.id && (
                     <div className="petty-bin-ask">
-                      <p className="small">{asking.action === 'purge' ? 'Deleting forever cannot be undone. The record below keeps its name, amount and who approved it.' : 'It comes back exactly as it was.'} {p.isPastor ? 'This happens straight away.' : 'You sign first; one more stakeholder must approve.'}</p>
+                      <p className="small">{asking.action === 'purge' ? 'It disappears for everyone. Only the Director can bring it back, from the deletion register.' : 'It comes back exactly as it was.'} {p.isPastor ? 'This happens straight away.' : 'You sign first; one more stakeholder must approve.'}</p>
                       <label className="field"><span>Reason (optional)</span><input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} /></label>
                       <div className="row-actions">
                         <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>
@@ -203,15 +205,18 @@ function BinView({ org }: { org: Organization }) {
         )}
       </section>
 
+      <ConfirmDialog open={!!restoring} title={restoring ? `Put back ${restoring.label}?` : ''} confirmLabel="Put back"
+        body={restoring?.state === 'purged' ? 'It was deleted forever. It comes back from its safety copy, with its receipts, exactly as it was.' : 'It comes back from the Bin exactly as it was.'}
+        onConfirm={() => { if (restoring) void act(restoring, 'restore'); setRestoring(null); }} onCancel={() => setRestoring(null)} />
       {/* Only the Director (pastor) sees the register (Andy, 2026-10-24). */}
       {p.isPastor && (
       <section className="card stack">
         <h2>Deletion register</h2>
-        <p className="small muted">{org.name}. Every entry moved to the bin, put back or deleted forever, with the two stakeholders who approved it.</p>
+        <p className="small muted">{org.name}. Every entry moved to the bin, put back or deleted forever, with who approved it. Only you can put an entry back, even one deleted forever.</p>
         {register.length === 0 ? <p className="muted small">Nothing has been deleted.</p> : (
           <div className="table-scroll">
             <table className="table petty-register">
-              <thead><tr><th>Date</th><th>Entry</th><th>Action</th><th>Reason</th><th>Approved by</th></tr></thead>
+              <thead><tr><th>Date</th><th>Entry</th><th>Action</th><th>Reason</th><th>Approved by</th><th className="no-print" /></tr></thead>
               <tbody>
                 {register.map(({ row, h }, i) => (
                   <tr key={`${row.id}-${i}`}>
@@ -220,6 +225,9 @@ function BinView({ org }: { org: Organization }) {
                     <td>{BIN_DONE_LABELS[h.action]}</td>
                     <td>{h.reason || '—'}</td>
                     <td>{h.signatures.map((s) => <div key={s.uid}>{s.name}, {s.title}<span className="small muted"> · {stamp(s.at)}</span></div>)}{h.sole && <div className="small muted">Sole approval</div>}</td>
+                    <td className="no-print">{h === row.history[row.history.length - 1] && row.state !== 'live' && !row.motion && (
+                      <button type="button" className="btn btn-quiet" onClick={() => setRestoring(row)}>Put back</button>
+                    )}</td>
                   </tr>
                 ))}
               </tbody>

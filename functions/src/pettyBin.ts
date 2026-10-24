@@ -36,7 +36,7 @@ function ownerOf(kind: BinKind, data: FirebaseFirestore.DocumentData) {
 }
 
 /** Deletes a receipt's file record and its saved parts. */
-async function purgeReceiptFiles(orgId: string, receiptId: string) {
+export async function purgeReceiptFiles(orgId: string, receiptId: string) {
   const fileRef = db.doc(`organizations/${orgId}/pettyReceiptFiles/${receiptId}`);
   const parts = ((await fileRef.get()).get('parts') as number | undefined) ?? 0;
   const batch = db.batch();
@@ -70,10 +70,12 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
 
   const targetRef = db.doc(`organizations/${orgId}/${COLLECTIONS[kind]}/${targetId}`);
   const binRef = db.doc(`organizations/${orgId}/pettyBin/${kind}_${targetId}`);
+  const vaultRef = db.doc(`organizations/${orgId}/pettyVault/${kind}_${targetId}`);
   const result = await db.runTransaction(async (tx) => {
-    const [targetSnap, binSnap] = await Promise.all([tx.get(targetRef), tx.get(binRef)]);
-    const target = targetSnap.data();
-    if (!target || target.orgId !== orgId) throw new HttpsError('not-found', 'This entry is no longer there.');
+    const [targetSnap, binSnap, vaultSnap] = await Promise.all([tx.get(targetRef), tx.get(binRef), tx.get(vaultRef)]);
+    const vault = vaultSnap.data() as { data: FirebaseFirestore.DocumentData; receipts?: { id: string; data: FirebaseFirestore.DocumentData }[] } | undefined;
+    const target = targetSnap.data() ?? (action === 'restore' ? vault?.data : undefined);
+    if (!target || target.orgId !== orgId) throw new HttpsError('not-found', action === 'restore' ? 'This entry was deleted forever before safety copies were kept, so it cannot come back.' : 'This entry is no longer there.');
     let bin = binSnap.data() as BinEntry | undefined;
     if (!bin) {
       if (target.deletedAt) throw new HttpsError('failed-precondition', 'This entry was deleted before the bin existed.');
@@ -90,6 +92,10 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
       return { outcome: 'withdrawn' as const, count: 0, action: motion.action };
     }
 
+    // Only the Director (the pastor account), signed in as himself, puts entries back (Andy, 2026-10-24).
+    if (action === 'restore' && !(signerUid === caller.uid && (caller.profile.permissions ?? []).includes('users.manage'))) {
+      throw new HttpsError('permission-denied', 'Only the Director can put entries back.');
+    }
     if (motion && motion.action !== action) throw new HttpsError('failed-precondition', `This is already waiting for "${motion.action}". Sign or withdraw that first.`);
     if (!motion && !binActionsFor(bin.state).includes(action)) throw new HttpsError('failed-precondition', 'That cannot be done to this entry now.');
     const sigs = motion?.signatures ?? [];
@@ -112,8 +118,20 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
 
     // The second signature: carry it out and keep the record.
     if (action === 'delete') tx.update(targetRef, { deletedAt: FieldValue.serverTimestamp(), deletedBy: signerUid, ...stamp });
-    else if (action === 'restore') tx.update(targetRef, { deletedAt: null, deletedBy: null, ...stamp });
-    else tx.delete(targetRef);
+    else if (action === 'restore' && bin.state === 'purged') {
+      // Bring a deleted-forever entry back from its safety copy, with a requisition's receipts.
+      if (!vault) throw new HttpsError('failed-precondition', 'This entry was deleted forever before safety copies were kept, so it cannot come back.');
+      tx.set(targetRef, { ...vault.data, deletedAt: null, deletedBy: null, ...stamp });
+      for (const r of vault.receipts ?? []) tx.set(db.doc(`organizations/${orgId}/pettyReceipts/${r.id}`), r.data);
+      tx.delete(vaultRef);
+    } else if (action === 'restore') tx.update(targetRef, { deletedAt: null, deletedBy: null, ...stamp });
+    else {
+      // "Delete forever" hides the entry from everyone but keeps a safety copy no app user can read.
+      const receipts = kind === 'request' ? (await tx.get(db.collection(`organizations/${orgId}/pettyReceipts`).where('reqId', '==', targetId))).docs : [];
+      tx.set(vaultRef, { orgId, kind, targetId, data: target, receipts: receipts.map((d) => ({ id: d.id, data: d.data() })), savedAt: FieldValue.serverTimestamp() });
+      for (const d of receipts) tx.delete(d.ref);
+      tx.delete(targetRef);
+    }
     tx.set(binRef, {
       ...bin, state: binStateAfter(action), motion: null,
       history: [...bin.history, { action, reason: next.reason, signatures: next.signatures, doneAt: Timestamp.now(), ...(sole ? { sole: true } : {}) }], ...stamp,
@@ -121,17 +139,7 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
     return { outcome: 'done' as const, count: next.signatures.length, action };
   });
 
-  // Deleting forever also removes a receipt's file, or a requisition's receipts and their files.
-  if (result.outcome === 'done' && action === 'purge') {
-    if (kind === 'receipt') await purgeReceiptFiles(orgId, targetId);
-    if (kind === 'request') {
-      const receipts = await db.collection(`organizations/${orgId}/pettyReceipts`).where('reqId', '==', targetId).get();
-      for (const r of receipts.docs) {
-        await purgeReceiptFiles(orgId, r.id);
-        await (r.ref as DocumentReference).delete();
-      }
-    }
-  }
+  // Receipt files stay (unreachable once their receipt record is gone) so a put-back brings them back.
   await writeAudit({
     actorUid: signerUid, actorEmail: signer.email, action: `petty_bin_${result.outcome}`, path: targetRef.path, collection: COLLECTIONS[kind], docId: targetId, orgId,
     note: result.outcome === 'done' ? `${BIN_DONE_LABELS[action]}${result.count === 1 ? ' (pastor alone)' : ''}` : `${action} (${result.count} of ${BIN_SIGNATURES_NEEDED})`,
