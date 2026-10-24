@@ -851,8 +851,11 @@ service cloud.firestore {
           && (request.resource.data.status != 'graduated' || (resource != null && resource.data.status == 'graduated'))
           && (resource == null ? (request.resource.data.get('admissionNo', null) == null
                                   || (has('settings.manage') && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1))
-                               : request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null))
-          && listOf(request.resource.data.sponsors, 4);
+                               : (request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null)
+                                  // The principal corrects a wrong number, alone (Andy, 2026-10-24: Cohort 2 is 2026).
+                                  || (has('settings.manage') && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1
+                                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admissionNo', 'updatedAt', 'updatedBy']))))
+          && listOf(request.resource.data.get('sponsors', []), 4);
         allow delete: if false;
       }
 

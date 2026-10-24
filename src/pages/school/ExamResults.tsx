@@ -3,6 +3,7 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { readSpreadsheetSheets } from '../../lib/statementFile';
 import { examResultId, logExam, saveExamMarks, saveExamResults } from '../../lib/examWrites';
+import { correctAdmissionNo } from '../../lib/schoolWrites';
 import { transcriptsPdf, type Transcript, type TranscriptSemester } from '../../lib/examPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
@@ -112,11 +113,15 @@ function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: I
   const { results: all } = useExamResults(org.id);
   const [file, setFile] = useState<{ name: string; parsed: ParsedResults } | null>(null);
   const [includeHeld, setIncludeHeld] = useState(false);
+  const [fixNumbers, setFixNumbers] = useState(true);
   const [saving, setSaving] = useState(false);
   const plan = useMemo(() => (file ? planResultImport(file.parsed, allStudents, { includeHeld }) : null), [file, allStudents, includeHeld]);
   const existing = useMemo(() => new Set(all.map((r) => r.id)), [all]);
   const replacing = plan ? plan.results.filter((r) => existing.has(examResultId(r.studentId, r.cohort))).length : 0;
   const cohorts = plan ? [...new Set(plan.results.map((r) => r.cohort))] : [];
+  // Students whose admission number differs from the file only by the year; the file can correct them.
+  const taken = new Set(allStudents.map((s) => admissionKey(s.admissionNo)));
+  const fixes = plan ? plan.results.filter((r) => r.fileAdmissionNo && !taken.has(admissionKey(r.fileAdmissionNo))) : [];
 
   async function choose(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
@@ -128,12 +133,24 @@ function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: I
     if (!plan || !file) return;
     setSaving(true);
     try {
-      await saveExamResults(org.id, plan.results, existing);
+      const tried = a.canManage && fixNumbers ? fixes : [];
+      // A number that can't be corrected never stops the results from saving.
+      const outcomes = await Promise.allSettled(tried.map((r) => correctAdmissionNo(org.id, r.studentId, r.fileAdmissionNo!)));
+      const fixing = tried.filter((_, i) => outcomes[i]!.status === 'fulfilled');
+      if (fixing.length < tried.length) toast.show(`${tried.length - fixing.length} admission numbers could not be corrected; correct them under Students.`);
+      if (fixing.length) {
+        for (const c of [...new Set(fixing.map((r) => r.cohort))]) {
+          const list = fixing.filter((r) => r.cohort === c);
+          void logExam(org.id, { action: 'admission', cohort: c, sheetId: null, detail: `Admission numbers corrected from ${file.name}: ${list.map((r) => `${r.admissionNo} → ${r.fileAdmissionNo}`).join(', ')}`.slice(0, 500), byName: a.myName });
+        }
+      }
+      const fixed = new Set(fixing.map((r) => r.studentId));
+      await saveExamResults(org.id, plan.results.map((r) => (fixed.has(r.studentId) ? { ...r, admissionNo: r.fileAdmissionNo! } : r)), existing);
       for (const c of cohorts) {
         const n = plan.results.filter((r) => r.cohort === c).length;
         void logExam(org.id, { action: 'upload', cohort: c, sheetId: null, detail: `Semester results for ${n} students uploaded from ${file.name}${replacing ? ' (earlier results replaced)' : ''}`, byName: a.myName });
       }
-      toast.show(`Saved results for ${plan.results.length} students.`);
+      toast.show(`Saved results for ${plan.results.length} students${fixing.length ? ` and corrected ${fixing.length} admission numbers` : ''}.`);
       setFile(null);
     } catch (err) { toast.show(friendlyError(err)); } finally { setSaving(false); }
   }
@@ -154,6 +171,13 @@ function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: I
             <KpiCard label="Held back" value={String(plan.held.length)} tone={plan.held.length ? 'warn' : undefined} />
           </KpiRow>
           {cohorts.length > 0 && <p className="small">Cohort{cohorts.length > 1 ? 's' : ''}: {cohorts.join(', ')}.{replacing > 0 && ` ${replacing} of these students already have results saved; theirs will be replaced.`}</p>}
+          {fixes.length > 0 && (
+            <div className="notice stack">
+              <p><strong>{fixes.length} admission {fixes.length === 1 ? 'number differs' : 'numbers differ'} from the file only by the year</strong>, for example {fixes[0]!.admissionNo} in Students and {fixes[0]!.fileAdmissionNo} in the file.</p>
+              <label className="check"><input type="checkbox" checked={fixNumbers} onChange={(e) => setFixNumbers(e.target.checked)} /> Correct {fixes.length === 1 ? 'it' : 'them'} in Students to match the file</label>
+              <details><summary className="small">See the list</summary><ul className="small">{fixes.map((r) => <li key={r.studentId}>{r.studentName}: {r.admissionNo} → {r.fileAdmissionNo}</li>)}</ul></details>
+            </div>
+          )}
           {plan.held.length > 0 && (
             <details>
               <summary>{plan.held.length} rows held back and not saved</summary>

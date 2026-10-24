@@ -72,6 +72,12 @@ describe('ADIA students', () => {
     await assertSucceeds(updateDoc(ref, { status: 'withdrawn', withdrawnOn: '2026-10-18', updatedAt: serverTimestamp(), updatedBy: 'adiaAdmin' }));
     await assertFails(deleteDoc(ref));
   });
+  it('lets staff with Settings correct an admission number, changing nothing else', async () => {
+    const ref = doc(as('pastor'), `${O}/students/s1`);
+    await assertFails(updateDoc(ref, { admissionNo: 'ADIA/2026/0009', status: 'withdrawn', updatedAt: serverTimestamp(), updatedBy: 'pastor' }));
+    await assertFails(updateDoc(ref, { admissionNo: '', updatedAt: serverTimestamp(), updatedBy: 'pastor' }));
+    await assertSucceeds(updateDoc(ref, { admissionNo: 'ADIA/2026/0009', updatedAt: serverTimestamp(), updatedBy: 'pastor' }));
+  });
   it('keeps identity numbers to the pastor', async () => {
     await assertFails(getDoc(doc(as('adiaAdmin'), `${O}/studentPrivate/s1`)));
     await assertFails(getDoc(doc(as('adiaDirector'), `${O}/studentPrivate/s1`)));

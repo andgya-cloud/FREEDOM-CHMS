@@ -88,7 +88,9 @@ describe('semester results', () => {
     ]);
     expect(plan.results.map((r) => r.studentId)).toEqual(['a', 'k']);
     expect(plan.results[0]!.warnings.join()).toMatch(/2025\/2\/011 in Students/);
+    expect(plan.results[0]!.fileAdmissionNo).toBe('ADIA/TLF/2026/2/011');
     expect(plan.results[1]!.warnings.join()).toMatch(/matched by name/);
+    expect(plan.results[1]!.fileAdmissionNo).toBeUndefined();
     expect(plan.unmatched).toHaveLength(1);
   });
 });

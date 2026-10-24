@@ -119,7 +119,11 @@ export function parseResultsWorkbook(sheets: { name: string; rows: Cell[][] }[])
 }
 
 export interface ImportStudent { id: string; admissionNo: string; name: string; courseId: string; cohort: string }
-export interface PlannedResult extends ExamResult { warnings: string[] }
+export interface PlannedResult extends ExamResult {
+  warnings: string[];
+  /** The file's admission number when it differs from Students only by the year. */
+  fileAdmissionNo?: string;
+}
 export interface ResultPlan {
   results: PlannedResult[];
   /** Rows whose admission number is not in Students. */
@@ -167,6 +171,7 @@ export function planResultImport(parsed: ParsedResults, students: readonly Impor
     if (!res) {
       res = { cohort, studentId: st.id, admissionNo: st.admissionNo, studentName: st.name, courseId: st.courseId || null, semesters: {}, printed: parsed.printed.get(admissionKey(r.admissionNo)) ?? null, notes: [], warnings: [] };
       if (hit.how) res.warnings.push(`${st.name}: ${hit.how}.`);
+      if (hit.how.startsWith('matched to admission number')) res.fileAdmissionNo = r.admissionNo.replace(/\s+/g, '');
       if (st.cohort && cohort !== st.cohort) res.warnings.push(`Students lists ${st.name} in ${st.cohort}, the file says ${cohort}.`);
       out.set(id, res);
     }

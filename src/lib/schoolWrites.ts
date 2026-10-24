@@ -205,3 +205,8 @@ export function importStudents(orgId: string, rows: readonly ImportRow[], have: 
   }
   return Promise.all(writes).then(() => undefined);
 }
+
+/** The principal corrects a student's admission number (Andy, 2026-10-24). */
+export function correctAdmissionNo(orgId: string, studentId: string, admissionNo: string) {
+  return updateRecord(doc(db, 'organizations', orgId, 'students', studentId), { admissionNo: admissionNo.slice(0, 40) });
+}
