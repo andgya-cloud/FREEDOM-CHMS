@@ -103,7 +103,7 @@ function Enrol({ org }: { org: Organization }) {
                 <option value="">Choose…</option>
                 {intakes.map((i) => { const c = capacityOf(i, s.students); return <option key={i.id} value={i.id}>{i.name}{i.capacity != null ? ` (${c.taken} of ${i.capacity} taken)` : ''}</option>; })}
               </select>
-              {intakes.length === 0 && <small className="hint">No intake yet for this programme. Add one under <Link to="/school/courses">Courses</Link>.</small>}
+              {intakes.length === 0 && <small className="hint">No intake yet for this programme. Add one under <Link to="/school/courses">Programmes</Link>.</small>}
               {cap?.full && <small className="hint danger-text">This intake is full.</small>}
             </label>
             {course.levels.length > 0 && (

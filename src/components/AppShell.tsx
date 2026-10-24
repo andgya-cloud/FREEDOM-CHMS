@@ -52,7 +52,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {current?.type === 'college' ? (
         <NavLink to="/school" className={({ isActive }) => `tab${isActive && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>
           {adia ? <AdiaIcon name="programmes" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>}
-          {adia ? <TabLabel full="Programmes" short="Courses" /> : 'School'}
+          {adia ? <TabLabel full="Programmes" short="Programs" /> : 'School'}
         </NavLink>
       ) : current?.type === 'ministry' ? (
         <NavLink to="/hope" className={({ isActive }) => `tab${isActive && !location.pathname.startsWith('/hope/petty-cash') ? ' active' : ''}`}>

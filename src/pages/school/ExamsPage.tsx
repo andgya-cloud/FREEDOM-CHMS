@@ -84,7 +84,7 @@ function Exams({ org }: { org: Organization }) {
       <div className="page-head"><h1>Exam Records</h1></div>
       {can('people.read') && <SchoolNav feesAllowed={s.feesAllowed} />}
       {cohorts.length === 0 ? (
-        <div className="notice">Exam records follow the intakes. Add an intake under <Link to="/school/courses">Courses</Link> first, such as "Cohort 4".</div>
+        <div className="notice">Exam records follow the intakes. Add a cohort under <Link to="/school/courses">Programmes</Link> first, such as "Cohort 4".</div>
       ) : (
         <>
           <div className="dash-controls no-print">

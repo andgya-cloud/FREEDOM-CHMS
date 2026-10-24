@@ -32,7 +32,7 @@ export function SchoolGate({ title, children }: { title: string; children: (org:
 export function SchoolNav({ feesAllowed }: { feesAllowed: boolean }) {
   const { can } = useAuth();
   const items: [string, string, boolean][] = [
-    ['/school', 'Overview', true], ['/school/students', 'Students', true], ['/school/courses', 'Courses', true],
+    ['/school', 'Overview', true], ['/school/students', 'Students', true], ['/school/courses', 'Programmes', true],
     ['/school/exams', 'Exam Records', can('exams.mark') || can('exams.manage') || can('users.manage')], ['/school/fees', 'Fees', feesAllowed], ['/school/graduation', 'Graduation', true],
     ['/school/reports', 'Reports', can('finance.reports')],
   ];

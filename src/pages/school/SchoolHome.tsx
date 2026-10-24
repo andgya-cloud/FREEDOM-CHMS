@@ -100,7 +100,7 @@ function Home({ org }: { org: Organization }) {
           <Donut label="Students by status" rows={STUDENT_STATUSES.map((k) => ({ label: STUDENT_STATUS_LABELS[k], value: statusCount(k) }))} center={String(live.length)} centerNote="students" />
         </Panel>
         <Panel title="Students in each cohort and department" wide>
-          {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Courses</Link>.</p> : (
+          {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Programmes</Link>.</p> : (
             <div className="exam-table-wrap">
               <table className="table">
                 <thead><tr><th>Cohort</th>{deptIds.map((id) => <th key={id} className="num">{s.courseName(id)}</th>)}<th className="num">Total</th></tr></thead>
