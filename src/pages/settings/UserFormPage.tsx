@@ -15,6 +15,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, SIGNATORY_ROLE_ID, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
+import { passwordProof } from '../../lib/pettyPin';
 
 interface FormState {
   displayName: string;
@@ -57,6 +58,7 @@ export function UserFormPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [resetPw, setResetPw] = useState('');
+  const [pwDone, setPwDone] = useState<{ email: string; works: boolean; temporary: string } | null>(null);
   const [confirmOff, setConfirmOff] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const tempPwId = useId();
@@ -143,9 +145,13 @@ export function UserFormPage() {
     const pw = resetPw || generateTemporaryPassword(form.email);
     if (passwordProblems(pw, form.email).length) return setError('The new password is not strong enough.');
     try {
-      await httpsCallable(functions, 'resetUserPassword')({ uid, password: pw });
+      const keep = !!resetPw;
+      const res = await httpsCallable<object, { ok: boolean; loginEmail?: string }>(functions, 'resetUserPassword')({ uid, password: pw, keep });
       setResetPw('');
-      toast.show(`Password reset. New temporary password: ${pw}`);
+      const loginEmail = res.data.loginEmail || form.email;
+      // Prove it at once with a real sign-in, so a problem shows here and not later at the signing box.
+      const works = await passwordProof('', loginEmail, pw).then(() => true).catch(() => false);
+      setPwDone({ email: loginEmail, works, temporary: keep ? '' : pw });
     } catch (err) {
       setError(friendlyError(err));
     }
@@ -248,8 +254,12 @@ export function UserFormPage() {
           <h2>Password</h2>
           <div className="input-with-button">
             <PasswordInput shown autoComplete="new-password" placeholder="Leave empty to generate one" value={resetPw} onChange={(e) => setResetPw(e.target.value)} />
-            <button type="button" className="btn" onClick={resetPassword}>Reset password</button>
+            <button type="button" className="btn" onClick={() => { setPwDone(null); void resetPassword(); }}>Set password</button>
           </div>
+          <small className="hint">Type the password you want {form.displayName.split(' ')[0] || 'them'} to use. It works for signing in and for signing petty cash.</small>
+          {pwDone && (pwDone.works
+            ? <p className="small" role="status">✓ Saved and checked. {form.displayName.split(' ')[0]} signs in with <strong>{pwDone.email}</strong>{pwDone.temporary ? <> and the temporary password <strong>{pwDone.temporary}</strong> (they will choose their own)</> : ' and the password you typed'}. The same password signs petty cash.</p>
+            : <p className="error" role="alert">The password was saved for petty cash signing, but a test sign-in with {pwDone.email} failed. Check that this is their sign-in email.</p>)}
           <h2>Access</h2>
           {form.active
             ? <button type="button" className="btn btn-danger" onClick={() => setConfirmOff(true)}>Switch off this account</button>

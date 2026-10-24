@@ -20,6 +20,18 @@ async function hashPin(pin: string, salt: Buffer) {
   return scrypt(pin, salt, 32);
 }
 
+/**
+ * Keeps a hash of the password the pastor sets in Staff accounts, so that password signs petty cash on the
+ * server directly, with no sign-in email involved (Andy, 2026-10-24). Kept beside the PIN, never readable.
+ */
+export async function saveSigningPassword(uid: string, password: string) {
+  const salt = randomBytes(16);
+  await db.doc(`pettyPins/${uid}`).set({
+    pwSalt: salt.toString('base64'), pwHash: (await hashPin(password, salt)).toString('base64'), pwSetAt: FieldValue.serverTimestamp(),
+    failed: 0, lockedUntil: null,
+  }, { merge: true });
+}
+
 /** Who may sign in this organization: requests need check/approve/authorize, top-ups and resets authorize. */
 export function canSign(profile: UserProfile | undefined, orgId: string, kind: 'request' | 'fund') {
   if (!profile?.active || !canAccessOrg(profile, orgId)) return false;
@@ -119,17 +131,24 @@ export async function verifyPin(uid: string, pin: string) {
   }
   const ref = db.doc(`pettyPins/${uid}`);
   const snap = await ref.get();
-  if (!snap.exists) throw new HttpsError('failed-precondition', 'This person has not set a PIN yet.');
-  const d = snap.data() as { salt: string; hash: string; failed?: number; lockedUntil?: FirebaseFirestore.Timestamp | null };
-  if (d.lockedUntil && d.lockedUntil.toMillis() > Date.now()) {
-    throw new HttpsError('resource-exhausted', `Too many wrong PINs. Try again in ${PIN_LOCK_MINUTES} minutes, or set a new PIN with your password.`);
+  // Four to six digits is a PIN; anything else is the signing password set in Staff accounts.
+  const isPin = /^\d{4,6}$/.test(pin);
+  const word = isPin ? 'PIN' : 'password';
+  const d = (snap.data() ?? {}) as { salt?: string; hash?: string; pwSalt?: string; pwHash?: string; failed?: number; lockedUntil?: FirebaseFirestore.Timestamp | null };
+  const salt = isPin ? d.salt : d.pwSalt;
+  const hash = isPin ? d.hash : d.pwHash;
+  if (!salt || !hash) {
+    throw new HttpsError('failed-precondition', isPin ? 'This person has not set a PIN yet.' : 'NO_SIGNING_PASSWORD');
   }
-  const ok = timingSafeEqual(await hashPin(pin, Buffer.from(d.salt, 'base64')), Buffer.from(d.hash, 'base64'));
+  if (d.lockedUntil && d.lockedUntil.toMillis() > Date.now()) {
+    throw new HttpsError('resource-exhausted', `Too many wrong tries. Try again in ${PIN_LOCK_MINUTES} minutes.`);
+  }
+  const ok = timingSafeEqual(await hashPin(pin, Buffer.from(salt, 'base64')), Buffer.from(hash, 'base64'));
   if (!ok) {
     const failed = (d.failed ?? 0) + 1;
     const lock = failed >= PIN_MAX_TRIES;
     await ref.update({ failed: lock ? 0 : failed, lockedUntil: lock ? new Date(Date.now() + PIN_LOCK_MINUTES * 60_000) : null });
-    throw new HttpsError('permission-denied', lock ? `Wrong PIN. That PIN is now locked for ${PIN_LOCK_MINUTES} minutes.` : `Wrong PIN. ${PIN_MAX_TRIES - failed} tries left.`);
+    throw new HttpsError('permission-denied', lock ? `Wrong ${word}. Signing is now locked for ${PIN_LOCK_MINUTES} minutes.` : `Wrong ${word}. ${PIN_MAX_TRIES - failed} tries left.`);
   }
   if (d.failed || d.lockedUntil) await ref.update({ failed: 0, lockedUntil: null });
 }

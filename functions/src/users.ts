@@ -3,6 +3,7 @@ import { db, auth, FieldValue, requireCaller, requireString, requireStringArray,
 import { DEFAULT_ROLES, TEAM_ROLE_ID, can, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
+import { saveSigningPassword } from './pettyPins.js';
 
 // The browser calls these directly, so anyone may reach them; each one checks
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
@@ -196,14 +197,18 @@ export const resetUserPassword = onCall(CALLABLE, async (request) => {
   }
   const email = (snap.data() as UserProfile).email;
   const password = checkPassword(data.password, email);
+  // A password the pastor chose himself is kept as is (Andy, 2026-10-24); a generated one must be changed.
+  const keep = data.keep === true;
   await auth.updateUser(uid, { password });
   await auth.revokeRefreshTokens(uid);
-  await db.doc(`users/${uid}`).update({ mustChangePassword: true, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
+  // The same password also signs petty cash, checked on the server with no sign-in email involved.
+  await saveSigningPassword(uid, password);
+  await db.doc(`users/${uid}`).update({ mustChangePassword: !keep, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'password_reset', path: `users/${uid}`,
     collection: 'users', docId: uid, orgId: null,
   });
-  return { ok: true };
+  return { ok: true, loginEmail: (await auth.getUser(uid)).email ?? email };
 });
 
 /**
