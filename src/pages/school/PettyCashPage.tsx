@@ -5,7 +5,7 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
-import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
+import { addReceipt, approveRequisition, cancelFund, checkRequisition, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
@@ -148,7 +148,7 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
 
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
   topup: { title: 'Top-Up', sub: 'Any one stakeholder tops up with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
-  reset: { title: 'Reset Budget Authorization', sub: 'Any two to approve the reset. A stakeholder cannot approve twice.', done: 'Budget reset. It now starts again from zero.' },
+  reset: { title: 'Reset Budget Authorization', sub: 'Any two stakeholders approve the reset: each picks their name and types their PIN.', done: 'Budget reset. It now starts again from zero.' },
 };
 
 /**
@@ -157,47 +157,19 @@ const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: strin
  */
 function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKind; onClose?: () => void }) {
   const p = usePettyCash(org);
-  const { profile } = useAuth();
   const toast = useToast();
   const [amount, setAmount] = useState('');
   const amountBox = useRef<HTMLInputElement>(null);
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
   const [askDelete, setAskDelete] = useState(false);
   const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
   const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
-  const iSigned = !!open && p.uid in open.signatures;
   const cents = kind === 'topup' ? (open ? open.amountCents : parseAmountCents(amount)) : 0;
   const ready = kind === 'reset' || (cents != null && cents > 0);
-  const name = profile?.displayName ?? 'Stakeholder';
   const text = FUND_TEXT[kind];
   const needed = fundSignaturesNeeded(kind);
   const slots = Math.max(needed, signed.length + (open ? 1 : 0));
   const quickTopUp = kind === 'topup' && !open;
   const topUpWho = org.type === 'college' ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
-
-  async function confirm() {
-    if (!password) return;
-    if (!ready) {
-      toast.show(amount.trim() ? 'Type the top-up amount in numbers, for example 500000.' : 'Type the top-up amount first, in the box at the top.');
-      amountBox.current?.focus();
-      return;
-    }
-    setBusy(true);
-    try {
-      await confirmOwnPassword(password);
-    } catch (err) {
-      setBusy(false);
-      toast.show(friendlyError(err));
-      return;
-    }
-    const last = !!open && signed.length + 1 >= needed;
-    const write = open ? signFund(org.id, open, name) : startFund(org.id, kind, cents ?? 0, name);
-    write.catch((err) => toast.show(friendlyError(err)));
-    setPassword(''); setAmount(''); setBusy(false);
-    toast.show(last ? text.done : `Signed. ${needed - signed.length - 1} more signature${needed - signed.length - 1 === 1 ? '' : 's'} needed.`);
-    if (last && kind === 'reset') onClose?.();
-  }
 
   return (
     <section className={`petty-auth petty-auth-${kind}`} aria-label={text.title}>
@@ -232,25 +204,20 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
         <ol className="petty-signers">
           {Array.from({ length: slots }, (_, n) => {
             const s = signed[n];
-            const mine = !s && n === signed.length && p.canAuthorize && !iSigned;
             return (
               <li key={n} className={s ? 'signed' : ''}>
                 <div className="petty-signer-head"><span className="petty-signer-no">{s ? '✓' : n + 1}</span><h3>Authorizer {n + 1}</h3>{s && <span className="petty-signer-when">{when(s[1].at)}</span>}</div>
                 {s ? (
                   <p className="petty-signer-name">Signed by {s[1].name}</p>
-                ) : mine ? (
-                  <div className="petty-signer-form">
-                    <label className="field"><span>Stakeholder</span><input value={name} readOnly /></label>
-                    <div className="petty-signer-row">
-                      <label className="field"><span>Your Insight-IQ password</span>
-                        <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password / signature" disabled={busy} />
-                      </label>
-                      <button type="button" className="btn btn-primary" disabled={!password || busy} onClick={confirm}>{busy ? 'Checking…' : '✓ Confirm'}</button>
-                    </div>
-                  </div>
-                ) : open && n === signed.length ? (
-                  <PettySignBox label="Another stakeholder picks their name and types their own PIN, or signs from their own account." orgId={org.id} fundOnly exclude={Object.keys(open.signatures)}
-                    sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'fund', open.id, uid, pin)}.`} />
+                ) : n === signed.length && (open || p.canAuthorize) ? (
+                  <PettySignBox label="Choose your name and type your own signing PIN." orgId={org.id} fundOnly exclude={open ? Object.keys(open.signatures) : []}
+                    sign={async (uid, pin) => {
+                      if (!open) return `Signed by ${await topUpWithPin(org.id, 0, uid, pin, kind)}. ${needed - 1} more signature${needed - 1 === 1 ? '' : 's'} needed.`;
+                      const who = await signWithPin(org.id, 'fund', open.id, uid, pin);
+                      const last = signed.length + 1 >= needed;
+                      if (last && kind === 'reset') onClose?.();
+                      return last ? `Signed by ${who}. ${text.done}` : `Signed by ${who}.`;
+                    }} />
                 ) : (
                   <p className="petty-signer-name muted">Waiting for the signature above</p>
                 )}
@@ -569,8 +536,6 @@ function Requisition({ org }: { org: Organization }) {
   const toast = useToast();
   const [rejecting, setRejecting] = useState(false);
   const [reason, setReason] = useState('');
-  const [password, setPassword] = useState('');
-  const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [sending, setSending] = useState(false);
   const { receipts } = useReceipts(org, reqId);
@@ -592,21 +557,6 @@ function Requisition({ org }: { org: Organization }) {
       { role: 'Board member', name: r.approved?.name ?? null, when: r.approved ? when(r.approved.at) : null },
     ];
 
-  async function sign() {
-    if (!r || !password) return;
-    setBusy(true);
-    try {
-      await confirmOwnPassword(password);
-    } catch (err) {
-      setBusy(false);
-      toast.show(friendlyError(err));
-      return;
-    }
-    const left = REQUEST_SIGNATURES_NEEDED - sigs.length - 1;
-    act(signRequisition(org.id, r, name, p.signRole), left <= 0 ? `${label(r)} approved. ${REQUEST_SIGNATURES_NEEDED} stakeholders signed.` : `Signed. ${left} more signature${left === 1 ? '' : 's'} needed.`);
-    setPassword('');
-    setBusy(false);
-  }
   const makePdf = () => requisitionPdf(org, {
     number: r.number, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote, items: r.items,
     totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status], date: when(r.createdAt),
@@ -723,14 +673,9 @@ function Requisition({ org }: { org: Organization }) {
             </div>
           ) : step === 'sign' ? (
             <>
-              <div className="field-row">
-                <label className="field"><span>Signing as</span><input value={`${name} (${p.signRole})`} readOnly /></label>
-                <label className="field"><span>Your Insight-IQ password</span>
-                  <PasswordInput autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Your password is your signature" disabled={busy} />
-                </label>
-              </div>
+              <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. Choose your name and type your own signing PIN.`} orgId={org.id} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
+                sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
               <div className="row-actions">
-                <button type="button" className="btn btn-primary" disabled={!password || busy} onClick={() => void sign()}>{busy ? 'Checking…' : 'Sign'}</button>
                 <button type="button" className="btn btn-quiet danger-text" onClick={() => setRejecting(true)}>Reject</button>
               </div>
             </>
@@ -744,7 +689,7 @@ function Requisition({ org }: { org: Organization }) {
           )}
         </section>
       )}
-      {r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
+      {step !== 'sign' && r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
         <section className="card stack no-print">
           <h2>Another stakeholder signs on this device</h2>
           <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} exclude={[r.requesterId, ...Object.keys(r.signatures)]}

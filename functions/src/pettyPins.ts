@@ -148,8 +148,10 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
-  const amountCents = typeof data.amountCents === 'number' ? data.amountCents : parseAmountCents(String(data.amountCents ?? ''));
-  if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0 || amountCents > 100000000000) {
+  // A reset is started the same way (name + PIN) but still waits for a second stakeholder.
+  const kind = data.kind === 'reset' ? 'reset' : 'topup';
+  const amountCents = kind === 'reset' ? 0 : typeof data.amountCents === 'number' ? data.amountCents : parseAmountCents(String(data.amountCents ?? ''));
+  if (kind === 'topup' && (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0 || amountCents > 100000000000)) {
     throw new HttpsError('invalid-argument', 'Type the top-up amount in numbers, for example 500000.');
   }
   requireMember(caller.profile, orgId);
@@ -157,20 +159,26 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   const signer = signerSnap.data() as UserProfile | undefined;
   const name = signer ? signer.displayName || signer.email : '';
   const orgType = (org.data() as { type?: string } | undefined)?.type;
-  if (!canSign(signer, orgId, 'fund') || !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage'))) {
-    throw new HttpsError('permission-denied', 'That person cannot top up here.');
+  if (!canSign(signer, orgId, 'fund') || (kind === 'topup' && !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage')))) {
+    throw new HttpsError('permission-denied', kind === 'topup' ? 'That person cannot top up here.' : 'That person cannot sign a reset.');
   }
   await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
-  const ref = db.collection(`organizations/${orgId}/pettyFunds`).doc();
+  const funds = db.collection(`organizations/${orgId}/pettyFunds`);
+  if (kind === 'reset') {
+    const waiting = await funds.where('kind', '==', 'reset').where('status', '==', 'collecting').get();
+    if (waiting.docs.some((d) => !d.data().deletedAt)) throw new HttpsError('already-exists', 'A reset is already waiting for a signature.');
+  }
+  const ref = funds.doc();
+  const status = fundStatusAfter(1, kind);
   await ref.set({
-    orgId, kind: 'topup', amountCents, status: 'done', doneAt: FieldValue.serverTimestamp(),
+    orgId, kind, amountCents, status, doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
     signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp() } },
     deletedAt: null, deletedBy: null,
     createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
   });
   await writeAudit({
-    actorUid: signerUid, actorEmail: signer!.email, action: 'petty_topup', path: ref.path, collection: 'pettyFunds',
-    docId: ref.id, orgId, note: `Top-up with PIN on ${caller.profile.displayName || caller.email}'s device`,
+    actorUid: signerUid, actorEmail: signer!.email, action: kind === 'topup' ? 'petty_topup' : 'petty_reset_start', path: ref.path, collection: 'pettyFunds',
+    docId: ref.id, orgId, note: `${kind === 'topup' ? 'Top-up' : 'Reset signed'} with PIN on ${caller.profile.displayName || caller.email}'s device`,
   });
   return { name, id: ref.id };
 });
