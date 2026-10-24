@@ -35,6 +35,9 @@ const num = (v: Cell): number | null => {
 
 /** "ADIA/ CTR/2025/1/001" and "adia/ctr/2025/1/001" are the same admission number. */
 export const admissionKey = (v: unknown) => String(v ?? '').toUpperCase().replace(/\s+/g, '');
+/** The admission number with its year left out: "ADIA/TLF/2026/2/011" → "ADIA/TLF/2/011". */
+export const withoutYear = (v: unknown) => admissionKey(v).replace(/\/(19|20)\d{2}\//, '/');
+const nameKey = (v: string) => v.toLowerCase().replace(/[^a-z ]/g, '').split(/\s+/).filter(Boolean).sort().join(' ');
 /** 1, "1", "Cohort 1" → "Cohort 1"; anything else is kept as typed. */
 export const cohortName = (v: Cell) => { const t = text(v); return /^\d+$/.test(t) ? `Cohort ${t}` : t; };
 const semesterOf = (v: Cell): Semester | null => { const m = /([12])\s*$/.exec(text(v)); return m ? (Number(m[1]) as Semester) : null; };
@@ -129,13 +132,32 @@ export interface ResultPlan {
 /** Matches every row to a student by admission number and groups them into one result per student and cohort. */
 export function planResultImport(parsed: ParsedResults, students: readonly ImportStudent[], opts: { includeHeld?: boolean } = {}): ResultPlan {
   const byAdm = new Map(students.map((s) => [admissionKey(s.admissionNo), s]));
+  // The same number with a different year ("ADIA/TLF/2026/2/011" in the file, ".../2025/2/011" in
+  // Students), when only one student fits; or the same name in the same cohort.
+  const unique = <K>(pairs: [K, ImportStudent][]) => {
+    const m = new Map<K, ImportStudent | null>();
+    for (const [k, st] of pairs) m.set(k, m.has(k) ? null : st);
+    return m;
+  };
+  const byNoYear = unique(students.filter((s) => s.admissionNo).map((s) => [withoutYear(s.admissionNo), s]));
+  const byName = unique(students.map((s) => [`${nameKey(s.name)}|${s.cohort}`, s]));
+  const find = (r: ParsedResultRow): { st: ImportStudent; how: string } | null => {
+    const exact = byAdm.get(admissionKey(r.admissionNo));
+    if (exact) return { st: exact, how: '' };
+    const y = byNoYear.get(withoutYear(r.admissionNo));
+    if (y) return { st: y, how: `matched to admission number ${y.admissionNo} in Students (the file has ${r.admissionNo})` };
+    const n = r.name ? byName.get(`${nameKey(r.name)}|${r.cohort}`) : null;
+    if (n) return { st: n, how: `matched by name; Students has admission number ${n.admissionNo || 'none'} (the file has ${r.admissionNo})` };
+    return null;
+  };
   const out = new Map<string, PlannedResult>();
   const unmatched: ParsedResultRow[] = [];
   const held: ParsedResultRow[] = [];
   let semesterCount = 0;
   for (const r of parsed.rows) {
-    const st = byAdm.get(admissionKey(r.admissionNo));
-    if (!st) { unmatched.push(r); continue; }
+    const hit = find(r);
+    if (!hit) { unmatched.push(r); continue; }
+    const st = hit.st;
     const usable = r.points != null && r.points > 0;
     if (r.held && !(opts.includeHeld && usable)) { held.push(r); continue; }
     if (r.points == null) { held.push(r); continue; }
@@ -144,6 +166,7 @@ export function planResultImport(parsed: ParsedResults, students: readonly Impor
     let res = out.get(id);
     if (!res) {
       res = { cohort, studentId: st.id, admissionNo: st.admissionNo, studentName: st.name, courseId: st.courseId || null, semesters: {}, printed: parsed.printed.get(admissionKey(r.admissionNo)) ?? null, notes: [], warnings: [] };
+      if (hit.how) res.warnings.push(`${st.name}: ${hit.how}.`);
       if (st.cohort && cohort !== st.cohort) res.warnings.push(`Students lists ${st.name} in ${st.cohort}, the file says ${cohort}.`);
       out.set(id, res);
     }
@@ -155,7 +178,7 @@ export function planResultImport(parsed: ParsedResults, students: readonly Impor
   }
   for (const res of out.values()) {
     for (const s of SEMESTERS) if (!res.semesters[String(s) as '1' | '2']) res.warnings.push(`No Semester ${s} score: the final result will show Incomplete.`);
-    const held1 = held.filter((h) => byAdm.get(admissionKey(h.admissionNo))?.id === res.studentId);
+    const held1 = held.filter((h) => find(h)?.st.id === res.studentId);
     for (const h of held1) res.notes.push(`Semester ${h.semester} held back: ${h.held}`.slice(0, 200));
   }
   return { results: [...out.values()].sort((a, b) => a.admissionNo.localeCompare(b.admissionNo)), unmatched, held, semesterCount };

@@ -80,4 +80,15 @@ describe('semester results', () => {
     expect(f.rows[0]).toMatchObject({ admissionNo: 'ADIA/IT/1', marks: { cat1: 8, final: 60 } });
     expect(f.rows[0]!.problems).toEqual(['"abs" is not a number']);
   });
+  it('matches a different year in the admission number, or the same name in the cohort, and says so', () => {
+    const wb = [{ name: 'Upload_Clean', rows: [clean, [2, 'TLF', 'ADIA/TLF/2026/2/011', 'ANA KWERA', 1, 60, 'CREDIT'], [2, 'TLF', 'ADIA/TLF/2026/2/099', 'ELVIS KOSKEY', 1, 50, 'PASS'], [2, 'IT', 'X/1', 'Nobody Here', 1, 50, 'PASS']] }];
+    const plan = planResultImport(parseResultsWorkbook(wb), [
+      { id: 'a', admissionNo: 'ADIA/TLF/2025/2/011', name: 'Ana Kwera', courseId: 'tlf', cohort: 'Cohort 2' },
+      { id: 'k', admissionNo: 'ADIA/TLF/2025/2/013', name: 'Elvis Koskey', courseId: 'tlf', cohort: 'Cohort 2' },
+    ]);
+    expect(plan.results.map((r) => r.studentId)).toEqual(['a', 'k']);
+    expect(plan.results[0]!.warnings.join()).toMatch(/2025\/2\/011 in Students/);
+    expect(plan.results[1]!.warnings.join()).toMatch(/matched by name/);
+    expect(plan.unmatched).toHaveLength(1);
+  });
 });
