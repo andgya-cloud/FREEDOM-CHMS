@@ -99,23 +99,37 @@ if (emulator) {
   };
 } else {
   const { requireAuth } = require('firebase-tools/lib/requireAuth');
+  const { getProjectDefaultAccount } = require('firebase-tools/lib/auth');
   const { Client } = require('firebase-tools/lib/apiv2');
-  try {
-    await requireAuth({ project: values.project });
-  } catch {
+  // The same saved login `firebase deploy` uses.
+  const account = getProjectDefaultAccount(process.cwd());
+  if (!account) {
     console.error('This computer is not signed in to Firebase. Run: npx firebase login   then try again.');
+    process.exit(1);
+  }
+  try {
+    await requireAuth({ project: values.project, projectRoot: process.cwd(), cwd: process.cwd(), user: account.user, tokens: account.tokens });
+  } catch (err) {
+    console.error(`Could not use this computer's Firebase login (${err?.message ?? err}). Run: npx firebase login   then try again.`);
     process.exit(1);
   }
   const client = new Client({ urlPrefix: 'https://identitytoolkit.googleapis.com', apiVersion: 'v1', auth: true });
   call = async (path, body) => (await client.post(path, body)).body;
 }
 
-const found = await call(`/projects/${values.project}/accounts:lookup`, { email: [email] });
-const user = found?.users?.[0];
-if (!user) {
-  console.error(`No Insight-IQ account uses ${email}. Nothing was changed.`);
+try {
+  const found = await call(`/projects/${values.project}/accounts:lookup`, { email: [email] });
+  const user = found?.users?.[0];
+  if (!user) {
+    console.error(`No Insight-IQ account uses ${email}. Nothing was changed.`);
+    process.exit(1);
+  }
+  await call(`/projects/${values.project}/accounts:update`, { localId: user.localId, password });
+  console.log(`Done. ${email} can now sign in with the new password.`);
+  process.exit(0);
+} catch (err) {
+  const said = err?.context?.body?.error?.message ?? err?.message ?? String(err);
+  console.error(`Firebase refused: ${said}`);
+  console.error('Nothing was changed. If it mentions credentials, run: npx firebase login --reauth   then try again.');
   process.exit(1);
 }
-await call(`/projects/${values.project}/accounts:update`, { localId: user.localId, password });
-console.log(`Done. ${email} can now sign in with the new password.`);
-process.exit(0);
