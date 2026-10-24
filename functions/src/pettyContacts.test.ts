@@ -37,3 +37,14 @@ describe('personKey and isDirector', () => {
     expect(isDirector({ displayName: 'Andrew Guya', permissions: [] })).toBe(false);
   });
 });
+
+describe('canKeepAccounts', () => {
+  it('lets only Andrew Guya and Doreen manage accounts', async () => {
+    const { canKeepAccounts } = await import('./shared/permissions');
+    const pastor = { active: true, permissions: ['users.manage'] };
+    expect(canKeepAccounts({ ...pastor, displayName: 'Andrew Guya' })).toBe(true);
+    expect(canKeepAccounts({ ...pastor, displayName: 'Doreen Guya' })).toBe(true);
+    expect(canKeepAccounts({ ...pastor, displayName: 'Elizabeth Mutuku' })).toBe(false);
+    expect(canKeepAccounts({ active: true, permissions: ['team.manage'], displayName: 'Doreen Mayaka' })).toBe(false);
+  });
+});

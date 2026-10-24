@@ -4,7 +4,7 @@ import { useAuth } from './state/AuthContext';
 import { useAppSettings } from './state/useAppSettings';
 import { isSharedDevice, MONEY_IDLE_MINUTES, useIdleSignOut } from './lib/useIdleSignOut';
 import { AppShell } from './components/AppShell';
-import { RequirePermission } from './components/RequirePermission';
+import { RequireAccountKeeper, RequirePermission } from './components/RequirePermission';
 import { SignInPage } from './pages/SignInPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { TodayPage } from './pages/TodayPage';
@@ -196,7 +196,7 @@ function AppRoutes() {
         <Route path="/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
         <Route path="/hope/exports" element={<RequirePermission permission="people.read"><HopeExportsPage /></RequirePermission>} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path="/settings/my-password" element={<ChangePasswordPage voluntary />} />
+        <Route path="/settings/my-password" element={<RequireAccountKeeper><ChangePasswordPage voluntary /></RequireAccountKeeper>} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
         <Route path="/settings/funds" element={<RequirePermission permission="settings.manage"><FundsPage /></RequirePermission>} />
@@ -207,9 +207,9 @@ function AppRoutes() {
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
         <Route path="/settings/organizations/:orgId" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
-        <Route path="/settings/users" element={<RequirePermission anyOf={['users.manage', 'team.manage']}><UsersPage /></RequirePermission>} />
-        <Route path="/settings/users/new" element={<RequirePermission anyOf={['users.manage', 'team.manage']}><UserFormPage /></RequirePermission>} />
-        <Route path="/settings/users/:uid" element={<RequirePermission anyOf={['users.manage', 'team.manage']}><UserFormPage /></RequirePermission>} />
+        <Route path="/settings/users" element={<RequireAccountKeeper><UsersPage /></RequireAccountKeeper>} />
+        <Route path="/settings/users/new" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
+        <Route path="/settings/users/:uid" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/settings/audit" element={<RequirePermission permission="audit.read"><AuditLogPage /></RequirePermission>} />

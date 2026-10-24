@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, TEAM_ROLE_ID, can, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, TEAM_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -32,9 +32,9 @@ async function loadRole(roleId: string, byUid?: string): Promise<RoleDefinition>
  */
 async function requireAccountManager(request: Parameters<typeof requireCaller>[0]) {
   const caller = await requireCaller(request);
-  if (can(caller.profile, 'users.manage')) return { caller, teamOnly: false };
-  if (can(caller.profile, 'team.manage')) return { caller, teamOnly: true };
-  throw new HttpsError('permission-denied', 'You do not have permission to do that.');
+  // Only Andrew Guya and Doreen manage accounts now (Andy, 2026-10-24); organization heads no longer do.
+  if (canKeepAccounts(caller.profile)) return { caller, teamOnly: false };
+  throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can manage staff accounts.');
 }
 
 const OUTSIDE_TEAM = 'You can only manage Staff accounts for your own organization.';
@@ -248,6 +248,10 @@ export const changeMyPassword = onCall(CALLABLE, async (request) => {
   const authTime = Number(request.auth?.token.auth_time ?? 0);
   if (Date.now() / 1000 - authTime > 600) {
     throw new HttpsError('failed-precondition', 'Please sign in again, then change your password.');
+  }
+  // Only the two account keepers change passwords, except someone made to choose their own at first sign-in.
+  if (!caller.profile.mustChangePassword && !canKeepAccounts(caller.profile)) {
+    throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can change passwords. Ask one of them.');
   }
   const password = checkPassword((request.data as Record<string, unknown> | null)?.password, caller.email);
   if (await passwordInUse(password, caller.uid)) throw new HttpsError('already-exists', 'Someone else already has this password. Please choose a different one.');

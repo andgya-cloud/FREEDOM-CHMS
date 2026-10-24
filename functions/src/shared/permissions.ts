@@ -166,6 +166,16 @@ export function can(profile: AccessProfile | null | undefined, permission: Permi
   return !!profile?.active && !!profile.permissions?.includes(permission);
 }
 
+/**
+ * Only Andrew Guya and Doreen Mayaka (also "Doreen Guya") may open Staff accounts and set anyone's
+ * password (Andy, 2026-10-24), and only while their account manages users.
+ */
+export const ACCOUNT_KEEPER_NAMES = ['Andrew Guya', 'Doreen Mayaka', 'Doreen Guya'] as const;
+export function canKeepAccounts(profile: (AccessProfile & { displayName?: string }) | null | undefined): boolean {
+  const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
+  return can(profile, 'users.manage') && ACCOUNT_KEEPER_NAMES.some((n) => plain(n) === plain(profile?.displayName ?? ''));
+}
+
 export function canAccessOrg(profile: AccessProfile | null | undefined, orgId: string): boolean {
   if (!profile?.active) return false;
   return !!profile.allOrgs || !!profile.orgIds?.includes(orgId);
