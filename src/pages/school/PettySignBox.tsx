@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { PasswordInput } from '../../components/PasswordInput';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { listPettySigners, setPinWithPassword, type PettySigner } from '../../lib/pettyPin';
+import { listPettySigners, passwordProof, setPinWithPassword, type PettySigner } from '../../lib/pettyPin';
 import { checkPin } from '../../../functions/src/shared/pettyCash';
 
 /**
@@ -36,7 +36,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
   }, [orgId, reload]);
   const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
   const chosen = choices.find((s) => s.uid === uid);
-  const needsPin = !!chosen && (!chosen.hasPin || settingPin);
+  const needsPin = !!chosen && settingPin;
   const pinOk = checkPin(newPin) && newPin === newPin2;
   function done(name: string) {
     setUid(''); setPin(''); setPassword(''); setNewPin(''); setNewPin2(''); setSettingPin(false);
@@ -53,7 +53,9 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
         setReload((n) => n + 1);
         done(await sign(chosen.uid, newPin));
       } else {
-        done(await sign(chosen.uid, pin.trim()));
+        // Four to six digits is a PIN; anything else is their Insight-IQ password.
+        const secret = pin.trim();
+        done(await sign(chosen.uid, /^\d{4,6}$/.test(secret) ? secret : await passwordProof(chosen.email, secret)));
       }
     } catch (err) {
       const e = err as { code?: string; message?: string };
@@ -78,15 +80,15 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
           </select>
         </label>
         {!needsPin && (
-          <label className="field"><span>Your signing PIN</span>
-            <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4 && ready) void go(); }} placeholder="4 to 6 digits" disabled={busy || !chosen} />
+          <label className="field"><span>Your PIN or password</span>
+            <PasswordInput autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4 && ready) void go(); }} placeholder={chosen ? 'Type your PIN or password' : 'Choose your name first'} disabled={busy || !chosen} />
           </label>
         )}
         {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || pin.length < 4 || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
       </div>
       {chosen && !needsPin && (
-        <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>Forgot your PIN? Set a new one</button>
+        <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>{chosen.hasPin ? 'Forgot your PIN? Set a new one' : 'Set a PIN for next time'}</button>
       )}
       {needsPin && (
         <div className="petty-pin-setup">
@@ -103,7 +105,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
             </label>
             <button type="button" className="btn btn-primary" disabled={!password || !pinOk || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Save PIN and sign'}</button>
           </div>
-          {chosen!.hasPin && <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back to PIN</button>}
+          <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back</button>
         </div>
       )}
     </div>

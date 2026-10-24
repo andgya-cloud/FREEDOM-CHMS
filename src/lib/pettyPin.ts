@@ -67,3 +67,19 @@ export async function sendPettyEmail(orgId: string, reqId: string): Promise<{ se
   const res = await httpsCallable<object, { sent: number; of: number }>(functions, 'sendPettyEmail')({ orgId, reqId });
   return res.data;
 }
+
+/**
+ * Proof that a stakeholder typed their own Insight-IQ password, for signing on a shared device without a
+ * PIN. A short-lived sign-in makes it, so the account signed in here is untouched.
+ */
+export async function passwordProof(email: string, password: string): Promise<string> {
+  const second = initializeApp(app.options, `proof-${Date.now()}`);
+  try {
+    const a = initializeAuth(second, { persistence: inMemoryPersistence });
+    if (usingEmulators) connectAuthEmulator(a, `http://${location.hostname}:9099`, { disableWarnings: true });
+    const cred = await signInWithEmailAndPassword(a, email, password);
+    return `idtoken:${await cred.user.getIdToken()}`;
+  } finally {
+    await deleteApp(second).catch(() => undefined);
+  }
+}

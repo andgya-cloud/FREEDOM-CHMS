@@ -1,7 +1,7 @@
 import { randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
+import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
 import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
@@ -68,8 +68,20 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
   };
 });
 
-/** Checks a signer's PIN, counting wrong tries and locking after too many. */
+/**
+ * A stakeholder may also sign with their Insight-IQ password (Andy, 2026-10-24): the device signs them in
+ * for a moment and sends proof in place of a PIN, so the password itself never reaches the server.
+ */
+const TOKEN_PREFIX = 'idtoken:';
+
+/** Checks a signer's PIN (or password proof), counting wrong PIN tries and locking after too many. */
 export async function verifyPin(uid: string, pin: string) {
+  if (pin.startsWith(TOKEN_PREFIX)) {
+    const t = await auth.verifyIdToken(pin.slice(TOKEN_PREFIX.length)).catch(() => null);
+    // The proof must be this person's and freshly made by typing their password.
+    if (!t || t.uid !== uid || Date.now() / 1000 - t.auth_time > 300) throw new HttpsError('permission-denied', 'That password could not be confirmed. Please type it again.');
+    return;
+  }
   const ref = db.doc(`pettyPins/${uid}`);
   const snap = await ref.get();
   if (!snap.exists) throw new HttpsError('failed-precondition', 'This person has not set a PIN yet.');
