@@ -8,6 +8,7 @@
  *
  * Local emulator: FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099 npm run set-password -- --project demo-freedom-chms --email ...
  */
+import { randomBytes, scrypt } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { createInterface } from 'node:readline';
 import { parseArgs } from 'node:util';
@@ -89,10 +90,19 @@ if ((await askHidden('Type it again: ')) !== password) {
 // The Identity Toolkit admin API, signed in with this computer's Firebase login (or the emulator).
 const emulator = process.env.FIREBASE_AUTH_EMULATOR_HOST;
 let call;
+// Firestore REST: (method, path under /v1, body, query) — for the password-only sign-in record.
+let fs;
 if (emulator) {
   call = async (path, body) => {
     const res = await fetch(`http://${emulator}/identitytoolkit.googleapis.com/v1${path}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' }, body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+    return res.json();
+  };
+  fs = async (method, path, body, query) => {
+    const res = await fetch(`http://${process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8080'}/v1${path}${query ? `?${query}` : ''}`, {
+      method, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer owner' }, body: body ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
     return res.json();
@@ -115,6 +125,25 @@ if (emulator) {
   }
   const client = new Client({ urlPrefix: 'https://identitytoolkit.googleapis.com', apiVersion: 'v1', auth: true });
   call = async (path, body) => (await client.post(path, body)).body;
+  const store = new Client({ urlPrefix: 'https://firestore.googleapis.com', apiVersion: 'v1', auth: true });
+  fs = async (method, path, body, query) => (await store.request({ method, path, body, queryParams: query ? new URLSearchParams(query) : undefined })).body;
+}
+
+const docs = `/projects/${values.project}/databases/(default)/documents`;
+const mask = (...f) => f.map((x) => `updateMask.fieldPaths=${x}`).join('&');
+
+/** Saves the password the way the app does, so typing just the password signs in and signs petty cash. */
+async function saveSignInRecord(uid) {
+  const salt = randomBytes(16);
+  const hash = await new Promise((ok, no) => scrypt(password, salt, 32, (e, k) => (e ? no(e) : ok(k))));
+  await fs('PATCH', `${docs}/pettyPins/${uid}`, { fields: {
+    pwSalt: { stringValue: salt.toString('base64') }, pwHash: { stringValue: hash.toString('base64') },
+    failed: { integerValue: '0' }, lockedUntil: { nullValue: null },
+  } }, mask('pwSalt', 'pwHash', 'failed', 'lockedUntil'));
+  await fs('PATCH', `${docs}/users/${uid}`, { fields: { mustChangePassword: { booleanValue: false } } }, `${mask('mustChangePassword')}&currentDocument.exists=true`);
+  // Clears any "too many wrong passwords" lock on the sign-in page.
+  const locks = await fs('GET', `${docs}/signInLimits`, null, 'pageSize=300');
+  for (const d of locks?.documents ?? []) await fs('DELETE', `/${d.name}`);
 }
 
 try {
@@ -125,7 +154,14 @@ try {
     process.exit(1);
   }
   await call(`/projects/${values.project}/accounts:update`, { localId: user.localId, password });
-  console.log(`Done. ${email} can now sign in with the new password.`);
+  try {
+    await saveSignInRecord(user.localId);
+  } catch (err) {
+    console.log(`The password is set: sign in with ${email} and the new password ("Sign in with email and password instead").`);
+    console.log(`Typing just the password will not work yet (${err?.context?.body?.error?.message ?? err?.message ?? err}).`);
+    process.exit(0);
+  }
+  console.log(`Done. ${email} can now sign in by typing just the new password (or with the email and password).`);
   process.exit(0);
 } catch (err) {
   const said = err?.context?.body?.error?.message ?? err?.message ?? String(err);
