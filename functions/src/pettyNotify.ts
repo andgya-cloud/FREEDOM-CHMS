@@ -9,7 +9,7 @@ import { jsPDF } from 'jspdf';
 import nodemailer from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canSign, requireMember } from './pettyPins.js';
-import { contactsFor, plainName, withContacts } from './pettyContacts.js';
+import { contactsFor, personKey as plainName, withContacts } from './pettyContacts.js';
 import { isSendingHour, sendingReady, withWhatsAppDefaults, type WhatsAppSettings } from './shared/whatsapp.js';
 import { PETTY_CASH_STATUS_LABELS, pettyCashBase, type PettyCashSignature } from './shared/pettyCash.js';
 import { drawRequisition, letterheadFor, type Letterhead } from './shared/pettyVoucher.js';

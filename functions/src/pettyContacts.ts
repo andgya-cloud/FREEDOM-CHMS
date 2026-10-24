@@ -5,16 +5,35 @@ import { normalizePhone } from './shared/phone.js';
  * notices go to these addresses, whatever email the person's Insight-IQ account signs in with. Kept on
  * the server only, so the numbers are never part of the app's public files.
  */
-export const ADIA_CONTACTS: ReadonlyArray<{ name: string; email: string; phone: string }> = [
+export const ADIA_CONTACTS: ReadonlyArray<{ name: string; email: string; phone: string; aliases?: string[] }> = [
   { name: 'Elizabeth Mutuku', email: 'elizabethkithei@gmail.com', phone: '0711938064' },
   { name: 'Elias Omondi', email: 'omondieliaso@gmail.com', phone: '0722909664' },
   { name: "Daniel Ojwang'", email: 'danalfre9@gmail.com', phone: '0714938182' },
-  { name: 'Doreen Mayaka', email: 'dorreen.guya@gmail.com', phone: '0723560852' },
+  { name: 'Doreen Mayaka', email: 'dorreen.guya@gmail.com', phone: '0723560852', aliases: ['Doreen Guya'] },
   { name: 'Andrew Guya', email: 'andgya@gmail.com', phone: '0728354575' },
   { name: 'Ronald Awili', email: 'ronaldawili@gmail.com', phone: '0720806229' },
 ];
 
 export const plainName = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
+
+/** One key per person, so "Doreen Guya" and "Doreen Mayaka" are the same stakeholder. */
+export function personKey(name: string) {
+  const n = plainName(name);
+  const c = ADIA_CONTACTS.find((x) => [x.name, ...(x.aliases ?? [])].some((a) => plainName(a) === n));
+  return c ? plainName(c.name) : n;
+}
+
+/** The built-in email for this person's name, if any. */
+export const contactEmail = (name: string) => ADIA_CONTACTS.find((c) => plainName(c.name) === personKey(name))?.email ?? '';
+
+/**
+ * The Director (Andrew Guya, the pastor account) is greyed out for others and signs from his own account
+ * with no password. Other people who manage accounts are not the Director.
+ */
+export function isDirector(profile: { displayName?: string; pettyTitle?: string; permissions?: string[] } | undefined) {
+  if (!(profile?.permissions ?? []).includes('users.manage')) return false;
+  return personKey(profile?.displayName ?? '') === 'andrewguya';
+}
 
 /** The built-in contacts for this kind of organization (ADIA only, so far). */
 export function contactsFor(orgType: string | undefined) {
@@ -31,11 +50,12 @@ export function withContacts<T extends Contactable>(orgType: string | undefined,
   const contacts = contactsFor(orgType);
   if (!contacts.length) return people;
   const byName = new Map(contacts.map((c) => [plainName(c.name), c]));
+  const key = (name: string) => personKey(name);
   const out: Contactable[] = people.map((p) => {
-    const c = byName.get(plainName(p.name));
+    const c = byName.get(key(p.name));
     return c ? { ...p, email: c.email, phone: c.phone || p.phone } : p;
   });
-  const have = new Set(out.map((p) => plainName(p.name)));
+  const have = new Set(out.map((p) => key(p.name)));
   for (const c of contacts) if (!have.has(plainName(c.name))) out.push({ uid: `contact-${plainName(c.name)}`, name: c.name, email: c.email, phone: c.phone });
   return out;
 }

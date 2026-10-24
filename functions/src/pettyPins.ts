@@ -5,6 +5,7 @@ import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type Us
 import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
 import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
+import { contactEmail, isDirector, personKey } from './pettyContacts.js';
 
 /**
  * Petty cash signing PINs (Andy, 2026-10-23): a stakeholder picks their name on the shared device and
@@ -60,14 +61,22 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
       const u = d.data() as UserProfile;
       const name = u.displayName || u.email;
       const canAuthorize = canSign(u, orgId, 'fund');
-      return { uid: d.id, name, title: u.pettyTitle ?? '', email: u.email, canAuthorize, isPastor: (u.permissions ?? []).includes('users.manage'), canTopUp: canAuthorize && canTopUpAlone(orgType, name, (u.permissions ?? []).includes('users.manage')) };
+      const isPastor = (u.permissions ?? []).includes('users.manage');
+      return { uid: d.id, name, title: u.pettyTitle ?? '', email: u.email, canAuthorize, isPastor, isDirector: isDirector(u), canTopUp: canAuthorize && canTopUpAlone(orgType, name, isPastor) };
     });
   const pins = people.length ? await db.getAll(...people.map((p) => db.doc(`pettyPins/${p.uid}`))) : [];
-  // Signing with a password uses the sign-in email, which can differ from the profile's.
-  const logins = people.length ? await auth.getUsers(people.slice(0, 100).map((p) => ({ uid: p.uid }))).catch(() => null) : null;
-  const loginEmail = new Map((logins?.users ?? []).map((u) => [u.uid, u.email]));
+  // Signing with a password uses the sign-in email, which can differ from the profile's. A person may also
+  // have a second account (made again with another email), so every email that is theirs is offered.
+  const everyone = users.docs.slice(0, 100);
+  const logins = everyone.length ? await auth.getUsers(everyone.map((d) => ({ uid: d.id }))).catch(() => null) : null;
+  const loginEmail = new Map((logins?.users ?? []).map((u) => [u.uid, u.email ?? '']));
+  const emailsOf = (uid: string, name: string, profileEmail: string) => {
+    const key = personKey(name);
+    const sameName = everyone.filter((d) => d.id !== uid && personKey((d.get('displayName') as string) || '') === key).map((d) => loginEmail.get(d.id) || (d.get('email') as string));
+    return [...new Set([loginEmail.get(uid), profileEmail, contactEmail(name), ...sameName].filter((e): e is string => !!e).map((e) => e.toLowerCase()))];
+  };
   return {
-    signers: people.map((p, i) => ({ ...p, email: loginEmail.get(p.uid) || p.email, hasPin: pins[i].exists })).sort((a, b) => a.name.localeCompare(b.name)),
+    signers: people.map((p, i) => ({ ...p, email: loginEmail.get(p.uid) || p.email, emails: emailsOf(p.uid, p.name, p.email), hasPin: pins[i].exists })).sort((a, b) => a.name.localeCompare(b.name)),
   };
 });
 
@@ -82,7 +91,22 @@ const TOKEN_PREFIX = 'idtoken:';
  * password for top-ups and resets (Andy, 2026-10-24): being signed in is the proof.
  */
 function directorSelf(callerUid: string, signerUid: string, signer: UserProfile | undefined) {
-  return callerUid === signerUid && (signer?.permissions ?? []).includes('users.manage');
+  return callerUid === signerUid && isDirector(signer);
+}
+
+/**
+ * Whether a password proof from account `proofUid` speaks for signer `uid`: the same account, or another
+ * active account of the same person (same name, or their built-in email), made when an account was created twice.
+ */
+async function sameSigner(uid: string, proofUid: string, proofEmail: string | undefined) {
+  if (proofUid === uid) return true;
+  const [a, b] = await db.getAll(db.doc(`users/${uid}`), db.doc(`users/${proofUid}`));
+  const signer = a.data() as UserProfile | undefined;
+  const other = b.data() as UserProfile | undefined;
+  if (!signer?.active) return false;
+  const email = (proofEmail ?? '').toLowerCase();
+  if (email && email === contactEmail(signer.displayName || '').toLowerCase()) return true;
+  return !!other?.active && !!signer.displayName && personKey(other.displayName || '') === personKey(signer.displayName);
 }
 
 /** Checks a signer's PIN (or password proof), counting wrong PIN tries and locking after too many. */
@@ -90,7 +114,7 @@ export async function verifyPin(uid: string, pin: string) {
   if (pin.startsWith(TOKEN_PREFIX)) {
     const t = await auth.verifyIdToken(pin.slice(TOKEN_PREFIX.length)).catch(() => null);
     // The proof must be this person's and freshly made by typing their password.
-    if (!t || t.uid !== uid || Date.now() / 1000 - t.auth_time > 300) throw new HttpsError('permission-denied', 'That password could not be confirmed. Please type it again.');
+    if (!t || Date.now() / 1000 - t.auth_time > 300 || !(await sameSigner(uid, t.uid, t.email))) throw new HttpsError('permission-denied', 'That password could not be confirmed. Please type it again.');
     return;
   }
   const ref = db.doc(`pettyPins/${uid}`);

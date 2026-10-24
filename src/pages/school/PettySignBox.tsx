@@ -39,8 +39,9 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
     return () => { live = false; };
   }, [orgId, reload]);
   const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
-  const lockedOut = (s: PettySigner) => directorMode && !!s.isPastor && s.uid !== user?.uid;
-  const iAmDirector = directorMode && choices.some((s) => s.isPastor && s.uid === user?.uid);
+  const director = (s: PettySigner) => s.isDirector ?? !!s.isPastor;
+  const lockedOut = (s: PettySigner) => directorMode && director(s) && s.uid !== user?.uid;
+  const iAmDirector = directorMode && choices.some((s) => director(s) && s.uid === user?.uid);
   // The Director signed in here is chosen for him, and signs with one tap.
   const chosen = choices.find((s) => s.uid === (uid || (iAmDirector ? user?.uid : '')) && !lockedOut(s));
   const noSecret = !!chosen && iAmDirector && chosen.uid === user?.uid;
@@ -65,12 +66,12 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
       } else {
         // Four to six digits is a PIN; anything else is their Insight-IQ password.
         const secret = pin.trim();
-        done(await sign(chosen.uid, /^\d{4,6}$/.test(secret) ? secret : await passwordProof(chosen.uid, chosen.email, secret)));
+        done(await sign(chosen.uid, /^\d{4,6}$/.test(secret) ? secret : await passwordProof(chosen.uid, chosen.emails?.length ? chosen.emails : chosen.email, secret)));
       }
     } catch (err) {
       const e = err as { code?: string; message?: string };
       const code = e?.code ?? '';
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') toast.show('That password is not right for ' + chosen.name + '.');
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') toast.show(`That password is not right for ${chosen.name}. Check it, or set a new one for them in Settings, Staff accounts, Set a new password.`);
       else if (code === 'auth/too-many-requests') toast.show('Too many tries for ' + chosen.name + '. Wait a few minutes and try again.');
       else if (code.startsWith('functions/') && e.message) toast.show(e.message.replace(/\s*\[\d+\]$/, ''));
       else toast.show(code === 'auth/network-request-failed' ? 'Signing here needs a connection. Try again when online.' : friendlyError(err));

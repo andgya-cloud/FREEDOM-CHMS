@@ -149,11 +149,13 @@ export function fundStatusAfter(signatureCount: number, kind: PettyFundKind = 'r
 
 /** At ADIA only these four may top up (Andy, 2026-10-24), besides the pastor (Andrew Guya). */
 export const ADIA_TOPUP_NAMES = ['Andrew Guya', "Daniel Ojwang'", 'Doreen Mayaka', 'Elias Omondi'] as const;
+/** Doreen Mayaka's account may carry her married name. */
+const TOPUP_ALIASES = ['Doreen Guya'];
 const plainName = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
 /** Whether a stakeholder who may sign top-ups in this kind of organization may top up alone. */
 export function canTopUpAlone(orgType: string | undefined, name: string, isPastor: boolean) {
   if (isPastor || orgType !== 'college') return true;
-  return ADIA_TOPUP_NAMES.some((n) => plainName(n) === plainName(name));
+  return [...ADIA_TOPUP_NAMES, ...TOPUP_ALIASES].some((n) => plainName(n) === plainName(name));
 }
 
 export interface FundSummary {

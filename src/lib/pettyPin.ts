@@ -4,7 +4,7 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/
 import { app, auth, functions, usingEmulators } from '../firebase';
 
 /** A stakeholder on the signing name list. */
-export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; canTopUp?: boolean; isPastor?: boolean; hasPin: boolean }
+export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; canTopUp?: boolean; isPastor?: boolean; isDirector?: boolean; emails?: string[]; hasPin: boolean }
 
 /** The people who can sign petty cash in this organization, with whether each has set a PIN. */
 export async function listPettySigners(orgId: string): Promise<PettySigner[]> {
@@ -78,20 +78,30 @@ export async function listPettyContacts(orgId: string): Promise<{ name: string; 
  * Proof that a stakeholder typed their own Insight-IQ password, for signing on a shared device without a
  * PIN. A short-lived sign-in makes it, so the account signed in here is untouched.
  */
-export async function passwordProof(uid: string, email: string, password: string): Promise<string> {
+export async function passwordProof(uid: string, emails: string | string[], password: string): Promise<string> {
   // The person signed in on this device proves it on their own account, whatever email the list shows.
   const me = auth.currentUser;
   if (me?.uid === uid && me.email) {
     await reauthenticateWithCredential(me, EmailAuthProvider.credential(me.email, password));
     return `idtoken:${await me.getIdToken(true)}`;
   }
-  const second = initializeApp(app.options, `proof-${Date.now()}`);
-  try {
-    const a = initializeAuth(second, { persistence: inMemoryPersistence });
-    if (usingEmulators) connectAuthEmulator(a, `http://${location.hostname}:9099`, { disableWarnings: true });
-    const cred = await signInWithEmailAndPassword(a, email, password);
-    return `idtoken:${await cred.user.getIdToken()}`;
-  } finally {
-    await deleteApp(second).catch(() => undefined);
+  // A person can have more than one account (made again with another email); try each of their emails.
+  const list = [...new Set((Array.isArray(emails) ? emails : [emails]).filter(Boolean))];
+  let last: unknown = null;
+  for (const email of list) {
+    const second = initializeApp(app.options, `proof-${Date.now()}`);
+    try {
+      const a = initializeAuth(second, { persistence: inMemoryPersistence });
+      if (usingEmulators) connectAuthEmulator(a, `http://${location.hostname}:9099`, { disableWarnings: true });
+      const cred = await signInWithEmailAndPassword(a, email, password);
+      return `idtoken:${await cred.user.getIdToken()}`;
+    } catch (err) {
+      last = err;
+      const code = (err as { code?: string })?.code ?? '';
+      if (code !== 'auth/invalid-credential' && code !== 'auth/wrong-password' && code !== 'auth/user-not-found' && code !== 'auth/invalid-email') throw err;
+    } finally {
+      await deleteApp(second).catch(() => undefined);
+    }
   }
+  throw last ?? Object.assign(new Error('No sign-in email'), { code: 'auth/invalid-credential' });
 }

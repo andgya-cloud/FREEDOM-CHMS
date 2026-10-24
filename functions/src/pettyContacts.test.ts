@@ -22,3 +22,18 @@ describe('withContacts', () => {
     expect(withContacts('ministry', people)).toEqual(people);
   });
 });
+
+describe('personKey and isDirector', () => {
+  it('treats Doreen Guya as Doreen Mayaka', async () => {
+    const { personKey, contactEmail } = await import('./pettyContacts');
+    expect(personKey('Doreen Guya')).toBe(personKey('Doreen Mayaka'));
+    expect(contactEmail('Doreen Guya')).toBe('dorreen.guya@gmail.com');
+  });
+  it('makes only Andrew Guya the Director, not every account manager', async () => {
+    const { isDirector } = await import('./pettyContacts');
+    expect(isDirector({ displayName: 'Andrew Guya', permissions: ['users.manage'] })).toBe(true);
+    expect(isDirector({ displayName: 'Doreen Guya', permissions: ['users.manage'] })).toBe(false);
+    expect(isDirector({ displayName: 'Doreen Guya', pettyTitle: 'Director', permissions: ['users.manage'] })).toBe(false);
+    expect(isDirector({ displayName: 'Andrew Guya', permissions: [] })).toBe(false);
+  });
+});
