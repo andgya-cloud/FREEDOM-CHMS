@@ -55,12 +55,13 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
       } else {
         // Four to six digits is a PIN; anything else is their Insight-IQ password.
         const secret = pin.trim();
-        done(await sign(chosen.uid, /^\d{4,6}$/.test(secret) ? secret : await passwordProof(chosen.email, secret)));
+        done(await sign(chosen.uid, /^\d{4,6}$/.test(secret) ? secret : await passwordProof(chosen.uid, chosen.email, secret)));
       }
     } catch (err) {
       const e = err as { code?: string; message?: string };
       const code = e?.code ?? '';
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') toast.show('That password is not right for ' + chosen.name + '.');
+      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found') toast.show('That password is not right for ' + chosen.name + '.');
+      else if (code === 'auth/too-many-requests') toast.show('Too many tries for ' + chosen.name + '. Wait a few minutes and try again.');
       else if (code.startsWith('functions/') && e.message) toast.show(e.message.replace(/\s*\[\d+\]$/, ''));
       else toast.show(code === 'auth/network-request-failed' ? 'Signing here needs a connection. Try again when online.' : friendlyError(err));
       setPin('');

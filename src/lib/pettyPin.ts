@@ -1,7 +1,7 @@
 import { deleteApp, initializeApp } from 'firebase/app';
-import { connectAuthEmulator, inMemoryPersistence, initializeAuth, signInWithEmailAndPassword } from 'firebase/auth';
+import { connectAuthEmulator, EmailAuthProvider, inMemoryPersistence, initializeAuth, reauthenticateWithCredential, signInWithEmailAndPassword } from 'firebase/auth';
 import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/functions';
-import { app, functions, usingEmulators } from '../firebase';
+import { app, auth, functions, usingEmulators } from '../firebase';
 
 /** A stakeholder on the signing name list. */
 export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; canTopUp?: boolean; hasPin: boolean }
@@ -72,7 +72,13 @@ export async function sendPettyEmail(orgId: string, reqId: string): Promise<{ se
  * Proof that a stakeholder typed their own Insight-IQ password, for signing on a shared device without a
  * PIN. A short-lived sign-in makes it, so the account signed in here is untouched.
  */
-export async function passwordProof(email: string, password: string): Promise<string> {
+export async function passwordProof(uid: string, email: string, password: string): Promise<string> {
+  // The person signed in on this device proves it on their own account, whatever email the list shows.
+  const me = auth.currentUser;
+  if (me?.uid === uid && me.email) {
+    await reauthenticateWithCredential(me, EmailAuthProvider.credential(me.email, password));
+    return `idtoken:${await me.getIdToken(true)}`;
+  }
   const second = initializeApp(app.options, `proof-${Date.now()}`);
   try {
     const a = initializeAuth(second, { persistence: inMemoryPersistence });

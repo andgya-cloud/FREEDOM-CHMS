@@ -63,8 +63,11 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
       return { uid: d.id, name, title: u.pettyTitle ?? '', email: u.email, canAuthorize, canTopUp: canAuthorize && canTopUpAlone(orgType, name, (u.permissions ?? []).includes('users.manage')) };
     });
   const pins = people.length ? await db.getAll(...people.map((p) => db.doc(`pettyPins/${p.uid}`))) : [];
+  // Signing with a password uses the sign-in email, which can differ from the profile's.
+  const logins = people.length ? await auth.getUsers(people.slice(0, 100).map((p) => ({ uid: p.uid }))).catch(() => null) : null;
+  const loginEmail = new Map((logins?.users ?? []).map((u) => [u.uid, u.email]));
   return {
-    signers: people.map((p, i) => ({ ...p, hasPin: pins[i].exists })).sort((a, b) => a.name.localeCompare(b.name)),
+    signers: people.map((p, i) => ({ ...p, email: loginEmail.get(p.uid) || p.email, hasPin: pins[i].exists })).sort((a, b) => a.name.localeCompare(b.name)),
   };
 });
 
