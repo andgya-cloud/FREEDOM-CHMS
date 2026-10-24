@@ -2,13 +2,15 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { millis, usePettyCash, useReceipts } from '../../state/usePettyCash';
+import { millis, usePettyCash, usePettyMonths, useReceipts } from '../../state/usePettyCash';
+import { PettySignBox } from './PettySignBox';
+import { closePettyMonth, reopenPettyMonth } from '../../lib/pettyPin';
 import { saveAllocations } from '../../lib/pettyCashWrites';
 import { AskDeleteDialog, BinButton } from './PettyBin';
-import { balanceSheetPdf } from '../../lib/pettyPdf';
+import { balanceSheetPdf, monthReportPdf } from '../../lib/pettyPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
-import { type LedgerLine, categoryBudgets, categoryLabel, parseAmountCents, pettyCashBase, pettyCashCategoriesFor, pettyLedger, PETTY_CASH_STATUS_LABELS } from '../../../functions/src/shared/pettyCash';
+import { type LedgerLine, categoryBudgets, categoryLabel, parseAmountCents, pettyCashBase, pettyCashCategoriesFor, pettyLedger, PETTY_CASH_STATUS_LABELS, MONTH_CLOSE_SIGNATURES } from '../../../functions/src/shared/pettyCash';
 import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
 import { money } from './common';
 import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, savePack } from './PettyCashPage';
@@ -24,6 +26,7 @@ export function PettyReceiptsPage() {
 
 function Receipts({ org }: { org: Organization }) {
   const p = usePettyCash(org);
+  const { months: monthRecs } = usePettyMonths(org);
   const toast = useToast();
   const { receipts } = useReceipts(org);
   const [show, setShow] = useState<'missing' | 'all'>('missing');
@@ -97,7 +100,7 @@ function Receipts({ org }: { org: Organization }) {
                   <span className="small muted">{money(org, r.totalCents)} · {categoryLabel(r)} · {receiptStatus(r, n, PETTY_CASH_STATUS_LABELS[r.status])}</span>
                   <span className={`badge${n || r.status !== 'approved' ? '' : ' badge-warn'}`}>{n ? `📎 ${n} receipt${n === 1 ? '' : 's'}` : 'No receipt yet'}</span>
                 </button>
-                {isOpen && <ReceiptsBox org={org} req={r} receipts={mine} />}
+                {isOpen && <ReceiptsBox org={org} req={r} receipts={mine} locked={monthRecs[r.month]?.status === 'closed'} />}
               </li>
             );
           })}
@@ -117,7 +120,28 @@ function BalanceSheet({ org }: { org: Organization }) {
   const toast = useToast();
   const lines = useMemo(() => pettyLedger(p.funds, p.requisitions, millis), [p.funds, p.requisitions]);
   const [deleting, setDeleting] = useState<LedgerLine | null>(null);
+  const { receipts } = useReceipts(org);
+  const periods = useMemo(() => {
+    const months = [...new Set(p.requisitions.map((r) => r.month))].sort().reverse();
+    return [...new Set(months.map((m) => m.slice(0, 4)))].flatMap((y) => [y, ...months.filter((m) => m.startsWith(y))]);
+  }, [p.requisitions]);
+  const [period, setPeriod] = useState('');
+  const [excelBusy, setExcelBusy] = useState(false);
   if (!p.seesAll) return <NoAccess />;
+  async function excel() {
+    const chosen = period || periods[1] || periods[0];
+    if (!chosen) return;
+    setExcelBusy(true);
+    try {
+      const { pettyWorkbook } = await import('../../lib/pettyExcel');
+      downloadFile(await pettyWorkbook(org.name, chosen, p.requisitions, receipts, lines));
+    } catch (err) {
+      toast.show(friendlyError(err));
+    } finally {
+      setExcelBusy(false);
+    }
+  }
+  const periodName = (x: string) => (x.length === 4 ? `Whole year ${x}` : new Date(`${x}-01T00:00:00`).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' }));
   // Totals for the current budget period (since the last reset).
   const current = lines.filter((l) => l.at > p.periodStart);
   const totals = {
@@ -145,6 +169,18 @@ function BalanceSheet({ org }: { org: Organization }) {
         </span>
       </div>
       <PettyNav org={org} />
+      <section className="card stack no-print">
+        <h2>Excel for the accountant</h2>
+        <p className="small muted">Every requisition, every expense line and the cash book, with amounts as numbers ready for the books or QuickBooks.</p>
+        <div className="field-row">
+          <label className="field"><span>Period</span>
+            <select value={period || periods[1] || periods[0] || ''} onChange={(e) => setPeriod(e.target.value)}>
+              {periods.map((x) => <option key={x} value={x}>{periodName(x)}</option>)}
+            </select>
+          </label>
+          <button type="button" className="btn btn-primary align-start" disabled={!periods.length || excelBusy} onClick={() => void excel()}>{excelBusy ? 'Making Excel…' : 'Download Excel'}</button>
+        </div>
+      </section>
       <KpiRow label="Since the last reset">
         <KpiCard label="Money in" value={money(org, totals.in)} tone="ok" note="Signed top-ups" />
         <KpiCard label="Money out" value={money(org, totals.out)} tone="warn" note="Approved requests" />
@@ -261,6 +297,129 @@ function BudgetTracker({ org }: { org: Organization }) {
           {!p.canAuthorize && <p className="small muted">The signing stakeholders set the category budgets.</p>}
         </>
       )}
+    </div>
+  );
+}
+
+/** Month-end close (Andy, 2026-10-24): two stakeholders close an ended month, then nothing in it changes; the Director reopens. */
+export function PettyMonthEndPage() {
+  return <PettyGate title="Month end">{(org) => <MonthEnd org={org} />}</PettyGate>;
+}
+
+function MonthEnd({ org }: { org: Organization }) {
+  const p = usePettyCash(org);
+  const toast = useToast();
+  const { receipts } = useReceipts(org);
+  const { months } = usePettyMonths(org);
+  const lines = useMemo(() => pettyLedger(p.funds, p.requisitions, millis), [p.funds, p.requisitions]);
+  const [reopening, setReopening] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  if (!p.seesAll) return <NoAccess />;
+  const thisMonth = p.month;
+  const list = [...new Set([...p.requisitions.map((r) => r.month), ...Object.keys(months)])].filter((m) => m < thisMonth).sort().reverse();
+  const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
+  const monthOf = (ms: number) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; };
+  const facts = (m: string) => {
+    const reqs = p.requisitions.filter((r) => r.month === m);
+    const approved = reqs.filter((r) => r.status === 'approved').sort((a, b) => (a.number ?? '').localeCompare(b.number ?? ''));
+    const waiting = reqs.filter((r) => r.status === 'submitted' || r.status === 'checked');
+    const count = (id: string) => receipts.filter((x) => x.reqId === id).length;
+    const book = lines.filter((l) => monthOf(l.at) === m);
+    const before = lines.filter((l) => monthOf(l.at) < m);
+    const opening = before.length ? before[before.length - 1]!.balanceCents : 0;
+    return { approved, waiting, count, missing: approved.filter((r) => count(r.id) === 0).length, opening,
+      in: book.reduce((n, l) => n + l.creditCents, 0), out: book.reduce((n, l) => n + l.debitCents, 0), closing: book.length ? book[book.length - 1]!.balanceCents : opening };
+  };
+  async function report(m: string) {
+    const f = facts(m);
+    const rec = months[m];
+    const cats = new Map<string, { count: number; cents: number }>();
+    f.approved.forEach((r) => { const c = cats.get(categoryLabel(r)) ?? { count: 0, cents: 0 }; cats.set(categoryLabel(r), { count: c.count + 1, cents: c.cents + r.totalCents }); });
+    try {
+      downloadFile(await monthReportPdf(org, {
+        month: m, monthName: monthName(m), status: rec?.status === 'closed' ? 'Closed' : 'Not closed yet',
+        openingCents: f.opening, inCents: f.in, outCents: f.out, closingCents: f.closing,
+        byCategory: [...cats].map(([category, v]) => ({ category, ...v })),
+        requests: f.approved.map((r) => ({ number: r.number ?? 'New', date: day(millis(r.createdAt) ?? Date.now()), requester: r.requesterName, category: categoryLabel(r), payee: r.payee ?? '', cents: r.totalCents, receipts: f.count(r.id) })),
+        closedBy: rec?.status === 'closed' ? Object.values(rec.signatures).map((s) => ({ name: s.name, role: s.role, when: millis(s.at) ? day(millis(s.at)!) : '' })) : [],
+        missingReceipts: f.missing,
+      }));
+    } catch (err) {
+      toast.show(friendlyError(err));
+    }
+  }
+  async function reopen(m: string) {
+    if (!reason.trim()) { toast.show('Give a reason for reopening.'); return; }
+    setBusy(true);
+    try {
+      await reopenPettyMonth(org.id, m, reason.trim());
+      toast.show(`${monthName(m)} is open again.`);
+      setReopening(null); setReason('');
+    } catch (err) {
+      const e = err as { code?: string; message?: string };
+      toast.show(e?.code?.startsWith('functions/') && e.message ? e.message : friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="page narrow">
+      <div className="page-head"><h1>Month end</h1></div>
+      <PettyNav org={org} />
+      <p className="small muted">Once a month has ended, any two stakeholders close it. After that no requisition, signature, receipt or deletion in that month can change. Only the Director can reopen a closed month, and must give a reason.</p>
+      {list.length === 0 && <p className="muted small">No past months yet.</p>}
+      {list.map((m) => {
+        const f = facts(m);
+        const rec = months[m];
+        const closed = rec?.status === 'closed';
+        const signed = rec?.status === 'closing' ? Object.entries(rec.signatures) : [];
+        return (
+          <section key={m} className="card stack">
+            <div className="card-head">
+              <h2>{monthName(m)}</h2>
+              <span className={`badge${closed ? '' : ' badge-warn'}`}>{closed ? '🔒 Closed' : rec?.status === 'closing' ? `${signed.length} of ${MONTH_CLOSE_SIGNATURES} signed` : 'Open'}</span>
+            </div>
+            <ul className="petty-figures">
+              <li><span>Opening</span><strong>{money(org, f.opening)}</strong></li>
+              <li><span>In</span><strong>{money(org, f.in)}</strong></li>
+              <li><span>Out</span><strong>{money(org, f.out)}</strong></li>
+              <li><span>Closing</span><strong>{money(org, f.closing)}</strong></li>
+            </ul>
+            <p className="small">{f.approved.length} approved requisition{f.approved.length === 1 ? '' : 's'}{f.missing ? `, ${f.missing} without a receipt` : ''}{f.waiting.length ? `. ${f.waiting.length} still waiting for signatures` : ''}.</p>
+            {closed && <p className="small muted">Closed by {Object.values(rec.signatures).map((s) => `${s.name}${s.enteredBy ? ` (entered by ${s.enteredBy})` : ''}`).join(' and ')}{millis(rec.closedAt) ? `, ${day(millis(rec.closedAt)!)}` : ''}.</p>}
+            <div className="row-actions">
+              <button type="button" className="btn btn-quiet" onClick={() => void report(m)}>Download month report (PDF)</button>
+              {closed && p.isPastor && reopening !== m && <button type="button" className="btn btn-quiet danger-text" onClick={() => setReopening(m)}>Reopen</button>}
+            </div>
+            {reopening === m && (
+              <div className="field-row">
+                <label className="field"><span>Why reopen {monthName(m)}?</span><input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
+                <button type="button" className="btn btn-danger align-start" disabled={busy || !reason.trim()} onClick={() => void reopen(m)}>Reopen</button>
+                <button type="button" className="btn btn-quiet align-start" onClick={() => { setReopening(null); setReason(''); }}>Cancel</button>
+              </div>
+            )}
+            {!closed && (f.waiting.length ? (
+              <p className="petty-warn small">Approve or reject the waiting requisitions ({f.waiting.map((r) => r.number ?? 'new').join(', ')}) before closing this month.</p>
+            ) : (
+              <>
+                {f.missing > 0 && <p className="petty-warn small">{f.missing} approved requisition{f.missing === 1 ? ' has' : 's have'} no receipt. Receipts cannot be added after the month is closed, so add them first if you can.</p>}
+                <PettySignBox label={`Close ${monthName(m)}: signature ${signed.length + 1} of ${MONTH_CLOSE_SIGNATURES}. Choose your name and type your own signing PIN.`} orgId={org.id}
+                  exclude={signed.map(([uid]) => uid)} confirmLabel="Close the month"
+                  sign={async (uid, pin) => {
+                    const res = await closePettyMonth(org.id, m, uid, pin);
+                    return res.status === 'closed' ? `${monthName(m)} is closed. Signed by ${res.name}.` : `Signed by ${res.name}. One more signature closes the month.`;
+                  }} />
+              </>
+            ))}
+            {rec?.history?.length ? (
+              <details className="small"><summary>History</summary>
+                <ul>{rec.history.map((h, i) => <li key={i}>{h.action === 'started' ? 'Close started' : h.action === 'closed' ? 'Closed' : h.action === 'reopened' ? 'Reopened' : 'Closing cancelled'} by {h.name}, {new Date(h.at).toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' })}{h.reason ? `: ${h.reason}` : ''}</li>)}</ul>
+              </details>
+            ) : null}
+          </section>
+        );
+      })}
     </div>
   );
 }

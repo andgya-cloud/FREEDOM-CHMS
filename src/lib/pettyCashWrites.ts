@@ -13,15 +13,21 @@ const me = () => {
 const reqRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'pettyCash', id);
 
 /** Saves a new requisition on the device straight away; the server gives it its number (ADIA-00015). */
-export function submitRequisition(orgId: string, input: { requesterName: string; category: PettyCashCategory; categoryNote: string | null; items: PettyCashItem[]; month: string }): { id: string; saved: Promise<unknown> } {
+export function submitRequisition(orgId: string, input: { requesterName: string; category: PettyCashCategory; categoryNote: string | null; items: PettyCashItem[]; month: string; payee?: string | null; mpesaCode?: string | null }): { id: string; saved: Promise<unknown> } {
   const ref = doc(collection(db, 'organizations', orgId, 'pettyCash'));
   const saved = trackWrite(setDoc(ref, {
     orgId, number: null, requesterId: me(), requesterName: input.requesterName, category: input.category,
     categoryNote: input.category === 'Other' ? input.categoryNote : null,
     items: input.items, totalCents: itemsTotalCents(input.items), month: input.month,
+    ...(input.payee ? { payee: input.payee } : {}), ...(input.mpesaCode ? { mpesaCode: input.mpesaCode } : {}),
     status: 'submitted', checked: null, approved: null, rejection: null, signatures: {}, ...createStamps(),
   }));
   return { id: ref.id, saved };
+}
+
+/** Adds or corrects who was paid and the M-Pesa code (Andy, 2026-10-24). */
+export function savePayment(orgId: string, id: string, payee: string | null, mpesaCode: string | null) {
+  return updateRecord(doc(db, 'organizations', orgId, 'pettyCash', id), { payee, mpesaCode });
 }
 
 const signOff = (name: string, role: string) => ({ uid: me(), name, role, at: serverTimestamp() });

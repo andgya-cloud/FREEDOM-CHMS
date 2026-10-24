@@ -3,9 +3,11 @@ import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, canKeepAccounts, isPettyTitle } from './shared/permissions.js';
-import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, type PettyCashSignature } from './shared/pettyCash.js';
+import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, DIRECTOR_LIMIT_CENTS, directorSigned, overDirectorLimit, waitingForDirector, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
+import { requireMonthOpen } from './pettyMonths.js';
+import { formatMoney } from './shared/giving.js';
 
 /**
  * Petty cash signing PINs (Andy, 2026-10-23): a stakeholder picks their name on the shared device and
@@ -252,9 +254,17 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
       throw new HttpsError('failed-precondition', 'The last signature must be the accountant\'s.');
     }
     const role = title || ((signer!.permissions ?? []).includes('users.manage') ? 'Pastor' : 'Stakeholder');
-    const approved = Object.keys(sigs).length + 1 >= REQUEST_SIGNATURES_NEEDED;
+    // Above the spending limit the Director must be one of the two signatures (Andy, 2026-10-24).
+    const director = isDirector(signer);
+    const byDirector = !!r.byDirector || isDirector((await tx.get(db.doc(`users/${r.requesterId}`))).data() as UserProfile | undefined);
+    const big = { totalCents: r.totalCents as number, byDirector, status: 'submitted' as const, signatures: sigs };
+    if (waitingForDirector(big) && !director) {
+      throw new HttpsError('failed-precondition', `This request is over ${formatMoney(DIRECTOR_LIMIT_CENTS, 'KES')}, so the second signature must be the Director's.`);
+    }
+    const approved = Object.keys(sigs).length + 1 >= REQUEST_SIGNATURES_NEEDED && (!overDirectorLimit(big) || director || directorSigned(sigs));
+    await requireMonthOpen(tx, orgId, r.month);
     tx.update(ref, {
-      [`signatures.${signerUid}`]: { name, role, at: FieldValue.serverTimestamp(), ...proxy },
+      [`signatures.${signerUid}`]: { name, role, at: FieldValue.serverTimestamp(), ...proxy, ...(director ? { director: true } : {}) },
       ...(approved ? { status: 'approved', approved: { uid: signerUid, name, role, at: FieldValue.serverTimestamp() } } : {}),
       ...stamp,
     });

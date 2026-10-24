@@ -120,7 +120,7 @@ describe('petty cash', () => {
   });
 
   it('approves a request once any two stakeholders sign, never the requester, each only once', async () => {
-    await seedRequest('n1', { signatures: {} });
+    await seedRequest('n1', { signatures: {}, totalCents: 800000 });
     const sig = (uid: string) => ({ name: uid, role: 'Stakeholder', at: serverTimestamp() });
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n1');
     await assertFails(updateDoc(ref('doreen'), { 'signatures.doreen': sig('doreen'), ...touched('doreen') }));
@@ -142,7 +142,7 @@ describe('petty cash', () => {
   });
 
   it('takes each signer\'s own title, and approves on the second signature', async () => {
-    await seedRequest('n3', { signatures: {} });
+    await seedRequest('n3', { signatures: {}, totalCents: 800000 });
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n3');
     await assertSucceeds(updateDoc(ref('dan'), { 'signatures.dan': { name: 'dan', role: 'Accountant', at: serverTimestamp() }, ...touched('dan') }));
     await assertFails(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Board member', at: serverTimestamp() }, ...touched('chair') }));
@@ -237,5 +237,32 @@ describe('petty cash', () => {
     await assertSucceeds(setDoc(doc(as('s1'), 'organizations/adia/pettySettings/budget'), budget('s1')));
     await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettySettings/budget')));
     await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettySettings/budget')));
+  });
+
+  it('keeps big requests for the Director, payment details editable, and closed months locked', async () => {
+    // Above KES 10,000 the second signature can only be added by signWithPin (which checks for the Director).
+    await seedRequest('big', { signatures: { s1: { name: 's1', role: 'Stakeholder', at: new Date() } } });
+    await assertFails(updateDoc(doc(as('s2'), 'organizations/adia/pettyCash/big'), {
+      'signatures.s2': { name: 's2', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s2', 'Stakeholder'), ...touched('s2') }));
+    await seedRequest('small', { totalCents: 500000, items: [{ description: 'Tea', amountCents: 500000 }], signatures: { s1: { name: 's1', role: 'Stakeholder', at: new Date() } } });
+    await assertSucceeds(updateDoc(doc(as('s2'), 'organizations/adia/pettyCash/small'), {
+      'signatures.s2': { name: 's2', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s2', 'Stakeholder'), ...touched('s2') }));
+    // Payee and M-Pesa code: on a new request, and added later by the requester or a signer.
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/p1'), { ...newRequest('doreen'), payee: 'Kenya Power', mpesaCode: 'SJK4H2XQ7P' }));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/p2'), { ...newRequest('doreen'), mpesaCode: 'sjk4' }));
+    await assertSucceeds(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/small'), { payee: 'Naivas', mpesaCode: 'QWE1234567', ...touched('doreen') }));
+    await assertSucceeds(updateDoc(doc(as('s1'), 'organizations/adia/pettyCash/small'), { mpesaCode: 'QWE1234568', ...touched('s1') }));
+    await assertFails(updateDoc(doc(as('ronald'), 'organizations/adia/pettyCash/small'), { payee: 'Me', ...touched('ronald') }));
+    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/small'), { totalCents: 100, ...touched('doreen') }));
+    // A closed month: no new requests, edits or receipts in it, and nobody writes the month record.
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/pettyMonths/2026-10'), { orgId: 'adia', month: '2026-10', status: 'closed', signatures: {}, history: [] });
+    });
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/p3'), newRequest('doreen')));
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/p4'), { ...newRequest('doreen'), month: '2026-11' }));
+    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/small'), { payee: 'Late', ...touched('doreen') }));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/late'), { orgId: 'adia', reqId: 'small', name: 'till.jpg', type: 'image/jpeg', size: 1000, uploadedByName: 'doreen', deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: 'doreen', updatedAt: serverTimestamp(), updatedBy: 'doreen' }));
+    await assertSucceeds(getDoc(doc(as('s1'), 'organizations/adia/pettyMonths/2026-10')));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/adia/pettyMonths/2026-11'), { orgId: 'adia', month: '2026-11', status: 'closed' }));
   });
 });

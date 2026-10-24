@@ -3,6 +3,8 @@ import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProf
 import { canSign, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
 import { canAccessOrg } from './shared/permissions.js';
 import { itemsTotalCents, lineAmountCents, MAX_PETTY_CASH_ITEMS, pettyCashCategoriesFor, type PettyCashItem } from './shared/pettyCash.js';
+import { requireMonthOpen } from './pettyMonths.js';
+import { cleanMpesaCode, MPESA_CODE } from './shared/pettyCash.js';
 
 /**
  * ADIA requester list (Andy, 2026-10-23): any of the stakeholders can raise a requisition on the shared
@@ -49,12 +51,16 @@ export const raisePettyRequest = onCall(CALLABLE, async (request) => {
   const month = typeof data.month === 'string' && /^\d{4}-\d{2}$/.test(data.month) ? data.month : null;
   if (!month) throw new HttpsError('invalid-argument', 'Please check the month.');
   const items = readItems(data.items);
+  await requireMonthOpen(null, orgId, month);
+  const payee = typeof data.payee === 'string' ? data.payee.trim().slice(0, 120) || null : null;
+  const code = typeof data.mpesaCode === 'string' ? cleanMpesaCode(data.mpesaCode) : '';
+  if (code && !MPESA_CODE.test(code)) throw new HttpsError('invalid-argument', 'An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.');
 
   const ref = db.collection(`organizations/${orgId}/pettyCash`).doc();
   const now = FieldValue.serverTimestamp();
   await ref.set({
     orgId, number: null, requesterId: requesterUid, requesterName: requester!.displayName || requester!.email,
-    category, categoryNote: category === 'Other' ? note : null, items, totalCents: itemsTotalCents(items), month,
+    category, categoryNote: category === 'Other' ? note : null, items, totalCents: itemsTotalCents(items), month, payee, mpesaCode: code || null,
     status: 'submitted', checked: null, approved: null, rejection: null, signatures: {},
     raisedBy: caller.uid, raisedByName: caller.profile.displayName || caller.profile.email,
     deletedAt: null, deletedBy: null, createdAt: now, createdBy: requesterUid, updatedAt: now, updatedBy: requesterUid,

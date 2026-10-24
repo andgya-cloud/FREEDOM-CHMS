@@ -4,8 +4,8 @@ import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
-import { addReceipt, approveRequisition, cancelFund, checkRequisition, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
+import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
+import { addReceipt, savePayment, approveRequisition, cancelFund, checkRequisition, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
@@ -18,6 +18,7 @@ import {
   categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
   ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
+  cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, LOW_CASH_CENTS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
 import { PettyInsights } from '../../components/PettyInsights';
@@ -106,7 +107,7 @@ export function PettyNav({ org }: { org: Organization }) {
   const base = pettyCashBase(org.type);
   const items: [string, string, boolean][] = [
     [base, 'Overview', true], [`${base}/new`, 'New requisition', p.canRequest], [`${base}/receipts`, 'Receipts', p.seesAll],
-    [`${base}/balance-sheet`, 'Balance sheet', p.seesAll], [`${base}/budget`, 'Budget tracker', p.seesAll], [`${base}/bin`, 'Bin', p.seesAll],
+    [`${base}/balance-sheet`, 'Balance sheet', p.seesAll], [`${base}/month-end`, 'Month end', p.seesAll], [`${base}/budget`, 'Budget tracker', p.seesAll], [`${base}/bin`, 'Bin', p.seesAll],
   ];
   return (
     <nav className="chips petty-nav no-print" aria-label="Petty cash">
@@ -194,6 +195,9 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const [confirming, setConfirming] = useState<((yes: boolean) => void) | null>(null);
   const askConfirm = () => new Promise<boolean>((resolve) => setConfirming(() => resolve));
   const answer = (yes: boolean) => { confirming?.(yes); setConfirming(null); };
+  // Imprest top-up (Andy, 2026-10-24): offer exactly what was spent since the last top-up.
+  const lastTopUp = Math.max(0, ...p.funds.filter((f) => f.kind === 'topup' && f.status === 'done').map((f) => millis(f.doneAt) ?? millis(f.createdAt) ?? 0));
+  const spentSince = p.requisitions.filter((r) => r.status === 'approved' && (millis(r.approved?.at) ?? millis(r.createdAt) ?? 0) > lastTopUp).reduce((n, r) => n + r.totalCents, 0);
   const topUpWho = org.type === 'college' ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
 
   return (
@@ -214,6 +218,11 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
             {amount.trim() && (cents != null && cents > 0
               ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget as soon as you confirm below.</small>
               : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
+            {spentSince > 0 && p.canAuthorize && (
+              <button type="button" className="btn btn-quiet align-start" onClick={() => setAmount(String(spentSince / 100))}>
+                Fill in {money(org, spentSince)}, spent since the last top-up
+              </button>
+            )}
           </label>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
@@ -301,7 +310,7 @@ export function PettyCashPage() {
 
 function Home({ org }: { org: Organization }) {
   const p = usePettyCash(org);
-  const actor = { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant };
+  const actor = { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant, isDirector: p.isPastor };
   const waiting = p.requisitions.filter((r) => nextStepFor(r, actor));
   const mine = p.requisitions.filter((r) => r.requesterId === p.uid);
   const approved = p.requisitions.filter((r) => r.status === 'approved');
@@ -321,6 +330,9 @@ function Home({ org }: { org: Organization }) {
         {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}
       </div>
       <PettyNav org={org} />
+      {p.seesAll && p.summary.remainingCents < LOW_CASH_CENTS && (
+        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, LOW_CASH_CENTS)}.{canTopUpHere ? ' Use the top-up box below; it can fill in what was spent since the last top-up.' : ' Ask someone who may top up.'}</p>
+      )}
       {p.seesAll && noReceipt.length > 0 && (
         <p className="petty-warn">
           {noReceipt.length} approved requisition{noReceipt.length === 1 ? ' still needs' : 's still need'} a receipt ({noReceipt.slice(0, 3).map(label).join(', ')}{noReceipt.length > 3 ? '…' : ''}).{' '}
@@ -390,6 +402,8 @@ function NewRequisition({ org }: { org: Organization }) {
   const [note, setNote] = useState('');
   const [lines, setLines] = useState<Line[]>([{ key: 1, description: '', quantity: '1', unitPrice: '' }]);
   const [copyFrom, setCopyFrom] = useState('');
+  const [payee, setPayee] = useState('');
+  const [mpesa, setMpesa] = useState('');
   const parsed = lines.map((l) => {
     const quantity = parseQuantity(l.quantity);
     const unitPriceCents = parseAmountCents(l.unitPrice);
@@ -434,11 +448,18 @@ function NewRequisition({ org }: { org: Organization }) {
     if (!category) return 'Choose a category.';
     if (category === 'Other' && !note.trim()) return 'Say what "Other" is for.';
     if (parsed.some((i) => !i.description || i.quantity == null || i.unitPriceCents == null || !i.amountCents)) return 'Fill in a description, quantity and unit price for every item.';
+    if (mpesa && !MPESA_CODE.test(cleanMpesaCode(mpesa))) return 'An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.';
     return null;
   }
+  // Warnings only (Andy, 2026-10-24): a possible repeat, a reused M-Pesa code, and the Director's limit.
+  const dupes = category && total ? possibleDuplicates({ requesterId: chosen?.uid ?? p.uid, requesterName: chosen?.name ?? profile?.displayName ?? '', totalCents: total, category },
+    p.requisitions, Date.now(), (r) => millis(r.createdAt)) : [];
+  const codeUsed = mpesa ? p.requisitions.find((r) => r.mpesaCode && r.mpesaCode === cleanMpesaCode(mpesa)) : undefined;
+  const bigOne = total > DIRECTOR_LIMIT_CENTS && !(p.isPastor && !chosen);
   const input = () => ({
     category: category as PettyCashCategory, categoryNote: category === 'Other' ? note.trim().slice(0, 120) : null,
     items: parsed.map((i) => ({ description: i.description.slice(0, 200), quantity: i.quantity!, unitPriceCents: i.unitPriceCents!, amountCents: i.amountCents! })), month: p.month,
+    payee: payee.trim().slice(0, 120) || null, mpesaCode: cleanMpesaCode(mpesa) || null,
   });
   /** ADIA: the chosen stakeholder raises it as theirs on this device, with their PIN. */
   async function raiseForChosen() {
@@ -545,6 +566,7 @@ function NewRequisition({ org }: { org: Organization }) {
         {p.seesAll && catRow && catRow.allocatedCents > 0 && (
           <p className={`small${catRow.spentCents + catRow.pendingCents + total > catRow.allocatedCents ? ' danger-text' : ' muted'}`}>
             {category}: {money(org, catRow.allocatedCents - catRow.spentCents - catRow.pendingCents)} left of {money(org, catRow.allocatedCents)} before this request.
+            {catRow.spentCents + catRow.pendingCents + total > catRow.allocatedCents ? ' This request goes over the category budget; it can still be sent and will show as over budget.' : ''}
           </p>
         )}
         <h3>Expense items</h3>
@@ -563,6 +585,14 @@ function NewRequisition({ org }: { org: Organization }) {
           <button type="button" className="btn btn-quiet align-start" onClick={() => setLines((ls) => [...ls, { key: Math.max(...ls.map((x) => x.key)) + 1, description: '', quantity: '1', unitPrice: '' }])}>Add another item</button>
         )}
         <p className="petty-total">Total <strong>{money(org, total)}</strong></p>
+        <div className="field-row">
+          <label className="field"><span>Paid to (optional)</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
+          <label className="field"><span>M-Pesa code (optional)</span><input value={mpesa} maxLength={14} autoCapitalize="characters" onChange={(e) => setMpesa(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
+        </div>
+        <p className="small muted">You can also add these later, with the receipts.</p>
+        {codeUsed && <p className="petty-warn small">This M-Pesa code is already on {label(codeUsed)} ({codeUsed.requesterName}, {money(org, codeUsed.totalCents)}). Check it is not the same payment.</p>}
+        {bigOne && <p className="petty-warn small">This request is over {money(org, DIRECTOR_LIMIT_CENTS)}, so the Director must be one of the two signatures.</p>}
+        {dupes.length > 0 && <p className="petty-warn small">Possible repeat: {dupes.map((d) => `${label(d)} (${when(d.createdAt)})`).join(', ')} asked for the same amount in {category} within {DUPLICATE_DAYS} days. You can still submit it if it is a new expense.</p>}
       </section>
       {p.seesAll && <p className="petty-left">Remaining in the budget after this request: <strong>{money(org, p.summary.remainingCents - total)}</strong></p>}
       <button type="button" className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : chosen ? `Submit requisition for ${chosen.name}` : 'Submit requisition'}</button>
@@ -586,11 +616,18 @@ function Requisition({ org }: { org: Organization }) {
   const [waPeople, setWaPeople] = useState<{ name: string; phone: string }[] | null>(null);
   const [waOpen, setWaOpen] = useState(false);
   const { receipts } = useReceipts(org, reqId);
+  const { months } = usePettyMonths(org);
   if (!p.any) return <NoAccess />;
   const r = p.requisitions.find((x) => x.id === reqId);
   if (!r) return <div className="page narrow"><h1>Requisition</h1><p className="muted">{p.loading ? 'Loading…' : 'This requisition was not found.'}</p><Link to={pettyCashBase(org.type)}>Back to petty cash</Link></div>;
-  const step = nextStepFor(r, { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant });
+  const step = nextStepFor(r, { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant, isDirector: p.isPastor });
   const needsAccountant = waitingForAccountant(r);
+  const needsDirector = waitingForDirector(r);
+  const locked = months[r.month]?.status === 'closed';
+  const dupes = r.status === 'submitted' ? possibleDuplicates(r, p.requisitions, millis(r.createdAt) ?? Date.now(), (x) => millis(x.createdAt)) : [];
+  const codeTwice = r.mpesaCode ? p.requisitions.filter((x) => x.id !== r.id && x.mpesaCode === r.mpesaCode) : [];
+  const catRow = p.seesAll ? categoryBudgets(pettyCashCategoriesFor(org.type), p.allocations, p.requisitions, p.periodStart, millis).find((c) => c.category === r.category) : undefined;
+  const overBudget = !!catRow && catRow.allocatedCents > 0 && catRow.spentCents + catRow.pendingCents > catRow.allocatedCents;
   const name = profile?.displayName ?? 'Staff';
   const act = (write: Promise<unknown>, done: string) => { write.catch((err) => toast.show(friendlyError(err))); toast.show(done); };
   const sigs = signaturesOf(r);
@@ -607,6 +644,7 @@ function Requisition({ org }: { org: Organization }) {
   const makePdf = () => requisitionPdf(org, {
     number: r.number, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote, items: r.items,
     totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status], date: when(r.createdAt),
+    payee: r.payee ?? null, mpesaCode: r.mpesaCode ?? null,
   }, signOffs, receipts.length);
   async function pdf() {
     try {
@@ -683,6 +721,7 @@ function Requisition({ org }: { org: Organization }) {
         </div>
       </div>
       <PettyNav org={org} />
+      {locked && <p className="notice">🔒 This requisition is in a closed month, so nothing in it can change. Only the Director can reopen the month.</p>}
       {canSend && (
         <section className="card stack no-print">
           <h2>{r.status === 'approved' ? 'Send the signed voucher' : 'Ask the stakeholders to approve'}</h2>
@@ -708,7 +747,7 @@ function Requisition({ org }: { org: Organization }) {
       <section className="card stack">
         <ul className="petty-figures petty-details">
           <li><span>Requester</span><strong>{r.requesterName}</strong></li>
-          <li><span>Category</span><strong>{categoryLabel(r)}</strong></li>
+          <li><span>Category</span><strong>{categoryLabel(r)}{overBudget && <span className="badge badge-warn"> Over budget</span>}</strong></li>
           <li><span>Date</span><strong>{when(r.createdAt)}</strong></li>
           <li><span>Status</span><strong className={needsReceipt(r, receipts.length) ? 'danger-text' : undefined}>{r.signatures && r.status === 'submitted' ? `${sigs.length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status])}</strong></li>
         </ul>
@@ -724,16 +763,20 @@ function Requisition({ org }: { org: Organization }) {
           </table>
         </div>
         <p className="petty-total">Total <strong>{money(org, r.totalCents)}</strong></p>
+        <PaymentDetails org={org} r={r} locked={locked} />
+        {codeTwice.length > 0 && <p className="petty-warn small">The M-Pesa code {r.mpesaCode} is also on {codeTwice.map(label).join(', ')}. Check it is not the same payment counted twice.</p>}
+        {dupes.length > 0 && <p className="petty-warn small">Possible repeat: {dupes.map((d) => `${label(d)} (${when(d.createdAt)})`).join(', ')}, same requester, amount and category within {DUPLICATE_DAYS} days.</p>}
       </section>
       <section className="card stack">
         <h2>{r.signatures ? 'Authorization' : 'Approval history'}</h2>
         {r.signatures && <p className="small muted">Any two to approve. A stakeholder cannot approve twice, and the requester cannot approve their own request. Each signs from their own account or with their name and PIN.</p>}
         {r.notice && <p className="small muted petty-notice-line">{noticeLine(r.notice)}</p>}
         {needsAccountant && <p className="notice">Waiting for the accountant's signature. It is the last one needed.</p>}
+        {overDirectorLimit(r) && r.status === 'submitted' && <p className="notice">{needsDirector ? "Waiting for the Director's signature. " : ''}This request is over {money(org, DIRECTOR_LIMIT_CENTS)}, so the Director must be one of the two signatures.</p>}
         <ol className="petty-steps">
           <li className="done"><strong>Requested by {r.requesterName}</strong><span className="small muted">{when(r.createdAt)}</span></li>
           {signOffs.map((s, n) => (
-            <li key={n} className={s.name ? 'done' : ''}><strong>{s.name ? `${s.role}: ${s.name}` : r.signatures ? (needsAccountant ? 'Accountant' : `Signature ${n + 1}`) : n === 0 ? 'Checked by the accountant' : 'Final approval by a board member'}</strong><span className="small muted">{s.when ?? 'Not yet'}</span></li>
+            <li key={n} className={s.name ? 'done' : ''}><strong>{s.name ? `${s.role}: ${s.name}` : r.signatures ? (needsAccountant ? 'Accountant' : needsDirector ? 'The Director' : `Signature ${n + 1}`) : n === 0 ? 'Checked by the accountant' : 'Final approval by a board member'}</strong><span className="small muted">{s.when ?? 'Not yet'}</span></li>
           ))}
         </ol>
         {r.rejection && <p className="notice">Rejected by {r.rejection.name} ({when(r.rejection.at)}): {r.rejection.reason}</p>}
@@ -751,7 +794,7 @@ function Requisition({ org }: { org: Organization }) {
             </div>
           ) : step === 'sign' ? (
             <>
-              <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. Choose your name and type your own signing PIN.`} orgId={org.id} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
+              <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : needsDirector ? ', the Director' : ''}. Choose your name and type your own signing PIN.`} orgId={org.id} directorOnly={needsDirector} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
                 sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
               <div className="row-actions">
                 <button type="button" className="btn btn-quiet danger-text" onClick={() => setRejecting(true)}>Reject</button>
@@ -774,7 +817,7 @@ function Requisition({ org }: { org: Organization }) {
             sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
         </section>
       )}
-      <ReceiptsBox org={org} req={r} receipts={receipts} />
+      <ReceiptsBox org={org} req={r} receipts={receipts} locked={locked} />
       {(p.canSign || r.requesterId === p.uid) && (r.status !== 'approved' || p.isKeeper) && (
         <section className="card stack no-print">
           <h2>Delete this request</h2>
@@ -789,7 +832,39 @@ function Requisition({ org }: { org: Organization }) {
 }
 
 /** A requisition's receipts: open, add (photos or PDFs) and remove. */
-export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: RequisitionRow; receipts: ReceiptRow[] }) {
+/** Who was paid and the M-Pesa code: shown, and added or corrected by the requester or a signer until the month closes. */
+function PaymentDetails({ org, r, locked }: { org: Organization; r: RequisitionRow; locked: boolean }) {
+  const p = usePettyCashAccess();
+  const toast = useToast();
+  const [editing, setEditing] = useState(false);
+  const [payee, setPayee] = useState(r.payee ?? '');
+  const [code, setCode] = useState(r.mpesaCode ?? '');
+  const canEdit = !locked && r.status !== 'rejected' && (r.requesterId === p.uid || p.canSign);
+  function save() {
+    const clean = cleanMpesaCode(code);
+    if (clean && !MPESA_CODE.test(clean)) { toast.show('An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.'); return; }
+    savePayment(org.id, r.id, payee.trim().slice(0, 120) || null, clean || null).catch((err) => toast.show(friendlyError(err)));
+    setEditing(false);
+    toast.show('Payment details saved.');
+  }
+  if (editing) return (
+    <div className="stack no-print">
+      <div className="field-row">
+        <label className="field"><span>Paid to</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
+        <label className="field"><span>M-Pesa code</span><input value={code} maxLength={14} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
+      </div>
+      <div className="row-actions"><button type="button" className="btn btn-primary" onClick={save}>Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>Cancel</button></div>
+    </div>
+  );
+  return (
+    <p className="small">
+      Paid to: <strong>{r.payee || 'not given'}</strong> · M-Pesa code: <strong>{r.mpesaCode || 'none'}</strong>
+      {canEdit && <> <button type="button" className="btn btn-quiet no-print" onClick={() => setEditing(true)}>{r.payee || r.mpesaCode ? 'Change' : 'Add'}</button></>}
+    </p>
+  );
+}
+
+export function ReceiptsBox({ org, req, receipts, locked = false }: { org: Organization; req: RequisitionRow; receipts: ReceiptRow[]; locked?: boolean }) {
   const p = usePettyCashAccess();
   const { profile } = useAuth();
   const toast = useToast();
@@ -798,7 +873,7 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
   const [removing, setRemoving] = useState<ReceiptRow | null>(null);
   const [item, setItem] = useState('');
   const [packing, setPacking] = useState(false);
-  const canAdd = req.status !== 'rejected' && (p.seesAll || req.requesterId === p.uid) && receipts.length < MAX_RECEIPTS_PER_REQUEST;
+  const canAdd = !locked && req.status !== 'rejected' && (p.seesAll || req.requesterId === p.uid) && receipts.length < MAX_RECEIPTS_PER_REQUEST;
 
   async function add(e: ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])].slice(0, MAX_RECEIPTS_PER_REQUEST - receipts.length);

@@ -63,6 +63,7 @@ const PettyCashPage = lazy(() => import('./pages/school/PettyCashPage').then((m)
 const NewRequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.NewRequisitionPage })));
 const RequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.RequisitionPage })));
 const PettyReceiptsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReceiptsPage })));
+const PettyMonthEndPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyMonthEndPage })));
 const PettyBalanceSheetPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyBalanceSheetPage })));
 const PettyBudgetPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyBudgetPage })));
 const PettyBinPage = lazy(() => import('./pages/school/PettyBin').then((m) => ({ default: m.PettyBinPage })));
@@ -164,6 +165,7 @@ function AppRoutes() {
         <Route path="/school/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/school/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
         <Route path="/school/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/month-end" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyMonthEndPage /></RequirePermission>} />
         <Route path="/school/petty-cash/balance-sheet" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBalanceSheetPage /></RequirePermission>} />
         <Route path="/school/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
         <Route path="/school/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
@@ -183,6 +185,7 @@ function AppRoutes() {
         <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/month-end" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyMonthEndPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/balance-sheet" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBalanceSheetPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
@@ -190,6 +193,7 @@ function AppRoutes() {
         <Route path="/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
         <Route path="/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />
+        <Route path="/petty-cash/month-end" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyMonthEndPage /></RequirePermission>} />
         <Route path="/petty-cash/balance-sheet" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBalanceSheetPage /></RequirePermission>} />
         <Route path="/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
         <Route path="/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />

@@ -5,7 +5,7 @@ import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import { ACCOUNTANT_TITLE, canKeepAccounts, isDirectorProfile, type Permission } from '../../functions/src/shared/permissions';
-import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund } from '../../functions/src/shared/pettyCash';
+import { fundSummary, periodStartOf, type PettyCashRequisition, type PettyFund, type PettyMonth } from '../../functions/src/shared/pettyCash';
 import type { Organization } from './OrgContext';
 
 export interface RequisitionRow extends PettyCashRequisition {
@@ -81,4 +81,14 @@ export function useReceipts(org: Organization, reqId?: string) {
   }, [org.id, on, reqId]);
   const receipts = useMemo(() => res.rows.filter((r) => !r.deletedAt).sort((a, b) => (a.createdAt?.toMillis() ?? Date.now()) - (b.createdAt?.toMillis() ?? Date.now())), [res.rows]);
   return { receipts, loading: res.loading };
+}
+
+export interface MonthRow extends PettyMonth { id: string; updatedAt?: Timestamp }
+/** Month-end close records, keyed by month ("2026-10"). */
+export function usePettyMonths(org: Organization) {
+  const access = usePettyCashAccess();
+  const on = !!org.id && access.any && !!access.uid;
+  const res = useLiveQuery<MonthRow>(() => (on ? collection(db, 'organizations', org.id, 'pettyMonths') : null), [org.id, on]);
+  const byMonth = useMemo(() => Object.fromEntries(res.rows.map((m) => [m.id, m])) as Record<string, MonthRow>, [res.rows]);
+  return { months: byMonth, loading: res.loading };
 }

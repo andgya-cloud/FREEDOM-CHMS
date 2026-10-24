@@ -1150,6 +1150,16 @@ service cloud.firestore {
           && shortText(a.name, 120) && shortText(a.role, 60);
       }
       // Who may sign a requisition: the accountant, the board members and the signing stakeholders.
+      // A month two stakeholders have closed: nothing in it changes (Andy, 2026-10-24).
+      function pcMonthOpen(month) {
+        return !exists(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month))
+          || get(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month)).data.status != 'closed';
+      }
+      // Who was paid and the M-Pesa code (10 letters and digits); both optional.
+      function pcPaymentFields(d) {
+        return (d.get('payee', null) == null || shortText(d.payee, 120))
+          && (d.get('mpesaCode', null) == null || (d.mpesaCode is string && d.mpesaCode.matches('^[A-Z0-9]{10}$')));
+      }
       function pcSigner() {
         return pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize');
       }
@@ -1171,9 +1181,10 @@ service cloud.firestore {
         // Only the signatories (pettycash.request) and the pastor raise requests.
         allow create: if pc('pettycash.request') && stampedCreate() && freshRecord()
           && request.resource.data.keys().hasOnly(['orgId', 'number', 'requesterId', 'requesterName', 'category', 'categoryNote', 'items',
-               'totalCents', 'month', 'status', 'checked', 'approved', 'rejection', 'signatures',
+               'totalCents', 'month', 'status', 'checked', 'approved', 'rejection', 'signatures', 'payee', 'mpesaCode',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId
+          && pcPaymentFields(request.resource.data) && pcMonthOpen(request.resource.data.month)
           && request.resource.data.number == null
           && request.resource.data.requesterId == request.auth.uid
           && shortText(request.resource.data.requesterName, 120)
@@ -1210,7 +1221,9 @@ service cloud.firestore {
                  && (sigs.size() >= 2
                       // Any two approve (Andy, 2026-10-23; was three). To require the accountant again, also check that one of
                       // sigs.values()[0..1].role == 'Accountant' here and set ACCOUNTANT_REQUIRED in shared/pettyCash.ts.
+                      // Above KES 10,000 the Director must sign, which only signWithPin can tell, so not here.
                       ? request.resource.data.status == 'approved' && pcStamp(request.resource.data.approved)
+                        && (resource.data.totalCents <= 1000000 || resource.data.get('byDirector', false) == true)
                       : request.resource.data.status == 'submitted' && request.resource.data.approved == null))
               || (pcStep(['status', 'rejection']) && pcRejection()));
         }
@@ -1225,8 +1238,16 @@ service cloud.firestore {
                 || (pcStep(['status', 'rejection']) && pcRejection())));
         }
         // Deleting goes through the bin (pettyBinSign), which needs two stakeholders, so nobody deletes here.
-        allow update: if resource.data.deletedAt == null && resource.data.requesterId != request.auth.uid
-            && ('signatures' in resource.data ? pcSignedFlow() : pcOldFlow());
+        // The requester or a signer adds or corrects who was paid and the M-Pesa code, until the month is closed.
+        function pcPaymentEdit() {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payee', 'mpesaCode', 'updatedAt', 'updatedBy'])
+            && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+            && (resource.data.requesterId == request.auth.uid || pcSigner())
+            && resource.data.status != 'rejected' && pcPaymentFields(request.resource.data);
+        }
+        allow update: if resource.data.deletedAt == null && pcMonthOpen(resource.data.month)
+            && (pcPaymentEdit() || (resource.data.requesterId != request.auth.uid
+            && ('signatures' in resource.data ? pcSignedFlow() : pcOldFlow())));
         allow delete: if false;
       }
 
@@ -1243,7 +1264,8 @@ service cloud.firestore {
       }
       function pcRequestOpen(reqId) {
         return exists(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId))
-          && get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.status != 'rejected';
+          && get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.status != 'rejected'
+          && pcMonthOpen(get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.month);
       }
       match /pettyReceipts/{receiptId} {
         allow read: if pcSeesRequest(resource.data.reqId);
@@ -1292,6 +1314,12 @@ service cloud.firestore {
       // The bin: a record per deleted (or once deleted) entry, with who asked, who signed and why.
       // Written only by pettyBinSign; read by everyone with petty cash access here.
       match /pettyBin/{entryId} {
+        allow read: if pcAny() || pc('pettycash.authorize');
+        allow write: if false;
+      }
+
+      // Month-end close records, written by closePettyMonth / reopenPettyMonth only.
+      match /pettyMonths/{month} {
         allow read: if pcAny() || pc('pettycash.authorize');
         allow write: if false;
       }

@@ -80,6 +80,7 @@ export interface PdfSignOff { role: string; name: string | null; when: string | 
 export interface VoucherRequisition {
   number: string | null; requesterName: string; category: string; categoryNote?: string | null; items: PettyCashItem[];
   totalCents: number; status: string; statusLabel: string; date: string;
+  payee?: string | null; mpesaCode?: string | null;
 }
 
 /**
@@ -104,9 +105,10 @@ export function drawRequisition(pdf: JsPdf, lh: Letterhead, crest: string | null
   pdf.text(stamp, w - 35, y + 8, { align: 'center' });
 
   // Who and what.
-  pdf.setFillColor(...GOLD_SOFT);
-  pdf.roundedRect(14, y, w - 76, 30, 2, 2, 'F');
   const rows: [string, string][] = [['Requested by', r.requesterName], ['Category', categoryLabel(r)], ['Status', r.statusLabel]];
+  if (r.payee || r.mpesaCode) rows.push(['Paid to', [r.payee, r.mpesaCode ? `M-Pesa ${r.mpesaCode}` : ''].filter(Boolean).join(' · ')]);
+  pdf.setFillColor(...GOLD_SOFT);
+  pdf.roundedRect(14, y, w - 76, rows.length * 8 + 6, 2, 2, 'F');
   pdf.setFontSize(9);
   rows.forEach(([k, v], i) => {
     pdf.setFont('helvetica', 'normal');
@@ -116,7 +118,7 @@ export function drawRequisition(pdf: JsPdf, lh: Letterhead, crest: string | null
     pdf.setTextColor(...INK);
     pdf.text(pdf.splitTextToSize(v, w - 130)[0] as string, 52, y + 8 + i * 8);
   });
-  y += 40;
+  y += rows.length * 8 + 16;
 
   // Items table.
   const cols = [14, 24, w - 92, w - 66, w - 14];

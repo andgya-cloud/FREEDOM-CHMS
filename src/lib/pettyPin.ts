@@ -56,6 +56,7 @@ export async function binSign(args: {
 /** ADIA: raises a requisition as the chosen stakeholder, after checking their PIN. Returns its id and their name. */
 export async function raisePettyRequest(args: {
   orgId: string; requesterUid: string; pin: string; category: string; categoryNote: string | null; month: string;
+  payee?: string | null; mpesaCode?: string | null;
   items: { description: string; quantity: number; unitPriceCents: number; amountCents: number }[];
 }): Promise<{ id: string; name: string }> {
   const res = await httpsCallable<object, { id: string; name: string }>(functions, 'raisePettyRequest')(args);
@@ -104,4 +105,14 @@ export async function passwordProof(uid: string, emails: string | string[], pass
     }
   }
   throw last ?? Object.assign(new Error('No sign-in email'), { code: 'auth/invalid-credential' });
+}
+
+/** Month-end close: one stakeholder's signature; the second closes the month. */
+export async function closePettyMonth(orgId: string, month: string, signerUid: string, pin: string): Promise<{ status: 'closing' | 'closed'; name: string }> {
+  const res = await httpsCallable<object, { status: 'closing' | 'closed'; name: string }>(functions, 'closePettyMonth')({ orgId, month, signerUid, pin });
+  return res.data;
+}
+/** Only the Director reopens a closed month, with a reason. */
+export async function reopenPettyMonth(orgId: string, month: string, reason: string) {
+  await httpsCallable(functions, 'reopenPettyMonth')({ orgId, month, reason });
 }

@@ -13,8 +13,10 @@ import { canKeepAccounts } from '../../../functions/src/shared/permissions';
  * (Andy, 2026-10-23). The server checks the PIN and writes the signature as them, so the person signed
  * in here stays signed in. Someone without a PIN, or who forgot it, sets one with their password once.
  */
-export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly = false, directorMode = false, ready = true, exclude, sign, confirmLabel = '✓ Confirm' }: {
+export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly = false, directorMode = false, directorOnly = false, ready = true, exclude, sign, confirmLabel = '✓ Confirm' }: {
   label: string; orgId: string; fundOnly?: boolean; exclude: string[]; confirmLabel?: string;
+  /** Only the Director may give this signature (a request over the spending limit). */
+  directorOnly?: boolean;
   /** Only the people who may top up alone; `ready` is false until the amount is typed. */
   topUpOnly?: boolean; ready?: boolean;
   /** The Director signs only from his own account, with no PIN or password (Andy, 2026-10-24). */
@@ -43,7 +45,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
       .catch((err) => { if (live) setLoadError((err as { code?: string })?.code?.includes('unavailable') ? 'The name list needs a connection.' : friendlyError(err)); });
     return () => { live = false; };
   }, [orgId, reload]);
-  const choices = (signers ?? []).filter((s) => (keeper || s.uid === user?.uid) && !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
+  const choices = (signers ?? []).filter((s) => (keeper || s.uid === user?.uid) && !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp) && (!directorOnly || !!(s.isDirector ?? s.isPastor)));
   const director = (s: PettySigner) => s.isDirector ?? !!s.isPastor;
   const lockedOut = (s: PettySigner) => directorMode && director(s) && s.uid !== user?.uid;
   const iAmDirector = directorMode && choices.some((s) => director(s) && s.uid === user?.uid);

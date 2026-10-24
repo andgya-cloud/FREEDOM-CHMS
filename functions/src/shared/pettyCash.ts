@@ -73,10 +73,15 @@ export interface PettyCashRequisition {
   rejection: { uid: string; name: string; reason: string; at?: unknown } | null;
   /** Stakeholders who signed, keyed by their account. Absent on requests made before signatures. */
   signatures?: Record<string, PettyCashSignature>;
+  /** Set by the server when the Director raised it, so his own big requests need no extra signature. */
+  byDirector?: boolean;
+  /** Who was paid and, when paid by M-Pesa, the transaction code (Andy, 2026-10-24). Both optional. */
+  payee?: string | null;
+  mpesaCode?: string | null;
 }
 
 /** A stakeholder's signature on a requisition. */
-export interface PettyCashSignature { name: string; role: string; at?: unknown; enteredBy?: string }
+export interface PettyCashSignature { name: string; role: string; at?: unknown; enteredBy?: string; director?: boolean }
 
 /** Signatures that approve a requisition. */
 export const REQUEST_SIGNATURES_NEEDED = 2;
@@ -90,7 +95,7 @@ export function itemsTotalCents(items: readonly { amountCents: number }[]): numb
   return items.reduce((sum, i) => sum + (Number.isFinite(i.amountCents) ? i.amountCents : 0), 0);
 }
 
-export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean; canSign?: boolean; isAccountant?: boolean }
+export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: boolean; canSign?: boolean; isAccountant?: boolean; isDirector?: boolean }
 
 
 /**
@@ -98,6 +103,47 @@ export interface PettyCashActor { uid: string; canCheck: boolean; canApprove: bo
  * "Any three to approve" and later "any two" on 2026-10-23, so it is off; turning it back on also needs the check in firestore.rules.
  */
 export const ACCOUNTANT_REQUIRED = false;
+
+/**
+ * Spending limit (Andy, 2026-10-24): a request above KES 10,000 needs the Director as one of its two
+ * signatures, so once one other person has signed, the last place is kept for him. Also checked in
+ * firestore.rules (a client cannot approve one) and in signWithPin.
+ */
+export const DIRECTOR_LIMIT_CENTS = 1_000_000;
+/** Below this the app warns that petty cash is running low (Andy, 2026-10-24). */
+export const LOW_CASH_CENTS = 500_000;
+export const overDirectorLimit = (r: Pick<PettyCashRequisition, 'totalCents' | 'byDirector'>) => r.totalCents > DIRECTOR_LIMIT_CENTS && !r.byDirector;
+export const directorSigned = (sigs: Record<string, PettyCashSignature> | undefined | null) => Object.values(sigs ?? {}).some((s) => s.director);
+/** True when only the Director's signature can complete this request. */
+export function waitingForDirector(r: Pick<PettyCashRequisition, 'status' | 'signatures' | 'totalCents' | 'byDirector'>): boolean {
+  if (r.status !== 'submitted' || !r.signatures || !overDirectorLimit(r) || directorSigned(r.signatures)) return false;
+  return Object.keys(r.signatures).length >= REQUEST_SIGNATURES_NEEDED - 1;
+}
+
+/** Month-end close: any two stakeholders close an ended month; only the Director reopens it (Andy, 2026-10-24). */
+export const MONTH_CLOSE_SIGNATURES = 2;
+export type PettyMonthStatus = 'open' | 'closing' | 'closed';
+export interface PettyMonth {
+  orgId: string; month: string; status: PettyMonthStatus;
+  signatures: Record<string, { name: string; role: string; at?: unknown; enteredBy?: string }>;
+  closedAt?: unknown;
+  history: { action: 'started' | 'closed' | 'reopened' | 'cancelled'; name: string; at: string; reason: string | null }[];
+}
+
+/** M-Pesa transaction codes are 10 letters and digits, such as SJK4H2XQ7P. */
+export const MPESA_CODE = /^[A-Z0-9]{10}$/;
+export const cleanMpesaCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
+
+/** Possible repeats (Andy, 2026-10-24): same person, same amount, same category, within 7 days. */
+export const DUPLICATE_DAYS = 7;
+export function possibleDuplicates<T extends Pick<PettyCashRequisition, 'id' | 'requesterId' | 'requesterName' | 'totalCents' | 'category' | 'status'>>(
+  r: Pick<PettyCashRequisition, 'requesterId' | 'requesterName' | 'totalCents' | 'category'> & { id?: string }, others: T[], atMs: number, msOf: (o: T) => number | null,
+): T[] {
+  const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
+  return others.filter((o) => o.id !== r.id && o.status !== 'rejected' && o.totalCents === r.totalCents && o.category === r.category
+    && (o.requesterId === r.requesterId || plain(o.requesterName) === plain(r.requesterName))
+    && Math.abs(atMs - (msOf(o) ?? atMs)) <= DUPLICATE_DAYS * 86_400_000);
+}
 
 /** True when only the accountant's signature can complete this request: two others have signed and the accountant has not. */
 export function waitingForAccountant(r: Pick<PettyCashRequisition, 'status' | 'signatures'>): boolean {
@@ -107,11 +153,12 @@ export function waitingForAccountant(r: Pick<PettyCashRequisition, 'status' | 's
 }
 
 /** What this person may do with a requisition right now: "sign", or on an older request "check" or "approve". */
-export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked' | 'signatures'>, actor: PettyCashActor): 'sign' | 'check' | 'approve' | null {
+export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked' | 'signatures'> & Partial<Pick<PettyCashRequisition, 'totalCents' | 'byDirector'>>, actor: PettyCashActor): 'sign' | 'check' | 'approve' | null {
   if (r.requesterId === actor.uid) return null;
   if (r.signatures) {
     if (r.status !== 'submitted' || !actor.canSign || actor.uid in r.signatures) return null;
     // The accountant must be one of the signatures, so the last place is kept for them.
+    if (waitingForDirector(r as PettyCashRequisition) && !actor.isDirector) return null;
     return waitingForAccountant(r) && !actor.isAccountant ? null : 'sign';
   }
   if (r.status === 'submitted' && actor.canCheck) return 'check';

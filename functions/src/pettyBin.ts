@@ -3,6 +3,7 @@ import { Timestamp, type DocumentReference } from 'firebase-admin/firestore';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canSign, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
 import { isDirector } from './pettyContacts.js';
+import { requireMonthOpen } from './pettyMonths.js';
 import { canKeepAccounts } from './shared/permissions.js';
 import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
 import {
@@ -86,6 +87,9 @@ export const pettyBinSign = onCall(CALLABLE, async (request) => {
       bin = { orgId, kind, targetId, ...(await describe(orgId, kind, target)), state: 'live', motion: null, history: [] };
     }
     const motion = bin.motion;
+    // Nothing in a closed month changes, not even through the bin (Andy, 2026-10-24).
+    const reqMonth = kind === 'request' ? target.month : kind === 'receipt' ? (await tx.get(db.doc(`organizations/${orgId}/pettyCash/${target.reqId}`))).get('month') : null;
+    await requireMonthOpen(tx, orgId, reqMonth);
 
     if (withdraw) {
       if (!motion) throw new HttpsError('failed-precondition', 'Nothing is waiting here.');

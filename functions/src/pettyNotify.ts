@@ -98,7 +98,7 @@ export async function voucherPdf(org: OrgInfo, r: FirebaseFirestore.DocumentData
   drawRequisition(pdf, org.lh, org.lh.crest ? await crestImage() : null, org.currency, {
     number: r.number ?? null, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote ?? null, items: r.items ?? [],
     totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status as keyof typeof PETTY_CASH_STATUS_LABELS] ?? r.status,
-    date: whenIn(org, r.createdAt),
+    date: whenIn(org, r.createdAt), payee: r.payee ?? null, mpesaCode: r.mpesaCode ?? null,
   }, signOffs, (await db.collection(`organizations/${org.id}/pettyReceipts`).where('reqId', '==', r.id ?? '').get()).docs.filter((d) => !d.get('deletedAt')).length, whenIn(org, null));
   stampPoweredBy(pdf);
   return { name: `${r.number ?? 'Requisition'}-approved.pdf`, data: Buffer.from(pdf.output('arraybuffer')) };

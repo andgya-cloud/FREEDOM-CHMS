@@ -1,6 +1,7 @@
 import { onDocumentCreated } from 'firebase-functions/v2/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
-import { db } from './common.js';
+import { db, type UserProfile } from './common.js';
+import { isDirector } from './pettyContacts.js';
 import { pettyCashNumber } from './shared/pettyCash.js';
 
 const SYSTEM = 'system';
@@ -17,8 +18,10 @@ export const onPettyCashCreated = onDocumentCreated('organizations/{orgId}/petty
   await db.runTransaction(async (tx) => {
     const [req, counter, org] = await Promise.all([tx.get(reqRef), tx.get(counterRef), tx.get(orgRef)]);
     if (!req.exists || req.get('number')) return;
+    // The Director's own requests need no extra signature above the spending limit (Andy, 2026-10-24).
+    const requester = (await tx.get(db.doc(`users/${req.get('requesterId')}`))).data() as UserProfile | undefined;
     const sequence = ((counter.data()?.last as number | undefined) ?? 0) + 1;
     tx.set(counterRef, { orgId, last: sequence, updatedAt: FieldValue.serverTimestamp(), updatedBy: SYSTEM }, { merge: true });
-    tx.update(reqRef, { number: pettyCashNumber((org.get('receiptPrefix') as string | undefined) ?? '', sequence), updatedAt: FieldValue.serverTimestamp(), updatedBy: SYSTEM });
+    tx.update(reqRef, { number: pettyCashNumber((org.get('receiptPrefix') as string | undefined) ?? '', sequence), ...(isDirector(requester) ? { byDirector: true } : {}), updatedAt: FieldValue.serverTimestamp(), updatedBy: SYSTEM });
   });
 });
