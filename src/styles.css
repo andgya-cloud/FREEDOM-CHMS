@@ -1022,3 +1022,6 @@ a.kpi:hover { border-color: var(--primary); }
 .petty-row-del { flex: none; display: inline-grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--red); cursor: pointer; }
 .petty-row-del:hover, .petty-row-del:focus-visible { background: rgba(180, 35, 24, 0.1); }
 .petty-row-del svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Reports' second row of tabs (Andy, 2026-10-24). */
+.petty-subnav { margin-top: -6px; }
+.petty-subnav .chip-small { font-size: 0.82rem; padding: 4px 12px; }

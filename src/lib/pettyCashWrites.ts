@@ -3,7 +3,7 @@ import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db } from '../firebase';
 import { createStamps, updateRecord, updateStamps } from './records';
 import { trackWrite } from './sync';
-import { fundStatusAfter, itemsTotalCents, MAX_RECEIPT_BYTES, MAX_RECEIPT_PARTS, receiptTypeOf, REQUEST_SIGNATURES_NEEDED, SHRINK_PHOTOS_OVER_BYTES, splitReceiptData, type PettyCashCategory, type PettyCashItem, type PettyFund, type PettyFundKind } from '../../functions/src/shared/pettyCash';
+import { fundStatusAfter, itemsTotalCents, MAX_RECEIPT_BYTES, MAX_RECEIPT_PARTS, receiptTypeOf, SHRINK_PHOTOS_OVER_BYTES, splitReceiptData, type PettyCashCategory, type PettyCashItem, type PettyFund, type PettyFundKind } from '../../functions/src/shared/pettyCash';
 
 const me = () => {
   const u = auth.currentUser;
@@ -28,29 +28,6 @@ export function submitRequisition(orgId: string, input: { requesterName: string;
 /** Adds or corrects who was paid and the M-Pesa code (Andy, 2026-10-24). */
 export function savePayment(orgId: string, id: string, payee: string | null, mpesaCode: string | null) {
   return updateRecord(doc(db, 'organizations', orgId, 'pettyCash', id), { payee, mpesaCode });
-}
-
-const signOff = (name: string, role: string) => ({ uid: me(), name, role, at: serverTimestamp() });
-
-/** A stakeholder's signature; the third one approves the request and records that signer as the approver. */
-export function signRequisition(orgId: string, r: { id: string; signatures?: Record<string, unknown> }, name: string, role: string) {
-  const uid = me();
-  const count = Object.keys(r.signatures ?? {}).length + 1;
-  const approved = count >= REQUEST_SIGNATURES_NEEDED;
-  return updateRecord(reqRef(orgId, r.id), {
-    [`signatures.${uid}`]: { name, role, at: serverTimestamp() },
-    ...(approved ? { status: 'approved', approved: signOff(name, role) } : {}),
-  });
-}
-
-/** The accountant's check, on a request made before signatures. */
-export function checkRequisition(orgId: string, id: string, name: string) {
-  return updateRecord(reqRef(orgId, id), { status: 'checked', checked: signOff(name, 'Accountant') });
-}
-
-/** A board member's final approval, on a request made before signatures. */
-export function approveRequisition(orgId: string, id: string, name: string) {
-  return updateRecord(reqRef(orgId, id), { status: 'approved', approved: signOff(name, 'Board member') });
 }
 
 export function rejectRequisition(orgId: string, id: string, name: string, reason: string) {

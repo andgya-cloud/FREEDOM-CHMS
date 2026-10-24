@@ -13,7 +13,7 @@ import {
   type BinAction, type BinEntry, type BinKind, type BinSignature,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
-import { PettyGate, PettyNav } from './PettyCashPage';
+import { PettyGate, PettyNav, ReportsNav } from './PettyCashPage';
 import { PettySignBox } from './PettySignBox';
 import type { Organization } from '../../state/OrgContext';
 
@@ -142,9 +142,9 @@ function BinView({ org }: { org: Organization }) {
     <div className="page narrow wide-table">
       <div className="page-head">
         <h1>Bin</h1>
-        {p.isPastor && <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>}
+        {p.seesRegister && <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>}
       </div>
-      <PettyNav org={org} />
+      <PettyNav org={org} /><ReportsNav org={org} />
       <p className="muted small no-print">{p.isPastor ? 'You can delete, delete forever and put back on your own. Only you can put entries back, even ones deleted forever, from the register below. Other stakeholders need any two of them to delete.' : 'Deleting and deleting forever each need any two stakeholders. Whoever asks signs first. Only the Director can put an entry back.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
 
       <section className="card stack no-print">
@@ -208,11 +208,11 @@ function BinView({ org }: { org: Organization }) {
       <ConfirmDialog open={!!restoring} title={restoring ? `Put back ${restoring.label}?` : ''} confirmLabel="Put back"
         body={restoring?.state === 'purged' ? 'It was deleted forever. It comes back from its safety copy, with its receipts, exactly as it was.' : 'It comes back from the Bin exactly as it was.'}
         onConfirm={() => { if (restoring) void act(restoring, 'restore'); setRestoring(null); }} onCancel={() => setRestoring(null)} />
-      {/* Only the Director (pastor) sees the register (Andy, 2026-10-24). */}
-      {p.isPastor && (
+      {/* The Director sees the register; the Chairman too, read-only, for audit (Andy, 2026-10-24). */}
+      {p.seesRegister && (
       <section className="card stack">
         <h2>Deletion register</h2>
-        <p className="small muted">{org.name}. Every entry moved to the bin, put back or deleted forever, with who approved it. Only you can put an entry back, even one deleted forever.</p>
+        <p className="small muted">{org.name}. Every entry moved to the bin, put back or deleted forever, with who approved it. {p.isPastor ? 'Only you can put an entry back, even one deleted forever.' : 'You can see it for audit; only the Director can put an entry back.'}</p>
         {register.length === 0 ? <p className="muted small">Nothing has been deleted.</p> : (
           <div className="table-scroll">
             <table className="table petty-register">
@@ -225,7 +225,7 @@ function BinView({ org }: { org: Organization }) {
                     <td>{BIN_DONE_LABELS[h.action]}</td>
                     <td>{h.reason || '—'}</td>
                     <td>{h.signatures.map((s) => <div key={s.uid}>{s.name}, {s.title}<span className="small muted"> · {stamp(s.at)}</span></div>)}{h.sole && <div className="small muted">Sole approval</div>}</td>
-                    <td className="no-print">{h === row.history[row.history.length - 1] && row.state !== 'live' && !row.motion && (
+                    <td className="no-print">{p.isPastor && h === row.history[row.history.length - 1] && row.state !== 'live' && !row.motion && (
                       <button type="button" className="btn btn-quiet" onClick={() => setRestoring(row)}>Put back</button>
                     )}</td>
                   </tr>

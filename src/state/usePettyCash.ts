@@ -33,7 +33,9 @@ export function usePettyCashAccess() {
   const isAccountant = profile?.pettyTitle === ACCOUNTANT_TITLE;
   // "Pastor" powers in petty cash (delete alone, the register, put back) are the Director's only (Andy, 2026-10-24).
   const isPastor = isDirectorProfile(profile);
-  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, isPastor, isKeeper: canKeepAccounts(profile), seesAll: canSign, any: canRequest || canAuthorize };
+  return { uid: user?.uid ?? '', canRequest, canCheck, canApprove, canAuthorize, canSign, signRole, isAccountant, isPastor, isKeeper: canKeepAccounts(profile), seesAll: canSign,
+    // The Chairman also sees the deletion register, read-only (Andy, 2026-10-24).
+    seesRegister: isPastor || profile?.pettyTitle === 'Chairman', any: canRequest || canAuthorize };
 }
 
 /** The voucher title for a signer: the one on their account, otherwise Pastor or Stakeholder. */

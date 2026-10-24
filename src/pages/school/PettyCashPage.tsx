@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, NavLink, useNavigate, useParams } from 'react-router-dom';
+import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
-import { addReceipt, savePayment, approveRequisition, cancelFund, checkRequisition, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
+import { addReceipt, savePayment, cancelFund, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
@@ -15,7 +15,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
 import type { PackGroup } from '../../lib/receiptPack';
 import {
-  categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
+  categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
   ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
   cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, LOW_CASH_CENTS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
@@ -105,13 +105,32 @@ export function NoAccess() {
 export function PettyNav({ org }: { org: Organization }) {
   const p = usePettyCashAccess();
   const base = pettyCashBase(org.type);
-  const items: [string, string, boolean][] = [
-    [base, 'Overview', true], [`${base}/new`, 'New requisition', p.canRequest], [`${base}/receipts`, 'Receipts', p.seesAll],
-    [`${base}/balance-sheet`, 'Balance sheet', p.seesAll], [`${base}/month-end`, 'Month end', p.seesAll], [`${base}/budget`, 'Budget tracker', p.seesAll], [`${base}/bin`, 'Bin', p.seesAll],
+  const { pathname } = useLocation();
+  // Four tabs (Andy, 2026-10-24); Reports holds the balance sheet, month end, budget tracker and bin.
+  const inReports = REPORT_PAGES.some((x) => pathname === `${base}/${x}`);
+  const items: [string, string, boolean, boolean | undefined][] = [
+    [base, 'Overview', true, undefined], [`${base}/new`, 'New requisition', p.canRequest, undefined], [`${base}/receipts`, 'Receipts', p.seesAll, undefined],
+    [`${base}/reports`, 'Reports', p.seesAll, inReports],
   ];
   return (
     <nav className="chips petty-nav no-print" aria-label="Petty cash">
-      {items.filter((i) => i[2]).map(([to, text]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip${isActive ? ' chip-on' : ''}`}>{text}</NavLink>)}
+      {items.filter((i) => i[2]).map(([to, text, , forced]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip${isActive || forced ? ' chip-on' : ''}`}>{text}</NavLink>)}
+    </nav>
+  );
+}
+
+const REPORT_PAGES = ['reports', 'balance-sheet', 'month-end', 'budget', 'bin'];
+/** The second row of tabs inside Reports. */
+export function ReportsNav({ org }: { org: Organization }) {
+  const p = usePettyCashAccess();
+  const base = pettyCashBase(org.type);
+  const items: [string, string, boolean][] = [
+    [`${base}/reports`, 'Approved', true], [`${base}/balance-sheet`, 'Balance sheet & Excel', true], [`${base}/month-end`, 'Month end', true],
+    [`${base}/budget`, 'Budget tracker', true], [`${base}/bin`, 'Bin', p.isPastor || p.seesRegister],
+  ];
+  return (
+    <nav className="chips petty-nav petty-subnav no-print" aria-label="Reports">
+      {items.filter((i) => i[2]).map(([to, text]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip chip-small${isActive ? ' chip-on' : ''}`}>{text}</NavLink>)}
     </nav>
   );
 }
@@ -144,8 +163,8 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
   );
 }
 
-/** Total budget, spent and remaining since the last reset, and the tile that starts a reset. */
-function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
+/** Total budget, spent and remaining. Month end carries the balance forward, so there is no reset (Andy, 2026-10-24). */
+function Stats({ org }: { org: Organization }) {
   const p = usePettyCash(org);
   const s = p.summary;
   // An older top-up still waiting for a signature is shown, but only counts once it is finished.
@@ -158,11 +177,6 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
       </div>
       <div className="petty-stat petty-stat-spent"><span>Total spent</span><strong>{money(org, s.spentCents)}</strong></div>
       <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Remaining</span><strong>{money(org, s.remainingCents)}</strong></div>
-      <button type="button" className="petty-reset" onClick={onReset} disabled={!p.canAuthorize} title={p.canAuthorize ? undefined : 'Only the signing stakeholders can reset the budget'}>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4" /></svg>
-        <strong>Reset<br />Budget</strong>
-        <small>2-SIG AUTH</small>
-      </button>
     </div>
   );
 }
@@ -275,7 +289,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   );
 }
 
-function RequisitionList({ org, rows, empty }: { org: Organization; rows: RequisitionRow[]; empty: string }) {
+export function RequisitionList({ org, rows, empty }: { org: Organization; rows: RequisitionRow[]; empty: string }) {
   const p = usePettyCashAccess();
   const { receipts } = useReceipts(org);
   const counts = useMemo(() => receipts.reduce<Record<string, number>>((m, rc) => ({ ...m, [rc.reqId]: (m[rc.reqId] ?? 0) + 1 }), {}), [receipts]);
@@ -314,9 +328,6 @@ function Home({ org }: { org: Organization }) {
   const waiting = p.requisitions.filter((r) => nextStepFor(r, actor));
   const mine = p.requisitions.filter((r) => r.requesterId === p.uid);
   const approved = p.requisitions.filter((r) => r.status === 'approved');
-  const resetOpen = p.funds.some((f) => f.kind === 'reset' && f.status === 'collecting');
-  const [showReset, setShowReset] = useState(false);
-  const inProgress = p.requisitions.filter((r) => r.status === 'submitted' || r.status === 'checked');
   const { profile } = useAuth();
   // At ADIA the top-up box shows only to the four who may top up (and Andrew Guya and Doreen) (Andy, 2026-10-24).
   const canTopUpHere = org.type !== 'college' || p.isKeeper || (p.canAuthorize && canTopUpAlone('college', profile?.displayName ?? '', p.isPastor));
@@ -339,16 +350,7 @@ function Home({ org }: { org: Organization }) {
           <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
         </p>
       )}
-      {p.seesAll && <Stats org={org} onReset={() => {
-        setShowReset(true);
-        // Bring the reset card into view and put the cursor in its password box, so the press clearly does something.
-        setTimeout(() => {
-          const card = document.querySelector<HTMLElement>('.petty-auth-reset');
-          card?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          card?.querySelector<HTMLInputElement>('input[type="password"]')?.focus({ preventScroll: true });
-        }, 50);
-      }} />}
-      {p.seesAll && (showReset || resetOpen) && <FundCard org={org} kind="reset" onClose={() => setShowReset(false)} />}
+      {p.seesAll && <Stats org={org} />}
       {p.seesAll && canTopUpHere && <FundCard org={org} kind="topup" />}
       {p.canSign && <BinNotice org={org} />}
       {p.canSign && (
@@ -364,18 +366,6 @@ function Home({ org }: { org: Organization }) {
         </section>
       )}
       {p.seesAll && !p.loading && <PettyInsights org={org} month={p.month} requisitions={p.requisitions} summary={p.summary} />}
-      {p.seesAll && (
-        <>
-          <section className="card stack">
-            <h2>In progress</h2>
-            <RequisitionList org={org} rows={inProgress} empty="No requests are waiting." />
-          </section>
-          <section className="card stack">
-            <h2>Approved</h2>
-            <RequisitionList org={org} rows={approved} empty="Nothing approved yet." />
-          </section>
-        </>
-      )}
       {p.loading && <p className="muted small">Loading…</p>}
     </div>
   );
@@ -417,10 +407,6 @@ function NewRequisition({ org }: { org: Organization }) {
   const [signers, setSigners] = useState<PettySigner[] | null>(null);
   const [requester, setRequester] = useState('');
   const [pin, setPin] = useState('');
-  const [settingPin, setSettingPin] = useState(false);
-  const [password, setPassword] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [newPin2, setNewPin2] = useState('');
   const [busy, setBusy] = useState(false);
   useEffect(() => {
     if (!isAdia) return;
@@ -431,7 +417,6 @@ function NewRequisition({ org }: { org: Organization }) {
   // Only Andrew Guya and Doreen Mayaka raise a request in someone else's name (Andy, 2026-10-24).
   const others = canKeepAccounts(profile) || !isAdia ? (signers ?? []).filter((x) => x.uid !== p.uid) : [];
   const chosen = others.find((x) => x.uid === requester);
-  const needsPinSetup = !!chosen && (!chosen.hasPin || settingPin);
   if (!p.any) return <NoAccess />;
 
   const update = (key: number, field: 'description' | 'quantity' | 'unitPrice', value: string) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, [field]: value } : l)));
@@ -464,15 +449,10 @@ function NewRequisition({ org }: { org: Organization }) {
   /** ADIA: the chosen stakeholder raises it as theirs on this device, with their PIN. */
   async function raiseForChosen() {
     if (!chosen) return;
-    if (needsPinSetup) {
-      if (!checkPin(newPin)) { toast.show('Choose a PIN of 4 to 6 digits, not all the same digit.'); return; }
-      if (newPin !== newPin2) { toast.show('The two PINs are not the same.'); return; }
-      if (!password) { toast.show(`${chosen.name} types their Insight-IQ password once to set a PIN.`); return; }
-    } else if (pin.length < 4) { toast.show(`${chosen.name} types their signing PIN.`); return; }
+    if (pin.length < 4) { toast.show(`${chosen.name} types their PIN or Insight-IQ password.`); return; }
     setBusy(true);
     try {
-      if (needsPinSetup) await setPinWithPassword(chosen.email, password, newPin);
-      const res = await raisePettyRequest({ orgId: org.id, requesterUid: chosen.uid, pin: needsPinSetup ? newPin : pin, ...input() });
+      const res = await raisePettyRequest({ orgId: org.id, requesterUid: chosen.uid, pin, ...input() });
       toast.show(`Request raised for ${res.name}. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`);
       navigate(`${pettyCashBase(org.type)}/${res.id}`);
     } catch (err) {
@@ -521,7 +501,7 @@ function NewRequisition({ org }: { org: Organization }) {
         <div className="field-row">
           {isAdia ? (
             <label className="field"><span>Requester</span>
-              <select value={chosen ? chosen.uid : ''} disabled={busy} onChange={(e) => { setRequester(e.target.value); setPin(''); setSettingPin(false); setPassword(''); setNewPin(''); setNewPin2(''); }}>
+              <select value={chosen ? chosen.uid : ''} disabled={busy} onChange={(e) => { setRequester(e.target.value); setPin(''); }}>
                 <option value="">{profile?.displayName ?? 'Me'} (me)</option>
                 {others.map((x) => <option key={x.uid} value={x.uid}>{x.name}{x.title ? ` (${x.title})` : ''}</option>)}
               </select>
@@ -534,29 +514,12 @@ function NewRequisition({ org }: { org: Organization }) {
             </select>
           </label>
         </div>
-        {chosen && !needsPinSetup && (
+        {chosen && (
           <div className="petty-signer-row">
-            <label className="field"><span>{chosen.name}'s signing PIN</span>
-              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))} placeholder="4 to 6 digits" disabled={busy} />
+            <label className="field"><span>{chosen.name}'s PIN or Insight-IQ password</span>
+              <PasswordInput autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="Typed by them" disabled={busy} />
             </label>
-            <button type="button" className="btn btn-quiet petty-pin-link align-start" onClick={() => setSettingPin(true)}>Forgot the PIN? Set a new one</button>
-          </div>
-        )}
-        {needsPinSetup && (
-          <div className="petty-pin-setup">
-            <p className="small">{chosen!.hasPin ? `${chosen!.name}, set a new PIN.` : `${chosen!.name} has no PIN yet. Set one now; next time only the PIN is needed.`} Type your Insight-IQ password once to prove it is you.</p>
-            <div className="petty-signer-row">
-              <label className="field"><span>{chosen!.name}'s Insight-IQ password</span>
-                <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
-              </label>
-              <label className="field"><span>New PIN (4 to 6 digits)</span>
-                <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
-              </label>
-              <label className="field"><span>Type the PIN again</span>
-                <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin2} onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))} disabled={busy} />
-              </label>
-            </div>
-            {chosen!.hasPin && <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back to PIN</button>}
+            <Link className="btn btn-quiet petty-pin-link align-start" to="/settings/signing-pin">Set or forgot a PIN?</Link>
           </div>
         )}
         {chosen && <p className="small muted">This is saved as {chosen.name}'s request, so {chosen.name} cannot sign it.</p>}
@@ -624,6 +587,8 @@ function Requisition({ org }: { org: Organization }) {
   const needsAccountant = waitingForAccountant(r);
   const needsDirector = waitingForDirector(r);
   const locked = months[r.month]?.status === 'closed';
+  // Requests from before signatures (status submitted or checked) are now signed the same way.
+  const waitingToSign = r.signatures ? r.status === 'submitted' : r.status === 'submitted' || r.status === 'checked';
   const dupes = r.status === 'submitted' ? possibleDuplicates(r, p.requisitions, millis(r.createdAt) ?? Date.now(), (x) => millis(x.createdAt)) : [];
   const codeTwice = r.mpesaCode ? p.requisitions.filter((x) => x.id !== r.id && x.mpesaCode === r.mpesaCode) : [];
   const catRow = p.seesAll ? categoryBudgets(pettyCashCategoriesFor(org.type), p.allocations, p.requisitions, p.periodStart, millis).find((c) => c.category === r.category) : undefined;
@@ -631,6 +596,9 @@ function Requisition({ org }: { org: Organization }) {
   const name = profile?.displayName ?? 'Staff';
   const act = (write: Promise<unknown>, done: string) => { write.catch((err) => toast.show(friendlyError(err))); toast.show(done); };
   const sigs = signaturesOf(r);
+  // The last signature may not take the cash left below zero (Andy, 2026-10-24).
+  const shortOfCash = waitingToSign && sigs.length + 1 >= REQUEST_SIGNATURES_NEEDED && p.summary.remainingCents - r.totalCents < 0;
+  const cashNote = shortOfCash && <p className="petty-warn">Not enough petty cash to approve this: {money(org, Math.max(0, p.summary.remainingCents))} left, and this request is {money(org, r.totalCents)}. Top up first, then sign.</p>;
   const signOffs = r.signatures
     ? Array.from({ length: REQUEST_SIGNATURES_NEEDED }, (_, n) => {
       const s = sigs[n];
@@ -785,35 +753,30 @@ function Requisition({ org }: { org: Organization }) {
       )}
       {step && (
         <section className="card stack no-print">
-          <h2>{step === 'sign' ? 'Sign this request' : step === 'check' ? 'Check this request' : 'Give final approval'}</h2>
+          <h2>Sign this request</h2>
           {rejecting ? (
             <div className="field-row">
               <label className="field"><span>Why is it rejected?</span><input value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} autoFocus /></label>
               <button type="button" className="btn btn-danger align-start" disabled={!reason.trim()} onClick={() => { act(rejectRequisition(org.id, r.id, name, reason.trim()), 'Request rejected'); setRejecting(false); }}>Reject</button>
               <button type="button" className="btn btn-quiet align-start" onClick={() => setRejecting(false)}>Cancel</button>
             </div>
-          ) : step === 'sign' ? (
+          ) : (
             <>
-              <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : needsDirector ? ', the Director' : ''}. Choose your name and type your own signing PIN.`} orgId={org.id} directorOnly={needsDirector} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
+              {cashNote}
+              <PettySignBox ready={!shortOfCash} label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : needsDirector ? ', the Director' : ''}. Choose your name and type your own signing PIN.`} orgId={org.id} directorOnly={needsDirector} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
                 sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
               <div className="row-actions">
                 <button type="button" className="btn btn-quiet danger-text" onClick={() => setRejecting(true)}>Reject</button>
               </div>
             </>
-          ) : (
-            <div className="row-actions">
-              <button type="button" className="btn btn-primary" onClick={() => act(step === 'check' ? checkRequisition(org.id, r.id, name) : approveRequisition(org.id, r.id, name), step === 'check' ? 'Checked. It now goes for final approval.' : 'Approved')}>
-                {step === 'check' ? 'Mark as checked' : 'Approve'}
-              </button>
-              <button type="button" className="btn btn-quiet danger-text" onClick={() => setRejecting(true)}>Reject</button>
-            </div>
           )}
         </section>
       )}
-      {step !== 'sign' && r.signatures && r.status === 'submitted' && sigs.length < REQUEST_SIGNATURES_NEEDED && (
+      {!step && waitingToSign && sigs.length < REQUEST_SIGNATURES_NEEDED && (
         <section className="card stack no-print">
           <h2>Another stakeholder signs on this device</h2>
-          <PettySignBox label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} exclude={[r.requesterId, ...Object.keys(r.signatures)]}
+          {cashNote}
+          <PettySignBox ready={!shortOfCash} label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} directorOnly={needsDirector} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
             sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
         </section>
       )}

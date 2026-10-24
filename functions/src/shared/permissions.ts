@@ -46,8 +46,8 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'giving.person.read',
   'finance.reports',
   'settings.manage',
+  // Three petty cash roles (Andy, 2026-10-24): Request, Sign, Top up. The old "check" tick now counts as Sign.
   'pettycash.request',
-  'pettycash.check',
   'pettycash.approve',
   'pettycash.authorize',
   'payroll.manage',
@@ -68,10 +68,10 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'giving.person.read': 'Giving history per person',
   'finance.reports': 'Financial reports',
   'settings.manage': 'Settings and organizations',
-  'pettycash.request': 'Petty cash: make requests',
-  'pettycash.check': 'Petty cash: check requests (accountant)',
-  'pettycash.approve': 'Petty cash: final approval',
-  'pettycash.authorize': 'Petty cash: sign top-ups and resets (3 signatures needed)',
+  'pettycash.request': 'Petty cash: Request (raise requisitions)',
+  'pettycash.check': 'Petty cash: Sign (old tick)',
+  'pettycash.approve': 'Petty cash: Sign (approve requisitions, any two)',
+  'pettycash.authorize': 'Petty cash: Top up (add money; also signs)',
   'payroll.manage': 'Payroll: staff pay details and preparing pay runs',
   'payroll.approve': 'Payroll: approving pay runs and deduction rates',
   'exams.mark': 'Exam records: key in my own marks sheets (trainer)',
@@ -149,7 +149,8 @@ export function effectivePermissions(
   if (role.isOwner) return [...PERMISSIONS];
   const granted = new Set<Permission>();
   for (const p of role.permissions) if (isPermission(p)) granted.add(p);
-  for (const p of extraPermissions) {
+  for (const raw of extraPermissions) {
+    const p = raw === 'pettycash.check' ? 'pettycash.approve' : raw;
     if (isPermission(p) && GRANTABLE_PERMISSIONS.includes(p)) granted.add(p);
   }
   return PERMISSIONS.filter((p) => granted.has(p));

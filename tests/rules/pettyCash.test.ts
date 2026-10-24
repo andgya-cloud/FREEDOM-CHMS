@@ -75,22 +75,19 @@ describe('petty cash', () => {
     await assertSucceeds(getDoc(doc(as('pastor'), 'organizations/adia/pettyCash/r1')));
   });
 
-  it('goes accountant, then a different board member, never on your own request', async () => {
+  it('lets no app user check, sign or approve directly: signing goes through the server with a PIN', async () => {
     await seedRequest('r1');
-    // The board member cannot skip the accountant.
+    await assertFails(updateDoc(doc(as('eliz'), 'organizations/adia/pettyCash/r1'), { status: 'checked', checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
     await assertFails(updateDoc(doc(as('elias'), 'organizations/adia/pettyCash/r1'), { status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
-    // The requester cannot check their own request.
-    await assertFails(updateDoc(doc(as('doreen'), 'organizations/adia/pettyCash/r1'), { status: 'checked', checked: stamp('doreen', 'Accountant'), ...touched('doreen') }));
-    // Nobody can change the amount while checking.
-    await assertFails(updateDoc(doc(as('eliz'), 'organizations/adia/pettyCash/r1'), { status: 'checked', totalCents: 1, checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
-    await assertSucceeds(updateDoc(doc(as('eliz'), 'organizations/adia/pettyCash/r1'), { status: 'checked', checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
-    await assertFails(updateDoc(doc(as('elias'), 'organizations/adia/pettyCash/r1'), { status: 'approved', approved: stamp('elias', 'Board member'), checked: null, ...touched('elias') }));
-    await assertSucceeds(updateDoc(doc(as('elias'), 'organizations/adia/pettyCash/r1'), { status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
+    await seedRequest('n1', { signatures: {}, totalCents: 800000 });
+    const sig = (uid: string) => ({ name: uid, role: 'Stakeholder', at: serverTimestamp() });
+    await assertFails(updateDoc(doc(as('s1'), 'organizations/adia/pettyCash/n1'), { 'signatures.s1': sig('s1'), ...touched('s1') }));
+    await seedRequest('n3', { signatures: { s1: { name: 's1', role: 'Stakeholder', at: new Date() } }, totalCents: 800000 });
+    await assertFails(updateDoc(doc(as('chair'), 'organizations/adia/pettyCash/n3'), { 'signatures.chair': { name: 'chair', role: 'Chairman', at: serverTimestamp() }, status: 'approved', approved: stamp('chair', 'Chairman'), ...touched('chair') }));
   });
 
-  it('does not let the person who checked also give final approval', async () => {
+  it('lets a signer reject an older checked request', async () => {
     await seedRequest('r2', { status: 'checked', checked: { uid: 'pastor', name: 'pastor', role: 'Accountant', at: new Date() } });
-    await assertFails(updateDoc(doc(as('pastor'), 'organizations/adia/pettyCash/r2'), { status: 'approved', approved: stamp('pastor', 'Board member'), ...touched('pastor') }));
     await assertSucceeds(updateDoc(doc(as('elias'), 'organizations/adia/pettyCash/r2'), { status: 'rejected', rejection: { uid: 'elias', name: 'Elias', reason: 'No receipt', at: serverTimestamp() }, ...touched('elias') }));
   });
 
@@ -117,36 +114,6 @@ describe('petty cash', () => {
     await assertFails(updateDoc(ref('s1'), { status: 'cancelled', ...touched('s1') }));
     await assertSucceeds(getDoc(doc(as('doreen'), 'organizations/adia/pettyFunds/f1')));
     await assertFails(getDoc(doc(as('plainHead'), 'organizations/adia/pettyFunds/f1')));
-  });
-
-  it('approves a request once any two stakeholders sign, never the requester, each only once', async () => {
-    await seedRequest('n1', { signatures: {}, totalCents: 800000 });
-    const sig = (uid: string) => ({ name: uid, role: 'Stakeholder', at: serverTimestamp() });
-    const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n1');
-    await assertFails(updateDoc(ref('doreen'), { 'signatures.doreen': sig('doreen'), ...touched('doreen') }));
-    await assertFails(updateDoc(ref('ronald'), { 'signatures.ronald': sig('ronald'), ...touched('ronald') }));
-    await assertFails(updateDoc(ref('s1'), { 'signatures.s2': sig('s2'), ...touched('s1') }));
-    await assertFails(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), status: 'approved', approved: stamp('s1', 'Stakeholder'), ...touched('s1') }));
-    await assertSucceeds(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), ...touched('s1') }));
-    await assertFails(updateDoc(ref('s1'), { 'signatures.s1': sig('s1'), ...touched('s1') }));
-    // The new-style request has no accountant step.
-    await assertFails(updateDoc(ref('eliz'), { status: 'checked', checked: stamp('eliz', 'Accountant'), ...touched('eliz') }));
-    // A titled signer signs under their own title only, and nobody but the accountant signs as Accountant.
-    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': { ...sig('elias'), role: 'Accountant' }, status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
-    await assertFails(updateDoc(ref('dan'), { 'signatures.dan': sig('dan'), status: 'approved', approved: stamp('dan', 'Accountant'), ...touched('dan') }));
-    // The second signature, whoever it is, must approve it, with no change to the amount.
-    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), ...touched('elias') }));
-    await assertFails(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), totalCents: 1, ...touched('elias') }));
-    await assertSucceeds(updateDoc(ref('elias'), { 'signatures.elias': sig('elias'), status: 'approved', approved: stamp('elias', 'Board member'), ...touched('elias') }));
-    await assertFails(updateDoc(ref('s2'), { 'signatures.s2': sig('s2'), ...touched('s2') }));
-  });
-
-  it('takes each signer\'s own title, and approves on the second signature', async () => {
-    await seedRequest('n3', { signatures: {}, totalCents: 800000 });
-    const ref = (uid: string) => doc(as(uid), 'organizations/adia/pettyCash/n3');
-    await assertSucceeds(updateDoc(ref('dan'), { 'signatures.dan': { name: 'dan', role: 'Accountant', at: serverTimestamp() }, ...touched('dan') }));
-    await assertFails(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Board member', at: serverTimestamp() }, ...touched('chair') }));
-    await assertSucceeds(updateDoc(ref('chair'), { 'signatures.chair': { name: 'chair', role: 'Chairman', at: serverTimestamp() }, status: 'approved', approved: stamp('chair', 'Chairman'), ...touched('chair') }));
   });
 
   it('lets nobody delete directly: deleting goes through the two-signature bin', async () => {
@@ -240,12 +207,12 @@ describe('petty cash', () => {
   });
 
   it('keeps big requests for the Director, payment details editable, and closed months locked', async () => {
-    // Above KES 10,000 the second signature can only be added by signWithPin (which checks for the Director).
+    // Signatures are added only by signWithPin, which checks for the Director above KES 10,000.
     await seedRequest('big', { signatures: { s1: { name: 's1', role: 'Stakeholder', at: new Date() } } });
     await assertFails(updateDoc(doc(as('s2'), 'organizations/adia/pettyCash/big'), {
       'signatures.s2': { name: 's2', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s2', 'Stakeholder'), ...touched('s2') }));
     await seedRequest('small', { totalCents: 500000, items: [{ description: 'Tea', amountCents: 500000 }], signatures: { s1: { name: 's1', role: 'Stakeholder', at: new Date() } } });
-    await assertSucceeds(updateDoc(doc(as('s2'), 'organizations/adia/pettyCash/small'), {
+    await assertFails(updateDoc(doc(as('s2'), 'organizations/adia/pettyCash/small'), {
       'signatures.s2': { name: 's2', role: 'Stakeholder', at: serverTimestamp() }, status: 'approved', approved: stamp('s2', 'Stakeholder'), ...touched('s2') }));
     // Payee and M-Pesa code: on a new request, and added later by the requester or a signer.
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyCash/p1'), { ...newRequest('doreen'), payee: 'Kenya Power', mpesaCode: 'SJK4H2XQ7P' }));

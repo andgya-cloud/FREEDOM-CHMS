@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, canKeepAccounts, isPettyTitle } from './shared/permissions.js';
-import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, DIRECTOR_LIMIT_CENTS, directorSigned, overDirectorLimit, waitingForDirector, type PettyCashSignature } from './shared/pettyCash.js';
+import { canTopUpAlone, checkPin, fundStatusAfter, fundSummary, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, DIRECTOR_LIMIT_CENTS, directorSigned, overDirectorLimit, waitingForDirector, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
 import { requireMonthOpen } from './pettyMonths.js';
@@ -237,17 +237,21 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     const snap = await tx.get(ref);
     const r = snap.data();
     if (!r || r.deletedAt) throw new HttpsError('not-found', 'This record is no longer there.');
-    const sigs = (r.signatures ?? null) as Record<string, PettyCashSignature> | null;
+    // Requests from before signatures are signed the same way now; the accountant's check counts as one (Andy, 2026-10-24).
+    const old = kind === 'request' && !r.signatures && (r.status === 'submitted' || r.status === 'checked');
+    const sigs = (old ? (r.checked ? { [r.checked.uid]: { name: r.checked.name, role: r.checked.role ?? 'Accountant', at: r.checked.at ?? null } } : {}) : r.signatures ?? null) as Record<string, PettyCashSignature> | null;
     if (!sigs) throw new HttpsError('failed-precondition', 'This record is not signed this way.');
     if (signerUid in sigs) throw new HttpsError('already-exists', `${name} has already signed.`);
     const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid };
     if (kind === 'fund') {
       if (r.status !== 'collecting') throw new HttpsError('failed-precondition', 'This is no longer waiting for signatures.');
+      // Budget resets were removed: month end carries the balance forward (Andy, 2026-10-24).
+      if (r.kind === 'reset') throw new HttpsError('failed-precondition', 'Budget reset is no longer used. Month end carries the balance forward; delete this old reset from the Bin.');
       const status = fundStatusAfter(Object.keys(sigs).length + 1, r.kind === 'topup' ? 'topup' : 'reset');
       tx.update(ref, { [`signatures.${signerUid}`]: { name, at: FieldValue.serverTimestamp(), ...proxy }, status, ...(status === 'done' ? { doneAt: FieldValue.serverTimestamp() } : {}), ...stamp });
       return;
     }
-    if (r.status !== 'submitted') throw new HttpsError('failed-precondition', 'This request is no longer waiting for signatures.');
+    if (r.status !== 'submitted' && !old) throw new HttpsError('failed-precondition', 'This request is no longer waiting for signatures.');
     if (r.requesterId === signerUid) throw new HttpsError('permission-denied', 'Nobody can sign their own request.');
     const title = isPettyTitle(signer!.pettyTitle) ? signer!.pettyTitle! : '';
     if (waitingForAccountant({ status: 'submitted', signatures: sigs }) && title !== ACCOUNTANT_TITLE) {
@@ -263,8 +267,21 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     }
     const approved = Object.keys(sigs).length + 1 >= REQUEST_SIGNATURES_NEEDED && (!overDirectorLimit(big) || director || directorSigned(sigs));
     await requireMonthOpen(tx, orgId, r.month);
+    // Approval may not take the cash left below zero (Andy, 2026-10-24).
+    if (approved) {
+      const [funds, spent] = await Promise.all([
+        tx.get(db.collection(`organizations/${orgId}/pettyFunds`)),
+        tx.get(db.collection(`organizations/${orgId}/pettyCash`).where('status', '==', 'approved')),
+      ]);
+      const live = <T>(q: FirebaseFirestore.QuerySnapshot) => q.docs.map((d) => d.data()).filter((d) => !d.deletedAt) as T[];
+      const { remainingCents } = fundSummary(live(funds), live(spent), (t) => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : null));
+      if (remainingCents - (r.totalCents as number) < 0) {
+        throw new HttpsError('failed-precondition', `Not enough petty cash: ${formatMoney(Math.max(0, remainingCents), 'KES')} left, and this request is ${formatMoney(r.totalCents as number, 'KES')}. Top up first, then sign.`);
+      }
+    }
+    const mine = { name, role, at: FieldValue.serverTimestamp(), ...proxy, ...(director ? { director: true } : {}) };
     tx.update(ref, {
-      [`signatures.${signerUid}`]: { name, role, at: FieldValue.serverTimestamp(), ...proxy, ...(director ? { director: true } : {}) },
+      ...(old ? { signatures: { ...sigs, [signerUid]: mine }, status: 'submitted' } : { [`signatures.${signerUid}`]: mine }),
       ...(approved ? { status: 'approved', approved: { uid: signerUid, name, role, at: FieldValue.serverTimestamp() } } : {}),
       ...stamp,
     });
@@ -286,8 +303,9 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
-  // A reset is started the same way (name + PIN) but still waits for a second stakeholder.
-  const kind = data.kind === 'reset' ? 'reset' : 'topup';
+  // Budget resets were removed: month end carries the balance forward (Andy, 2026-10-24).
+  if (data.kind === 'reset') throw new HttpsError('failed-precondition', 'Budget reset is no longer used. Month end carries the balance forward.');
+  const kind = 'topup' as 'topup' | 'reset';
   const amountCents = kind === 'reset' ? 0 : typeof data.amountCents === 'number' ? data.amountCents : parseAmountCents(String(data.amountCents ?? ''));
   if (kind === 'topup' && (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0 || amountCents > 100000000000)) {
     throw new HttpsError('invalid-argument', 'Type the top-up amount in numbers, for example 500000.');

@@ -4,8 +4,8 @@ import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { friendlyError } from '../../lib/errors';
-import { listPettySigners, passwordProof, setPinWithPassword, type PettySigner } from '../../lib/pettyPin';
-import { checkPin } from '../../../functions/src/shared/pettyCash';
+import { listPettySigners, passwordProof, type PettySigner } from '../../lib/pettyPin';
+import { Link } from 'react-router-dom';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 
 /**
@@ -33,10 +33,6 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
   const [loadError, setLoadError] = useState('');
   const [uid, setUid] = useState('');
   const [pin, setPin] = useState('');
-  const [settingPin, setSettingPin] = useState(false);
-  const [password, setPassword] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [newPin2, setNewPin2] = useState('');
   const [busy, setBusy] = useState(false);
   const [reload, setReload] = useState(0);
   useEffect(() => {
@@ -52,23 +48,15 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
   // The Director signed in here is chosen for him, and signs with one tap.
   const chosen = choices.find((s) => s.uid === (uid || (iAmDirector || !keeper ? user?.uid : '')) && !lockedOut(s));
   const noSecret = !!chosen && iAmDirector && chosen.uid === user?.uid;
-  const needsPin = !!chosen && settingPin && !noSecret;
-  const pinOk = checkPin(newPin) && newPin === newPin2;
   function done(name: string) {
-    setUid(''); setPin(''); setPassword(''); setNewPin(''); setNewPin2(''); setSettingPin(false);
+    setUid(''); setPin('');
     toast.show(name);
   }
   async function go() {
     if (!chosen || !ready) return;
     setBusy(true);
     try {
-      if (needsPin) {
-        if (!checkPin(newPin)) { toast.show('Choose a PIN of 4 to 6 digits, not all the same digit.'); return; }
-        if (newPin !== newPin2) { toast.show('The two PINs are not the same.'); return; }
-        await setPinWithPassword(chosen.email, password, newPin);
-        setReload((n) => n + 1);
-        done(await sign(chosen.uid, newPin));
-      } else if (noSecret) {
+      if (noSecret) {
         done(await sign(chosen.uid, ''));
       } else {
         // Four to six digits is a PIN; anything else is their Insight-IQ password.
@@ -115,41 +103,23 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
           </label>
         ) : (
         <label className="field"><span>Stakeholder</span>
-          <select value={chosen?.uid ?? ''} onChange={(e) => { setUid(e.target.value); setPin(''); setSettingPin(false); }} disabled={busy || !signers}>
+          <select value={chosen?.uid ?? ''} onChange={(e) => { setUid(e.target.value); setPin(''); }} disabled={busy || !signers}>
             <option value="">{signers ? (choices.length ? 'Choose your name' : 'Nobody else can sign this') : 'Loading names…'}</option>
             {choices.map((s) => <option key={s.uid} value={s.uid} disabled={lockedOut(s)}>{s.name}{lockedOut(s) ? ' (signs from his own account)' : s.title ? ` (${s.title})` : ''}</option>)}
           </select>
         </label>
         )}
-        {!needsPin && !noSecret && (
+        {!noSecret && (
           <label className="field"><span>Your PIN or password</span>
             <PasswordInput autoComplete="off" value={pin} onChange={(e) => setPin(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4 && ready) void go(); }} placeholder={chosen ? 'Type your PIN or password' : 'Choose your name first'} disabled={busy || !chosen} />
           </label>
         )}
-        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || (!noSecret && pin.length < 4) || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
+        {<button type="button" className="btn btn-primary" disabled={!chosen || (!noSecret && pin.length < 4) || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
       </div>
       {noSecret && <p className="small muted">Signed in as {chosen!.name}: no password needed.</p>}
-      {chosen && !needsPin && !noSecret && (
-        <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>{chosen.hasPin ? 'Forgot your PIN? Set a new one' : 'Set a PIN for next time'}</button>
-      )}
-      {needsPin && (
-        <div className="petty-pin-setup">
-          <p className="small">{chosen!.hasPin ? `${chosen!.name}, set a new PIN.` : `${chosen!.name} has no PIN yet. Set one now; next time you will only need the PIN.`} Type your Insight-IQ password once to prove it is you.</p>
-          <div className="petty-signer-row">
-            <label className="field"><span>Your Insight-IQ password</span>
-              <PasswordInput autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Typed by them" disabled={busy} />
-            </label>
-            <label className="field"><span>New PIN (4 to 6 digits)</span>
-              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin} onChange={(e) => setNewPin(e.target.value.replace(/\D/g, ''))} disabled={busy} />
-            </label>
-            <label className="field"><span>Type the PIN again</span>
-              <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin2} onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))} disabled={busy} />
-            </label>
-            <button type="button" className="btn btn-primary" disabled={!password || !pinOk || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Save PIN and sign'}</button>
-          </div>
-          <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back</button>
-        </div>
+      {chosen && !noSecret && (
+        <Link className="btn btn-quiet petty-pin-link" to="/settings/signing-pin">{chosen.hasPin ? 'Forgot your PIN? Set a new one' : 'Set a PIN for next time'}</Link>
       )}
     </div>
   );

@@ -13,7 +13,7 @@ import { toCsv } from '../../lib/analytics';
 import { type LedgerLine, categoryBudgets, categoryLabel, parseAmountCents, pettyCashBase, pettyCashCategoriesFor, pettyLedger, PETTY_CASH_STATUS_LABELS, MONTH_CLOSE_SIGNATURES } from '../../../functions/src/shared/pettyCash';
 import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
 import { money } from './common';
-import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, savePack } from './PettyCashPage';
+import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, ReportsNav, RequisitionList, savePack } from './PettyCashPage';
 import { needsReceipt, receiptStatus } from '../../lib/receiptNames';
 import type { Organization } from '../../state/OrgContext';
 
@@ -168,7 +168,7 @@ function BalanceSheet({ org }: { org: Organization }) {
           <CsvButton name="petty-cash-balance-sheet.csv" csv={csv} />
         </span>
       </div>
-      <PettyNav org={org} />
+      <PettyNav org={org} /><ReportsNav org={org} />
       <section className="card stack no-print">
         <h2>Excel for the accountant</h2>
         <p className="small muted">Every requisition, every expense line and the cash book, with amounts as numbers ready for the books or QuickBooks.</p>
@@ -254,7 +254,7 @@ function BudgetTracker({ org }: { org: Organization }) {
         <h1>Budget tracker</h1>
         {p.canAuthorize && !draft && <button type="button" className="btn btn-primary" onClick={edit}>Set category budgets</button>}
       </div>
-      <PettyNav org={org} />
+      <PettyNav org={org} /><ReportsNav org={org} />
       <KpiRow label="Budget">
         <KpiCard label="Total budget" value={money(org, p.summary.budgetCents)} note="Signed top-ups since the last reset" />
         <KpiCard label="Shared out to categories" value={money(org, allocated)} tone={allocated > p.summary.budgetCents ? 'warn' : 'ok'} note={allocated > p.summary.budgetCents ? 'More than the budget' : `${money(org, p.summary.budgetCents - allocated)} not shared out`} />
@@ -366,7 +366,7 @@ function MonthEnd({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <div className="page-head"><h1>Month end</h1></div>
-      <PettyNav org={org} />
+      <PettyNav org={org} /><ReportsNav org={org} />
       <p className="small muted">Once a month has ended, any two stakeholders close it. After that no requisition, signature, receipt or deletion in that month can change. Only the Director can reopen a closed month, and must give a reason.</p>
       {list.length === 0 && <p className="muted small">No past months yet.</p>}
       {list.map((m) => {
@@ -420,6 +420,40 @@ function MonthEnd({ org }: { org: Organization }) {
           </section>
         );
       })}
+    </div>
+  );
+}
+
+/** Reports: approved requisitions by month (moved off the Overview, Andy 2026-10-24), with the other reports one tap away. */
+export function PettyReportsPage() {
+  return <PettyGate title="Reports">{(org) => <Reports org={org} />}</PettyGate>;
+}
+
+function Reports({ org }: { org: Organization }) {
+  const p = usePettyCash(org);
+  const approved = p.requisitions.filter((r) => r.status === 'approved');
+  const months = useMemo(() => [...new Set(approved.map((r) => r.month))].sort().reverse(), [approved]);
+  const [month, setMonth] = useState('');
+  if (!p.seesAll) return <NoAccess />;
+  const shown = month || months[0] || '';
+  const rows = approved.filter((r) => r.month === shown);
+  const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
+  return (
+    <div className="page narrow">
+      <div className="page-head"><h1>Reports</h1></div>
+      <PettyNav org={org} /><ReportsNav org={org} />
+      <section className="card stack">
+        <div className="card-head">
+          <h2>Approved requisitions</h2>
+          {months.length > 0 && (
+            <select aria-label="Month" value={shown} onChange={(e) => setMonth(e.target.value)}>
+              {months.map((m) => <option key={m} value={m}>{monthName(m)}</option>)}
+            </select>
+          )}
+        </div>
+        {rows.length > 0 && <p className="small muted">{rows.length} approved, {money(org, rows.reduce((n, r) => n + r.totalCents, 0))} in total.</p>}
+        <RequisitionList org={org} rows={rows} empty="Nothing approved yet." />
+      </section>
     </div>
   );
 }

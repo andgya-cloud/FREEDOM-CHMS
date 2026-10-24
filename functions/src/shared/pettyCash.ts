@@ -153,17 +153,16 @@ export function waitingForAccountant(r: Pick<PettyCashRequisition, 'status' | 's
 }
 
 /** What this person may do with a requisition right now: "sign", or on an older request "check" or "approve". */
-export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked' | 'signatures'> & Partial<Pick<PettyCashRequisition, 'totalCents' | 'byDirector'>>, actor: PettyCashActor): 'sign' | 'check' | 'approve' | null {
+export function nextStepFor(r: Pick<PettyCashRequisition, 'status' | 'requesterId' | 'checked' | 'signatures'> & Partial<Pick<PettyCashRequisition, 'totalCents' | 'byDirector'>>, actor: PettyCashActor): 'sign' | null {
   if (r.requesterId === actor.uid) return null;
-  if (r.signatures) {
-    if (r.status !== 'submitted' || !actor.canSign || actor.uid in r.signatures) return null;
-    // The accountant must be one of the signatures, so the last place is kept for them.
-    if (waitingForDirector(r as PettyCashRequisition) && !actor.isDirector) return null;
-    return waitingForAccountant(r) && !actor.isAccountant ? null : 'sign';
-  }
-  if (r.status === 'submitted' && actor.canCheck) return 'check';
-  if (r.status === 'checked' && actor.canApprove && r.checked?.uid !== actor.uid) return 'approve';
-  return null;
+  if (!actor.canSign) return null;
+  // Requests from before signatures (waiting at "submitted" or "checked") are signed the same way now (Andy, 2026-10-24).
+  const sigs = r.signatures ?? (r.checked ? { [r.checked.uid]: { name: r.checked.name, role: r.checked.role } } : {});
+  const waiting = r.signatures ? r.status === 'submitted' : r.status === 'submitted' || r.status === 'checked';
+  if (!waiting || actor.uid in sigs) return null;
+  const view = { ...r, signatures: sigs, status: 'submitted' as const } as PettyCashRequisition;
+  if (waitingForDirector(view) && !actor.isDirector) return null;
+  return waitingForAccountant(view) && !actor.isAccountant ? null : 'sign';
 }
 
 /** Signatures needed before money is added to petty cash, or the budget is reset. */

@@ -21,17 +21,12 @@ describe('petty cash', () => {
     expect(parseAmountCents('Ksh 500 000/=')).toBe(50000000);
   });
 
-  it('lets the accountant check, then someone else give final approval, never on their own request', () => {
-    const base = { requesterId: 'doreen', checked: null as null | { uid: string; name: string; role: string } };
-    const eliz = { uid: 'eliz', canCheck: true, canApprove: false };
-    const elias = { uid: 'elias', canCheck: false, canApprove: true };
-    expect(nextStepFor({ ...base, status: 'submitted' }, eliz)).toBe('check');
-    expect(nextStepFor({ ...base, status: 'submitted' }, elias)).toBeNull();
-    expect(nextStepFor({ ...base, requesterId: 'eliz', status: 'submitted' }, eliz)).toBeNull();
-    const checked = { ...base, status: 'checked' as const, checked: { uid: 'eliz', name: 'E', role: 'Accountant' } };
-    expect(nextStepFor(checked, elias)).toBe('approve');
-    expect(nextStepFor(checked, { uid: 'eliz', canCheck: true, canApprove: true })).toBeNull();
-    expect(nextStepFor({ ...checked, status: 'approved' }, elias)).toBeNull();
+  it('signs an older checked request the same way: the check counts as one signature', () => {
+    const checked = { requesterId: 'doreen', status: 'checked' as const, checked: { uid: 'eliz', name: 'E', role: 'Accountant' } };
+    expect(nextStepFor(checked, { uid: 'elias', canCheck: false, canApprove: true, canSign: true })).toBe('sign');
+    expect(nextStepFor(checked, { uid: 'eliz', canCheck: true, canApprove: true, canSign: true })).toBeNull();
+    expect(nextStepFor({ ...checked, status: 'approved' }, { uid: 'elias', canCheck: false, canApprove: true, canSign: true })).toBeNull();
+    expect(nextStepFor({ requesterId: 'eliz', status: 'submitted' as const, checked: null }, { uid: 'eliz', canCheck: true, canApprove: true, canSign: true })).toBeNull();
   });
 
   it('lets any two approve, nobody twice and never the requester', () => {
