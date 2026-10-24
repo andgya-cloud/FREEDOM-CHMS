@@ -140,10 +140,10 @@ function BinView({ org }: { org: Organization }) {
     <div className="page narrow wide-table">
       <div className="page-head">
         <h1>Bin</h1>
-        <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>
+        {p.isPastor && <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>}
       </div>
       <PettyNav org={org} />
-      <p className="muted small no-print">{p.isPastor ? 'You can put back or delete forever on your own. For other stakeholders each step needs any two of them.' : 'Deleting, putting back and deleting forever each need any two stakeholders. Whoever asks signs first.'} Every step is recorded below.</p>
+      <p className="muted small no-print">{p.isPastor ? 'You can put back or delete forever on your own. For other stakeholders each step needs any two of them.' : 'Deleting, putting back and deleting forever each need any two stakeholders. Whoever asks signs first.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
 
       <section className="card stack no-print">
         <h2>Waiting for a second stakeholder</h2>
@@ -203,6 +203,8 @@ function BinView({ org }: { org: Organization }) {
         )}
       </section>
 
+      {/* Only the Director (pastor) sees the register (Andy, 2026-10-24). */}
+      {p.isPastor && (
       <section className="card stack">
         <h2>Deletion register</h2>
         <p className="small muted">{org.name}. Every entry moved to the bin, put back or deleted forever, with the two stakeholders who approved it.</p>
@@ -225,6 +227,7 @@ function BinView({ org }: { org: Organization }) {
           </div>
         )}
       </section>
+      )}
     </div>
   );
 }
