@@ -1,6 +1,7 @@
 import { formatMoney } from './giving.js';
 import { BIN_SIGNATURES_NEEDED, categoryLabel, REQUEST_SIGNATURES_NEEDED, type PettyCashCategory } from './pettyCash.js';
 import type { Letterhead } from './pettyVoucher.js';
+import { POWERED_BY, poweredByHtml } from './poweredBy.js';
 
 /*
  * The petty cash notices (Andy, 2026-10-23): "please approve" when a request is submitted, a reminder
@@ -51,7 +52,7 @@ export function noticeText(n: NoticeInput): string {
     `Requisition: ${n.r.number}`, `Requested by: ${n.r.requesterName}`, `Category: ${categoryLabel(n.r)}`, `Amount: ${amount}`,
     `Items: ${n.r.items.map((i) => i.description).join('; ')}`, '',
     n.kind === 'approved' ? `View it in Insight-IQ: ${n.link}` : `Review and approve in Insight-IQ: ${n.link}`, '',
-    'Kind regards,', `${n.lh.name} · Petty Cash`, ...n.lh.lines,
+    'Kind regards,', `${n.lh.name} · Petty Cash`, ...n.lh.lines, '', POWERED_BY,
   ].join('\n');
 }
 
@@ -83,7 +84,7 @@ ${rows.map(([k, v], i) => `<tr style="background:${i % 2 ? '#ffffff' : '#faf6ec'
 <p style="margin:24px 0 8px"><a href="${esc(n.link)}" style="display:inline-block;background:#0b112c;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold">${button}</a></p>
 <p style="font-size:12px;color:#6b7280;margin:8px 0 0">${n.kind === 'approved' ? 'Each signature on the voucher was made from the signer’s own account or personal PIN.' : `Sign from your own Insight-IQ account, or with your name and PIN on the device where the request is open. Deleting a request needs any ${BIN_SIGNATURES_NEEDED} stakeholders too.`}</p>
 </td></tr>
-<tr><td style="padding:18px 28px 24px;color:#6b7280;font-size:12px;border-top:1px solid #f1f1f1">Kind regards,<br><strong style="color:#0b112c">${esc(n.lh.name)} · Petty Cash</strong><br>This message was sent automatically by Insight-IQ.</td></tr>
+<tr><td style="padding:18px 28px 24px;color:#6b7280;font-size:12px;border-top:1px solid #f1f1f1">Kind regards,<br><strong style="color:#0b112c">${esc(n.lh.name)} · Petty Cash</strong><br>This message was sent from Insight-IQ.${poweredByHtml()}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 

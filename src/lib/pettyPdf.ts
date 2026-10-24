@@ -7,6 +7,7 @@ import {
 import type { Organization } from '../state/OrgContext';
 import { newPdf } from './givingPdf';
 import { crestImage } from './payrollPdf';
+import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 export type { PdfSignOff };
 const madeAt = () => new Date().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' });
@@ -16,6 +17,7 @@ export async function requisitionPdf(org: Organization, r: VoucherRequisition, s
   const pdf = await newPdf('a4');
   const lh = letterheadFor(org);
   drawRequisition(pdf, lh, lh.crest ? await crestImage() : null, org.currency || 'KES', r, signOffs, receiptCount, madeAt());
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `${r.number ?? 'Requisition'}${r.status === 'approved' ? '-approved' : ''}.pdf`, { type: 'application/pdf' });
 }
 
@@ -77,5 +79,6 @@ export async function balanceSheetPdf(org: Organization, lines: LedgerLine[], wh
     y += h;
   });
   drawFooter(pdf, `${lh.name} · Petty cash balance sheet`, madeAt());
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `${org.name.replace(/[^A-Za-z0-9]+/g, '-')}-petty-cash-balance-sheet.pdf`, { type: 'application/pdf' });
 }

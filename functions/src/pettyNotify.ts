@@ -13,6 +13,7 @@ import { contactsFor, personKey as plainName, withContacts } from './pettyContac
 import { isSendingHour, sendingReady, withWhatsAppDefaults, type WhatsAppSettings } from './shared/whatsapp.js';
 import { PETTY_CASH_STATUS_LABELS, pettyCashBase, type PettyCashSignature } from './shared/pettyCash.js';
 import { drawRequisition, letterheadFor, type Letterhead } from './shared/pettyVoucher.js';
+import { stampPoweredBy } from './shared/poweredBy.js';
 import {
   noticeHtml, noticeSubject, noticeText, PETTY_WA_TEMPLATES, REMIND_AFTER_HOURS, waParams,
   type NoticeInput, type NoticeRequest, type PettyNoticeKind,
@@ -99,6 +100,7 @@ export async function voucherPdf(org: OrgInfo, r: FirebaseFirestore.DocumentData
     totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status as keyof typeof PETTY_CASH_STATUS_LABELS] ?? r.status,
     date: whenIn(org, r.createdAt),
   }, signOffs, (await db.collection(`organizations/${org.id}/pettyReceipts`).where('reqId', '==', r.id ?? '').get()).docs.filter((d) => !d.get('deletedAt')).length, whenIn(org, null));
+  stampPoweredBy(pdf);
   return { name: `${r.number ?? 'Requisition'}-approved.pdf`, data: Buffer.from(pdf.output('arraybuffer')) };
 }
 

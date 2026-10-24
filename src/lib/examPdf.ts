@@ -1,6 +1,7 @@
 import { crestImage } from './payrollPdf';
 import { newPdf } from './givingPdf';
 import { EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, type ExamReport, type ExamSettings, type ReportRow } from '../../functions/src/shared/exams';
+import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 const NAVY: [number, number, number] = [11, 17, 44];
 const GOLD: [number, number, number] = [210, 167, 75];
@@ -160,5 +161,6 @@ export async function resultSlipsPdf(opts: { cohort: string; reportTitle: string
   });
 
   const safe = (rows.length === 1 ? rows[0]!.name : reportTitle).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `Result-Slip-${cohort.replace(/[^A-Za-z0-9]+/g, '-')}-${safe}.pdf`, { type: 'application/pdf' });
 }

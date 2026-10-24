@@ -8,6 +8,7 @@ import { Bars, Scorecard, TrendChart } from '../../components/Scorecard';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { formatMoney } from '../../../functions/src/shared/giving';
 import { dueText, reasonLabel, reportCsv, reportFileName, reportPdf, type GivingPart, type PastoralPart } from '../../../functions/src/shared/reports';
+import { stampPoweredBy } from '../../../functions/src/shared/poweredBy';
 
 const day = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`;
 const pct = (v: number | null | undefined) => (v == null ? '–' : `${v}%`);
@@ -57,6 +58,7 @@ export function ReportPage() {
   async function pdfFile() {
     const { jsPDF } = await import('jspdf');
     const pdf = reportPdf(jsPDF, report!, pastoral, giving);
+    stampPoweredBy(pdf);
     return new File([pdf.output('blob')], reportFileName(report!, 'pdf'), { type: 'application/pdf' });
   }
   async function sharePdf() {

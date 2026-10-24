@@ -15,6 +15,7 @@ import {
 } from './shared/metrics.js';
 import { isTraining } from './shared/organizations.js';
 import { buildReport, reportFileName, reportPdf, reportsDue, type GivingPart, type PastoralPart, type ReportDoc } from './shared/reports.js';
+import { POWERED_BY, poweredByHtml, stampPoweredBy } from './shared/poweredBy.js';
 
 const SYSTEM = 'system';
 const DAY = 86_400_000;
@@ -141,6 +142,7 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 
 export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving: GivingPart | null, appUrl: string) {
   const pdf = reportPdf(jsPDF, r, pastoral, giving);
+  stampPoweredBy(pdf);
   const content = Buffer.from(pdf.output('arraybuffer')).toString('base64');
   const kind = r.type === 'weekly' ? 'Weekly' : 'Monthly';
   const h = r.headlines.current;
@@ -158,8 +160,8 @@ export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving:
   ];
   return {
     subject: `${kind} report: ${r.orgName}, ${r.label}`,
-    text: lines.join('\n'),
-    html: lines.map((l) => (l ? `<p style="margin:0 0 6px">${escapeHtml(l)}</p>` : '<br>')).join(''),
+    text: [...lines, '', POWERED_BY].join('\n'),
+    html: lines.map((l) => (l ? `<p style="margin:0 0 6px">${escapeHtml(l)}</p>` : '<br>')).join('') + poweredByHtml(),
     attachments: [{ filename: reportFileName(r, 'pdf'), content, encoding: 'base64', contentType: 'application/pdf' }],
   };
 }

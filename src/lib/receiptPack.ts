@@ -3,6 +3,7 @@ import { receiptKindLabel } from '../../functions/src/shared/pettyCash';
 import { receiptData } from './pettyCashWrites';
 import { itemLabel, receiptCode } from './receiptNames';
 import { downloadFile } from './givingPdf';
+import { INSIGHT_LOGO_PNG, POWERED_BY } from '../../functions/src/shared/poweredBy';
 
 /**
  * Receipt packs (Andy, 2026-10-24): one PDF holding a requisition's receipts, or a whole month's, in
@@ -105,6 +106,15 @@ export async function buildReceiptPack(orgName: string, title: string, groups: P
       p.drawText(clip(font, `This receipt is a ${receiptKindLabel(r.type)} file and cannot be shown here.`, 11, A4[0] - 2 * MARGIN), { x: MARGIN, y: A4[1] / 2, size: 11, font });
       p.drawText(clip(font, `Open ${g.number} in Insight-IQ, Petty Cash, Receipts, to view "${r.name}".`, 10, A4[0] - 2 * MARGIN), { x: MARGIN, y: A4[1] / 2 - 18, size: 10, font });
     }
+  }
+  // "Powered by Insight-IQ" with the logo at the foot of every page, as on the app's other PDFs.
+  const logo = await pdf.embedPng(bytesOf(INSIGHT_LOGO_PNG));
+  for (const pg of pdf.getPages()) {
+    const tw = font.widthOfTextAtSize(POWERED_BY, 7);
+    const x = (pg.getWidth() - 10 - 3 - tw) / 2;
+    pg.drawRectangle({ x: x - 4, y: 8, width: tw + 21, height: 14, color: rgb(1, 1, 1), opacity: 0.9 });
+    pg.drawImage(logo, { x, y: 10, width: 10, height: 10 });
+    pg.drawText(POWERED_BY, { x: x + 13, y: 12.5, size: 7, font, color: rgb(0.47, 0.49, 0.53) });
   }
   return { bytes: await pdf.save(), missing };
 }

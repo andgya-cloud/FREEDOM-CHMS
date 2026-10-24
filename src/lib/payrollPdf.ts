@@ -2,6 +2,7 @@ import { formatMoney } from '../../functions/src/shared/giving';
 import type { PayLine } from '../../functions/src/shared/payroll';
 import type { Organization } from '../state/OrgContext';
 import { newPdf } from './givingPdf';
+import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 const NAVY: [number, number, number] = [11, 17, 44];
 const GOLD: [number, number, number] = [210, 167, 75];
@@ -155,5 +156,6 @@ export async function payslipPdf(org: Organization, monthLabel: string, month: s
   pdf.rect(0, h - 3, w, 3, 'F');
 
   const safe = l.name.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `Staff-Payslip-${month}-${safe}.pdf`, { type: 'application/pdf' });
 }

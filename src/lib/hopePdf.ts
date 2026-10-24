@@ -3,6 +3,7 @@ import { formatDateKey } from '../../functions/src/shared/datetime';
 import type { HopeReportDoc } from '../../functions/src/shared/hope';
 import { header, newPdf, GREY, INK } from './givingPdf';
 import { drawTable } from './schoolPdf';
+import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 /** The Hope Center report as a PDF, made on the device. The monthly one has counts only: no names, no codes. */
 export async function hopeReportPdf(org: Organization, r: HopeReportDoc): Promise<File> {
@@ -49,5 +50,6 @@ export async function hopeReportPdf(org: Organization, r: HopeReportDoc): Promis
         r.followUps.map((f) => [f.code, f.name, f.programme, f.since ? formatDateKey(f.since) : '']), h - 30);
     } else note('No follow-ups are open.');
   }
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `Hope Center ${r.type} report ${r.label}.pdf`, { type: 'application/pdf' });
 }

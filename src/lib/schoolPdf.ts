@@ -5,13 +5,14 @@ import { OUTCOME_LABELS, type SchoolReportDoc, type SchoolSettings, type UnitRes
 import type { Organization } from '../state/OrgContext';
 import type { Gift } from '../state/useGiving';
 import { header, newPdf, receiptNumberFor, paymentLabel, GREY, INK } from './givingPdf';
+import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 /**
  * ADIA documents as PDF files, made on the device so they work offline:
  * report cards, transcripts, fee statements and the director's school report.
  */
 
-const file = (pdf: JsPdf, name: string) => new File([pdf.output('blob')], name, { type: 'application/pdf' });
+const file = (pdf: JsPdf, name: string) => { stampPoweredBy(pdf); return new File([pdf.output('blob')], name, { type: 'application/pdf' }); };
 
 export interface Column { label: string; x: number; align?: 'right' }
 
