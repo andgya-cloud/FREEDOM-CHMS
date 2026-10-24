@@ -206,6 +206,10 @@ describe('petty cash', () => {
     await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/p'), meta('doreen', 'q1', { name: 'till.png', type: 'image/png' })));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/t'), meta('doreen', 'q1', { type: 'text/html' })));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/d'), meta('doreen', 'q1', { size: 10000001 })));
+    // A receipt can be tied to one expense item of the requisition.
+    await assertSucceeds(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/i'), meta('doreen', 'q1', { itemIndex: 1 })));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/j'), meta('doreen', 'q1', { itemIndex: -1 })));
+    await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceipts/k'), meta('doreen', 'q1', { itemIndex: 'two' })));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/e_0'), part('doreen', 'e', 0, 'data:text/html;base64,AAAA')));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptParts/wrong'), part('doreen', 'e', 0, 'data:image/png;base64,AAAA')));
     await assertFails(setDoc(doc(as('doreen'), 'organizations/adia/pettyReceiptFiles/g'), { ...file('doreen'), data: 'data:image/jpeg;base64,AAAA' }));

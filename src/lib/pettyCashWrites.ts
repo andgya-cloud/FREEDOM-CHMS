@@ -130,7 +130,7 @@ async function shrinkPhoto(file: File): Promise<string> {
 }
 
 /** Adds a receipt to a requisition: photos, PDF, Word, Excel or CSV up to 10 MB. Big photos are made smaller first. */
-export async function addReceipt(orgId: string, reqId: string, file: File, uploadedByName: string) {
+export async function addReceipt(orgId: string, reqId: string, file: File, uploadedByName: string, itemIndex: number | null = null) {
   const type = receiptTypeOf(file.name, file.type);
   if (!type) throw new Error(`${file.name} is not a receipt format this app takes. Use a photo, PDF, Word, Excel or CSV file.`);
   if (file.size > MAX_RECEIPT_BYTES) throw new Error(`${file.name} is larger than 10 MB.`);
@@ -152,7 +152,7 @@ export async function addReceipt(orgId: string, reqId: string, file: File, uploa
     ...parts.map((part, index) => trackWrite(setDoc(doc(db, 'organizations', orgId, 'pettyReceiptParts', `${ref.id}_${index}`),
       { orgId, reqId, receiptId: ref.id, index, data: part, createdAt: stamps.createdAt, createdBy: stamps.createdBy }))),
     trackWrite(setDoc(doc(db, 'organizations', orgId, 'pettyReceiptFiles', ref.id), { orgId, reqId, parts: parts.length, ...stamps })),
-    trackWrite(setDoc(ref, { orgId, reqId, name, type: savedType, size, uploadedByName, ...stamps })),
+    trackWrite(setDoc(ref, { orgId, reqId, name, type: savedType, size, uploadedByName, ...(itemIndex != null ? { itemIndex } : {}), ...stamps })),
   ]);
 }
 

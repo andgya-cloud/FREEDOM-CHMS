@@ -1248,7 +1248,7 @@ service cloud.firestore {
       match /pettyReceipts/{receiptId} {
         allow read: if pcSeesRequest(resource.data.reqId);
         allow create: if stampedCreate() && freshRecord()
-          && request.resource.data.keys().hasOnly(['orgId', 'reqId', 'name', 'type', 'size', 'uploadedByName',
+          && request.resource.data.keys().hasOnly(['orgId', 'reqId', 'name', 'type', 'size', 'uploadedByName', 'itemIndex',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId
           && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
@@ -1256,7 +1256,9 @@ service cloud.firestore {
           && shortText(request.resource.data.name, 200) && shortText(request.resource.data.type, 100)
           && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 10000000
           && request.resource.data.type.matches(pcReceiptTypes())
-          && shortText(request.resource.data.uploadedByName, 120);
+          && shortText(request.resource.data.uploadedByName, 120)
+          && (!('itemIndex' in request.resource.data) || (request.resource.data.itemIndex is int
+               && request.resource.data.itemIndex >= 0 && request.resource.data.itemIndex < 50));
         // Deleting goes through the bin (pettyBinSign), which needs two stakeholders.
         allow update, delete: if false;
       }

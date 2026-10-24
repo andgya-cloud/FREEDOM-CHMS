@@ -68,7 +68,7 @@ export function usePettyCash(org: Organization) {
   return { ...access, month, requisitions, funds, summary, periodStart, allocations, loading: reqs.loading };
 }
 
-export interface ReceiptRow { id: string; reqId: string; name: string; type: string; size: number; uploadedByName: string; createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }
+export interface ReceiptRow { id: string; reqId: string; name: string; type: string; size: number; uploadedByName: string; itemIndex?: number | null; createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }
 
 /** Receipt records (not the files): all of them for those who see every requisition, or one requisition's. */
 export function useReceipts(org: Organization, reqId?: string) {

@@ -11,7 +11,8 @@ import { toCsv } from '../../lib/analytics';
 import { type LedgerLine, categoryBudgets, categoryLabel, parseAmountCents, pettyCashBase, pettyCashCategoriesFor, pettyLedger, PETTY_CASH_STATUS_LABELS } from '../../../functions/src/shared/pettyCash';
 import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
 import { money } from './common';
-import { BudgetHealth, NoAccess, PettyGate, PettyNav, ReceiptsBox } from './PettyCashPage';
+import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, savePack } from './PettyCashPage';
+import { needsReceipt, receiptStatus } from '../../lib/receiptNames';
 import type { Organization } from '../../state/OrgContext';
 
 const day = (ms: number) => new Date(ms).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
@@ -23,39 +24,80 @@ export function PettyReceiptsPage() {
 
 function Receipts({ org }: { org: Organization }) {
   const p = usePettyCash(org);
+  const toast = useToast();
   const { receipts } = useReceipts(org);
   const [show, setShow] = useState<'missing' | 'all'>('missing');
   const [open, setOpen] = useState<string | null>(null);
+  const [month, setMonth] = useState('');
+  const [category, setCategory] = useState('');
+  const [packing, setPacking] = useState(false);
+  const live = p.requisitions.filter((r) => r.status !== 'rejected');
+  const months = useMemo(() => [...new Set(live.map((r) => r.month))].sort().reverse(), [live]);
   if (!p.seesAll) return <NoAccess />;
-  const countFor = (id: string) => receipts.filter((r) => r.reqId === id).length;
-  const approved = p.requisitions.filter((r) => r.status === 'approved');
-  const list = (show === 'missing' ? approved.filter((r) => countFor(r.id) === 0) : p.requisitions.filter((r) => r.status !== 'rejected'));
+  const receiptsOf = (id: string) => receipts.filter((r) => r.reqId === id);
+  const inView = live.filter((r) => (!month || r.month === month) && (!category || r.category === category));
+  const approved = inView.filter((r) => r.status === 'approved');
+  const missing = approved.filter((r) => needsReceipt(r, receiptsOf(r.id).length));
+  const list = show === 'missing' ? missing : inView;
+  const monthName = (m: string) => new Date(`${m}-01T00:00:00`).toLocaleDateString('en-KE', { month: 'long', year: 'numeric' });
+  const prefix = org.type === 'college' ? 'ADIA' : org.name.replace(/[^A-Za-z0-9]+/g, '-');
+  async function monthPack() {
+    if (!month) return;
+    setPacking(true);
+    const groups = live.filter((r) => r.month === month && r.status === 'approved' && (!category || r.category === category))
+      .sort((a, b) => (a.number ?? '').localeCompare(b.number ?? ''))
+      .map((r) => packGroup(org, r, receiptsOf(r.id)));
+    await savePack(org, `Receipts for ${monthName(month)}${category ? `, ${category}` : ''}`, `${prefix}-receipts-${month}.pdf`, groups, toast);
+    setPacking(false);
+  }
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>Receipts</h1></div>
+      <div className="page-head">
+        <h1>Receipts</h1>
+        <span className="row-actions no-print">
+          <button type="button" className="btn btn-primary" disabled={!month || packing || !approved.length} onClick={() => void monthPack()}
+            title={month ? undefined : 'Pick a month first'}>{packing ? 'Making PDF…' : "Download month's receipts (PDF)"}</button>
+        </span>
+      </div>
       <PettyNav org={org} />
+      <div className="row-actions petty-filters">
+        <label className="field"><span>Month</span>
+          <select value={month} onChange={(e) => setMonth(e.target.value)}>
+            <option value="">All months</option>
+            {months.map((m) => <option key={m} value={m}>{monthName(m)}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>Category</span>
+          <select value={category} onChange={(e) => setCategory(e.target.value)}>
+            <option value="">All categories</option>
+            {pettyCashCategoriesFor(org.type).map((c) => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </label>
+      </div>
+      {!month && <p className="small muted">Pick a month to download all its approved requisitions' receipts in one PDF.</p>}
       <KpiRow label="Receipts">
-        <KpiCard label="Receipts kept" value={String(receipts.length)} />
-        <KpiCard label="Approved requests" value={String(approved.length)} />
-        <KpiCard label="Approved without a receipt" value={String(approved.filter((r) => countFor(r.id) === 0).length)} tone={approved.some((r) => countFor(r.id) === 0) ? 'warn' : 'ok'} />
+        <KpiCard label="Receipts kept" value={String(inView.reduce((n, r) => n + receiptsOf(r.id).length, 0))} />
+        <KpiCard label="Complete" value={String(approved.length - missing.length)} tone="ok" note="Approved, with a receipt" />
+        <KpiCard label="Receipt needed" value={String(missing.length)} tone={missing.length ? 'warn' : 'ok'} note="Approved, no receipt yet" />
       </KpiRow>
       <div className="segmented" role="group" aria-label="Which requisitions">
-        <button type="button" className={show === 'missing' ? 'on' : ''} onClick={() => setShow('missing')}>Approved, no receipt yet</button>
+        <button type="button" className={show === 'missing' ? 'on' : ''} onClick={() => setShow('missing')}>Receipt needed ({missing.length})</button>
         <button type="button" className={show === 'all' ? 'on' : ''} onClick={() => setShow('all')}>All requisitions</button>
       </div>
-      {list.length === 0 ? <p className="muted small">{show === 'missing' ? 'Every approved request has a receipt.' : 'No requisitions yet.'}</p> : (
+      {list.length === 0 ? <p className="muted small">{show === 'missing' ? 'Every approved requisition here has a receipt.' : 'No requisitions here.'}</p> : (
         <ul className="petty-folders">
           {list.map((r) => {
-            const n = countFor(r.id);
+            const mine = receiptsOf(r.id);
+            const n = mine.length;
             const isOpen = open === r.id;
             return (
               <li key={r.id} className="card">
                 <button type="button" className="petty-folder" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : r.id)}>
                   <span className="petty-folder-name">{r.number ?? 'New request'} · {r.requesterName}</span>
-                  <span className="small muted">{money(org, r.totalCents)} · {categoryLabel(r)} · {PETTY_CASH_STATUS_LABELS[r.status]}</span>
-                  <span className={`badge${n ? '' : ' badge-warn'}`}>{n} receipt{n === 1 ? '' : 's'}</span>
+                  <span className="small muted">{money(org, r.totalCents)} · {categoryLabel(r)} · {receiptStatus(r, n, PETTY_CASH_STATUS_LABELS[r.status])}</span>
+                  <span className={`badge${n || r.status !== 'approved' ? '' : ' badge-warn'}`}>{n ? `📎 ${n} receipt${n === 1 ? '' : 's'}` : 'No receipt yet'}</span>
                 </button>
-                {isOpen && <ReceiptsBox org={org} req={r} receipts={receipts.filter((x) => x.reqId === r.id)} />}
+                {isOpen && <ReceiptsBox org={org} req={r} receipts={mine} />}
               </li>
             );
           })}

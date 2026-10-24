@@ -12,6 +12,8 @@ import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
+import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
+import type { PackGroup } from '../../lib/receiptPack';
 import {
   categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
   ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
@@ -28,6 +30,23 @@ import type { Timestamp } from 'firebase/firestore';
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : 'just now');
 const label = (r: RequisitionRow) => r.number ?? 'New request';
+
+/** A requisition and its receipts, as they go into a receipt pack. */
+export const packGroup = (org: Organization, r: RequisitionRow, receipts: ReceiptRow[]): PackGroup => ({
+  number: label(r), requesterName: r.requesterName, amount: money(org, r.totalCents), category: categoryLabel(r),
+  status: receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status]), items: r.items, receipts,
+});
+
+/** Saves a receipt pack PDF, or says why it could not. */
+export async function savePack(org: Organization, title: string, fileName: string, groups: PackGroup[], toast: { show: (m: string) => void }) {
+  try {
+    const { downloadReceiptPack } = await import('../../lib/receiptPack');
+    const missing = await downloadReceiptPack(org.name, title, fileName, groups, org.id);
+    if (missing) toast.show(`${missing} receipt${missing === 1 ? ' has' : 's have'} not reached this device yet and ${missing === 1 ? 'was' : 'were'} left out. Try again when online.`);
+  } catch (err) {
+    toast.show(friendlyError(err));
+  }
+}
 /** What the stakeholders were emailed about this request, by whom and when. */
 function noticeLine(n: NonNullable<RequisitionRow['notice']>) {
   const parts = [];
@@ -249,6 +268,8 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
 
 function RequisitionList({ org, rows, empty }: { org: Organization; rows: RequisitionRow[]; empty: string }) {
   const p = usePettyCashAccess();
+  const { receipts } = useReceipts(org);
+  const counts = useMemo(() => receipts.reduce<Record<string, number>>((m, rc) => ({ ...m, [rc.reqId]: (m[rc.reqId] ?? 0) + 1 }), {}), [receipts]);
   const [deleting, setDeleting] = useState<RequisitionRow | null>(null);
   if (rows.length === 0) return <p className="muted small">{empty}</p>;
   return (
@@ -258,7 +279,10 @@ function RequisitionList({ org, rows, empty }: { org: Organization; rows: Requis
           <li key={r.id} className="petty-row">
             <Link to={`${pettyCashBase(org.type)}/${r.id}`}>
               <span className="link-title">{label(r)} · {r.requesterName}</span>
-              <span className="link-detail">{money(org, r.totalCents)} · {r.signatures && r.status === 'submitted' ? `${Object.keys(r.signatures).length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : PETTY_CASH_STATUS_LABELS[r.status]} · {categoryLabel(r)}</span>
+              <span className="link-detail">{money(org, r.totalCents)} · {r.signatures && r.status === 'submitted' ? `${Object.keys(r.signatures).length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : receiptStatus(r, counts[r.id] ?? 0, PETTY_CASH_STATUS_LABELS[r.status])} · {categoryLabel(r)}</span>
+              {p.seesAll && r.status !== 'rejected' && (counts[r.id]
+                ? <span className="badge">📎 {counts[r.id]} receipt{counts[r.id] === 1 ? '' : 's'}</span>
+                : needsReceipt(r, 0) && <span className="badge badge-warn">No receipt yet</span>)}
             </Link>
             {(p.canSign || r.requesterId === p.uid) && (r.status !== 'approved' || p.isKeeper) && <BinButton label={`Delete ${label(r)}`} onClick={() => setDeleting(r)} />}
           </li>
@@ -287,6 +311,8 @@ function Home({ org }: { org: Organization }) {
   const { profile } = useAuth();
   // At ADIA the top-up box shows only to the four who may top up (and Andrew Guya and Doreen) (Andy, 2026-10-24).
   const canTopUpHere = org.type !== 'college' || p.isKeeper || (p.canAuthorize && canTopUpAlone('college', profile?.displayName ?? '', p.isPastor));
+  const { receipts } = useReceipts(org);
+  const noReceipt = approved.filter((r) => !receipts.some((rc) => rc.reqId === r.id));
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
@@ -295,6 +321,12 @@ function Home({ org }: { org: Organization }) {
         {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}
       </div>
       <PettyNav org={org} />
+      {p.seesAll && noReceipt.length > 0 && (
+        <p className="petty-warn">
+          {noReceipt.length} approved requisition{noReceipt.length === 1 ? ' still needs' : 's still need'} a receipt ({noReceipt.slice(0, 3).map(label).join(', ')}{noReceipt.length > 3 ? '…' : ''}).{' '}
+          <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
+        </p>
+      )}
       {p.seesAll && <Stats org={org} onReset={() => {
         setShowReset(true);
         // Bring the reset card into view and put the cursor in its password box, so the press clearly does something.
@@ -678,7 +710,7 @@ function Requisition({ org }: { org: Organization }) {
           <li><span>Requester</span><strong>{r.requesterName}</strong></li>
           <li><span>Category</span><strong>{categoryLabel(r)}</strong></li>
           <li><span>Date</span><strong>{when(r.createdAt)}</strong></li>
-          <li><span>Status</span><strong>{r.signatures && r.status === 'submitted' ? `${sigs.length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : PETTY_CASH_STATUS_LABELS[r.status]}</strong></li>
+          <li><span>Status</span><strong className={needsReceipt(r, receipts.length) ? 'danger-text' : undefined}>{r.signatures && r.status === 'submitted' ? `${sigs.length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status])}</strong></li>
         </ul>
         <h2>Expense items</h2>
         <div className="exam-table-wrap">
@@ -764,6 +796,8 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
   const [busy, setBusy] = useState(false);
   const [viewing, setViewing] = useState<{ name: string; type: string; data: string } | null>(null);
   const [removing, setRemoving] = useState<ReceiptRow | null>(null);
+  const [item, setItem] = useState('');
+  const [packing, setPacking] = useState(false);
   const canAdd = req.status !== 'rejected' && (p.seesAll || req.requesterId === p.uid) && receipts.length < MAX_RECEIPTS_PER_REQUEST;
 
   async function add(e: ChangeEvent<HTMLInputElement>) {
@@ -775,7 +809,7 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
     for (const f of files) {
       try {
         // Saved on this device at once and sent when online.
-        const saved = addReceipt(org.id, req.id, f, profile?.displayName ?? 'Staff');
+        const saved = addReceipt(org.id, req.id, f, profile?.displayName ?? 'Staff', item === '' ? null : Number(item));
         saved.catch((err) => toast.show(friendlyError(err)));
         await Promise.race([saved, new Promise((r) => setTimeout(r, 1500))]);
         added += 1;
@@ -807,20 +841,40 @@ export function ReceiptsBox({ org, req, receipts }: { org: Organization; req: Re
     <section className="card stack no-print">
       <div className="card-head">
         <h2>Receipts</h2>
-        {canAdd && (
-          <label className="btn btn-quiet">
-            {busy ? 'Adding…' : 'Add receipts'}
-            <input type="file" accept={RECEIPT_ACCEPT} multiple className="visually-hidden" onChange={(e) => void add(e)} disabled={busy} />
-          </label>
-        )}
+        <span className="row-actions">
+          {receipts.length > 0 && req.number && (
+            <button type="button" className="btn btn-quiet" disabled={packing} onClick={async () => {
+              setPacking(true);
+              await savePack(org, `${req.number} receipts`, `${req.number}-receipts.pdf`, [packGroup(org, req, receipts)], toast);
+              setPacking(false);
+            }}>{packing ? 'Making PDF…' : 'Download receipts (PDF)'}</button>
+          )}
+          {canAdd && (
+            <label className="btn btn-quiet">
+              {busy ? 'Adding…' : 'Add receipts'}
+              <input type="file" accept={RECEIPT_ACCEPT} multiple className="visually-hidden" onChange={(e) => void add(e)} disabled={busy} />
+            </label>
+          )}
+        </span>
       </div>
+      {needsReceipt(req, receipts.length) && <p className="petty-warn small">This requisition is approved but has no receipt yet. It counts as complete once a receipt is added.</p>}
+      {canAdd && req.items.length > 1 && (
+        <label className="field">
+          <span>Receipt is for</span>
+          <select value={item} onChange={(e) => setItem(e.target.value)}>
+            <option value="">Whole requisition</option>
+            {req.items.map((_it, i) => <option key={i} value={String(i)}>{itemLabel(req.items, i)}</option>)}
+          </select>
+        </label>
+      )}
       {receipts.length === 0 ? <p className="muted small">No receipts yet. Add a photo or a PDF of each receipt once the money is spent.</p> : (
         <ul className="petty-receipts">
-          {receipts.map((rc) => (
+          {receipts.map((rc, i) => (
             <li key={rc.id}>
               <button type="button" className="petty-receipt" onClick={() => void open(rc)}>
                 <span className="petty-receipt-kind">{receiptKindLabel(rc.type)}</span>
-                <span className="petty-receipt-name">{rc.name}</span>
+                <span className="petty-receipt-name">{req.number ? `${receiptCode(req.number, i + 1)} · ` : ''}{rc.name}</span>
+                {req.items.length > 1 && <span className="small">{itemLabel(req.items, rc.itemIndex)}</span>}
                 <span className="small muted">{Math.max(1, Math.round(rc.size / 1024))} KB · {rc.uploadedByName} · {when(rc.createdAt)}</span>
               </button>
               {(rc.createdBy === p.uid || p.canSign) && <BinButton label={`Remove ${rc.name}`} onClick={() => setRemoving(rc)} />}
