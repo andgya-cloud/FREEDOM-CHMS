@@ -196,6 +196,7 @@ function AppRoutes() {
         <Route path="/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
         <Route path="/hope/exports" element={<RequirePermission permission="people.read"><HopeExportsPage /></RequirePermission>} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/my-password" element={<ChangePasswordPage voluntary />} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
         <Route path="/settings/funds" element={<RequirePermission permission="settings.manage"><FundsPage /></RequirePermission>} />

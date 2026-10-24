@@ -14,6 +14,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', permission: 'users.manage', orPermission: 'team.manage' },
   { to: '/settings/data', label: 'Data and backups', detail: 'Weekly backup, download everything, one person’s data, practice mode', permission: 'data.export' },
   { to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },
+  { to: '/settings/my-password', label: 'My password', detail: 'Change your own password; it also signs you in on its own' },
   { to: '/help', label: 'Help', detail: 'How to do the everyday jobs' },
   { to: '/settings/device', label: 'This device', detail: 'Install, sync, theme and sign-out' },
 ];
