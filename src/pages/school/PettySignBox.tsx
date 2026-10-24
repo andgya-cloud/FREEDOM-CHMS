@@ -10,8 +10,10 @@ import { checkPin } from '../../../functions/src/shared/pettyCash';
  * (Andy, 2026-10-23). The server checks the PIN and writes the signature as them, so the person signed
  * in here stays signed in. Someone without a PIN, or who forgot it, sets one with their password once.
  */
-export function PettySignBox({ label: title, orgId, fundOnly = false, exclude, sign, confirmLabel = '✓ Confirm' }: {
+export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly = false, ready = true, exclude, sign, confirmLabel = '✓ Confirm' }: {
   label: string; orgId: string; fundOnly?: boolean; exclude: string[]; confirmLabel?: string;
+  /** Only the people who may top up alone; `ready` is false until the amount is typed. */
+  topUpOnly?: boolean; ready?: boolean;
   /** Signs as the chosen stakeholder with their PIN; returns the name to show. */
   sign: (signerUid: string, pin: string) => Promise<string>;
 }) {
@@ -32,7 +34,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, exclude, s
       .catch((err) => { if (live) setLoadError((err as { code?: string })?.code?.includes('unavailable') ? 'The name list needs a connection.' : friendlyError(err)); });
     return () => { live = false; };
   }, [orgId, reload]);
-  const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize));
+  const choices = (signers ?? []).filter((s) => !exclude.includes(s.uid) && (!fundOnly || s.canAuthorize) && (!topUpOnly || !!s.canTopUp));
   const chosen = choices.find((s) => s.uid === uid);
   const needsPin = !!chosen && (!chosen.hasPin || settingPin);
   const pinOk = checkPin(newPin) && newPin === newPin2;
@@ -41,7 +43,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, exclude, s
     toast.show(name);
   }
   async function go() {
-    if (!chosen) return;
+    if (!chosen || !ready) return;
     setBusy(true);
     try {
       if (needsPin) {
@@ -78,10 +80,10 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, exclude, s
         {!needsPin && (
           <label className="field"><span>Your signing PIN</span>
             <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={pin} onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-              onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4) void go(); }} placeholder="4 to 6 digits" disabled={busy || !chosen} />
+              onKeyDown={(e) => { if (e.key === 'Enter' && pin.length >= 4 && ready) void go(); }} placeholder="4 to 6 digits" disabled={busy || !chosen} />
           </label>
         )}
-        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || pin.length < 4 || busy} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
+        {!needsPin && <button type="button" className="btn btn-primary" disabled={!chosen || pin.length < 4 || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : confirmLabel}</button>}
       </div>
       {chosen && !needsPin && (
         <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(true)}>Forgot your PIN? Set a new one</button>
@@ -99,7 +101,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, exclude, s
             <label className="field"><span>Type the PIN again</span>
               <PasswordInput inputMode="numeric" autoComplete="off" maxLength={6} value={newPin2} onChange={(e) => setNewPin2(e.target.value.replace(/\D/g, ''))} disabled={busy} />
             </label>
-            <button type="button" className="btn btn-primary" disabled={!password || !pinOk || busy} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Save PIN and sign'}</button>
+            <button type="button" className="btn btn-primary" disabled={!password || !pinOk || busy || !ready} onClick={() => void go()}>{busy ? 'Checking…' : '✓ Save PIN and sign'}</button>
           </div>
           {chosen!.hasPin && <button type="button" className="btn btn-quiet petty-pin-link" onClick={() => setSettingPin(false)}>Back to PIN</button>}
         </div>

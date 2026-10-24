@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, isPettyTitle } from './shared/permissions.js';
-import { checkPin, fundStatusAfter, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, type PettyCashSignature } from './shared/pettyCash.js';
+import { canTopUpAlone, checkPin, fundStatusAfter, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 
 /**
@@ -52,10 +52,16 @@ export const listPettySigners = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const orgId = requireString((request.data as Record<string, unknown> | null)?.orgId, 'the organization', { max: 80 });
   requireMember(caller.profile, orgId);
-  const users = await db.collection('users').where('active', '==', true).get();
+  const [users, org] = await Promise.all([db.collection('users').where('active', '==', true).get(), db.doc(`organizations/${orgId}`).get()]);
+  const orgType = (org.data() as { type?: string } | undefined)?.type;
   const people = users.docs
     .filter((d) => canSign(d.data() as UserProfile, orgId, 'request'))
-    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, title: u.pettyTitle ?? '', email: u.email, canAuthorize: canSign(u, orgId, 'fund') }; });
+    .map((d) => {
+      const u = d.data() as UserProfile;
+      const name = u.displayName || u.email;
+      const canAuthorize = canSign(u, orgId, 'fund');
+      return { uid: d.id, name, title: u.pettyTitle ?? '', email: u.email, canAuthorize, canTopUp: canAuthorize && canTopUpAlone(orgType, name, (u.permissions ?? []).includes('users.manage')) };
+    });
   const pins = people.length ? await db.getAll(...people.map((p) => db.doc(`pettyPins/${p.uid}`))) : [];
   return {
     signers: people.map((p, i) => ({ ...p, hasPin: pins[i].exists })).sort((a, b) => a.name.localeCompare(b.name)),
@@ -107,7 +113,7 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid };
     if (kind === 'fund') {
       if (r.status !== 'collecting') throw new HttpsError('failed-precondition', 'This is no longer waiting for signatures.');
-      const status = fundStatusAfter(Object.keys(sigs).length + 1);
+      const status = fundStatusAfter(Object.keys(sigs).length + 1, r.kind === 'topup' ? 'topup' : 'reset');
       tx.update(ref, { [`signatures.${signerUid}`]: { name, at: FieldValue.serverTimestamp() }, status, ...(status === 'done' ? { doneAt: FieldValue.serverTimestamp() } : {}), ...stamp });
       return;
     }
@@ -130,4 +136,41 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     docId, orgId, note: `Signed with PIN on ${caller.profile.displayName || caller.email}'s device`,
   });
   return { name };
+});
+
+/**
+ * Tops up petty cash in one step (Andy, 2026-10-24): a stakeholder allowed to top up picks their name,
+ * types the amount and their own PIN, and the money is in the budget straight away. At ADIA only
+ * Andrew Guya, Daniel Ojwang', Doreen Mayaka and Elias Omondi may do this.
+ */
+export const topUpWithPin = onCall(CALLABLE, async (request) => {
+  const caller = await requireCaller(request);
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const orgId = requireString(data.orgId, 'the organization', { max: 80 });
+  const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
+  const amountCents = typeof data.amountCents === 'number' ? data.amountCents : parseAmountCents(String(data.amountCents ?? ''));
+  if (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0 || amountCents > 100000000000) {
+    throw new HttpsError('invalid-argument', 'Type the top-up amount in numbers, for example 500000.');
+  }
+  requireMember(caller.profile, orgId);
+  const [signerSnap, org] = await Promise.all([db.doc(`users/${signerUid}`).get(), db.doc(`organizations/${orgId}`).get()]);
+  const signer = signerSnap.data() as UserProfile | undefined;
+  const name = signer ? signer.displayName || signer.email : '';
+  const orgType = (org.data() as { type?: string } | undefined)?.type;
+  if (!canSign(signer, orgId, 'fund') || !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage'))) {
+    throw new HttpsError('permission-denied', 'That person cannot top up here.');
+  }
+  await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
+  const ref = db.collection(`organizations/${orgId}/pettyFunds`).doc();
+  await ref.set({
+    orgId, kind: 'topup', amountCents, status: 'done', doneAt: FieldValue.serverTimestamp(),
+    signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp() } },
+    deletedAt: null, deletedBy: null,
+    createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
+  });
+  await writeAudit({
+    actorUid: signerUid, actorEmail: signer!.email, action: 'petty_topup', path: ref.path, collection: 'pettyFunds',
+    docId: ref.id, orgId, note: `Top-up with PIN on ${caller.profile.displayName || caller.email}'s device`,
+  });
+  return { name, id: ref.id };
 });

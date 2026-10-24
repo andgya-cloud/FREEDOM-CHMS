@@ -4,7 +4,7 @@ import { connectFunctionsEmulator, getFunctions, httpsCallable } from 'firebase/
 import { app, functions, usingEmulators } from '../firebase';
 
 /** A stakeholder on the signing name list. */
-export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; hasPin: boolean }
+export interface PettySigner { uid: string; name: string; title: string; email: string; canAuthorize: boolean; canTopUp?: boolean; hasPin: boolean }
 
 /** The people who can sign petty cash in this organization, with whether each has set a PIN. */
 export async function listPettySigners(orgId: string): Promise<PettySigner[]> {
@@ -15,6 +15,12 @@ export async function listPettySigners(orgId: string): Promise<PettySigner[]> {
 /** Signs a waiting request, top-up or reset as the chosen stakeholder with their PIN. Returns their name. */
 export async function signWithPin(orgId: string, kind: 'request' | 'fund', docId: string, signerUid: string, pin: string): Promise<string> {
   const res = await httpsCallable<object, { name: string }>(functions, 'signWithPin')({ orgId, kind, docId, signerUid, pin });
+  return res.data.name;
+}
+
+/** Tops up petty cash in one step as the chosen stakeholder, with their PIN. Returns their name. */
+export async function topUpWithPin(orgId: string, amountCents: number, signerUid: string, pin: string): Promise<string> {
+  const res = await httpsCallable<object, { name: string }>(functions, 'topUpWithPin')({ orgId, amountCents, signerUid, pin });
   return res.data.name;
 }
 

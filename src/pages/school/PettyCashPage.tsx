@@ -7,13 +7,13 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, approveRequisition, cancelFund, checkRequisition, confirmOwnPassword, receiptData, rejectRequisition, signFund, signRequisition, startFund, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
-import { listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettySigners, raisePettyRequest, sendPettyEmail, setPinWithPassword, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import {
   categoryBudgets, categoryLabel, checkPin, lineAmountCents, type CategoryBudgetRow,
-  FUND_SIGNATURES_NEEDED, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
+  ADIA_TOPUP_NAMES, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
@@ -126,9 +126,9 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
 function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
   const p = usePettyCash(org);
   const s = p.summary;
-  // A top-up still collecting signatures is shown, but only counts once the third stakeholder signs.
+  // An older top-up still waiting for a signature is shown, but only counts once it is finished.
   const pending = p.funds.find((f) => f.kind === 'topup' && f.status === 'collecting');
-  const pendingLeft = pending ? FUND_SIGNATURES_NEEDED - Object.keys(pending.signatures).length : 0;
+  const pendingLeft = pending ? Math.max(1, fundSignaturesNeeded('topup') - Object.keys(pending.signatures).length) : 0;
   return (
     <div className="petty-stats">
       <div className="petty-stat petty-stat-budget"><span>Total budget</span><strong>{money(org, s.budgetCents)}</strong>
@@ -147,11 +147,14 @@ function Stats({ org, onReset }: { org: Organization; onReset: () => void }) {
 
 
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
-  topup: { title: 'Top-Up Authorization', sub: 'Any two to approve. A stakeholder cannot approve twice.', done: 'Top-up complete. The money is now in the budget.' },
+  topup: { title: 'Top-Up', sub: 'Any one stakeholder tops up with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
   reset: { title: 'Reset Budget Authorization', sub: 'Any two to approve the reset. A stakeholder cannot approve twice.', done: 'Budget reset. It now starts again from zero.' },
 };
 
-/** A top-up or a reset collecting its two signatures. Each stakeholder signs from their own account with their own password. */
+/**
+ * A top-up (one stakeholder's PIN, Andy 2026-10-24) or a reset collecting its two signatures. An older
+ * top-up still waiting for a second signature is finished by the next PIN.
+ */
 function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKind; onClose?: () => void }) {
   const p = usePettyCash(org);
   const { profile } = useAuth();
@@ -168,6 +171,10 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const ready = kind === 'reset' || (cents != null && cents > 0);
   const name = profile?.displayName ?? 'Stakeholder';
   const text = FUND_TEXT[kind];
+  const needed = fundSignaturesNeeded(kind);
+  const slots = Math.max(needed, signed.length + (open ? 1 : 0));
+  const quickTopUp = kind === 'topup' && !open;
+  const topUpWho = org.type === 'college' ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
 
   async function confirm() {
     if (!password) return;
@@ -184,11 +191,11 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
       toast.show(friendlyError(err));
       return;
     }
-    const last = !!open && signed.length + 1 >= FUND_SIGNATURES_NEEDED;
+    const last = !!open && signed.length + 1 >= needed;
     const write = open ? signFund(org.id, open, name) : startFund(org.id, kind, cents ?? 0, name);
     write.catch((err) => toast.show(friendlyError(err)));
     setPassword(''); setAmount(''); setBusy(false);
-    toast.show(last ? text.done : `Signed. ${FUND_SIGNATURES_NEEDED - signed.length - 1} more signature${FUND_SIGNATURES_NEEDED - signed.length - 1 === 1 ? '' : 's'} needed.`);
+    toast.show(last ? text.done : `Signed. ${needed - signed.length - 1} more signature${needed - signed.length - 1 === 1 ? '' : 's'} needed.`);
     if (last && kind === 'reset') onClose?.();
   }
 
@@ -198,8 +205,8 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
         <div className="petty-auth-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d={kind === 'topup' ? 'M9 3h6l-1.5 3h-3zM6 10c0-2 2.7-4 6-4s6 2 6 4l1 8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3zM12 10v7M10 12.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5-1 1-2 1.3-2 .6-2 1.4.9 1.3 2 1.3 2-.6 2-1.3' : 'M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4'} /></svg>
         </div>
-        <div className="petty-auth-title"><h2>{text.title}</h2><p>{text.sub}</p></div>
-        <span className="petty-auth-count">{signed.length}/{FUND_SIGNATURES_NEEDED}</span>
+        <div className="petty-auth-title"><h2>{text.title}</h2><p>{kind === 'topup' ? topUpWho : text.sub}</p></div>
+        {!quickTopUp && <span className="petty-auth-count">{signed.length}/{slots}</span>}
       </div>
       <div className="petty-auth-body">
         {kind === 'topup' && (open ? (
@@ -208,14 +215,22 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
             <input ref={amountBox} inputMode="decimal" className={ready ? '' : 'petty-amount-empty'} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Type the amount here, e.g. 500000" disabled={!p.canAuthorize} />
             {amount.trim() && (cents != null && cents > 0
-              ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget once {FUND_SIGNATURES_NEEDED} stakeholders sign below.</small>
+              ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget as soon as you confirm with your PIN below.</small>
               : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
           </label>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the top-up amount in the box above. Step 2: type your password below and press Confirm.</p>}
+        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the top-up amount in the box above. Step 2: choose your name, type your PIN and press Top up.</p>}
+        {quickTopUp ? (
+          <PettySignBox label="Choose your name and type your own signing PIN." orgId={org.id} topUpOnly ready={ready} exclude={[]} confirmLabel="✓ Top up"
+            sign={async (uid, pin) => {
+              const who = await topUpWithPin(org.id, cents ?? 0, uid, pin);
+              setAmount('');
+              return `Top-up of ${money(org, cents ?? 0)} by ${who} is done. The money is now in the budget.`;
+            }} />
+        ) : (
         <ol className="petty-signers">
-          {Array.from({ length: FUND_SIGNATURES_NEEDED }, (_, n) => {
+          {Array.from({ length: slots }, (_, n) => {
             const s = signed[n];
             const mine = !s && n === signed.length && p.canAuthorize && !iSigned;
             return (
@@ -243,6 +258,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
             );
           })}
         </ol>
+        )}
         <div className="row-actions">
           {open && open.createdBy !== p.uid && p.canSign && <button type="button" className="btn btn-quiet danger-text" onClick={() => setAskDelete(true)}>Delete this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}

@@ -108,7 +108,7 @@ function BalanceSheet({ org }: { org: Organization }) {
         <KpiCard label="Money out" value={money(org, totals.out)} tone="warn" note="Approved requests" />
         <KpiCard label="Balance now" value={money(org, totals.balance)} tone="gold" />
       </KpiRow>
-      {lines.length === 0 ? <p className="muted small">Nothing yet. Top-ups appear once 3 stakeholders sign them, and requests once they are approved.</p> : (
+      {lines.length === 0 ? <p className="muted small">Nothing yet. Top-ups appear as soon as they are made, and requests once they are approved.</p> : (
         <div className="card exam-table-wrap">
           <table className="table petty-ledger">
             <thead><tr><th>Date</th><th>Description</th><th className="num">In</th><th className="num">Out</th><th className="num">Balance</th>{p.canSign && <th className="no-print" aria-label="Delete" />}</tr></thead>

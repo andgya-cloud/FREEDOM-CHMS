@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkPin, categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, waitingForAccountant, pettyCashNumber } from './pettyCash';
+import { canTopUpAlone, checkPin, categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, fundStatusAfter, fundSummary, itemsTotalCents, nextStepFor, parseAmountCents, waitingForAccountant, pettyCashNumber } from './pettyCash';
 
 describe('petty cash', () => {
   it('numbers requisitions like the old system', () => {
@@ -66,6 +66,17 @@ describe('petty cash', () => {
   it('completes a top-up at the second signature', () => {
     expect(fundStatusAfter(1)).toBe('collecting');
     expect(fundStatusAfter(2)).toBe('done');
+    expect(fundStatusAfter(1, 'topup')).toBe('done');
+    expect(fundStatusAfter(1, 'reset')).toBe('collecting');
+  });
+
+  it('lets only the four named ADIA stakeholders top up alone', () => {
+    expect(canTopUpAlone('college', "Daniel Ojwang'", false)).toBe(true);
+    expect(canTopUpAlone('college', 'daniel ojwang', false)).toBe(true);
+    expect(canTopUpAlone('college', 'Doreen Mayaka', false)).toBe(true);
+    expect(canTopUpAlone('college', 'Elizabeth Mutuku', false)).toBe(false);
+    expect(canTopUpAlone('college', 'Andy', true)).toBe(true);
+    expect(canTopUpAlone('ministry', 'Anyone', false)).toBe(true);
   });
 
   it('works out a line from quantity and unit price', () => {

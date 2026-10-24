@@ -136,9 +136,24 @@ export interface PettyFund {
   doneAt?: unknown;
 }
 
+/** A top-up needs one stakeholder's PIN (Andy, 2026-10-24); a reset still needs two. */
+export const TOPUP_SIGNATURES_NEEDED = 1;
+export function fundSignaturesNeeded(kind: PettyFundKind) {
+  return kind === 'topup' ? TOPUP_SIGNATURES_NEEDED : FUND_SIGNATURES_NEEDED;
+}
+
 /** The status a fund record takes once it has this many signatures. */
-export function fundStatusAfter(signatureCount: number): PettyFundStatus {
-  return signatureCount >= FUND_SIGNATURES_NEEDED ? 'done' : 'collecting';
+export function fundStatusAfter(signatureCount: number, kind: PettyFundKind = 'reset'): PettyFundStatus {
+  return signatureCount >= fundSignaturesNeeded(kind) ? 'done' : 'collecting';
+}
+
+/** At ADIA only these four may top up (Andy, 2026-10-24), besides the pastor (Andrew Guya). */
+export const ADIA_TOPUP_NAMES = ['Andrew Guya', "Daniel Ojwang'", 'Doreen Mayaka', 'Elias Omondi'] as const;
+const plainName = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
+/** Whether a stakeholder who may sign top-ups in this kind of organization may top up alone. */
+export function canTopUpAlone(orgType: string | undefined, name: string, isPastor: boolean) {
+  if (isPastor || orgType !== 'college') return true;
+  return ADIA_TOPUP_NAMES.some((n) => plainName(n) === plainName(name));
 }
 
 export interface FundSummary {
