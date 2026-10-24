@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildExamReport, DEFAULT_EXAM_SETTINGS, DEFAULT_EXAM_WEIGHTS, gradeFor, markProblem, rankOf, sheetProgress, unitTotal, weightsProblem, type ExamSheet, type ExamStudent } from './exams';
+import { buildExamReport, DEFAULT_EXAM_SETTINGS, DEFAULT_EXAM_WEIGHTS, examSettingsWithDefaults, gradeFor, markProblem, parseMark, rankOf, sheetProgress, unitTotal, weightsProblem, type ExamSheet, type ExamStudent } from './exams';
 
 const sheet = (id: string, courseId: string | null, marks: ExamSheet['marks'], weights = DEFAULT_EXAM_WEIGHTS): ExamSheet => ({
   id, cohort: 'September 2026', courseId, ownerUid: 'u', ownerName: 'T', courseName: id, teacherName: 'Grace', weights, status: 'draft', marks,
@@ -51,5 +51,42 @@ describe('exam records', () => {
   it('measures how much of a sheet is keyed in', () => {
     expect(sheetProgress(sheet('x', 'ict', { a: { cat1: 1, cat2: 1, cat3: 1, final: 1 }, b: { cat1: 2 } }), ['a', 'b'])).toBe(63);
     expect(sheetProgress(sheet('x', 'ict', {}), [])).toBe(0);
+  });
+  it('reads ABS and EX: absent counts as 0, exempt is left out of the weighting', () => {
+    expect(parseMark(' abs ')).toEqual({ value: 'ABS', problem: null });
+    expect(parseMark('Exempt').value).toBe('EX');
+    expect(parseMark('72.5').value).toBe(72.5);
+    expect(parseMark('').value).toBeNull();
+    expect(parseMark('7o').problem).toMatch(/not a mark/);
+    expect(markProblem('ABS', 10)).toBeNull();
+    // 10/10/10/70: CAT 1 absent, the rest full marks -> 90.
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { cat1: 'ABS', cat2: 100, cat3: 100, final: 100 })).toMatchObject({ total: 90, complete: true, filled: 4 });
+    // CAT 1 exempt: 100 over the 90% that is left.
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { cat1: 'EX', cat2: 100, cat3: 100, final: 100 })).toMatchObject({ total: 100, needed: 3 });
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { cat1: 'EX', cat2: 'EX', cat3: 'EX', final: 'EX' })).toMatchObject({ total: null, exempt: true, complete: true });
+    expect(sheetProgress(sheet('x', 'ict', { a: { cat1: 'ABS', cat2: 'EX', cat3: 1, final: 1 } }), ['a'])).toBe(100);
+  });
+  it('lets a resit replace a failed course, never above the pass mark', () => {
+    const fail = { cat1: 30, cat2: 30, cat3: 30, final: 30 };
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { ...fail, resit: 80 }, 39)).toMatchObject({ total: 39, resitUsed: true });
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { ...fail, resit: 35 }, 39)).toMatchObject({ total: 35, resitUsed: true });
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { ...fail, resit: 20 }, 39)).toMatchObject({ total: 30, resitUsed: false });
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { cat1: 50, cat2: 50, cat3: 50, final: 50, resit: 90 }, 39)).toMatchObject({ total: 50, resitUsed: false });
+    expect(unitTotal(DEFAULT_EXAM_WEIGHTS, { ...fail, resit: 80 })).toMatchObject({ total: 30 });
+  });
+  it('marks a report provisional until every course is approved, and leaves exempt courses out', () => {
+    const students = [st('a', 'Amina', 'ict')];
+    const full = (v: number) => ({ cat1: v, cat2: v, cat3: v, final: v });
+    const one = { ...sheet('Networking', 'ict', { a: full(80) }), status: 'approved' as const };
+    const two = sheet('Entrepreneurship', null, { a: { cat1: 'EX', cat2: 'EX', cat3: 'EX', final: 'EX' } });
+    const r = buildExamReport('ict', [one, two], students, DEFAULT_EXAM_SETTINGS);
+    expect(r.rows[0]).toMatchObject({ average: 80, missing: 0, provisional: true });
+    expect(r.rows[0]!.cells.Entrepreneurship!.exempt).toBe(true);
+    expect(buildExamReport('ict', [one], students, DEFAULT_EXAM_SETTINGS).rows[0]!.provisional).toBe(false);
+  });
+  it('keeps one weighting scheme in the settings, with 10/10/10/70 when none is saved', () => {
+    expect(examSettingsWithDefaults({}).weights).toEqual(DEFAULT_EXAM_WEIGHTS);
+    const w = { ...DEFAULT_EXAM_WEIGHTS, final: { max: 60, wt: 70 } };
+    expect(examSettingsWithDefaults({ weights: w }).weights.final.max).toBe(60);
   });
 });

@@ -10,7 +10,7 @@ const GOLD_SOFT: [number, number, number] = [246, 236, 212];
 const INK: [number, number, number] = [31, 41, 55];
 const GREY: [number, number, number] = [107, 114, 128];
 
-const fmt = (v: number | null | undefined) => (v == null ? '–' : String(v));
+const fmt = (v: number | string | null | undefined) => (v == null ? '–' : String(v));
 
 /**
  * ADIA result slips on the navy and gold letterhead, one A4 page per student, for a whole report or
@@ -43,7 +43,8 @@ export async function resultSlipsPdf(opts: { cohort: string; reportTitle: string
     pdf.setTextColor(...GOLD);
     pdf.setFontSize(9);
     pdf.setCharSpace(1.6);
-    pdf.text('STUDENT RESULT SLIP', 44, 23);
+    // Not every course approved yet: the slip says so (Andy, 2026-10-24).
+    pdf.text(row.provisional ? 'STUDENT RESULT SLIP · PROVISIONAL' : 'STUDENT RESULT SLIP', 44, 23);
     pdf.setCharSpace(0);
     pdf.setTextColor(220, 224, 235);
     pdf.setFont('helvetica', 'normal');
@@ -98,8 +99,8 @@ export async function resultSlipsPdf(opts: { cohort: string; reportTitle: string
       pdf.text(pdf.splitTextToSize(u.teacherName, 38)[0] as string, 71, y);
       EXAM_COMPONENTS.forEach((k, i) => pdf.text(u.weights[k].wt > 0 ? `${fmt(c?.[k])}/${u.weights[k].max}` : '–', 111 + i * 15, y));
       pdf.setFont('helvetica', 'bold');
-      pdf.text(c?.total == null ? (c?.partial != null ? `(${c.partial})` : '–') : String(c.total), 171, y);
-      pdf.text(c?.grade || '–', 185, y);
+      pdf.text(c?.exempt ? 'EX' : c?.total == null ? (c?.partial != null ? `(${c.partial})` : '–') : `${c.total}${c.resitUsed ? ' R' : ''}`, 171, y);
+      pdf.text(c?.exempt ? 'Exempt' : c?.grade || '–', 185, y);
       pdf.setDrawColor(229, 231, 235);
       pdf.setLineWidth(0.2);
       pdf.line(14, y + 2, w - 14, y + 2);
@@ -138,7 +139,7 @@ export async function resultSlipsPdf(opts: { cohort: string; reportTitle: string
     y += 8;
     pdf.setFontSize(7.5);
     pdf.setTextColor(...GREY);
-    pdf.text(`Pass mark ${settings.passMark}%. Grades: ${bandsText(settings)}. A total in brackets is not final: some papers are not yet marked.`, 14, y, { maxWidth: w - 28 });
+    pdf.text(`Pass mark ${settings.passMark}%. Grades: ${bandsText(settings)}. A total in brackets is not final: some papers are not yet marked. ABS is absent (0); EX is exempt; R is a resit, capped at the pass mark.${row.provisional ? ' Provisional: not every course is approved by the principal yet.' : ''}`, 14, y, { maxWidth: w - 28 });
 
     // Signatures.
     const sy = h - 34;

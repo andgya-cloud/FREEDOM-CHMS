@@ -1025,3 +1025,10 @@ a.kpi:hover { border-color: var(--primary); }
 /* Reports' second row of tabs (Andy, 2026-10-24). */
 .petty-subnav { margin-top: -6px; }
 .petty-subnav .chip-small { font-size: 0.82rem; padding: 4px 12px; }
+
+/* Exam Records status pills and the add-a-course box (2026-10-24 rebuild). */
+.exams .badge-ok { background: rgba(22, 163, 74, 0.14); color: #15803d; }
+.exams .badge-gold { background: rgba(210, 167, 75, 0.18); color: #8a6d2c; }
+.exam-add { padding: 12px; border: 1px dashed var(--border); border-radius: 10px; }
+.exam-mark { text-transform: uppercase; }
+.exams .badge { white-space: nowrap; }

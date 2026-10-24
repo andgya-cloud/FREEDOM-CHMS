@@ -15,9 +15,29 @@ export const DEFAULT_EXAM_WEIGHTS: ExamWeights = {
   cat1: { max: 100, wt: 10 }, cat2: { max: 100, wt: 10 }, cat3: { max: 100, wt: 10 }, final: { max: 100, wt: 70 },
 };
 
-export type StudentMarks = Partial<Record<ExamComponent, number | null>>;
+/** A paper's mark: a number, ABS (absent, counts as 0) or EX (exempt, left out of the weighting). */
+export type MarkValue = number | 'ABS' | 'EX' | null;
+export const ABSENT = 'ABS';
+export const EXEMPT = 'EX';
+/** A student's papers, and a resit mark out of 100 for a failed course (Andy, 2026-10-24). */
+export type StudentMarks = Partial<Record<ExamComponent, MarkValue>> & { resit?: number | null };
 
-export type ExamSheetStatus = 'draft' | 'submitted';
+/** Draft (the trainer keys in), submitted (waiting for the principal), approved (final). */
+export type ExamSheetStatus = 'draft' | 'submitted' | 'approved';
+export const EXAM_STATUS_LABELS: Record<ExamSheetStatus, string> = { draft: 'Marking', submitted: 'Waiting for approval', approved: 'Approved' };
+
+/** Reads what a trainer typed: a number, ABS, EX, or blank. Anything else is a problem. */
+export function parseMark(text: unknown): { value: MarkValue; problem: string | null } {
+  if (typeof text === 'number') return Number.isFinite(text) ? { value: text, problem: null } : { value: null, problem: 'Type a number.' };
+  const t = String(text ?? '').trim();
+  if (t === '') return { value: null, problem: null };
+  const u = t.toUpperCase().replace(/[^A-Z]/g, '');
+  if (u === 'ABS' || u === 'ABSENT' || u === 'A') return { value: ABSENT, problem: null };
+  if (u === 'EX' || u === 'EXEMPT' || u === 'E') return { value: EXEMPT, problem: null };
+  const n = Number(t.replace(/,/g, ''));
+  return Number.isFinite(n) && /^-?\d+(\.\d+)?$/.test(t.replace(/,/g, '')) ? { value: n, problem: null } : { value: null, problem: `"${t}" is not a mark. Type a number, ABS or EX.` };
+}
+export const markText = (v: MarkValue | undefined) => (v == null ? '' : String(v));
 export interface ExamSheet {
   id: string;
   /** The intake name every programme shares, such as "September 2026". */
@@ -33,6 +53,9 @@ export interface ExamSheet {
   marks: Record<string, StudentMarks>;
   /** Which semester the course belongs to; its totals make up that semester's points. */
   semester?: 1 | 2 | null;
+  /** Why the principal sent it back, shown to the trainer. */
+  returnNote?: string | null;
+  approvedByName?: string | null;
   deletedAt?: unknown;
 }
 
@@ -45,6 +68,8 @@ export interface ExamSettings {
   principalTitle: string;
   directorName: string;
   directorTitle: string;
+  /** ADIA's one weighting for every course (Andy, 2026-10-24); trainers cannot change it. */
+  weights: ExamWeights;
 }
 /** ADIA's grade bands (Andy, 2026-10-24): Distinction 79 and above, Credit above 59, Pass 39 to 59, Fail below 39. */
 export const ADIA_BANDS: GradeBand[] = [
@@ -60,12 +85,14 @@ export const DEFAULT_EXAM_SETTINGS: ExamSettings = {
   principalTitle: 'Principal',
   directorName: 'Andrew Guya',
   directorTitle: 'Director',
+  weights: DEFAULT_EXAM_WEIGHTS,
 };
 
 export function examSettingsWithDefaults(raw: Partial<ExamSettings> | null | undefined): ExamSettings {
   const s = { ...DEFAULT_EXAM_SETTINGS, ...(raw ?? {}) };
   const bands = Array.isArray(s.bands) && s.bands.length ? [...s.bands].sort((a, b) => b.min - a.min) : DEFAULT_EXAM_SETTINGS.bands;
-  return { ...s, bands };
+  const weights = s.weights && EXAM_COMPONENTS.every((c) => s.weights[c] && typeof s.weights[c].max === 'number') ? s.weights : DEFAULT_EXAM_WEIGHTS;
+  return { ...s, bands, weights };
 }
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
@@ -83,8 +110,8 @@ export function weightsProblem(w: ExamWeights): string | null {
 }
 
 /** Why a typed mark can't be saved, or null when it is fine. */
-export function markProblem(value: number | null, max: number): string | null {
-  if (value == null) return null;
+export function markProblem(value: MarkValue | undefined, max: number): string | null {
+  if (value == null || value === ABSENT || value === EXEMPT) return null;
   if (!Number.isFinite(value) || value < 0) return 'Marks cannot be negative.';
   if (value > max) return `The most for this paper is ${max}.`;
   return null;
@@ -98,24 +125,42 @@ export interface UnitTotal {
   complete: boolean;
   filled: number;
   needed: number;
+  /** Every paper is EX: the course is left out of the student's average. */
+  exempt: boolean;
+  /** The resit mark replaced a failed total (capped at the pass mark). */
+  resitUsed: boolean;
 }
 
-/** Σ (mark ÷ out-of × percentage) ÷ Σ percentages × 100. */
-export function unitTotal(weights: ExamWeights, m: StudentMarks | null | undefined): UnitTotal {
-  let sumWt = 0, acc = 0, complete = true, filled = 0, needed = 0;
+/**
+ * Σ (mark ÷ out-of × percentage) ÷ Σ percentages × 100. ABS counts as 0; an EX paper is left out of
+ * the weighting. With a pass mark, a resit replaces a failed total, but never above the pass mark.
+ */
+export function unitTotal(weights: ExamWeights, m: StudentMarks | null | undefined, passMark?: number): UnitTotal {
+  let sumWt = 0, acc = 0, complete = true, filled = 0, needed = 0, used = 0;
   for (const c of EXAM_COMPONENTS) {
     const { max, wt } = weights[c];
     if (!(wt > 0) || !(max > 0)) continue;
+    used++;
+    const v = m?.[c];
+    if (v === EXEMPT) continue;
     needed++;
     sumWt += wt;
-    const v = m?.[c];
     if (v == null) { complete = false; continue; }
     filled++;
-    acc += (v / max) * wt;
+    if (typeof v === 'number') acc += (v / max) * wt;
   }
-  if (sumWt <= 0) return { total: null, partial: null, complete: false, filled, needed };
-  const partial = round1((acc / sumWt) * 100);
-  return { total: complete ? partial : null, partial, complete, filled, needed };
+  const exempt = used > 0 && needed === 0;
+  if (sumWt <= 0) return { total: null, partial: null, complete: exempt, filled, needed, exempt, resitUsed: false };
+  // Nothing keyed in yet: no running total either.
+  const partial = filled ? round1((acc / sumWt) * 100) : null;
+  let total = complete ? partial : null;
+  let resitUsed = false;
+  const resit = m?.resit;
+  if (total != null && passMark != null && total < passMark && typeof resit === 'number' && Number.isFinite(resit)) {
+    const r = Math.min(resit, passMark);
+    if (r > total) { total = round1(r); resitUsed = true; }
+  }
+  return { total, partial: resitUsed ? total : partial, complete, filled, needed, exempt, resitUsed };
 }
 
 export function gradeFor(avg: number | null, settings: Pick<ExamSettings, 'bands'>): { grade: string; remark: string } {
@@ -131,7 +176,7 @@ export function rankOf(values: (number | null)[]): (number | null)[] {
 
 export interface ExamStudent { id: string; name: string; admissionNo: string; courseId: string; courseName: string }
 
-export interface ReportCell extends StudentMarks { total: number | null; partial: number | null; complete: boolean; grade: string }
+export interface ReportCell extends StudentMarks { total: number | null; partial: number | null; complete: boolean; grade: string; exempt: boolean; resitUsed: boolean }
 export interface ReportRow {
   studentId: string;
   name: string;
@@ -147,6 +192,8 @@ export interface ReportRow {
   attendance: number | null;
   missing: number;
   position: number | null;
+  /** Some of the student's courses are not approved yet. */
+  provisional: boolean;
 }
 export interface ReportUnit { sheetId: string; courseName: string; teacherName: string; status: ExamSheetStatus; common: boolean; weights: ExamWeights }
 export interface ExamReport { units: ReportUnit[]; rows: ReportRow[] }
@@ -174,8 +221,9 @@ export function buildExamReport(courseId: string | null, sheets: readonly ExamSh
     let missing = 0;
     for (const sh of all) {
       const m = sh.marks?.[st.id] ?? null;
-      const u = unitTotal(sh.weights, m);
-      cells[sh.id] = { ...(m ?? {}), total: u.total, partial: u.partial, complete: u.complete, grade: u.total == null ? '' : gradeFor(u.total, settings).grade };
+      const u = unitTotal(sh.weights, m, settings.passMark);
+      cells[sh.id] = { ...(m ?? {}), total: u.total, partial: u.partial, complete: u.complete, grade: u.total == null ? '' : gradeFor(u.total, settings).grade, exempt: u.exempt, resitUsed: u.resitUsed };
+      if (u.exempt) continue;
       if (u.total == null) missing++; else totals.push(u.total);
     }
     const sum = totals.reduce((a, b) => a + b, 0);
@@ -189,6 +237,7 @@ export function buildExamReport(courseId: string | null, sheets: readonly ExamSh
       cells, total: totals.length ? round1(sum) : null, average, grade: g.grade,
       remarks: edited ? remarks[st.id]! : auto, remarksAuto: auto, remarksEdited: edited,
       attendance: typeof att === 'number' ? att : null, missing, position: null,
+      provisional: all.some((sh) => sh.status !== 'approved'),
     };
   });
   const positions = rankOf(rows.map((r) => r.average));
@@ -202,6 +251,7 @@ export function buildExamReport(courseId: string | null, sheets: readonly ExamSh
 
 /** How much of a sheet has been keyed in: marks entered out of marks needed for its roster. */
 export function sheetProgress(sheet: Pick<ExamSheet, 'weights' | 'marks'>, rosterIds: readonly string[]): number {
+  // ABS and EX count as entered.
   const needed = EXAM_COMPONENTS.filter((c) => sheet.weights[c].wt > 0 && sheet.weights[c].max > 0);
   const cells = rosterIds.length * needed.length;
   if (!cells) return 0;

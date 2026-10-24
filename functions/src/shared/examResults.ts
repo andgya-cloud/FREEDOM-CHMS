@@ -4,7 +4,7 @@
  * marks sheets (the plain average of the student's course totals). The final result is the average
  * of Semester 1 and Semester 2, graded on ADIA's bands; a missing semester makes it Incomplete.
  */
-import { gradeFor, unitTotal, type ExamSettings, type ExamSheet, type StudentMarks } from './exams.js';
+import { gradeFor, parseMark, unitTotal, type ExamSettings, type ExamSheet, type MarkValue, type StudentMarks } from './exams.js';
 
 export type Cell = string | number | Date | boolean | null | undefined;
 export const SEMESTERS = [1, 2] as const;
@@ -208,20 +208,23 @@ export function printedDiffers(printed: SemesterScore | null | undefined, final:
   return Math.abs(printed.points - final) > 0.05;
 }
 
-export interface CourseLine { sheetId: string; courseName: string; teacherName: string; total: number | null; partial: number | null; complete: boolean }
-export interface SemesterFromSheets { courses: CourseLine[]; points: number | null; partial: number | null; complete: boolean }
+export interface CourseLine { sheetId: string; courseName: string; teacherName: string; total: number | null; partial: number | null; complete: boolean; approved: boolean; resitUsed: boolean }
+export interface SemesterFromSheets { courses: CourseLine[]; points: number | null; partial: number | null; complete: boolean; approved: boolean }
 
 /**
  * A student's semester worked out from the marks sheets set to that semester: the plain average of
  * their course totals. `partial` grows as each CAT comes in; `points` is set once every course is complete.
  */
-export type SemesterSheet = Pick<ExamSheet, 'id' | 'courseId' | 'courseName' | 'teacherName' | 'weights' | 'marks'> & { semester?: number | null };
-export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { id: string; courseId: string }, semester: Semester): SemesterFromSheets {
+export type SemesterSheet = Pick<ExamSheet, 'id' | 'courseId' | 'courseName' | 'teacherName' | 'weights' | 'marks'> & { semester?: number | null; status?: string };
+export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { id: string; courseId: string }, semester: Semester, passMark?: number): SemesterFromSheets {
   const mine = sheets.filter((s) => s.semester === semester && (s.courseId == null || s.courseId === student.courseId));
-  const courses = mine.map((s) => {
-    const u = unitTotal(s.weights, (s.marks?.[student.id] ?? null) as StudentMarks | null);
-    return { sheetId: s.id, courseName: s.courseName, teacherName: s.teacherName, total: u.total, partial: u.partial, complete: u.complete };
-  });
+  const courses: CourseLine[] = [];
+  for (const s of mine) {
+    const u = unitTotal(s.weights, (s.marks?.[student.id] ?? null) as StudentMarks | null, passMark);
+    // A course the student is exempt from is left out of their semester.
+    if (u.exempt) continue;
+    courses.push({ sheetId: s.id, courseName: s.courseName, teacherName: s.teacherName, total: u.total, partial: u.partial, complete: u.complete, approved: s.status == null || s.status === 'approved', resitUsed: u.resitUsed });
+  }
   const parts = courses.map((c) => c.partial).filter((p): p is number => p != null);
   const complete = courses.length > 0 && courses.every((c) => c.complete);
   return {
@@ -229,42 +232,50 @@ export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { 
     partial: parts.length ? round2(parts.reduce((a, b) => a + b, 0) / parts.length) : null,
     points: complete ? round2(courses.reduce((a, c) => a + (c.total ?? 0), 0) / courses.length) : null,
     complete,
+    approved: courses.length > 0 && courses.every((c) => c.approved),
   };
 }
 
-export type MarkColumn = 'cat1' | 'cat2' | 'cat3' | 'final';
-export interface ParsedMarkRow { row: number; admissionNo: string; name: string; marks: Partial<Record<MarkColumn, number | null>>; problems: string[] }
+export type MarkColumn = 'cat1' | 'cat2' | 'cat3' | 'final' | 'resit';
+export interface ParsedMarkRow { row: number; admissionNo: string; name: string; marks: Partial<Record<MarkColumn, MarkValue>>; problems: string[] }
 
 const MARK_COLS: Record<MarkColumn, string[]> = {
   cat1: ['cat1', 'cat01', 'test1', 'assignment1'],
   cat2: ['cat2', 'cat02', 'test2', 'assignment2'],
   cat3: ['cat3', 'cat03', 'test3', 'assignment3'],
   final: ['final', 'finalexam', 'exam', 'endterm', 'endtermexam', 'endofterm', 'finalmark'],
+  resit: ['resit', 'resitmark', 'supplementary', 'supp'],
+};
+/** "CAT 1 (out of 100)" and "Final Exam" are found by how the heading starts. */
+const markColumnOf = (k: string): MarkColumn | null => {
+  const base = k.replace(/outof\d+.*$/, '');
+  for (const c of Object.keys(MARK_COLS) as MarkColumn[]) if (MARK_COLS[c].includes(base)) return c;
+  return null;
 };
 
 /** Reads a trainer's marks file: Admission No (or Name) and any of CAT 1, CAT 2, CAT 3 and Final. */
 export function parseMarksFile(sheets: { name: string; rows: Cell[][] }[]): { rows: ParsedMarkRow[]; columns: MarkColumn[]; problems: string[] } {
   for (const sh of sheets) {
-    const at = sh.rows.slice(0, 10).findIndex((r) => { const ks = r.map(key); return Object.values(MARK_COLS).some((names) => names.some((n) => ks.includes(n))); });
+    const at = sh.rows.slice(0, 10).findIndex((r) => r.map(key).some((k) => markColumnOf(k) != null));
     if (at < 0) continue;
     const ks = sh.rows[at]!.map(key);
     const adm = COLS.admission.map((n) => ks.indexOf(n)).find((i) => i >= 0) ?? -1;
     const nm = COLS.name.map((n) => ks.indexOf(n)).find((i) => i >= 0) ?? -1;
     if (adm < 0 && nm < 0) return { rows: [], columns: [], problems: ['The file needs an Admission No or a Name column.'] };
-    const cols = (Object.keys(MARK_COLS) as MarkColumn[]).map((c) => [c, MARK_COLS[c].map((n) => ks.indexOf(n)).find((i) => i >= 0) ?? -1] as const).filter(([, i]) => i >= 0);
+    const cols = (Object.keys(MARK_COLS) as MarkColumn[]).map((c) => [c, ks.findIndex((k) => markColumnOf(k) === c)] as const).filter(([, i]) => i >= 0);
     const rows: ParsedMarkRow[] = [];
     sh.rows.slice(at + 1).forEach((r, i) => {
       const a = adm >= 0 ? text(r[adm]) : '';
       const n = nm >= 0 ? text(r[nm]) : '';
       if (!a && !n) return;
-      const marks: Partial<Record<MarkColumn, number | null>> = {};
+      const marks: Partial<Record<MarkColumn, MarkValue>> = {};
       const problems: string[] = [];
       for (const [c, idx] of cols) {
         const raw = r[idx];
         if (text(raw) === '') continue;
-        const v = num(raw);
-        if (v == null) problems.push(`"${text(raw)}" is not a number`);
-        else marks[c] = v;
+        const { value, problem } = parseMark(raw instanceof Date ? '' : raw);
+        if (problem || (c === 'resit' && typeof value !== 'number')) problems.push(`"${text(raw)}" is not a mark`);
+        else marks[c] = value;
       }
       rows.push({ row: at + i + 2, admissionNo: a, name: n, marks, problems });
     });

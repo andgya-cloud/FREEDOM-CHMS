@@ -9,7 +9,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
 import { useExamAccess, useExamResults, useExamSettings, type ExamSheetRow } from '../../state/useExams';
-import { EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, markProblem, type ExamSettings, type ExamStudent, type StudentMarks } from '../../../functions/src/shared/exams';
+import { EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, markProblem, type ExamComponent, type ExamSettings, type ExamStudent, type MarkValue, type StudentMarks } from '../../../functions/src/shared/exams';
 import {
   admissionKey, finalResult, parseMarksFile, parseResultsWorkbook, planResultImport, printedDiffers, semesterFromSheets,
   type ExamResult, type ImportStudent, type ParsedResults, type Semester,
@@ -21,15 +21,15 @@ import type { Organization } from '../../state/OrgContext';
  * Excel, sees every student's Semester 1, Semester 2 and final result, and prints transcripts. New
  * cohorts' semesters are worked out from the trainers' marks sheets as the CATs come in.
  */
-export function ResultsAndTranscripts({ org, cohort, sheets, students, allStudents, courseName }: {
-  org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[]; allStudents: ImportStudent[]; courseName: (id: string) => string;
+export function ResultsAndTranscripts({ org, cohort, sheets, students, courseName }: {
+  org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courseName: (id: string) => string;
 }) {
   const { settings } = useExamSettings(org.id);
   const { results: cohortResults } = useExamResults(org.id, cohort);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
   const rows = useMemo(() => buildRows(cohort, students, cohortResults, sheets, settings, courseName), [cohort, students, cohortResults, sheets, settings, courseName]);
-  const counts = { done: rows.filter((r) => r.final.complete).length, incomplete: rows.filter((r) => !r.final.complete).length, differ: rows.filter((r) => printedDiffers(r.printed, r.final.final, settings)).length };
+  const counts = { provisional: rows.filter((r) => r.sems.some((x) => x.provisional)).length, done: rows.filter((r) => r.final.complete).length, incomplete: rows.filter((r) => !r.final.complete).length, differ: rows.filter((r) => printedDiffers(r.printed, r.final.final, settings)).length };
   const byGrade = (g: string) => rows.filter((r) => r.final.grade === g).length;
 
   async function pdf(list: Row[], title: string) {
@@ -39,7 +39,6 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, allStuden
 
   return (
     <section className="stack">
-      <ResultsUpload org={org} allStudents={allStudents} />
       <section className="card stack">
         <div className="card-head"><h2>Results · {cohort}</h2><span className="muted small">{rows.length} students</span></div>
         <KpiRow label="Final results">
@@ -50,8 +49,9 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, allStuden
           <KpiCard label="Fail" value={String(byGrade('Fail'))} />
           <KpiCard label="Incomplete" value={String(counts.incomplete)} tone={counts.incomplete ? 'warn' : undefined} />
         </KpiRow>
+        {counts.provisional > 0 && <p className="notice small">{counts.provisional} {counts.provisional === 1 ? 'student’s semester includes' : 'students’ semesters include'} courses not yet approved; those figures are provisional.</p>}
         {counts.differ > 0 && <p className="notice small">{counts.differ} {counts.differ === 1 ? 'student’s printed graduation-list figure differs' : 'students’ printed graduation-list figures differ'} from the Semester 1 and 2 average. They are marked below for the principal to confirm.</p>}
-        {rows.length === 0 ? <p className="muted">No students or results for {cohort} yet. Upload past results above, or trainers set their marks sheets to Semester 1 or 2.</p> : (
+        {rows.length === 0 ? <p className="muted">No students or results for {cohort} yet. Upload past results under Setup, or set up the cohort's Semester 1 and 2 courses.</p> : (
           <>
             <div className="row-actions no-print">
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void pdf(rows, `${cohort} transcripts`)}>{busy ? 'Preparing…' : 'Transcripts for everyone (PDF)'}</button>
@@ -66,7 +66,7 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, allStuden
                   {rows.map((r) => (
                     <tr key={r.key}>
                       <td>{r.name}<div className="muted small">{r.admissionNo} · {r.programme}</div></td>
-                      {r.sems.map((s, i) => <td key={i} className="num">{s.points ?? (s.partial != null ? <span className="muted">({s.partial})</span> : '–')}</td>)}
+                      {r.sems.map((s, i) => <td key={i} className="num">{s.points != null ? <>{s.points}{s.provisional && <div className="muted small">provisional</div>}</> : s.partial != null ? <span className="muted">({s.partial})</span> : '–'}</td>)}
                       <td className="num"><strong>{r.final.final ?? '–'}</strong></td>
                       <td>{r.final.grade === 'Incomplete' ? <span className="badge badge-warn">Incomplete</span> : r.final.grade}</td>
                       <td className="small">{r.printed ? <span className={printedDiffers(r.printed, r.final.final, settings) ? 'up-bad' : 'muted'}>{r.printed.points}{r.printed.grade ? ` ${r.printed.grade}` : ''}{printedDiffers(r.printed, r.final.final, settings) ? ' · check' : ''}</span> : ''}</td>
@@ -76,7 +76,7 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, allStuden
                 </tbody>
               </table>
             </div>
-            <p className="muted small">Final points are the average of Semester 1 and Semester 2. A figure in brackets is a running total while CATs are still coming in. Semesters come from past results uploaded here, or from the marks sheets set to that semester.</p>
+            <p className="muted small">Final points are the average of Semester 1 and Semester 2. A figure in brackets is a running total while CATs are still coming in. Semesters come from past results uploaded under Setup, or from that semester's courses; a semester with a course not yet approved is provisional.</p>
           </>
         )}
       </section>
@@ -84,7 +84,7 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, allStuden
   );
 }
 
-interface RowSem extends TranscriptSemester { points: number | null }
+interface RowSem extends TranscriptSemester { points: number | null; provisional: boolean }
 interface Row { key: string; name: string; admissionNo: string; programme: string; cohort: string; sems: [RowSem, RowSem]; final: ReturnType<typeof finalResult>; printed: ExamResult['printed']; notes: string[] }
 
 function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[], sheets: ExamSheetRow[], settings: ExamSettings, courseName: (id: string) => string): Row[] {
@@ -95,9 +95,13 @@ function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[
     const res = byStudent.get(p.id);
     const sem = (n: Semester): RowSem => {
       const saved = res?.semesters[String(n) as '1' | '2'];
-      if (saved) return { label: `Semester ${n}`, points: saved.points, partial: null, grade: gradeFor(saved.points, settings).grade, source: 'Past results', courses: [] };
-      const fromSheets = semesterFromSheets(sheets, { id: p.id, courseId: p.courseId }, n);
-      return { label: `Semester ${n}`, points: fromSheets.points, partial: fromSheets.partial, grade: fromSheets.points == null ? '' : gradeFor(fromSheets.points, settings).grade, source: fromSheets.courses.length ? 'Marks sheets' : '', courses: fromSheets.courses };
+      if (saved) return { label: `Semester ${n}`, points: saved.points, partial: null, grade: gradeFor(saved.points, settings).grade, source: 'Past results', courses: [], provisional: false };
+      const fromSheets = semesterFromSheets(sheets, { id: p.id, courseId: p.courseId }, n, settings.passMark);
+      const provisional = fromSheets.courses.length > 0 && !fromSheets.approved;
+      return {
+        label: `Semester ${n}`, points: fromSheets.points, partial: fromSheets.partial, grade: fromSheets.points == null ? '' : gradeFor(fromSheets.points, settings).grade,
+        source: fromSheets.courses.length ? (provisional ? 'Courses (provisional: not all approved)' : 'Courses') : '', courses: fromSheets.courses, provisional,
+      };
     };
     const sems: [RowSem, RowSem] = [sem(1), sem(2)];
     return { key: p.id, name: p.name, admissionNo: p.admissionNo, programme: p.programme, cohort, sems, final: finalResult(sems[0].points, sems[1].points, settings), printed: res?.printed ?? null, notes: res?.notes ?? [] };
@@ -107,7 +111,7 @@ function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[
 const toTranscript = (r: Row): Transcript => ({ name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: r.cohort, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes });
 
 /** The principal's upload of past semester results, with a preview before anything is saved. */
-function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: ImportStudent[] }) {
+export function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: ImportStudent[] }) {
   const toast = useToast();
   const a = useExamAccess();
   const { results: all } = useExamResults(org.id);
@@ -212,20 +216,21 @@ function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: I
  * A trainer's Excel upload for their own marks sheet (Andy, 2026-10-24): download the class list as a
  * template, fill in the CATs and Final, upload it, check the preview and save every mark at once.
  */
-export function MarksUpload({ org, sheet, roster, editable, onSaved }: {
-  org: Organization; sheet: ExamSheetRow; roster: ExamStudent[]; editable: boolean; onSaved: (detail: string) => void;
+export function MarksUpload({ org, sheet, roster, editable, withResit, onSaved }: {
+  org: Organization; sheet: ExamSheetRow; roster: ExamStudent[]; editable: boolean; withResit: boolean; onSaved: (detail: string) => void;
 }) {
   const toast = useToast();
   const [preview, setPreview] = useState<{ name: string; marks: Record<string, StudentMarks>; changed: number; problems: string[]; unknown: string[] } | null>(null);
   const used = EXAM_COMPONENTS.filter((c) => sheet.weights[c].wt > 0);
+  const cellOf = (v: MarkValue | undefined) => (v == null ? null : typeof v === 'number' ? { value: v, type: Number } : { value: v, type: String });
 
   async function template() {
     try {
       const { default: writeXlsxFile } = await import('write-excel-file');
-      const head = ['Admission No', 'Name', ...used.map((c) => `${EXAM_COMPONENT_LABELS[c]} (out of ${sheet.weights[c].max})`)].map((value) => ({ value, fontWeight: 'bold' as const }));
+      const head = ['Admission No', 'Name', ...used.map((c) => `${EXAM_COMPONENT_LABELS[c]} (out of ${sheet.weights[c].max})`), ...(withResit ? ['Resit (out of 100)'] : [])].map((value) => ({ value, fontWeight: 'bold' as const }));
       const body = roster.map((st) => [{ value: st.admissionNo, type: String }, { value: st.name, type: String },
-        ...used.map((c) => { const v = sheet.marks?.[st.id]?.[c]; return v == null ? null : { value: v, type: Number }; })]);
-      const blob = await writeXlsxFile([head, ...body] as never, { columns: [{ width: 24 }, { width: 32 }, ...used.map(() => ({ width: 16 }))], sheet: 'Marks' } as never) as unknown as Blob;
+        ...used.map((c) => cellOf(sheet.marks?.[st.id]?.[c])), ...(withResit ? [cellOf(sheet.marks?.[st.id]?.resit)] : [])]);
+      const blob = await writeXlsxFile([head, ...body] as never, { columns: [{ width: 24 }, { width: 32 }, ...used.map(() => ({ width: 16 })), ...(withResit ? [{ width: 16 }] : [])], sheet: 'Marks' } as never) as unknown as Blob;
       downloadFile(new File([blob], `${(sheet.courseName || 'Marks').replace(/[^A-Za-z0-9]+/g, '-')}-${sheet.cohort.replace(/[^A-Za-z0-9]+/g, '-')}-marks.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
     } catch (err) { toast.show(friendlyError(err)); }
   }
@@ -249,9 +254,10 @@ export function MarksUpload({ org, sheet, roster, editable, onSaved }: {
         for (const c of parsed.columns) {
           if (!(c in r.marks)) continue;
           const v = r.marks[c] ?? null;
-          if (sheet.weights[c].wt <= 0) continue;
-          const bad = markProblem(v, sheet.weights[c].max);
-          if (bad) { problems.push(`${st.name}, ${EXAM_COMPONENT_LABELS[c]}: ${bad}`); continue; }
+          if (c !== 'resit' && sheet.weights[c as ExamComponent].wt <= 0) continue;
+          const label = c === 'resit' ? 'Resit' : EXAM_COMPONENT_LABELS[c];
+          const bad = markProblem(v, c === 'resit' ? 100 : sheet.weights[c].max);
+          if (bad) { problems.push(`${st.name}, ${label}: ${bad}`); continue; }
           if ((marks[st.id]?.[c] ?? null) !== v) { marks[st.id] = { ...(marks[st.id] ?? {}), [c]: v }; changed++; }
         }
       }
@@ -269,7 +275,7 @@ export function MarksUpload({ org, sheet, roster, editable, onSaved }: {
   return (
     <section className="card stack no-print">
       <div className="card-head"><h2>Upload marks from Excel</h2></div>
-      <p className="muted small">Download the class list, fill in the marks in Excel, and upload it. Totals and grades work themselves out as each CAT comes in. Blank boxes are left as they are.</p>
+      <p className="muted small">Download the class list, fill in the marks in Excel (a number, ABS or EX), and upload it. Totals and grades work themselves out as each CAT comes in. Blank boxes are left as they are.</p>
       <div className="row-actions">
         <button type="button" className="btn btn-quiet" onClick={() => void template()}>Download class list (Excel)</button>
         {editable && <label className="btn btn-primary">Upload marks<input type="file" accept=".xlsx,.csv" hidden onChange={(e) => void choose(e)} /></label>}

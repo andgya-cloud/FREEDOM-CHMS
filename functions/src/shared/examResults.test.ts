@@ -73,12 +73,21 @@ describe('semester results', () => {
     expect(semesterFromSheets(sheets, { id: 's', courseId: 'it' }, 1)).toMatchObject({ points: 70, complete: true });
   });
 
-  it("reads a trainer's marks file and flags what is not a number", () => {
-    const f = parseMarksFile([{ name: 'Marks', rows: [['Course: Networking'], ['Admission No', 'Name', 'CAT 1', 'CAT 2', 'CAT 3', 'Final Exam'], ['ADIA/IT/1', 'Ann', 8, '', 'abs', 60], [null, null]] }]);
-    expect(f.columns).toEqual(['cat1', 'cat2', 'cat3', 'final']);
-    expect(f.rows).toHaveLength(1);
-    expect(f.rows[0]).toMatchObject({ admissionNo: 'ADIA/IT/1', marks: { cat1: 8, final: 60 } });
-    expect(f.rows[0]!.problems).toEqual(['"abs" is not a number']);
+  it("reads a trainer's marks file, with ABS, EX and a resit, and flags what is not a mark", () => {
+    const f = parseMarksFile([{ name: 'Marks', rows: [['Course: Networking'], ['Admission No', 'Name', 'CAT 1 (out of 100)', 'CAT 2', 'CAT 3', 'Final Exam', 'Resit (out of 100)'], ['ADIA/IT/1', 'Ann', 8, '', 'abs', 60, null], ['ADIA/IT/2', 'Ben', 'ex', 'x7', 50, 30, 'ABS'], [null, null]] }]);
+    expect(f.columns).toEqual(['cat1', 'cat2', 'cat3', 'final', 'resit']);
+    expect(f.rows).toHaveLength(2);
+    expect(f.rows[0]).toMatchObject({ admissionNo: 'ADIA/IT/1', marks: { cat1: 8, cat3: 'ABS', final: 60 }, problems: [] });
+    expect(f.rows[1]!.marks).toEqual({ cat1: 'EX', cat3: 50, final: 30 });
+    expect(f.rows[1]!.problems).toEqual(['"x7" is not a mark', '"ABS" is not a mark']);
+  });
+  it('leaves exempt courses out of the semester, uses resits, and says whether every course is approved', () => {
+    const sheet = (id: string, status: string, m: Record<string, unknown>) =>
+      ({ id, semester: 1, courseId: null, courseName: id, teacherName: 'T', weights: DEFAULT_EXAM_WEIGHTS, status, marks: { s: m as never } });
+    const sheets = [sheet('a', 'approved', { cat1: 'EX', cat2: 'EX', cat3: 'EX', final: 'EX' }), sheet('b', 'approved', { cat1: 30, cat2: 30, cat3: 30, final: 30, resit: 70 }), sheet('c', 'submitted', { cat1: 60, cat2: 60, cat3: 60, final: 60 })];
+    const s = semesterFromSheets(sheets, { id: 's', courseId: 'it' }, 1, 39);
+    expect(s.courses.map((c) => [c.sheetId, c.total, c.resitUsed])).toEqual([['b', 39, true], ['c', 60, false]]);
+    expect(s).toMatchObject({ points: 49.5, complete: true, approved: false });
   });
   it('matches a different year in the admission number, or the same name in the cohort, and says so', () => {
     const wb = [{ name: 'Upload_Clean', rows: [clean, [2, 'TLF', 'ADIA/TLF/2026/2/011', 'ANA KWERA', 1, 60, 'CREDIT'], [2, 'TLF', 'ADIA/TLF/2026/2/099', 'ELVIS KOSKEY', 1, 50, 'PASS'], [2, 'IT', 'X/1', 'Nobody Here', 1, 50, 'PASS']] }];

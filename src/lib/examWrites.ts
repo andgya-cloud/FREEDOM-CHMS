@@ -2,22 +2,22 @@ import { addDoc, collection, doc, serverTimestamp, setDoc, writeBatch } from 'fi
 import { auth, db } from '../firebase';
 import { createRecord, createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
-import type { ExamComponent, ExamSettings, ExamWeights, StudentMarks } from '../../functions/src/shared/exams';
+import type { ExamComponent, ExamSettings, ExamWeights, MarkValue, StudentMarks } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
 
 const sheetRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'examSheets', id);
 
-/** A new marks sheet for one course, owned by the trainer who keys it in. */
+/** The principal sets up a course for a cohort and gives it to a trainer (Andy, 2026-10-24). */
 export function createExamSheet(orgId: string, input: { cohort: string; courseId: string | null; courseName: string; teacherName: string; weights: ExamWeights; ownerUid: string; ownerName: string; semester: 1 | 2 | null }) {
   return createRecord(collection(db, 'organizations', orgId, 'examSheets'), { orgId, ...input, status: 'draft', submittedAt: null, marks: {} });
 }
 
-/** One mark (or a cleared box) for one student. Saved on the device first, so it works offline. */
-export function saveExamMark(orgId: string, sheetId: string, studentId: string, field: ExamComponent, value: number | null) {
+/** One mark (a number, ABS, EX, a resit, or a cleared box) for one student. Saved on the device first, so it works offline. */
+export function saveExamMark(orgId: string, sheetId: string, studentId: string, field: ExamComponent | 'resit', value: MarkValue) {
   return updateRecord(sheetRef(orgId, sheetId), { [`marks.${studentId}.${field}`]: value });
 }
 
-export function saveExamSheetDetails(orgId: string, sheetId: string, changes: { courseName?: string; teacherName?: string; weights?: ExamWeights; semester?: 1 | 2 | null }) {
+export function saveExamSheetDetails(orgId: string, sheetId: string, changes: { courseName?: string; teacherName?: string; ownerUid?: string; ownerName?: string; weights?: ExamWeights; semester?: 1 | 2 | null }) {
   return updateRecord(sheetRef(orgId, sheetId), changes);
 }
 
@@ -26,13 +26,19 @@ export function saveExamMarks(orgId: string, sheetId: string, marks: Record<stri
   return updateRecord(sheetRef(orgId, sheetId), { marks });
 }
 
-/** Submitting locks the sheet; only the principal can open it again. */
+/** The trainer submits for approval; the sheet locks until the principal approves it or sends it back. */
 export function submitExamSheet(orgId: string, sheetId: string) {
   return updateRecord(sheetRef(orgId, sheetId), { status: 'submitted', submittedAt: serverTimestamp() });
 }
 
-export function unlockExamSheet(orgId: string, sheetId: string) {
-  return updateRecord(sheetRef(orgId, sheetId), { status: 'draft' });
+/** The principal approves: the course's results are final. */
+export function approveExamSheet(orgId: string, sheetId: string, byName: string) {
+  return updateRecord(sheetRef(orgId, sheetId), { status: 'approved', approvedAt: serverTimestamp(), approvedByName: byName.slice(0, 120), returnNote: null });
+}
+
+/** The principal sends it back to the trainer to change, with a note saying why. */
+export function returnExamSheet(orgId: string, sheetId: string, note: string) {
+  return updateRecord(sheetRef(orgId, sheetId), { status: 'draft', returnNote: note.trim().slice(0, 300) || null });
 }
 
 export function deleteExamSheet(orgId: string, sheetId: string) {
@@ -53,13 +59,6 @@ export function saveExamRemark(orgId: string, cohort: string, exists: boolean, s
   const ref = doc(db, 'organizations', orgId, 'examMeta', metaId(cohort));
   if (exists) return updateRecord(ref, { [`remarks.${scope}.${studentId}`]: text });
   return trackWrite(setDoc(ref, { orgId, cohort, remarks: { [scope]: { [studentId]: text } }, attendance: {}, ...createStamps() }));
-}
-
-/** A student's attendance percentage for the cohort, as it prints on the report and slip. */
-export function saveExamAttendance(orgId: string, cohort: string, exists: boolean, studentId: string, value: number | null) {
-  const ref = doc(db, 'organizations', orgId, 'examMeta', metaId(cohort));
-  if (exists) return updateRecord(ref, { [`attendance.${studentId}`]: value });
-  return trackWrite(setDoc(ref, { orgId, cohort, remarks: {}, attendance: { [studentId]: value }, ...createStamps() }));
 }
 
 export function saveExamSettings(orgId: string, exists: boolean, settings: ExamSettings) {

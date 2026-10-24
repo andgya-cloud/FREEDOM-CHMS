@@ -15,6 +15,7 @@ export { onPettyCashCreated } from './pettyCash.js';
 export { closePettyMonth, reopenPettyMonth } from './pettyMonths.js';
 export { setPettyPin, listPettySigners, signWithPin, topUpWithPin, findPasswordAccount } from './pettyPins.js';
 export { pettyBinSign } from './pettyBin.js';
+export { listExamTrainers } from './exams.js';
 export { raisePettyRequest } from './pettyRaise.js';
 export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail, listPettyContacts } from './pettyNotify.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';

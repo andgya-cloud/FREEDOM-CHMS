@@ -55,7 +55,6 @@ const StudentsPage = lazy(() => import('./pages/school/StudentsPage').then((m) =
 const EnrolPage = lazy(() => import('./pages/school/EnrolPage').then((m) => ({ default: m.EnrolPage })));
 const StudentPage = lazy(() => import('./pages/school/StudentPage').then((m) => ({ default: m.StudentPage })));
 const CoursesPage = lazy(() => import('./pages/school/CoursesPage').then((m) => ({ default: m.CoursesPage })));
-const ResultsPage = lazy(() => import('./pages/school/ResultsPage').then((m) => ({ default: m.ResultsPage })));
 const FeesPage = lazy(() => import('./pages/school/FeesPage').then((m) => ({ default: m.FeesPage })));
 const GraduationPage = lazy(() => import('./pages/school/GraduationPage').then((m) => ({ default: m.GraduationPage })));
 const SchoolReportsPage = lazy(() => import('./pages/school/SchoolReportsPage').then((m) => ({ default: m.SchoolReportsPage })));
@@ -160,7 +159,8 @@ function AppRoutes() {
         <Route path="/school/students/import" element={<RequirePermission permission="people.write"><StudentImportPage /></RequirePermission>} />
         <Route path="/school/students/:studentId" element={<RequirePermission permission="people.read"><StudentPage /></RequirePermission>} />
         <Route path="/school/courses" element={<RequirePermission permission="people.read"><CoursesPage /></RequirePermission>} />
-        <Route path="/school/results" element={<RequirePermission permission="people.read"><ResultsPage /></RequirePermission>} />
+        {/* The old School Results tab is now part of Exam Records (Andy, 2026-10-24). */}
+        <Route path="/school/results" element={<Navigate to="/school/exams?tab=results" replace />} />
         <Route path="/school/fees" element={<RequirePermission anyOf={['gifts.write', 'finance.reports', 'giving.person.read']}><FeesPage /></RequirePermission>} />
         <Route path="/school/graduation" element={<RequirePermission permission="people.read"><GraduationPage /></RequirePermission>} />
         <Route path="/school/reports" element={<RequirePermission anyOf={['finance.reports', 'settings.manage']}><SchoolReportsPage /></RequirePermission>} />

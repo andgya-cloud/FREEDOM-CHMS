@@ -31,24 +31,32 @@ beforeEach(async () => {
 });
 
 describe('exam records rules', () => {
-  it('lets a trainer key in only their own sheet, and locks it once submitted', async () => {
+  it('lets only the principal set up a course, and the trainer key in, submit, then wait for approval', async () => {
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/examSheets/net');
     await assertFails(setDoc(ref('staff'), sheet('staff')));
-    await assertFails(setDoc(ref('grace'), sheet('grace', 'otto')));
-    await assertFails(setDoc(ref('grace'), { ...sheet('grace'), status: 'submitted' }));
-    await assertSucceeds(setDoc(ref('grace'), sheet('grace')));
+    await assertFails(setDoc(ref('grace'), sheet('grace')));
+    await assertFails(setDoc(ref('principal'), { ...sheet('principal', 'grace'), status: 'submitted' }));
+    await assertSucceeds(setDoc(ref('principal'), sheet('principal', 'grace')));
     await assertFails(getDoc(ref('otto')));
+    await assertSucceeds(getDoc(ref('grace')));
     await assertFails(updateDoc(ref('otto'), { 'marks.s1.cat1': 50, ...touched('otto') }));
-    await assertSucceeds(updateDoc(ref('grace'), { 'marks.s1.cat1': 50, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { 'marks.s1.cat1': 50, 'marks.s1.cat2': 'ABS', ...touched('grace') }));
+    // The trainer can't change the course, the weighting or who owns it.
     await assertFails(updateDoc(ref('grace'), { ownerUid: 'otto', ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { courseName: 'Other', ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { weights: { ...weights, final: { max: 100, wt: 90 } }, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { status: 'approved', approvedAt: serverTimestamp(), ...touched('grace') }));
     await assertFails(updateDoc(ref('grace'), { status: 'submitted', ...touched('grace') }));
     await assertSucceeds(updateDoc(ref('grace'), { status: 'submitted', submittedAt: serverTimestamp(), ...touched('grace') }));
     await assertFails(updateDoc(ref('grace'), { 'marks.s1.cat2': 60, ...touched('grace') }));
     await assertFails(updateDoc(ref('grace'), { status: 'draft', ...touched('grace') }));
-    await assertSucceeds(getDoc(ref('principal')));
-    await assertSucceeds(updateDoc(ref('principal'), { 'marks.s1.cat2': 60, ...touched('principal') }));
-    await assertSucceeds(updateDoc(ref('principal'), { status: 'draft', ...touched('principal') }));
+    // The principal sends it back with a note, then approves it.
+    await assertSucceeds(updateDoc(ref('principal'), { status: 'draft', returnNote: 'Check CAT 2', ...touched('principal') }));
     await assertSucceeds(updateDoc(ref('grace'), { 'marks.s1.cat3': 70, ...touched('grace') }));
+    await assertFails(updateDoc(ref('principal'), { status: 'approved', ...touched('principal') }));
+    await assertSucceeds(updateDoc(ref('principal'), { status: 'approved', approvedAt: serverTimestamp(), approvedByName: 'Principal', returnNote: null, ...touched('principal') }));
+    await assertFails(updateDoc(ref('grace'), { 'marks.s1.resit': 60, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('principal'), { 'marks.s1.resit': 60, ownerUid: 'otto', ownerName: 'Otto', teacherName: 'Otto', ...touched('principal') }));
   });
 
   it('keeps remarks, attendance, grading and the log to the principal', async () => {
@@ -59,6 +67,8 @@ describe('exam records rules', () => {
     const settings = (uid: string) => ({ orgId: 'adia', passMark: 70, bands: [{ min: 0, grade: 'Fail', remark: '' }], principalName: 'P', principalTitle: 'Principal', directorName: 'D', directorTitle: 'Director', ...stamps(uid) });
     await assertFails(setDoc(doc(as('grace'), 'organizations/adia/examSettings/main'), settings('grace')));
     await assertSucceeds(setDoc(doc(as('principal'), 'organizations/adia/examSettings/main'), settings('principal')));
+    await assertFails(updateDoc(doc(as('principal'), 'organizations/adia/examSettings/main'), { weights: { cat1: { max: 100, wt: 10 } }, ...touched('principal') }));
+    await assertSucceeds(updateDoc(doc(as('principal'), 'organizations/adia/examSettings/main'), { weights, ...touched('principal') }));
     await assertSucceeds(getDoc(doc(as('grace'), 'organizations/adia/examSettings/main')));
     const entry = (uid: string) => ({ orgId: 'adia', action: 'edit', cohort: 'September 2026', sheetId: 'net', detail: 'Changed a mark', byUid: uid, byName: uid, at: serverTimestamp() });
     await assertFails(addDoc(collection(as('grace'), 'organizations/adia/examLog'), entry('grace')));
@@ -67,9 +77,11 @@ describe('exam records rules', () => {
   });
   it('takes a semester on a sheet, and a whole Excel upload of marks', async () => {
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/examSheets/sem');
-    await assertFails(setDoc(ref('grace'), { ...sheet('grace'), semester: 3 }));
-    await assertSucceeds(setDoc(ref('grace'), { ...sheet('grace'), semester: 1 }));
-    await assertSucceeds(updateDoc(ref('grace'), { semester: 2, marks: { s1: { cat1: 50, cat2: 60 }, s2: { final: 70 } }, ...touched('grace') }));
+    await assertFails(setDoc(ref('principal'), { ...sheet('principal', 'grace'), semester: 3 }));
+    await assertSucceeds(setDoc(ref('principal'), { ...sheet('principal', 'grace'), semester: 1 }));
+    await assertFails(updateDoc(ref('grace'), { semester: 2, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { marks: { s1: { cat1: 50, cat2: 'EX' }, s2: { final: 70 } }, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('principal'), { semester: 2, ...touched('principal') }));
   });
 
   it('keeps past semester results to the principal', async () => {

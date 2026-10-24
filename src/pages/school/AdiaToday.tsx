@@ -74,7 +74,7 @@ export function AdiaToday({ org }: { org: Organization }) {
         <KpiCard label="Attendance this week" value={pct(thisWeek)} changes={[{ now: thisWeek, before: lastWeek, since: 'last week' }]} spark={marked.length > 1 ? marked : undefined} to="/attendance" />
         {s.feesAllowed
           ? <KpiCard label="Fees collected" value={pct(collected)} note={billed ? `${money(org, paid)} of ${money(org, billed)}` : 'No fees billed yet'} to="/school/fees" />
-          : <KpiCard label="Pass rate" value={pct(metrics.passRate)} note="From marks entered so far" to="/school/results" />}
+          : <KpiCard label="Pass rate" value={pct(metrics.passRate)} note="From marks entered so far" to="/school/exams?tab=results" />}
         {s.feesAllowed
           ? <KpiCard label="Fee arrears" value={money(org, arrearsCents)} tone={arrearsCents ? 'warn' : 'ok'} note={`${arrears.length} ${arrears.length === 1 ? 'student owes' : 'students owe'}`} to="/school/fees" />
           : <KpiCard label="Below attendance" value={String(alerts.length)} tone={alerts.length ? 'warn' : 'ok'} note={`Under ${s.settings.attendanceThreshold}% of classes`} to="/school" />}

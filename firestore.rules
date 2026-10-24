@@ -1445,27 +1445,36 @@ service cloud.firestore {
       }
       function examSheetFields(d) {
         return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'ownerUid', 'ownerName', 'courseName', 'teacherName', 'weights', 'status',
-               'submittedAt', 'marks', 'semester', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
-          && d.orgId == orgId && shortText(d.cohort, 80) && d.cohort.size() >= 1
+               'submittedAt', 'marks', 'semester', 'approvedAt', 'approvedByName', 'returnNote',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.orgId == orgId && shortText(d.cohort, 80) && d.cohort.size() >= 1 && d.ownerUid is string
           && (d.courseId == null || shortText(d.courseId, 80))
           && shortText(d.courseName, 120) && shortText(d.teacherName, 120) && shortText(d.ownerName, 120)
           && examWeights(d.weights) && d.marks is map && d.marks.size() <= 400
-          && d.status in ['draft', 'submitted']
-          && (!('semester' in d) || d.semester == null || d.semester in [1, 2]);
+          && d.status in ['draft', 'submitted', 'approved']
+          && (!('semester' in d) || d.semester == null || d.semester in [1, 2])
+          && (!('returnNote' in d) || d.returnNote == null || shortText(d.returnNote, 300))
+          && (!('approvedByName' in d) || d.approvedByName == null || shortText(d.approvedByName, 120));
       }
+      // The principal sets up every course and gives it to a trainer (Andy, 2026-10-24). The trainer only keys
+      // in marks while marking, then submits; the principal approves (final) or sends it back.
       match /examSheets/{sheetId} {
         allow read: if ex('exams.manage') || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid);
         allow create: if examSheetFields(request.resource.data) && stampedCreate() && freshRecord()
           && request.resource.data.status == 'draft' && request.resource.data.submittedAt == null
-          && (ex('exams.manage') || (ex('exams.mark') && request.resource.data.ownerUid == request.auth.uid));
+          && ex('exams.manage');
         allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'weights', 'marks', 'semester', 'status',
-               'submittedAt', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
-          && (request.resource.data.status == resource.data.status
-              || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)
-              || (request.resource.data.status == 'draft' && ex('exams.manage')))
           && (ex('exams.manage')
-              || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid && resource.data.status == 'draft'));
+              ? request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'ownerUid', 'ownerName', 'weights', 'marks', 'semester', 'status',
+                   'submittedAt', 'approvedAt', 'approvedByName', 'returnNote', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
+                && (request.resource.data.status == resource.data.status
+                    || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)
+                    || (request.resource.data.status == 'approved' && request.resource.data.approvedAt == request.time)
+                    || request.resource.data.status == 'draft')
+              : ex('exams.mark') && resource.data.ownerUid == request.auth.uid && resource.data.status == 'draft'
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['marks', 'status', 'submittedAt', 'updatedAt', 'updatedBy'])
+                && (request.resource.data.status == 'draft'
+                    || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)));
         allow delete: if false;
       }
       // Semester results from Excel (Andy, 2026-10-24): one student's past results for one cohort, kept by
@@ -1503,8 +1512,9 @@ service cloud.firestore {
       match /examSettings/{settingId} {
         allow read: if ex('exams.manage') || ex('exams.mark');
         allow create, update: if ex('exams.manage') && settingId == 'main'
-          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle',
+          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('weights' in request.resource.data) || examWeights(request.resource.data.weights))
           && request.resource.data.orgId == orgId
           && request.resource.data.passMark is number && request.resource.data.passMark >= 0 && request.resource.data.passMark <= 100
           && request.resource.data.bands is list && request.resource.data.bands.size() >= 1 && request.resource.data.bands.size() <= 10
