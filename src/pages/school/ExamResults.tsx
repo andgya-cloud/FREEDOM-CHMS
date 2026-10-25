@@ -216,11 +216,13 @@ export function ResultsUpload({ org, allStudents }: { org: Organization; allStud
  * A trainer's Excel upload for their own marks sheet (Andy, 2026-10-24): download the class list as a
  * template, fill in the CATs and Final, upload it, check the preview and save every mark at once.
  */
-export function MarksUpload({ org, sheet, roster, editable, withResit, onSaved }: {
-  org: Organization; sheet: ExamSheetRow; roster: ExamStudent[]; editable: boolean; withResit: boolean; onSaved: (detail: string) => void;
+export function MarksUpload({ org, sheet, roster, editable, withResit, locked, onSaved }: {
+  org: Organization; sheet: ExamSheetRow; roster: ExamStudent[]; editable: boolean; withResit: boolean;
+  /** Papers sent and locked for this person: their columns in the file are left out (Andy, 2026-10-25). */
+  locked: (ExamComponent | 'resit')[]; onSaved: (detail: string) => void;
 }) {
   const toast = useToast();
-  const [preview, setPreview] = useState<{ name: string; marks: Record<string, StudentMarks>; changed: number; problems: string[]; unknown: string[] } | null>(null);
+  const [preview, setPreview] = useState<{ name: string; marks: Record<string, StudentMarks>; changed: number; problems: string[]; unknown: string[]; papers: (ExamComponent | 'resit')[] } | null>(null);
   const used = EXAM_COMPONENTS.filter((c) => sheet.weights[c].wt > 0);
   const cellOf = (v: MarkValue | undefined) => (v == null ? null : typeof v === 'number' ? { value: v, type: Number } : { value: v, type: String });
 
@@ -247,11 +249,14 @@ export function MarksUpload({ org, sheet, roster, editable, withResit, onSaved }
       const problems = [...parsed.problems];
       const unknown: string[] = [];
       let changed = 0;
+      const skipped = parsed.columns.filter((c) => locked.includes(c));
+      for (const c of skipped) problems.push(`${c === 'resit' ? 'Resit' : EXAM_COMPONENT_LABELS[c]} is sent and locked, so that column was left as it is.`);
+      const papers = parsed.columns.filter((c) => !locked.includes(c) && (c === 'resit' || sheet.weights[c as ExamComponent].wt > 0));
       for (const r of parsed.rows) {
         const st = (r.admissionNo && byAdm.get(admissionKey(r.admissionNo))) || byName.get(r.name.toLowerCase());
         if (!st) { unknown.push(`${r.admissionNo || ''} ${r.name}`.trim()); continue; }
         for (const p of r.problems) problems.push(`${st.name}: ${p}`);
-        for (const c of parsed.columns) {
+        for (const c of papers) {
           if (!(c in r.marks)) continue;
           const v = r.marks[c] ?? null;
           if (c !== 'resit' && sheet.weights[c as ExamComponent].wt <= 0) continue;
@@ -261,13 +266,13 @@ export function MarksUpload({ org, sheet, roster, editable, withResit, onSaved }
           if ((marks[st.id]?.[c] ?? null) !== v) { marks[st.id] = { ...(marks[st.id] ?? {}), [c]: v }; changed++; }
         }
       }
-      setPreview({ name: f.name, marks, changed, problems, unknown });
+      setPreview({ name: f.name, marks, changed, problems, unknown, papers });
     } catch (err) { toast.show(friendlyError(err)); }
   }
 
   function save() {
     if (!preview) return;
-    saveExamMarks(org.id, sheet.id, preview.marks).then(() => toast.show(`${preview.changed} marks saved.`), (err) => toast.show(friendlyError(err)));
+    saveExamMarks(org.id, sheet.id, preview.marks, preview.papers).then(() => toast.show(`${preview.changed} marks saved.`), (err) => toast.show(friendlyError(err)));
     onSaved(`${preview.changed} marks uploaded from ${preview.name}`);
     setPreview(null);
   }

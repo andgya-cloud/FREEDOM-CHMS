@@ -3,18 +3,21 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import {
-  useExamAccess, useExamLog, useExamMeta, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, type ExamSheetRow, type ExamTrainer,
+  useExamAccess, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, type ExamSheetRow, type ExamTrainer,
 } from '../../state/useExams';
 import {
-  approveExamSheet, createExamSheet, deleteExamSheet, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails, submitExamSheet,
+  approveExamSheet, askExamChange, createExamSheet, deleteExamSheet, emailExamNotice, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails,
+  sendExamPapers, unlockExamPaper,
 } from '../../lib/examWrites';
+import { examNoticeText, type ExamNoticeKind } from '../../../functions/src/shared/examNotices';
 import { bandsText, resultSlipsPdf } from '../../lib/examPdf';
 import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
 import {
-  ADIA_BANDS, buildExamReport, EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, markProblem, markText, parseMark, scopeKey, sheetProgress, unitTotal, weightsProblem,
+  ADIA_BANDS, buildExamReport, departmentSummary, EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, isLocked, markProblem, markText, parseMark, scopeKey, sheetProgress, unitTotal,
+  usedComponents, weightsProblem,
   type ExamComponent, type ExamSettings, type ExamSheetStatus, type ExamStudent, type ExamWeights, type GradeBand,
 } from '../../../functions/src/shared/exams';
 import { studentAttendance } from '../../../functions/src/shared/school';
@@ -23,8 +26,9 @@ import type { Organization } from '../../state/OrgContext';
 
 /**
  * ADIA Exam Records, rebuilt with Andy (2026-10-24). The principal sets up each cohort's courses and
- * gives each to a trainer, keeps one weighting for every course, approves what trainers submit and
- * prints results. A trainer sees only "My classes": key in or upload marks, then submit for approval.
+ * gives each to a trainer, approves what trainers send and prints results. A trainer sees only "My
+ * classes": set the percentages, key in or upload marks, and send each paper; a sent paper locks
+ * until the principal unlocks it (2026-10-25).
  */
 export function ExamsPage() {
   return <SchoolGate title="Exam Records">{(org) => <Exams org={org} />}</SchoolGate>;
@@ -35,7 +39,7 @@ export function ExamSheetPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type Tab = 'overview' | 'results' | 'setup' | 'log';
+type Tab = 'overview' | 'departments' | 'results' | 'setup' | 'log';
 /** Links saved before the rebuild still land on the right tab. */
 const OLD_TABS: Record<string, Tab> = { progress: 'overview', sheets: 'setup', grading: 'setup', reports: 'results', transcripts: 'results' };
 
@@ -67,7 +71,7 @@ function Exams({ org }: { org: Organization }) {
   const [params, setParams] = useSearchParams();
   const cohort = params.get('cohort') && cohorts.includes(params.get('cohort')!) ? params.get('cohort')! : cohorts[0] ?? '';
   const raw = params.get('tab') ?? 'overview';
-  const tab: Tab = OLD_TABS[raw] ?? (['overview', 'results', 'setup', 'log'].includes(raw) ? (raw as Tab) : 'overview');
+  const tab: Tab = OLD_TABS[raw] ?? (['overview', 'departments', 'results', 'setup', 'log'].includes(raw) ? (raw as Tab) : 'overview');
   const set = (k: string, v: string) => { const p = new URLSearchParams(params); p.set(k, v); setParams(p, { replace: true }); };
   const { sheets } = useExamSheets(org.id, a.canManage ? cohort : '');
   const students = useMemo(() => studentsOf(cohort), [cohort, s.students, s.intakes, s.peopleLoading]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -75,8 +79,8 @@ function Exams({ org }: { org: Organization }) {
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} courseName={s.courseName} />;
-  // Three tabs (Andy, 2026-10-24); the change log opens from a link at the bottom of Setup.
-  const tabs: [Tab, string][] = [['overview', 'Overview'], ['results', 'Results'], ['setup', 'Setup']];
+  // The change log opens from a link at the bottom of Setup (Andy, 2026-10-24); Departments added 2026-10-25.
+  const tabs: [Tab, string][] = [['overview', 'Overview'], ['departments', 'Departments'], ['results', 'Results'], ['setup', 'Setup']];
   const shown: Tab = tab === 'log' ? 'setup' : tab;
 
   return (
@@ -93,6 +97,7 @@ function Exams({ org }: { org: Organization }) {
             {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={shown === k} className={shown === k ? 'on' : ''} onClick={() => set('tab', k)}>{label}</button>)}
           </div>
           {tab === 'overview' && <Overview org={org} cohort={cohort} sheets={sheets} students={students} courseName={s.courseName} onSetup={() => set('tab', 'setup')} />}
+          {tab === 'departments' && <Departments org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} />}
           {tab === 'results' && <Results org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} />}
           {tab === 'setup' && <Setup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} allStudents={allStudents} onLog={() => set('tab', 'log')} />}
           {tab === 'log' && <><button type="button" className="btn btn-quiet btn-small align-start" onClick={() => set('tab', 'setup')}>← Back to Setup</button><ChangeLog org={org} cohort={cohort} /></>}
@@ -116,7 +121,7 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
   return (
     <div className="page narrow exams">
       <div className="page-head"><h1>My classes</h1></div>
-      <p className="muted">Tap a class to key in marks or upload them from Excel. When every mark is in, tap <strong>Submit for approval</strong>.</p>
+      <p className="muted">Tap a class to key in marks or upload them from Excel. When a CAT's marks are in, send it to the principal; it locks.</p>
       {sheets.length === 0 ? <p className="muted">{loading ? 'Loading…' : 'No classes yet. The principal sets up the courses and gives each one to its trainer; yours will show here.'}</p> : cohorts.map((c) => {
         const students = studentsOf(c);
         return (
@@ -132,7 +137,8 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
                       <span className="exam-card-head"><strong>{sh.courseName || 'Untitled course'}</strong><StatusPill status={sh.status} /></span>
                       <span className="muted small">{programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster.length} students</span>
                       <span className="exam-bar"><span style={{ width: `${pctDone}%` }} className={pctDone >= 100 ? 'done' : ''} /></span>
-                      <span className="muted small">{pctDone}% of marks entered</span>
+                      <span className="muted small">{pctDone}% of marks entered{sentText(sh)}</span>
+                      {sh.changeRequest && <span className="small up-bad">Waiting for the principal to unlock {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}</span>}
                       {sh.status === 'draft' && sh.returnNote && <span className="small up-bad">Sent back: {sh.returnNote}</span>}
                     </Link>
                   </li>
@@ -149,6 +155,11 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
 /* ---------- the principal's Overview ---------- */
 
 const STATUS_ORDER: Record<string, number> = { submitted: 0, draft: 1, approved: 2 };
+/** " · CAT 1 and CAT 2 sent", for a course still being marked. */
+const sentText = (sh: ExamSheetRow) => {
+  const sent = usedComponents(sh.weights).filter((c) => isLocked(sh, c) && c !== 'final').map((c) => EXAM_COMPONENT_LABELS[c]);
+  return sh.status === 'draft' && sent.length ? ` · ${sent.join(', ')} sent` : '';
+};
 const waLink = (phone: string, text: string) => {
   let d = phone.replace(/\D/g, '');
   if (d.startsWith('0')) d = `254${d.slice(1)}`;
@@ -176,10 +187,10 @@ function Overview({ org, cohort, sheets, students, courseName, onSetup }: { org:
   const { trainers } = useExamTrainers(org.id);
   const act = useSheetActions(org);
   const rows = sheets.map((sh) => ({ sh, roster: rosterFor(students, sh.courseId).length, pct: sheetProgress(sh, rosterFor(students, sh.courseId).map((x) => x.id)) }))
-    .sort((x, y) => (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || x.pct - y.pct);
+    .sort((x, y) => Number(!!y.sh.changeRequest) - Number(!!x.sh.changeRequest) || (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || x.pct - y.pct);
   const count = (st: string) => sheets.filter((s) => s.status === st).length;
   const phoneOf = (uid: string) => trainers.find((t) => t.uid === uid)?.phone ?? '';
-  const remind = (sh: ExamSheetRow, pctDone: number) => waLink(phoneOf(sh.ownerUid), `Hello ${sh.teacherName}, a reminder from ADIA: your ${sh.courseName} marks for ${cohort} are ${pctDone}% entered. Please key in the rest and tap Submit for approval in Insight-IQ, Exam Records. Thank you.`);
+  const remind = (sh: ExamSheetRow, pctDone: number) => waLink(phoneOf(sh.ownerUid), `Hello ${sh.teacherName}, a reminder from ADIA: your ${sh.courseName} marks for ${cohort} are ${pctDone}% entered. Please key in the rest and send each paper in Insight-IQ, Exam Records. Thank you.`);
   const waiting = count('submitted');
   return (
     <section className="stack">
@@ -196,11 +207,12 @@ function Overview({ org, cohort, sheets, students, courseName, onSetup }: { org:
               <li key={sh.id}>
                 <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
                   <strong>{sh.courseName || 'Untitled'}</strong>
-                  <span className="muted small">{sh.teacherName} · {programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster} students</span>
+                  <span className="muted small">{sh.teacherName} · {programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster} students{sentText(sh)}</span>
                   <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
+                  {sh.changeRequest && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
                 </Link>
                 <span className="exam-list-side">
-                  <StatusPill status={sh.status} />
+                  {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
                   {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
                   {sh.status === 'draft' && <a className="btn btn-quiet btn-small" href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
                   {sh.status === 'approved' && <Link className="btn btn-quiet btn-small" to={`${BASE}/sheet/${sh.id}`}>Open</Link>}
@@ -211,6 +223,69 @@ function Overview({ org, cohort, sheets, students, courseName, onSetup }: { org:
           <p className="muted small">Tap a course to see its marks. To send one back, open it and tap Send back.</p>
         </>
       )}
+    </section>
+  );
+}
+
+/* ---------- Departments: every programme of the cohort so far ---------- */
+
+/**
+ * Each department's standing so far (Andy, 2026-10-25): it works itself out as trainers key in each CAT,
+ * using the papers marked so far, with the class average, the pass rate and a count by grade like the
+ * summary on ADIA's graduation list.
+ */
+function Departments({ org, cohort, sheets, students, courses }: { org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[] }) {
+  const { settings } = useExamSettings(org.id);
+  const depts = courses.map((c) => ({ c, d: departmentSummary(c.id, sheets, students, settings) })).filter(({ d }) => d.rows.length > 0);
+  const grades = settings.bands.map((b) => b.grade);
+  if (!depts.length) return <p className="muted">No students in {cohort} yet.</p>;
+  const csv = () => toCsv(['Department', 'Position', 'Name', 'Admission No', 'Courses marked', 'So far (%)', 'Grade'],
+    depts.flatMap(({ c, d }) => [...d.rows].sort((x, y) => (x.position ?? 9999) - (y.position ?? 9999)).map((r) => [c.name, r.position, r.name, r.admissionNo, `${r.marked} of ${r.courses}`, r.soFar, r.grade])));
+  return (
+    <section className="stack">
+      <div className="dash-controls no-print">
+        <p className="muted small">Works itself out as each CAT is keyed in, from the papers marked so far. It is provisional until every course is approved.</p>
+        <span className="row-actions"><CsvButton name={`Departments-${cohort}.csv`.replace(/[^A-Za-z0-9.-]+/g, '-')} csv={csv} /><button type="button" className="btn btn-quiet" onClick={() => window.print()}>Print</button></span>
+      </div>
+      <div className="card exam-table-wrap">
+        <table className="table">
+          <thead><tr><th>Department</th>{grades.map((g) => <th key={g} className="num">{g}</th>)}<th className="num">Students</th><th className="num">Class average</th><th className="num">Pass rate</th></tr></thead>
+          <tbody>
+            {depts.map(({ c, d }) => (
+              <tr key={c.id}>
+                <td>{c.name}</td>
+                {grades.map((g) => <td key={g} className="num">{d.byGrade[g] || '–'}</td>)}
+                <td className="num">{d.rows.length}</td>
+                <td className="num">{d.classAverage == null ? '–' : `${d.classAverage}%`}</td>
+                <td className="num">{d.graded ? `${Math.round((d.passed / d.graded) * 100)}%` : '–'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {depts.map(({ c, d }) => (
+        <section key={c.id} className="card stack">
+          <div className="card-head"><h2>{c.name}</h2>{d.provisional && <span className="badge badge-warn">Provisional</span>}</div>
+          <p className="muted small">{d.rows.length} students · {d.courses} {d.courses === 1 ? 'course' : 'courses'} · class average {d.classAverage == null ? '–' : `${d.classAverage}%`} · passed {d.graded ? `${d.passed} of ${d.graded}` : '–'}</p>
+          <div className="exam-table-wrap">
+            <table className="table exam-table">
+              <thead><tr><th className="num">Pos</th><th>Name</th><th>Adm no</th><th className="num">Courses marked</th><th className="num">So far</th><th>Grade</th></tr></thead>
+              <tbody>
+                {[...d.rows].sort((x, y) => (x.position ?? 9999) - (y.position ?? 9999) || x.name.localeCompare(y.name)).map((r) => (
+                  <tr key={r.studentId}>
+                    <td className="num">{r.position ?? '–'}</td>
+                    <td>{r.name}</td>
+                    <td>{r.admissionNo}</td>
+                    <td className="num">{r.marked} of {r.courses}</td>
+                    <td className="num"><strong>{r.soFar == null ? '–' : `${r.soFar}%`}</strong></td>
+                    <td>{r.grade}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
     </section>
   );
 }
@@ -368,7 +443,7 @@ function Setup({ org, cohort, cohorts, sheets, students, courses, allStudents, o
     <section className="stack">
       <CourseSetup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} />
       {/* Set once and seldom changed, so folded away (Andy, 2026-10-24). */}
-      <Fold title="Weighting" note={EXAM_COMPONENTS.filter((c) => w[c].wt > 0).map((c) => `${EXAM_COMPONENT_LABELS[c]} ${w[c].wt}%`).join(' · ')}><Weighting org={org} /></Fold>
+      <Fold title="Starting percentages" note={EXAM_COMPONENTS.filter((c) => w[c].wt > 0).map((c) => `${EXAM_COMPONENT_LABELS[c]} ${w[c].wt}%`).join(' · ')}><Weighting org={org} /></Fold>
       <Fold title="Grading and signatures" note={`Pass mark ${settings.passMark}%`}><Grading org={org} /></Fold>
       <Fold title="Upload past results" note="From your Excel cohort files"><ResultsUpload org={org} allStudents={allStudents} /></Fold>
       <button type="button" className="btn-link align-start small" onClick={onLog}>See the change log</button>
@@ -474,7 +549,7 @@ function CourseSetup({ org, cohort, cohorts, sheets, students, courses }: { org:
               </select>
             </label>
           </div>
-          {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor ticks "Exam records: key in marks" on a trainer's account under Settings, Staff accounts.</p>}
+          {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
           <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add course</button><button type="button" className="btn btn-quiet" onClick={() => setAdding(false)}>Done</button></div>
         </div>
       )}
@@ -535,14 +610,14 @@ function Weighting({ org }: { org: Organization }) {
   function save() {
     const problem = weightsProblem(v);
     if (problem) return toast.show(problem);
-    saveExamSettings(org.id, exists, { ...settings, weights: v }).then(() => toast.show('Weighting saved. Every course now uses it.'), (err) => toast.show(friendlyError(err)));
+    saveExamSettings(org.id, exists, { ...settings, weights: v }).then(() => toast.show('Saved. New courses start with these percentages.'), (err) => toast.show(friendlyError(err)));
     void logExam(org.id, { action: 'weighting', cohort: 'All cohorts', sheetId: null, detail: EXAM_COMPONENTS.map((c) => `${EXAM_COMPONENT_LABELS[c]} ${v[c].wt}% of ${v[c].max}`).join(', '), byName: a.myName });
     setW(null);
   }
   return (
     <section className="card stack">
-      <h2>Weighting</h2>
-      <p className="muted small">One weighting for every ADIA course. Trainers see it on their marks sheet but cannot change it. Set a paper to 0% if it is not used.</p>
+      <h2>Starting percentages</h2>
+      <p className="muted small">Where every new course starts. Each trainer can then change their own course's percentages until they send its first paper. Set a paper to 0% if it is not used.</p>
       <table className="table exam-weights">
         <thead><tr><th>Paper</th><th className="num">Marked out of</th><th className="num">Worth (%)</th></tr></thead>
         <tbody>
@@ -556,7 +631,7 @@ function Weighting({ org }: { org: Organization }) {
         </tbody>
       </table>
       <p className={`small ${sum === 100 ? 'muted' : 'up-bad'}`}>The percentages add up to {sum}%.{sum !== 100 && ' They usually add up to 100.'}</p>
-      <div className="row-actions"><button type="button" className="btn btn-primary" disabled={!w} onClick={save}>Save weighting</button>{w && <button type="button" className="btn btn-quiet" onClick={() => setW(null)}>Cancel</button>}</div>
+      <div className="row-actions"><button type="button" className="btn btn-primary" disabled={!w} onClick={save}>Save</button>{w && <button type="button" className="btn btn-quiet" onClick={() => setW(null)}>Cancel</button>}</div>
     </section>
   );
 }
@@ -631,6 +706,8 @@ function Grading({ org }: { org: Organization }) {
 
 /* ---------- the marks sheet ---------- */
 
+const paperName = (c: ExamComponent) => (c === 'final' ? 'Final exam' : EXAM_COMPONENT_LABELS[c]);
+
 function SheetEditor({ org }: { org: Organization }) {
   const { sheetId = '' } = useParams();
   const a = useExamAccess();
@@ -649,7 +726,9 @@ function SheetEditor({ org }: { org: Organization }) {
   const editable = a.canManage || (isOwner && sheet.status === 'draft');
   const loggedEdit = a.canManage && (sheet.status !== 'draft' || !isOwner);
   const w = sheet.weights;
-  const used = EXAM_COMPONENTS.filter((c) => w[c].wt > 0 && w[c].max > 0);
+  const used = usedComponents(w);
+  // A paper the trainer sent is locked for them; the principal can still change it (logged) or unlock it.
+  const lockedForMe = (c: ExamComponent) => !a.canManage && isLocked(sheet, c);
   const totals = new Map(roster.map((st) => [st.id, unitTotal(w, sheet.marks?.[st.id], settings.passMark)]));
   // The resit column shows once a student has failed the course (or already has a resit).
   const failed = (id: string) => { const m = sheet.marks?.[id]; const u = unitTotal(w, m ? { ...m, resit: null } : m); return u.total != null && u.total < settings.passMark; };
@@ -684,18 +763,11 @@ function SheetEditor({ org }: { org: Organization }) {
       log('resit', `${st.name} resit ${before ?? 'blank'} → ${value ?? 'blank'}`);
     } catch (err) { toast.show(friendlyError(err)); }
   }
-  function submit() {
-    const missing = roster.length - done;
-    if (missing > 0 && !window.confirm(`${missing} ${missing === 1 ? 'student does' : 'students do'} not have every mark yet. Type ABS for a student who missed a paper, or EX if exempt. Submit anyway?`)) return;
-    submitExamSheet(org.id, sheet!.id).then(() => toast.show('Submitted. The principal will approve it, or send it back if something needs changing.'), (err) => toast.show(friendlyError(err)));
-    log('submit', 'submitted for approval');
-    navigate(back);
-  }
 
   const notice = sheet.status === 'approved'
     ? `Approved${sheet.approvedByName ? ` by ${sheet.approvedByName}` : ''}. These results are final.${a.canManage ? ' Changes you make are written to the change log.' : ''}`
     : sheet.status === 'submitted'
-      ? (a.canManage ? 'Submitted by the trainer. Check the marks, then approve or send back.' : 'Submitted. Waiting for the principal to approve it, so the marks are locked.')
+      ? (a.canManage ? 'The trainer sent the Final exam. Check the marks, then approve or send back.' : 'Every paper is sent and locked. Waiting for the principal to approve it.')
       : sheet.returnNote ? `The principal sent this back: ${sheet.returnNote}` : null;
 
   return (
@@ -709,14 +781,16 @@ function SheetEditor({ org }: { org: Organization }) {
       {notice && <div className={`notice small${sheet.status === 'draft' ? ' up-bad' : ''}`}>{notice}</div>}
       {loggedEdit && sheet.status === 'draft' && <div className="notice small">You are changing a trainer's marks. Every change is written to the change log.</div>}
 
+      <Percentages org={org} sheet={sheet} canEdit={a.canManage || (isOwner && sheet.status === 'draft' && !used.some((c) => isLocked(sheet, c)) && !isLocked(sheet, 'final'))} onLog={log} />
+
       <section className="card stack">
         <div className="card-head"><h2>Marks</h2><span className="muted small">{done} of {roster.length} complete · {pctDone}% entered</span></div>
         <span className="exam-bar"><span style={{ width: `${pctDone}%` }} className={pctDone >= 100 ? 'done' : ''} /></span>
-        <p className="small muted">Weighting set by the principal: {used.map((c) => `${EXAM_COMPONENT_LABELS[c]} ${w[c].wt}% (out of ${w[c].max})`).join(' · ')}. Type a mark, <strong>ABS</strong> for absent (counts as 0) or <strong>EX</strong> for exempt.</p>
+        <p className="small muted">Type a mark, <strong>ABS</strong> for absent (counts as 0) or <strong>EX</strong> for exempt. A sent paper is locked.</p>
         {roster.length === 0 ? <p className="muted">No enrolled students in {sheet.cohort}{sheet.courseId ? ` for ${s.courseName(sheet.courseId)}` : ''}. Students come from the Students list, by intake.</p> : (
           <div className="exam-table-wrap">
             <table className="table exam-marks">
-              <thead><tr><th>Student</th>{used.map((c) => <th key={c} className="num">{EXAM_COMPONENT_LABELS[c]}<div className="muted small">/{w[c].max}</div></th>)}<th className="num">Total</th><th>Grade</th>{showResit && <th className="num">Resit<div className="muted small">/100</div></th>}</tr></thead>
+              <thead><tr><th>Student</th>{used.map((c) => <th key={c} className="num">{EXAM_COMPONENT_LABELS[c]}<div className="muted small">/{w[c].max}{isLocked(sheet, c) ? ' · sent' : ''}</div></th>)}<th className="num">Total</th><th>Grade</th>{showResit && <th className="num">Resit<div className="muted small">/100</div></th>}</tr></thead>
               <tbody>
                 {roster.map((st) => {
                   const m = sheet.marks?.[st.id];
@@ -726,7 +800,7 @@ function SheetEditor({ org }: { org: Organization }) {
                       <td>{st.name}<div className="muted small">{st.admissionNo}{sheet.courseId == null ? ` · ${st.courseName}` : ''}</div></td>
                       {used.map((c) => (
                         <td key={c} className="num">
-                          <input className="exam-mark" disabled={!editable} defaultValue={markText(m?.[c])} key={`${st.id}-${c}-${markText(m?.[c])}`} autoCapitalize="characters"
+                          <input className="exam-mark" disabled={!editable || lockedForMe(c)} defaultValue={markText(m?.[c])} key={`${st.id}-${c}-${markText(m?.[c])}`} autoCapitalize="characters"
                             aria-label={`${st.name} ${EXAM_COMPONENT_LABELS[c]}`} onBlur={(e) => mark(st, c, e.target)}
                             onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
                         </td>
@@ -736,7 +810,7 @@ function SheetEditor({ org }: { org: Organization }) {
                       {showResit && (
                         <td className="num">
                           {(failed(st.id) || typeof m?.resit === 'number') && (
-                            <input className="exam-mark" disabled={!editable} inputMode="decimal" defaultValue={m?.resit ?? ''} key={`${st.id}-resit-${m?.resit ?? ''}`}
+                            <input className="exam-mark" disabled={!editable || lockedForMe('final')} inputMode="decimal" defaultValue={m?.resit ?? ''} key={`${st.id}-resit-${m?.resit ?? ''}`}
                               aria-label={`${st.name} resit`} onBlur={(e) => resit(st, e.target)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} />
                           )}
                         </td>
@@ -748,16 +822,139 @@ function SheetEditor({ org }: { org: Organization }) {
             </table>
           </div>
         )}
-        <p className="muted small">Marks save as you leave each box, even without internet; they send when you are back online. A total in brackets is a running total until every paper is in.{showResit ? ` A resit replaces a failed total, up to the pass mark (${settings.passMark}%).` : ''}</p>
+        <p className="muted small">Marks save as you leave each box, even without internet; they send when you are back online. A total in brackets is the running total: the points earned so far out of 100.{showResit ? ` A resit replaces a failed total, up to the pass mark (${settings.passMark}%).` : ''}</p>
       </section>
 
-      <MarksUpload org={org} sheet={sheet} roster={roster} editable={editable} withResit={showResit} onSaved={(detail) => log('upload', detail)} />
+      <Papers org={org} sheet={sheet} roster={roster} isOwner={isOwner} onSubmitted={() => navigate(back)} />
 
-      <div className="row-actions no-print">
-        {sheet.status === 'draft' && isOwner && <button type="button" className="btn btn-primary" disabled={!roster.length} onClick={submit}>Submit for approval</button>}
-        {a.canManage && sheet.status !== 'approved' && <button type="button" className="btn btn-primary" onClick={() => { act.approve(sheet); navigate(back); }}>Approve</button>}
-        {a.canManage && sheet.status !== 'draft' && <button type="button" className="btn btn-quiet" onClick={() => act.sendBack(sheet)}>{sheet.status === 'approved' ? 'Reopen for the trainer' : 'Send back to the trainer'}</button>}
-      </div>
+      <MarksUpload org={org} sheet={sheet} roster={roster} editable={editable} withResit={showResit}
+        locked={a.canManage ? [] : [...used.filter((c) => isLocked(sheet, c)), ...(isLocked(sheet, 'final') ? ['resit' as const] : [])]} onSaved={(detail) => log('upload', detail)} />
+
+      {a.canManage && (
+        <div className="row-actions no-print">
+          {sheet.status !== 'approved' && <button type="button" className="btn btn-primary" onClick={() => { act.approve(sheet); navigate(back); }}>Approve</button>}
+          {sheet.status !== 'draft' && <button type="button" className="btn btn-quiet" onClick={() => act.sendBack(sheet)}>{sheet.status === 'approved' ? 'Reopen for the trainer' : 'Send back to the trainer'}</button>}
+        </div>
+      )}
     </div>
+  );
+}
+
+/** The course's papers: "marked out of" and percentage, set by its trainer until the first paper is sent (Andy, 2026-10-25). */
+function Percentages({ org, sheet, canEdit, onLog }: { org: Organization; sheet: ExamSheetRow; canEdit: boolean; onLog: (action: string, detail: string) => void }) {
+  const toast = useToast();
+  const [w, setW] = useState<ExamWeights | null>(null);
+  const v = w ?? sheet.weights;
+  const sum = EXAM_COMPONENTS.reduce((t, c) => t + (v[c].wt || 0), 0);
+  const put = (c: ExamComponent, k: 'max' | 'wt', val: string) => setW({ ...v, [c]: { ...v[c], [k]: Number(val) } });
+  const summary = usedComponents(sheet.weights).map((c) => `${paperName(c)} ${sheet.weights[c].wt}%`).join(' · ');
+  function save() {
+    const problem = weightsProblem(v);
+    if (problem) return toast.show(problem);
+    if (sum !== 100) return toast.show(`The percentages add up to ${sum}%. Make them add up to 100.`);
+    saveExamSheetDetails(org.id, sheet.id, { weights: v }).then(() => toast.show('Percentages saved.'), (err) => toast.show(friendlyError(err)));
+    onLog('percentages', EXAM_COMPONENTS.map((c) => `${EXAM_COMPONENT_LABELS[c]} ${v[c].wt}% of ${v[c].max}`).join(', '));
+    setW(null);
+  }
+  if (!canEdit) return <p className="small muted">Percentages: {summary}.</p>;
+  return (
+    <details className="card exam-fold" open={!!w}>
+      <summary><strong>Percentages</strong><span className="muted small">{summary}</span></summary>
+      <p className="muted small">Set what each CAT and the Final exam are marked out of and what they are worth. Use 0% for a paper you do not give. They lock when you send the first paper.</p>
+      <table className="table exam-weights">
+        <thead><tr><th>Paper</th><th className="num">Marked out of</th><th className="num">Worth (%)</th></tr></thead>
+        <tbody>
+          {EXAM_COMPONENTS.map((c) => (
+            <tr key={c}>
+              <td>{paperName(c)}</td>
+              <td className="num"><input className="exam-att" inputMode="decimal" value={v[c].max} onChange={(e) => put(c, 'max', e.target.value)} aria-label={`${paperName(c)} marked out of`} /></td>
+              <td className="num"><input className="exam-att" inputMode="decimal" value={v[c].wt} onChange={(e) => put(c, 'wt', e.target.value)} aria-label={`${paperName(c)} worth`} /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className={`small ${sum === 100 ? 'muted' : 'up-bad'}`}>They add up to {sum}%{sum === 100 ? '.' : '; they must add up to 100.'}</p>
+      <div className="row-actions"><button type="button" className="btn btn-primary" disabled={!w} onClick={save}>Save percentages</button>{w && <button type="button" className="btn btn-quiet" onClick={() => setW(null)}>Cancel</button>}</div>
+    </details>
+  );
+}
+
+/**
+ * Sending each paper to the principal (Andy, 2026-10-25): a sent paper locks; the trainer tells the
+ * principal by email or WhatsApp, and asks to change a sent paper; only the principal unlocks it.
+ */
+function Papers({ org, sheet, roster, isOwner, onSubmitted }: { org: Organization; sheet: ExamSheetRow; roster: ExamStudent[]; isOwner: boolean; onSubmitted: () => void }) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const [emailing, setEmailing] = useState('');
+  const trainer = isOwner && !a.canManage;
+  const principals = useExamPrincipals(org.id, sheet.id, trainer);
+  const used = usedComponents(sheet.weights);
+  const req = sheet.changeRequest ?? null;
+  const missing = (c: ExamComponent) => roster.filter((st) => sheet.marks?.[st.id]?.[c] == null).length;
+
+  function send(c: ExamComponent) {
+    const papers = c === 'final' ? used.filter((x) => !isLocked(sheet, x)) : [c];
+    const gaps = missing(c);
+    const msg = c === 'final'
+      ? `Send the Final exam? This locks every paper and sends ${sheet.courseName} to the principal for approval.${gaps ? ` ${gaps} ${gaps === 1 ? 'student has' : 'students have'} no Final mark yet (type ABS or EX).` : ''}`
+      : `Send ${paperName(c)}? Its marks lock, and only the principal can unlock them.${gaps ? ` ${gaps} ${gaps === 1 ? 'student has' : 'students have'} no mark yet (type ABS or EX).` : ''}`;
+    if (!window.confirm(msg)) return;
+    sendExamPapers(org.id, sheet.id, papers).then(() => toast.show(`${paperName(c)} sent and locked. Now tell the principal.`), (err) => toast.show(friendlyError(err)));
+    if (c === 'final') onSubmitted();
+  }
+  function ask(c: ExamComponent) {
+    const reason = window.prompt(`Why do you need to change ${paperName(c)}? The principal sees this.`, '');
+    if (!reason?.trim()) return;
+    askExamChange(org.id, sheet.id, c, reason, a.myName).then(() => toast.show('Asked. Now tell the principal by email or WhatsApp.'), (err) => toast.show(friendlyError(err)));
+  }
+  function unlock(c: ExamComponent) {
+    const reopen = c === 'final' && sheet.status !== 'draft';
+    if (!window.confirm(`Unlock ${paperName(c)} so ${sheet.teacherName} can change it?${reopen ? ' The course goes back to marking.' : ''}`)) return;
+    unlockExamPaper(org.id, sheet.id, c, reopen).then(() => toast.show(`${paperName(c)} unlocked for ${sheet.teacherName}.`), (err) => toast.show(friendlyError(err)));
+    void logExam(org.id, { action: 'unlock', cohort: sheet.cohort, sheetId: sheet.id, detail: `${sheet.courseName}: ${paperName(c)} unlocked for ${sheet.teacherName}${req?.component === c ? ` (asked: ${req.reason})` : ''}`, byName: a.myName });
+  }
+  async function email(kind: ExamNoticeKind, c: ExamComponent) {
+    setEmailing(`${kind}${c}`);
+    try { toast.show(`Emailed ${(await emailExamNotice(org.id, sheet.id, kind, c)).join(', ')}.`); } catch (err) { toast.show(friendlyError(err)); } finally { setEmailing(''); }
+  }
+  const whatsapp = (kind: ExamNoticeKind, c: ExamComponent) => {
+    const p = principals.find((x) => x.phone) ?? principals[0];
+    const text = examNoticeText({ kind, component: c, courseName: sheet.courseName, cohort: sheet.cohort, teacherName: sheet.teacherName, reason: req?.reason, link: `${window.location.origin}${BASE}/sheet/${sheet.id}`, recipientName: p?.name });
+    return waLink(p?.phone ?? '', text);
+  };
+  const tell = (kind: ExamNoticeKind, c: ExamComponent) => (
+    <span className="row-actions">
+      <button type="button" className="btn btn-quiet btn-small" disabled={!!emailing} onClick={() => void email(kind, c)}>{emailing === `${kind}${c}` ? 'Sending…' : 'Send Email'}</button>
+      <a className="btn btn-quiet btn-small" href={whatsapp(kind, c)} target="_blank" rel="noreferrer">Send WhatsApp</a>
+    </span>
+  );
+
+  if (!trainer && !a.canManage) return null;
+  return (
+    <section className="card stack no-print">
+      <h2>{trainer ? 'Send to the principal' : 'Papers'}</h2>
+      {trainer && <p className="muted small">Send each CAT when its marks are in; it locks so nobody can change it. Sending the Final exam sends the whole course for approval.</p>}
+      <ul className="exam-list">
+        {used.map((c) => {
+          const sent = isLocked(sheet, c);
+          const asked = req?.component === c;
+          return (
+            <li key={c}>
+              <span className="exam-list-main">
+                <strong>{paperName(c)}</strong>
+                <span className="muted small">{sent ? 'Sent and locked' : `Open · ${roster.length - missing(c)} of ${roster.length} marked`}</span>
+                {asked && <span className="small up-bad">{req!.byName} asks to change it: {req!.reason}</span>}
+              </span>
+              <span className="exam-list-side">
+                {trainer && !sent && sheet.status === 'draft' && <button type="button" className="btn btn-primary btn-small" onClick={() => send(c)}>Send {paperName(c)}</button>}
+                {trainer && sent && (asked ? tell('change', c) : <>{tell('sent', c)}{!req && <button type="button" className="btn btn-quiet btn-small" onClick={() => ask(c)}>Ask to change</button>}</>)}
+                {a.canManage && sent && <button type="button" className={`btn btn-small ${asked ? 'btn-primary' : 'btn-quiet'}`} onClick={() => unlock(c)}>Unlock</button>}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
   );
 }

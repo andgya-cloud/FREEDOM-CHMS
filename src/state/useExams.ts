@@ -5,7 +5,7 @@ import { db, functions } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { examMetaId } from '../lib/examWrites';
-import { examSettingsWithDefaults, type ExamSettings, type ExamSheet, type ReportMeta } from '../../functions/src/shared/exams';
+import { EXAM_COMPONENTS, examSettingsWithDefaults, mergedMarks, type ExamSettings, type ExamSheet, type ReportMeta } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
 
 export interface ExamSheetRow extends ExamSheet { submittedAt?: Timestamp | null; updatedAt?: Timestamp }
@@ -21,9 +21,17 @@ export function useExamAccess() {
 
 const col = (orgId: string, name: string) => collection(db, 'organizations', orgId, name);
 
-/** Every course uses ADIA's one weighting from the settings (Andy, 2026-10-24), whatever a sheet saved. */
+/**
+ * Each course keeps its own percentages, which its trainer sets (Andy, 2026-10-25; the settings' weighting
+ * is only where a new course starts), and its marks are the older map with each paper's own field on top.
+ */
+const normalize = (s: ExamSheetRow, settings: ExamSettings): ExamSheetRow => ({
+  ...s,
+  weights: s.weights && EXAM_COMPONENTS.every((c) => typeof s.weights[c]?.max === 'number' && typeof s.weights[c]?.wt === 'number') ? s.weights : settings.weights,
+  marks: mergedMarks(s as unknown as Record<string, unknown>),
+});
 const withWeights = (rows: ExamSheetRow[], settings: ExamSettings) =>
-  rows.filter((s) => !s.deletedAt).map((s) => ({ ...s, weights: settings.weights })).sort((x, y) => (x.semester ?? 9) - (y.semester ?? 9) || x.courseName.localeCompare(y.courseName));
+  rows.filter((s) => !s.deletedAt).map((s) => normalize(s, settings)).sort((x, y) => (x.semester ?? 9) - (y.semester ?? 9) || x.courseName.localeCompare(y.courseName));
 
 /** The courses of a cohort: every one for the principal, a trainer's own for a trainer. */
 export function useExamSheets(orgId: string, cohort: string) {
@@ -51,7 +59,7 @@ export function useMyExamSheets(orgId: string) {
 export function useExamSheet(orgId: string, sheetId: string) {
   const { settings } = useExamSettings(orgId);
   const { data, loading } = useLiveDoc<ExamSheetRow>(() => (orgId && sheetId ? doc(db, 'organizations', orgId, 'examSheets', sheetId) : null), [orgId, sheetId]);
-  const sheet = useMemo(() => (data && !data.deletedAt ? { ...data, weights: settings.weights } : null), [data, settings]);
+  const sheet = useMemo(() => (data && !data.deletedAt ? normalize(data, settings) : null), [data, settings]);
   return { sheet, loading };
 }
 
@@ -104,4 +112,18 @@ export function useExamResults(orgId: string, cohort?: string) {
     [orgId, cohort, a.canManage],
   );
   return { results: useMemo(() => rows.filter((r) => !r.deletedAt), [rows]), loading };
+}
+
+export interface ExamPrincipal { name: string; phone: string }
+/** The principal's name and WhatsApp number, for a trainer's Send WhatsApp button on their class (Andy, 2026-10-25). */
+export function useExamPrincipals(orgId: string, sheetId: string, on: boolean) {
+  const [principals, setPrincipals] = useState<ExamPrincipal[]>([]);
+  useEffect(() => {
+    if (!orgId || !sheetId || !on) return;
+    let live = true;
+    httpsCallable<Record<string, string>, { principals: ExamPrincipal[] }>(functions, 'examNotify')({ orgId, sheetId, kind: 'sent', component: 'cat1', channel: 'contacts' })
+      .then((r) => { if (live) setPrincipals(r.data.principals); }, () => { if (live) setPrincipals([]); });
+    return () => { live = false; };
+  }, [orgId, sheetId, on]);
+  return principals;
 }

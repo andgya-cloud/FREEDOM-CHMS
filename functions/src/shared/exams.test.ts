@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildExamReport, DEFAULT_EXAM_SETTINGS, DEFAULT_EXAM_WEIGHTS, examSettingsWithDefaults, gradeFor, markProblem, parseMark, rankOf, sheetProgress, unitTotal, weightsProblem, type ExamSheet, type ExamStudent } from './exams';
+import { buildExamReport, departmentSummary, mergedMarks, DEFAULT_EXAM_SETTINGS, DEFAULT_EXAM_WEIGHTS, examSettingsWithDefaults, gradeFor, markProblem, parseMark, rankOf, sheetProgress, unitTotal, weightsProblem, type ExamSheet, type ExamStudent } from './exams';
 
 const sheet = (id: string, courseId: string | null, marks: ExamSheet['marks'], weights = DEFAULT_EXAM_WEIGHTS): ExamSheet => ({
   id, cohort: 'September 2026', courseId, ownerUid: 'u', ownerName: 'T', courseName: id, teacherName: 'Grace', weights, status: 'draft', marks,
@@ -88,5 +88,22 @@ describe('exam records', () => {
     expect(examSettingsWithDefaults({}).weights).toEqual(DEFAULT_EXAM_WEIGHTS);
     const w = { ...DEFAULT_EXAM_WEIGHTS, final: { max: 60, wt: 70 } };
     expect(examSettingsWithDefaults({ weights: w }).weights.final.max).toBe(60);
+  });
+  it('lays each paper\'s own marks over the older marks map', () => {
+    const merged = mergedMarks({ marks: { a: { cat1: 5, cat2: 6 }, b: { final: 40 } }, cat1Marks: { a: 9, c: 'ABS' }, finalMarks: { b: null }, resitMarks: { b: 50 } });
+    expect(merged).toEqual({ a: { cat1: 9, cat2: 6 }, b: { final: null, resit: 50 }, c: { cat1: 'ABS' } });
+  });
+  it('sums up a department so far, with running totals while CATs come in', () => {
+    const students = [st('a', 'Amina', 'ict'), st('b', 'Brian', 'ict'), st('c', 'Cate', 'catering')];
+    const sheets = [
+      { ...sheet('Networking', 'ict', { a: { cat1: 80 }, b: { cat1: 30 } }), status: 'draft' as const },
+      sheet('Entrepreneurship', null, { a: { cat1: 60 }, c: { cat1: 90 } }),
+    ];
+    const d = departmentSummary('ict', sheets, students, DEFAULT_EXAM_SETTINGS);
+    expect(d.rows.map((r) => [r.name, r.soFar, r.marked, r.courses, r.position, r.grade])).toEqual([
+      ['Amina', 70, 2, 2, 1, 'Credit'], ['Brian', 30, 1, 2, 2, 'Fail'],
+    ]);
+    expect(d).toMatchObject({ classAverage: 50, passed: 1, graded: 2, courses: 2, provisional: true });
+    expect(d.byGrade).toMatchObject({ Credit: 1, Fail: 1, Distinction: 0 });
   });
 });

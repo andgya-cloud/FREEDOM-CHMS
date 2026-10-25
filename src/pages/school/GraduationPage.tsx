@@ -1,9 +1,14 @@
-import { useState } from 'react';
+import { useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { issueCertificate, recordOutcome } from '../../lib/schoolWrites';
+import { saveGraduationGrades } from '../../lib/examWrites';
+import { readSpreadsheetSheets } from '../../lib/statementFile';
+import { useExamAccess, useExamResults } from '../../state/useExams';
+import { parseGraduationList, type GraduationRow } from '../../../functions/src/shared/graduation';
+import { admissionKey } from '../../../functions/src/shared/examResults';
 import { csvFile } from '../../lib/schoolPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
@@ -59,6 +64,8 @@ function Graduation({ org }: { org: Organization }) {
           <button type="button" className="btn btn-primary align-start" disabled={!picked || !issuedOn} onClick={issue}>Issue certificate</button>
         </section>
       )}
+
+      {(can('settings.manage') || can('school.manage')) && <GraduationUpload org={org} s={s} />}
 
       <section className="card stack">
         <h2>Follow-ups due</h2>
@@ -117,5 +124,89 @@ function OutcomeForm({ orgId, outcome, name, today, canRecord }: { orgId: string
         </>
       )}
     </div>
+  );
+}
+
+type Match = { row: GraduationRow; st: ReturnType<typeof useSchoolPage>['students'][number] | null; why: 'graduate' | 'already' | 'fail' | 'not-enrolled' | 'unknown' };
+
+/**
+ * The graduation list from Excel (Andy, 2026-10-25): each student who passed gets their certificate (and
+ * becomes a graduate, with the 3, 6 and 12-month follow-ups); a Fail stays as it is. The final points and
+ * grade are kept with the student's results.
+ */
+function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof useSchoolPage> }) {
+  const toast = useToast();
+  const exams = useExamAccess();
+  const { results } = useExamResults(org.id);
+  const [issuedOn, setIssuedOn] = useState(s.today);
+  const [plan, setPlan] = useState<{ file: string; matches: Match[]; problems: string[] } | null>(null);
+  const [saving, setSaving] = useState(false);
+  const certified = new Set(s.certificates.map((c) => c.studentId));
+  const plain = (n: string) => n.toLowerCase().replace(/[^a-z ]/g, '').split(/\s+/).filter(Boolean).sort().join(' ');
+
+  async function choose(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    try {
+      const list = parseGraduationList(await readSpreadsheetSheets(f));
+      const live = s.students.filter((st) => !st.deletedAt);
+      const byAdm = new Map(live.filter((st) => st.admissionNo).map((st) => [admissionKey(st.admissionNo), st]));
+      const byName = new Map(live.map((st) => [plain(s.nameOf(st.id)), st]));
+      const matches: Match[] = list.rows.map((row) => {
+        const st = byAdm.get(admissionKey(row.admissionNo)) ?? byName.get(plain(row.name)) ?? null;
+        const why: Match['why'] = !st ? 'unknown' : !row.passed ? 'fail' : st.status === 'graduated' || certified.has(st.id) ? 'already' : st.status === 'enrolled' ? 'graduate' : 'not-enrolled';
+        return { row, st, why };
+      });
+      setPlan({ file: f.name, matches, problems: list.problems });
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+
+  async function save() {
+    if (!plan || !issuedOn) return;
+    setSaving(true);
+    try {
+      const go = plan.matches.filter((m) => m.why === 'graduate');
+      for (const m of go) issueCertificate(org.id, m.st!.id, m.st!.courseId, issuedOn).catch((err) => toast.show(friendlyError(err)));
+      if (exams.canManage) {
+        const existing = new Set(results.map((r) => r.id));
+        await saveGraduationGrades(org.id, plan.matches.filter((m) => m.st && m.row.points != null).map((m) => ({
+          studentId: m.st!.id, cohort: s.intakeName(m.st!.intakeId) || 'Cohort', admissionNo: m.st!.admissionNo ?? m.row.admissionNo, studentName: s.nameOf(m.st!.id),
+          courseId: m.st!.courseId, points: m.row.points!, grade: m.row.grade,
+        })), existing);
+      }
+      toast.show(`${go.length} ${go.length === 1 ? 'certificate' : 'certificates'} issued.${exams.canManage ? ' Final points and grades saved.' : ''}`);
+      setPlan(null);
+    } catch (err) { toast.show(friendlyError(err)); } finally { setSaving(false); }
+  }
+
+  const group = (why: Match['why']) => plan?.matches.filter((m) => m.why === why) ?? [];
+  const list = (ms: Match[]) => <ul className="small">{ms.map((m) => <li key={m.row.row}>{m.row.name} · {m.row.admissionNo}{m.row.points != null ? ` · ${m.row.points}` : ''}{m.row.grade ? ` ${m.row.grade}` : ''}</li>)}</ul>;
+  const go = group('graduate');
+  return (
+    <section className="card stack">
+      <h2>Upload the graduation list</h2>
+      <p className="small muted">An Excel file with Student name, Adm No., Points and Grade, under each department's name. Everyone who passed gets their certificate; a Fail stays as it is.</p>
+      <div className="row-actions">
+        <label className="field"><span>Date issued</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
+        <label className="btn btn-primary align-end">Choose the Excel file<input type="file" accept=".xlsx,.csv" hidden onChange={(e) => void choose(e)} /></label>
+      </div>
+      {plan && (
+        <div className="stack">
+          <p><strong>{plan.file}</strong>: {plan.matches.length} students. <strong>{go.length}</strong> will graduate.</p>
+          {plan.problems.length > 0 && <ul className="small up-bad">{plan.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}
+          {go.length > 0 && <details open><summary>{go.length} will get a certificate</summary>{list(go)}</details>}
+          {group('fail').length > 0 && <details><summary>{group('fail').length} did not pass (no certificate)</summary>{list(group('fail'))}</details>}
+          {group('already').length > 0 && <details><summary>{group('already').length} already graduated</summary>{list(group('already'))}</details>}
+          {group('not-enrolled').length > 0 && <details><summary className="up-bad">{group('not-enrolled').length} not enrolled now (deferred or withdrawn), left as they are</summary>{list(group('not-enrolled'))}</details>}
+          {group('unknown').length > 0 && <details open><summary className="up-bad">{group('unknown').length} not found in Students</summary>{list(group('unknown'))}</details>}
+          <div className="row-actions">
+            <button type="button" className="btn btn-primary" disabled={saving || (!go.length && !exams.canManage)} onClick={() => void save()}>{saving ? 'Saving…' : go.length ? `Issue ${go.length} certificates` : 'Save the points and grades'}</button>
+            <button type="button" className="btn btn-quiet" onClick={() => setPlan(null)}>Cancel</button>
+          </div>
+          <p className="small muted">Certificates get the next serial numbers and cannot be undone.</p>
+        </div>
+      )}
+    </section>
   );
 }

@@ -103,6 +103,9 @@ export const TEAM_ROLE_ID = 'staff';
 /** The ADIA principal: students, attendance, Exam Records and graduation, each student's fee balance, nothing else (Andy, 2026-10-25). */
 export const PRINCIPAL_ROLE_ID = 'principal';
 
+/** An ADIA trainer: keys in their own classes' marks in Exam Records and sees nothing else (Andy, 2026-10-25). */
+export const TRAINER_ROLE_ID = 'trainer';
+
 /** The role for the petty cash signatories: they raise and sign requests, top-ups and resets, and see nothing else. */
 export const SIGNATORY_ROLE_ID = 'signatory';
 
@@ -115,7 +118,7 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
   return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -135,6 +138,8 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   staff: { name: 'Staff', permissions: [...TEAM_WORK] },
   signatory: { name: 'Petty cash signatory', permissions: ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'] },
   principal: { name: 'Principal', permissions: ['people.read', 'people.write', 'attendance.write', 'exams.manage', 'school.manage', 'fees.balances'] },
+  // people.read gives the trainer their students' names; the menu shows them Exam Records only.
+  trainer: { name: 'Trainer', permissions: ['people.read', 'exams.mark'] },
 };
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {

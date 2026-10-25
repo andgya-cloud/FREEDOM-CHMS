@@ -31,7 +31,7 @@ beforeEach(async () => {
 });
 
 describe('exam records rules', () => {
-  it('lets only the principal set up a course, and the trainer key in, submit, then wait for approval', async () => {
+  it('lets only the principal set up a course, and the trainer key in, send each paper, then wait for approval', async () => {
     const ref = (uid: string) => doc(as(uid), 'organizations/adia/examSheets/net');
     await assertFails(setDoc(ref('staff'), sheet('staff')));
     await assertFails(setDoc(ref('grace'), sheet('grace')));
@@ -39,24 +39,43 @@ describe('exam records rules', () => {
     await assertSucceeds(setDoc(ref('principal'), sheet('principal', 'grace')));
     await assertFails(getDoc(ref('otto')));
     await assertSucceeds(getDoc(ref('grace')));
-    await assertFails(updateDoc(ref('otto'), { 'marks.s1.cat1': 50, ...touched('otto') }));
-    await assertSucceeds(updateDoc(ref('grace'), { 'marks.s1.cat1': 50, 'marks.s1.cat2': 'ABS', ...touched('grace') }));
-    // The trainer can't change the course, the weighting or who owns it.
+    await assertFails(updateDoc(ref('otto'), { 'cat1Marks.s1': 50, ...touched('otto') }));
+    await assertSucceeds(updateDoc(ref('grace'), { 'cat1Marks.s1': 50, 'cat2Marks.s1': 'ABS', ...touched('grace') }));
+    // The old marks map is the principal's only now.
+    await assertFails(updateDoc(ref('grace'), { 'marks.s1.cat1': 50, ...touched('grace') }));
+    // The trainer sets the percentages (Andy, 2026-10-25) until the first paper is sent, but never a broken one.
+    await assertFails(updateDoc(ref('grace'), { weights: { ...weights, final: { max: 0, wt: 70 } }, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { weights: { ...weights, cat1: { max: 30, wt: 15 }, cat3: { max: 100, wt: 0 }, final: { max: 100, wt: 75 } }, ...touched('grace') }));
+    // The trainer can't change the course or who owns it.
     await assertFails(updateDoc(ref('grace'), { ownerUid: 'otto', ...touched('grace') }));
     await assertFails(updateDoc(ref('grace'), { courseName: 'Other', ...touched('grace') }));
-    await assertFails(updateDoc(ref('grace'), { weights: { ...weights, final: { max: 100, wt: 90 } }, ...touched('grace') }));
+    // Sending CAT 1 locks it: no more changes to it, no unlocking it, no more percentage changes.
+    await assertSucceeds(updateDoc(ref('grace'), { 'locked.cat1': true, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { 'cat1Marks.s1': 20, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { 'locked.cat1': false, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { weights, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { 'cat2Marks.s1': 60, ...touched('grace') }));
+    // Asking to change it, then the principal unlocks it.
+    await assertFails(updateDoc(ref('grace'), { changeRequest: { component: 'cat9', reason: 'x', byName: 'Grace' }, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { changeRequest: { component: 'cat1', reason: 'Typed 50 for 5', byName: 'Grace' }, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { 'locked.cat1': false, changeRequest: null, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('principal'), { 'locked.cat1': false, changeRequest: null, ...touched('principal') }));
+    await assertSucceeds(updateDoc(ref('grace'), { 'cat1Marks.s1': 5, ...touched('grace') }));
+    // Submitting needs the Final sent too, with the server's time.
     await assertFails(updateDoc(ref('grace'), { status: 'approved', approvedAt: serverTimestamp(), ...touched('grace') }));
-    await assertFails(updateDoc(ref('grace'), { status: 'submitted', ...touched('grace') }));
-    await assertSucceeds(updateDoc(ref('grace'), { status: 'submitted', submittedAt: serverTimestamp(), ...touched('grace') }));
-    await assertFails(updateDoc(ref('grace'), { 'marks.s1.cat2': 60, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { status: 'submitted', submittedAt: serverTimestamp(), ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { status: 'submitted', 'locked.final': true, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { status: 'submitted', submittedAt: serverTimestamp(), locked: { cat1: true, cat2: true, cat3: true, final: true }, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { 'finalMarks.s1': 60, ...touched('grace') }));
     await assertFails(updateDoc(ref('grace'), { status: 'draft', ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { changeRequest: { component: 'final', reason: 'Missed a script', byName: 'Grace' }, ...touched('grace') }));
     // The principal sends it back with a note, then approves it.
-    await assertSucceeds(updateDoc(ref('principal'), { status: 'draft', returnNote: 'Check CAT 2', ...touched('principal') }));
-    await assertSucceeds(updateDoc(ref('grace'), { 'marks.s1.cat3': 70, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('principal'), { status: 'draft', 'locked.final': false, changeRequest: null, returnNote: 'Check the Final', ...touched('principal') }));
+    await assertSucceeds(updateDoc(ref('grace'), { 'finalMarks.s1': 70, ...touched('grace') }));
     await assertFails(updateDoc(ref('principal'), { status: 'approved', ...touched('principal') }));
     await assertSucceeds(updateDoc(ref('principal'), { status: 'approved', approvedAt: serverTimestamp(), approvedByName: 'Principal', returnNote: null, ...touched('principal') }));
-    await assertFails(updateDoc(ref('grace'), { 'marks.s1.resit': 60, ...touched('grace') }));
-    await assertSucceeds(updateDoc(ref('principal'), { 'marks.s1.resit': 60, ownerUid: 'otto', ownerName: 'Otto', teacherName: 'Otto', ...touched('principal') }));
+    await assertFails(updateDoc(ref('grace'), { 'resitMarks.s1': 60, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('principal'), { 'resitMarks.s1': 60, ownerUid: 'otto', ownerName: 'Otto', teacherName: 'Otto', ...touched('principal') }));
   });
 
   it('keeps remarks, attendance, grading and the log to the principal', async () => {
@@ -80,8 +99,15 @@ describe('exam records rules', () => {
     await assertFails(setDoc(ref('principal'), { ...sheet('principal', 'grace'), semester: 3 }));
     await assertSucceeds(setDoc(ref('principal'), { ...sheet('principal', 'grace'), semester: 1 }));
     await assertFails(updateDoc(ref('grace'), { semester: 2, ...touched('grace') }));
-    await assertSucceeds(updateDoc(ref('grace'), { marks: { s1: { cat1: 50, cat2: 'EX' }, s2: { final: 70 } }, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('grace'), { cat1Marks: { s1: 50 }, cat2Marks: { s1: 'EX' }, finalMarks: { s2: 70 }, ...touched('grace') }));
     await assertSucceeds(updateDoc(ref('principal'), { semester: 2, ...touched('principal') }));
+    // A full class of 80 with every paper keyed in stays within the server's limits.
+    const ids = Array.from({ length: 80 }, (_, i) => `s${i}`);
+    const full = Object.fromEntries(ids.map((id) => [id, 55]));
+    await assertSucceeds(updateDoc(ref('grace'), { cat1Marks: full, cat2Marks: full, cat3Marks: full, finalMarks: full, ...touched('grace') }));
+    await assertSucceeds(updateDoc(ref('principal'), { marks: Object.fromEntries(ids.map((id) => [id, { cat1: 1, cat2: 2, cat3: 3, final: 4 }])), ...touched('principal') }));
+    await assertSucceeds(updateDoc(ref('grace'), { 'locked.cat1': true, 'cat2Marks.s5': 60, ...touched('grace') }));
+    await assertFails(updateDoc(ref('grace'), { 'cat1Marks.s5': 60, ...touched('grace') }));
   });
 
   it('keeps past semester results to the principal', async () => {

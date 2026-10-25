@@ -56,8 +56,34 @@ export interface ExamSheet {
   /** Why the principal sent it back, shown to the trainer. */
   returnNote?: string | null;
   approvedByName?: string | null;
+  /** Papers the trainer has sent to the principal: locked until the principal unlocks them (Andy, 2026-10-25). */
+  locked?: Partial<Record<ExamComponent, boolean>>;
+  /** The trainer's request to change a sent paper, waiting for the principal. */
+  changeRequest?: ExamChangeRequest | null;
   deletedAt?: unknown;
 }
+export interface ExamChangeRequest { component: ExamComponent; reason: string; byName: string }
+
+/**
+ * Since 2026-10-25 each paper's marks are kept in their own field (cat1Marks, ..., finalMarks,
+ * resitMarks), so a sent paper can be locked by the server on its own. Older sheets keep `marks`;
+ * the per-paper fields go on top of it.
+ */
+export const MARK_FIELDS = { cat1: 'cat1Marks', cat2: 'cat2Marks', cat3: 'cat3Marks', final: 'finalMarks', resit: 'resitMarks' } as const;
+export type MarkField = keyof typeof MARK_FIELDS;
+export function mergedMarks(raw: Partial<Record<string, unknown>> & { marks?: Record<string, StudentMarks> }): Record<string, StudentMarks> {
+  const out: Record<string, StudentMarks> = {};
+  for (const [id, m] of Object.entries(raw.marks ?? {})) out[id] = { ...m };
+  for (const [f, field] of Object.entries(MARK_FIELDS) as [MarkField, string][]) {
+    const map = raw[field];
+    if (!map || typeof map !== 'object') continue;
+    for (const [id, v] of Object.entries(map as Record<string, MarkValue>)) out[id] = { ...(out[id] ?? {}), [f]: v };
+  }
+  return out;
+}
+export const isLocked = (sheet: Pick<ExamSheet, 'locked'>, c: ExamComponent) => sheet.locked?.[c] === true;
+/** The papers that count for this course (worth more than 0%). */
+export const usedComponents = (w: ExamWeights) => EXAM_COMPONENTS.filter((c) => w[c].wt > 0 && w[c].max > 0);
 
 export interface GradeBand { min: number; grade: string; remark: string }
 export interface ExamSettings {
@@ -258,4 +284,55 @@ export function sheetProgress(sheet: Pick<ExamSheet, 'weights' | 'marks'>, roste
   let filled = 0;
   for (const id of rosterIds) for (const c of needed) if (sheet.marks?.[id]?.[c] != null) filled++;
   return Math.round((filled / cells) * 100);
+}
+
+/** Out of 100 on the papers marked so far only (8 of 10 in CAT 1 alone is 80), or null with none marked. */
+export function markedSoFar(weights: ExamWeights, m: StudentMarks | null | undefined): number | null {
+  let wt = 0, acc = 0;
+  for (const c of usedComponents(weights)) {
+    const v = m?.[c];
+    if (v == null || v === EXEMPT) continue;
+    wt += weights[c].wt;
+    if (typeof v === 'number') acc += (v / weights[c].max) * weights[c].wt;
+  }
+  return wt > 0 ? round1((acc / wt) * 100) : null;
+}
+
+export interface DepartmentRow { studentId: string; name: string; admissionNo: string; marked: number; courses: number; soFar: number | null; grade: string; position: number | null; complete: boolean }
+export interface DepartmentSummary { rows: DepartmentRow[]; classAverage: number | null; passed: number; graded: number; byGrade: Record<string, number>; courses: number; provisional: boolean }
+
+/**
+ * One department (programme) of a cohort so far (Andy, 2026-10-25): each student's average over their
+ * courses (the programme's and the common ones, both semesters). A course whose papers are not all in
+ * counts on the papers marked so far, so the figure moves as each CAT is keyed in.
+ */
+export function departmentSummary(courseId: string, sheets: readonly ExamSheet[], students: readonly ExamStudent[], settings: ExamSettings): DepartmentSummary {
+  const all = sheets.filter((s) => !s.deletedAt && (s.courseId === courseId || s.courseId == null));
+  const roster = students.filter((s) => s.courseId === courseId).sort((a, b) => a.name.localeCompare(b.name));
+  const byGrade: Record<string, number> = Object.fromEntries(settings.bands.map((b) => [b.grade, 0]));
+  let anyPartial = false;
+  const rows: DepartmentRow[] = roster.map((st) => {
+    const values: number[] = [];
+    let courses = 0, complete = true;
+    for (const sh of all) {
+      const u = unitTotal(sh.weights, sh.marks?.[st.id] ?? null, settings.passMark);
+      if (u.exempt) continue;
+      courses++;
+      const v = u.total ?? markedSoFar(sh.weights, sh.marks?.[st.id]);
+      if (u.total == null) complete = false;
+      if (v != null) values.push(v);
+    }
+    if (!complete) anyPartial = true;
+    const soFar = values.length ? round1(values.reduce((a, b) => a + b, 0) / values.length) : null;
+    const grade = gradeFor(soFar, settings).grade;
+    if (grade) byGrade[grade] = (byGrade[grade] ?? 0) + 1;
+    return { studentId: st.id, name: st.name, admissionNo: st.admissionNo, marked: values.length, courses, soFar, grade, position: null, complete: complete && courses > 0 };
+  });
+  rankOf(rows.map((r) => r.soFar)).forEach((p, i) => { rows[i]!.position = p; });
+  const graded = rows.filter((r) => r.soFar != null);
+  const classAverage = graded.length ? round1(graded.reduce((t, r) => t + r.soFar!, 0) / graded.length) : null;
+  return {
+    rows, classAverage, graded: graded.length, passed: graded.filter((r) => r.soFar! >= settings.passMark).length, byGrade, courses: all.length,
+    provisional: anyPartial || all.some((s) => s.status !== 'approved'),
+  };
 }

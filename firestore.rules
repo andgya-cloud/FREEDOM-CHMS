@@ -1448,10 +1448,43 @@ service cloud.firestore {
       function examWeights(w) {
         return w is map && w.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final']) && w.keys().hasAll(['cat1', 'cat2', 'cat3', 'final']);
       }
+      function weightValues(w) {
+        return paperWeight(w.cat1) && paperWeight(w.cat2) && paperWeight(w.cat3) && paperWeight(w.final);
+      }
+      function paperWeight(p) {
+        return p is map && p.max is number && p.max > 0 && p.max <= 1000 && p.wt is number && p.wt >= 0 && p.wt <= 100;
+      }
+      function markMap(d, field) {
+        return !(field in d) || (d[field] is map && d[field].size() <= 400);
+      }
+      // A paper the trainer sent is locked: only the principal unlocks it (Andy, 2026-10-25). The trainer keys in
+      // each paper, sets the percentages until the first paper is sent, sends papers (they lock), and sends the
+      // Final to submit. After that they can only ask to change something.
+      function trainerSheetUpdate(b, a) {
+        let changed = a.diff(b).affectedKeys();
+        let lb = b.get('locked', {});
+        let la = a.get('locked', {});
+        return b.status == 'draft'
+          ? changed.hasOnly(['cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'weights', 'changeRequest', 'status', 'submittedAt', 'updatedAt', 'updatedBy'])
+            && (lb.get('cat1', false) != true || (la.get('cat1', false) == true && !changed.hasAny(['cat1Marks'])))
+            && (lb.get('cat2', false) != true || (la.get('cat2', false) == true && !changed.hasAny(['cat2Marks'])))
+            && (lb.get('cat3', false) != true || (la.get('cat3', false) == true && !changed.hasAny(['cat3Marks'])))
+            && (lb.get('final', false) != true || (la.get('final', false) == true && !changed.hasAny(['finalMarks', 'resitMarks'])))
+            && (!changed.hasAny(['weights']) || (lb.get('cat1', false) != true && lb.get('cat2', false) != true && lb.get('cat3', false) != true && lb.get('final', false) != true
+                                                 && weightValues(a.weights)))
+            && (a.status == 'draft' || (a.status == 'submitted' && a.submittedAt == request.time && la.get('final', false) == true))
+          : b.status == 'submitted' && changed.hasOnly(['changeRequest', 'updatedAt', 'updatedBy']);
+      }
       function examSheetFields(d) {
         return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'ownerUid', 'ownerName', 'courseName', 'teacherName', 'weights', 'status',
                'submittedAt', 'marks', 'semester', 'approvedAt', 'approvedByName', 'returnNote',
+               'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest', 'notified',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && markMap(d, 'cat1Marks') && markMap(d, 'cat2Marks') && markMap(d, 'cat3Marks') && markMap(d, 'finalMarks') && markMap(d, 'resitMarks')
+          && (!('locked' in d) || (d.locked is map && d.locked.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final'])))
+          && (!('changeRequest' in d) || d.changeRequest == null
+              || (d.changeRequest is map && d.changeRequest.keys().hasOnly(['component', 'reason', 'byName'])
+                  && d.changeRequest.component in ['cat1', 'cat2', 'cat3', 'final'] && shortText(d.changeRequest.reason, 300) && shortText(d.changeRequest.byName, 120)))
           && d.orgId == orgId && shortText(d.cohort, 80) && d.cohort.size() >= 1 && d.ownerUid is string
           && (d.courseId == null || shortText(d.courseId, 80))
           && shortText(d.courseName, 120) && shortText(d.teacherName, 120) && shortText(d.ownerName, 120)
@@ -1467,19 +1500,17 @@ service cloud.firestore {
         allow read: if ex('exams.manage') || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid);
         allow create: if examSheetFields(request.resource.data) && stampedCreate() && freshRecord()
           && request.resource.data.status == 'draft' && request.resource.data.submittedAt == null
-          && ex('exams.manage');
+          && weightValues(request.resource.data.weights) && ex('exams.manage');
         allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete()
           && (ex('exams.manage')
               ? request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'ownerUid', 'ownerName', 'weights', 'marks', 'semester', 'status',
-                   'submittedAt', 'approvedAt', 'approvedByName', 'returnNote', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
+                   'submittedAt', 'approvedAt', 'approvedByName', 'returnNote', 'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest',
+                   'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
                 && (request.resource.data.status == resource.data.status
                     || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)
                     || (request.resource.data.status == 'approved' && request.resource.data.approvedAt == request.time)
                     || request.resource.data.status == 'draft')
-              : ex('exams.mark') && resource.data.ownerUid == request.auth.uid && resource.data.status == 'draft'
-                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['marks', 'status', 'submittedAt', 'updatedAt', 'updatedBy'])
-                && (request.resource.data.status == 'draft'
-                    || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)));
+              : ex('exams.mark') && resource.data.ownerUid == request.auth.uid && trainerSheetUpdate(resource.data, request.resource.data));
         allow delete: if false;
       }
       // Semester results from Excel (Andy, 2026-10-24): one student's past results for one cohort, kept by

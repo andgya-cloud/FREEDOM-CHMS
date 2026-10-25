@@ -1057,3 +1057,4 @@ a.kpi:hover { border-color: var(--primary); }
 /* Three tiles (the principal, who has no fees tile) share the row evenly. */
 .glass-tiles.three, .side-look .glass-tiles.three, .glass-today:not(:has(> .checklist)) > .glass-tiles.three { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 600px) { .glass-tiles.three .tile-sub { display: none; } }
+.align-end { align-self: flex-end; }

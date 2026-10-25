@@ -12,7 +12,7 @@ import { friendlyError } from '../../lib/errors';
 import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
-import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -36,6 +36,7 @@ const ROLE_HINTS: Record<string, string> = {
   staff: ': everyday work in their organization, never sees money',
   signatory: ': raises and signs petty cash requests, top-ups and resets, and sees nothing else',
   principal: ': ADIA students, attendance, Exam Records and graduation, with each student\'s fee balance; nothing else',
+  trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
 };
 
 const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '' };
@@ -81,7 +82,8 @@ export function UserFormPage() {
   const role = roles.find((r) => r.id === form.roleId);
   const signatory = form.roleId === SIGNATORY_ROLE_ID;
   // The principal works at ADIA only, with no extra ticks (Andy, 2026-10-25).
-  const principal = form.roleId === PRINCIPAL_ROLE_ID;
+  // A trainer works at ADIA only too, in Exam Records (Andy, 2026-10-25).
+  const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID;
   const colleges = organizations.filter((o) => o.type === 'college').map((o) => o.id);
   // The voucher title is for the petty cash signatories, the pastor included when they sign.
   const showTitle = !teamOnly && (signatory || !!role?.isOwner);
@@ -97,7 +99,7 @@ export function UserFormPage() {
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
-    if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError('The principal works at ADIA only. Untick the other organizations.');
+    if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : 'principal'} works at ADIA only. Untick the other organizations.`);
     if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
     setBusy(true);
     try {
@@ -184,7 +186,7 @@ export function UserFormPage() {
             <legend>Role</legend>
             {roles.map((r) => (
               <label key={r.id} className="check">
-                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
+                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID || r.id === TRAINER_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
                 <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ROLE_HINTS[r.id] ?? ''}</span>
               </label>
             ))}
