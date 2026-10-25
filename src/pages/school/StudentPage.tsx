@@ -146,6 +146,13 @@ function Student({ org }: { org: Organization }) {
         </section>
       )}
 
+      {!s.feesAllowed && s.balancesAllowed && (
+        <section className="card stack">
+          <h2>Fee balance</h2>
+          <p><span className="big-number">{money(org, Math.abs(bal?.balanceCents ?? 0))}</span> <span className="muted small">{(bal?.balanceCents ?? 0) > 0 ? 'to pay' : (bal?.balanceCents ?? 0) < 0 ? 'paid ahead' : 'nothing owed'}</span></p>
+        </section>
+      )}
+
       <section className="card stack">
         <h2>Sponsor or guardian</h2>
         {(st.sponsors ?? []).length === 0 ? <p className="muted small">None saved.</p> : (

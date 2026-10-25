@@ -95,7 +95,7 @@ function Students({ org }: { org: Organization }) {
                   <h3>{s.courseName(d.id) || 'No department'} <span className="muted small">{d.list.length}</span></h3>
                   <div className="exam-table-wrap">
                     <table className="table student-table">
-                      <thead><tr><th>Name</th><th>Adm no</th><th>Phone</th><th>Status</th><th className="num">Attendance</th>{s.feesAllowed && <th className="num">Owes</th>}</tr></thead>
+                      <thead><tr><th>Name</th><th>Adm no</th><th>Phone</th><th>Status</th><th className="num">Attendance</th>{s.balancesAllowed && <th className="num">Owes</th>}</tr></thead>
                       <tbody>
                         {d.list.map(({ st, name }) => {
                           const course = s.courses.find((c) => c.id === st.courseId);
@@ -109,7 +109,7 @@ function Students({ org }: { org: Organization }) {
                               <td className="nowrap">{phone ? <a href={`tel:${phone}`}>{phone}</a> : <span className="muted small">none</span>}</td>
                               <td>{STUDENT_STATUS_LABELS[st.status]}</td>
                               <td className="num">{att?.percent != null ? pct(att.percent) : '–'}</td>
-                              {s.feesAllowed && <td className="num">{bal && bal.balanceCents > 0 ? money(org, bal.balanceCents) : '–'}</td>}
+                              {s.balancesAllowed && <td className="num">{bal && bal.balanceCents > 0 ? money(org, bal.balanceCents) : '–'}</td>}
                             </tr>
                           );
                         })}

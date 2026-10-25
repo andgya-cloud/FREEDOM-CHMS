@@ -30,6 +30,9 @@ export const PERMISSIONS = [
   // ADIA exam records: trainers key in their own marks sheets; the principal compiles, edits and unlocks
   'exams.mark',
   'exams.manage',
+  // ADIA principal (Andy, 2026-10-25): keep admission numbers and issue certificates; see each student's fee balance only
+  'school.manage',
+  'fees.balances',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -76,6 +79,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'payroll.approve': 'Payroll: approving pay runs and deduction rates',
   'exams.mark': 'Exam records: key in my own marks sheets (trainer)',
   'exams.manage': 'Exam records: compile reports, edit and unlock sheets (principal)',
+  'school.manage': 'Students: admission numbers, graduation and certificates',
+  'fees.balances': "Each student's fee balance (no payments)",
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',
@@ -95,6 +100,9 @@ const TEAM_WORK = ['people.read', 'people.write', 'attendance.write', 'programs.
 /** The role an organization head gives to the staff they add. */
 export const TEAM_ROLE_ID = 'staff';
 
+/** The ADIA principal: students, attendance, Exam Records and graduation, each student's fee balance, nothing else (Andy, 2026-10-25). */
+export const PRINCIPAL_ROLE_ID = 'principal';
+
 /** The role for the petty cash signatories: they raise and sign requests, top-ups and resets, and see nothing else. */
 export const SIGNATORY_ROLE_ID = 'signatory';
 
@@ -107,7 +115,7 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
   return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -126,6 +134,7 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   head: { name: 'Organization head', permissions: [...TEAM_WORK, 'team.manage'] },
   staff: { name: 'Staff', permissions: [...TEAM_WORK] },
   signatory: { name: 'Petty cash signatory', permissions: ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'] },
+  principal: { name: 'Principal', permissions: ['people.read', 'people.write', 'attendance.write', 'exams.manage', 'school.manage', 'fees.balances'] },
 };
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {

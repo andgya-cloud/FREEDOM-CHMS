@@ -69,6 +69,8 @@ export function TodayPage() {
     : to === '/follow-ups' ? can('followups.manage')
     : to === '/school/exams' ? can('exams.mark') || can('exams.manage') || can('users.manage')
     : true);
+  // The principal has no fees access, so ADIA's fees tile is left out rather than greyed.
+  const tiles = (tileActions as readonly (typeof tileActions)[number][]).filter((a) => a.to !== '/school/fees' || allowedTo(a.to));
 
   // The petty cash signatories work in Petty Cash only, so it is their first page.
   if (profile?.roleId === SIGNATORY_ROLE_ID && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type)) {
@@ -91,8 +93,8 @@ export function TodayPage() {
       <FirstRunChecklist />
 
       {sided && (
-        <div className="glass-tiles">
-          {tileActions.map((a) => {
+        <div className={`glass-tiles${tiles.length === 3 ? ' three' : ''}`}>
+          {tiles.map((a) => {
             const ready = organizations.length > 0 && allowedTo(a.to);
             const inner = (
               <>

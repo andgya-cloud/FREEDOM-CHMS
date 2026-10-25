@@ -162,3 +162,30 @@ describe('ADIA certificates, outcomes and reports', () => {
     await assertSucceeds(setDoc(doc(as('adiaDirector'), `${O}/schoolReportRequests/r2`), req('adiaDirector')));
   });
 });
+
+describe('ADIA principal', () => {
+  const PRINCIPAL_PERMS = ['people.read', 'people.write', 'attendance.write', 'exams.manage', 'school.manage', 'fees.balances'];
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users/flavier'), { email: 'f@example.org', displayName: 'Flavier', roleId: 'principal', extraPermissions: [], orgIds: ['adia'], allOrgs: false, permissions: PRINCIPAL_PERMS, active: true });
+    });
+  });
+  it('sees each fee balance but no invoices, payments, petty cash or payroll', async () => {
+    await assertSucceeds(getDoc(doc(as('flavier'), `${O}/feeBalances/s1`)));
+    await assertSucceeds(getDocs(collection(as('flavier'), `${O}/feeBalances`)));
+    await assertFails(setDoc(doc(as('flavier'), `${O}/feeBalances/s1`), { orgId: 'adia', balanceCents: 0 }));
+    await assertFails(getDoc(doc(as('flavier'), `${O}/invoices/i1`)));
+    await assertFails(getDocs(collection(as('flavier'), `${O}/gifts`)));
+    await assertFails(getDocs(collection(as('flavier'), `${O}/pettyCash`)));
+    await assertFails(getDocs(collection(as('flavier'), `${O}/payrollStaff`)));
+    await assertFails(getDoc(doc(as('flavier'), `${O}/schoolReports/weekly_2026-10-12`)));
+    await assertFails(getDoc(doc(as('flavier'), 'organizations/freedom/people/p1')));
+  });
+  it('gives admission numbers and issues certificates, but cannot change programmes', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/s2`), { orgId: 'adia', fullName: 'Student Two', firstName: 'Student', status: 'student', whatsappConsent: {}, ...stamps }); });
+    await assertSucceeds(setDoc(doc(as('flavier'), `${O}/students/s2`), student('flavier', { admissionNo: 'ADIA/2026/0002' })));
+    const cert = { orgId: 'adia', studentId: 's1', courseId: 'ict', issuedOn: '2026-12-10', ...created('flavier') };
+    await assertSucceeds(setDoc(doc(as('flavier'), `${O}/certificates/s1`), cert));
+    await assertFails(setDoc(doc(as('flavier'), `${O}/courses/dress`), { orgId: 'adia', name: 'Dressmaking', levels: [], units: [], timetable: [], active: true, ...created('flavier') }));
+  });
+});

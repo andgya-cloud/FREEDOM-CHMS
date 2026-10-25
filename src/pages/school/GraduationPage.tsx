@@ -45,7 +45,7 @@ function Graduation({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head"><h1>Graduation</h1></div>
       <SchoolNav feesAllowed={s.feesAllowed} />
-      {can('settings.manage') && (
+      {(can('settings.manage') || can('school.manage')) && (
         <section className="card stack">
           <h2>Issue a certificate</h2>
           <p className="small muted">The certificate gets the next serial number, the student becomes a graduate, and follow-ups at 3, 6 and 12 months are created. This cannot be undone.</p>

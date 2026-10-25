@@ -81,7 +81,7 @@ function StudentImport({ org }: { org: Organization }) {
     setBusy(true);
     try {
       // Saved on this device at once and sent when online, like every other change.
-      importStudents(org.id, plan.ready, { courseIds: s.courses.map((c) => c.id), keepAdmissionNos: can('settings.manage'), keepIdNumbers: can('pastoral.read') }, s.today, profile?.uid ?? null).catch((err) => toast.show(friendlyError(err)));
+      importStudents(org.id, plan.ready, { courseIds: s.courses.map((c) => c.id), keepAdmissionNos: can('settings.manage') || can('school.manage'), keepIdNumbers: can('pastoral.read') }, s.today, profile?.uid ?? null).catch((err) => toast.show(friendlyError(err)));
       setDone(plan.ready.length);
       setFile(null);
       toast.show(`${plan.ready.length} students added`);
@@ -173,7 +173,7 @@ function StudentImport({ org }: { org: Organization }) {
           )}
           {plan.newCourses.length > 0 && <p className="notice small">These programmes will be added: {plan.newCourses.join(', ')}. Check the spelling first; a programme spelt differently from one you already have will be added as a new one.</p>}
           {plan.newIntakes.length > 0 && <p className="notice small">These intakes will be added: {plan.newIntakes.map((i) => `${i.courseName} ${i.name}`).join(', ')}.</p>}
-          {!can('settings.manage') && plan.ready.some((r) => r.admissionNo) && <p className="notice small">Only staff with the Settings permission can keep the file's admission numbers, so these students will get new numbers.</p>}
+          {!can('settings.manage') && !can('school.manage') && plan.ready.some((r) => r.admissionNo) && <p className="notice small">Only staff with the Settings permission can keep the file's admission numbers, so these students will get new numbers.</p>}
           {needsSettings && <p className="error" role="alert">Adding programmes or intakes needs the Settings permission. Ask the pastor to add them, or to do the import.</p>}
 
           <div className="card exam-table-wrap">

@@ -791,6 +791,10 @@ service cloud.firestore {
       function feesRead() {
         return canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports') || has('giving.person.read'));
       }
+      // The principal keeps admission numbers and issues certificates without the wider Settings permission (Andy, 2026-10-25).
+      function schoolManage() {
+        return has('settings.manage') || has('school.manage');
+      }
       function listOf(v, max) {
         return v is list && v.size() <= max;
       }
@@ -850,10 +854,10 @@ service cloud.firestore {
           && request.resource.data.status in ['applicant', 'enrolled', 'deferred', 'graduated', 'withdrawn']
           && (request.resource.data.status != 'graduated' || (resource != null && resource.data.status == 'graduated'))
           && (resource == null ? (request.resource.data.get('admissionNo', null) == null
-                                  || (has('settings.manage') && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1))
+                                  || (schoolManage() && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1))
                                : (request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null)
                                   // The principal corrects a wrong number, alone (Andy, 2026-10-24: Cohort 2 is 2026).
-                                  || (has('settings.manage') && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1
+                                  || (schoolManage() && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1
                                       && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admissionNo', 'updatedAt', 'updatedBy']))))
           && listOf(request.resource.data.get('sponsors', []), 4);
         allow delete: if false;
@@ -930,7 +934,8 @@ service cloud.firestore {
 
       // What each student has been billed and has paid. Cloud Functions write it.
       match /feeBalances/{studentId} {
-        allow read: if feesRead();
+        // The principal sees each student's balance, but no invoices or payments (Andy, 2026-10-25).
+        allow read: if feesRead() || (canAccessOrg(orgId) && has('fees.balances'));
         allow write: if false;
       }
 
@@ -938,7 +943,7 @@ service cloud.firestore {
       // are added by a Cloud Function when a certificate is issued.
       match /certificates/{certificateId} {
         allow read: if schoolRead();
-        allow create: if orgWrite(orgId, 'settings.manage')
+        allow create: if (orgWrite(orgId, 'settings.manage') || orgWrite(orgId, 'school.manage'))
           && certificateId == request.resource.data.studentId
           && request.resource.data.keys().hasOnly(['orgId', 'studentId', 'courseId', 'issuedOn',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])

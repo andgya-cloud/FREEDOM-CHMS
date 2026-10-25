@@ -35,6 +35,8 @@ export function useSchool(orgId: string) {
   const [settingsRaw, setSettingsRaw] = useState<Partial<SchoolSettings> | null>(null);
   const [settingsReady, setSettingsReady] = useState(false);
   const feesAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
+  // The principal sees each student's balance only (Andy, 2026-10-25).
+  const balancesAllowed = feesAllowed || can('fees.balances');
   const on = !!orgId && !!profile?.active;
 
   const courses = useLiveQuery<CourseRow>(() => (on ? col(orgId, 'courses') : null), [orgId, on]);
@@ -43,7 +45,7 @@ export function useSchool(orgId: string) {
   const assessments = useLiveQuery<Assessment & { orgId: string }>(() => (on ? col(orgId, 'assessments') : null), [orgId, on]);
   const marks = useLiveQuery<Mark & { id: string }>(() => (on ? col(orgId, 'marks') : null), [orgId, on]);
   const invoices = useLiveQuery<InvoiceRow>(() => (on && feesAllowed ? col(orgId, 'invoices') : null), [orgId, on, feesAllowed]);
-  const balances = useLiveQuery<BalanceRow>(() => (on && feesAllowed ? col(orgId, 'feeBalances') : null), [orgId, on, feesAllowed]);
+  const balances = useLiveQuery<BalanceRow>(() => (on && balancesAllowed ? col(orgId, 'feeBalances') : null), [orgId, on, balancesAllowed]);
   const structures = useLiveQuery<FeeStructureRow>(() => (on && feesAllowed ? col(orgId, 'feeStructures') : null), [orgId, on, feesAllowed]);
   const certificates = useLiveQuery<CertificateRow>(() => (on ? col(orgId, 'certificates') : null), [orgId, on]);
   const outcomes = useLiveQuery<OutcomeRow & { deletedAt?: unknown }>(() => (on ? col(orgId, 'outcomes') : null), [orgId, on]);
@@ -77,6 +79,7 @@ export function useSchool(orgId: string) {
     settings,
     settingsSaved: !!settingsRaw,
     feesAllowed,
+    balancesAllowed,
     loading: courses.loading || students.loading || !settingsReady,
   };
 }
