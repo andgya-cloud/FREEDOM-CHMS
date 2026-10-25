@@ -801,7 +801,8 @@ service cloud.firestore {
 
       match /courses/{courseId} {
         allow read: if schoolRead();
-        allow create, update: if orgWrite(orgId, 'settings.manage')
+        // The principal (school.manage) may add a department too, but not change one (Andy, 2026-10-25).
+        allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
           && courseId.matches('^[a-z0-9_]{2,40}$')
           && request.resource.data.keys().hasOnly(['orgId', 'name', 'levels', 'units', 'timetable', 'active',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
@@ -815,7 +816,8 @@ service cloud.firestore {
 
       match /intakes/{intakeId} {
         allow read: if schoolRead();
-        allow create, update: if orgWrite(orgId, 'settings.manage')
+        // ...and start a new cohort, which is one new intake for each programme.
+        allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
           && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'name', 'startDate', 'capacity', 'active',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('courses', request.resource.data.courseId)
@@ -1470,8 +1472,7 @@ service cloud.firestore {
             && (lb.get('cat2', false) != true || (la.get('cat2', false) == true && !changed.hasAny(['cat2Marks'])))
             && (lb.get('cat3', false) != true || (la.get('cat3', false) == true && !changed.hasAny(['cat3Marks'])))
             && (lb.get('final', false) != true || (la.get('final', false) == true && !changed.hasAny(['finalMarks', 'resitMarks'])))
-            && (!changed.hasAny(['weights']) || (lb.get('cat1', false) != true && lb.get('cat2', false) != true && lb.get('cat3', false) != true && lb.get('final', false) != true
-                                                 && weightValues(a.weights)))
+            && (!changed.hasAny(['weights']) || (!lb.values().hasAny([true]) && weightValues(a.weights)))
             && (a.status == 'draft' || (a.status == 'submitted' && a.submittedAt == request.time && la.get('final', false) == true))
           : b.status == 'submitted' && changed.hasOnly(['changeRequest', 'updatedAt', 'updatedBy']);
       }
@@ -1500,8 +1501,8 @@ service cloud.firestore {
         allow read: if ex('exams.manage') || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid);
         allow create: if examSheetFields(request.resource.data) && stampedCreate() && freshRecord()
           && request.resource.data.status == 'draft' && request.resource.data.submittedAt == null
-          && weightValues(request.resource.data.weights) && ex('exams.manage');
-        allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete()
+          && weightValues(request.resource.data.weights) && ex('exams.manage') && !cohortClosed(request.resource.data.cohort);
+        allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete() && !cohortClosed(resource.data.cohort)
           && (ex('exams.manage')
               ? request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'ownerUid', 'ownerName', 'weights', 'marks', 'semester', 'status',
                    'submittedAt', 'approvedAt', 'approvedByName', 'returnNote', 'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest',
@@ -1536,6 +1537,32 @@ service cloud.firestore {
           && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
         allow delete: if false;
       }
+      // Each cohort's graduation date, and whether it has graduated and closed (Andy, 2026-10-25): a closed
+      // cohort's marks are read only. Only the principal, an admin, Andy or Doreen reopen it, and only with
+      // their password typed again in the last five minutes.
+      function cohortKey(name) {
+        return name.replace('[^A-Za-z0-9]+', '-').replace('^-|-$', '');
+      }
+      function cohortClosed(name) {
+        let p = /databases/$(database)/documents/organizations/$(orgId)/examCohorts/$(cohortKey(name));
+        return exists(p) && get(p).data.closed == true;
+      }
+      function recentSignIn() {
+        return request.auth.token.auth_time is int && request.time.toMillis() - request.auth.token.auth_time * 1000 < 300000;
+      }
+      match /examCohorts/{key} {
+        allow read: if ex('exams.mark') || schoolRead();
+        allow create, update: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'graduationDate', 'closed', 'closedAt', 'closedByName', 'reopenedAt', 'reopenedByName',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && key == cohortKey(request.resource.data.cohort)
+          && (request.resource.data.graduationDate == null || isDate(request.resource.data.graduationDate))
+          && request.resource.data.closed is bool
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete() && request.resource.data.cohort == resource.data.cohort)
+          && (resource == null || resource.data.closed != true || recentSignIn());
+        allow delete: if false;
+      }
       match /examMeta/{cohortKey} {
         allow read: if ex('exams.manage');
         allow create, update: if ex('exams.manage')
@@ -1548,8 +1575,9 @@ service cloud.firestore {
       match /examSettings/{settingId} {
         allow read: if ex('exams.manage') || ex('exams.mark');
         allow create, update: if ex('exams.manage') && settingId == 'main'
-          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights',
+          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('courseList' in request.resource.data) || listOf(request.resource.data.courseList, 400))
           && (!('weights' in request.resource.data) || examWeights(request.resource.data.weights))
           && request.resource.data.orgId == orgId
           && request.resource.data.passMark is number && request.resource.data.passMark >= 0 && request.resource.data.passMark <= 100

@@ -21,8 +21,8 @@ import type { Organization } from '../../state/OrgContext';
  * Excel, sees every student's Semester 1, Semester 2 and final result, and prints transcripts. New
  * cohorts' semesters are worked out from the trainers' marks sheets as the CATs come in.
  */
-export function ResultsAndTranscripts({ org, cohort, sheets, students, courseName }: {
-  org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courseName: (id: string) => string;
+export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, students, courseName }: {
+  org: Organization; cohort: string; label?: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courseName: (id: string) => string;
 }) {
   const { settings } = useExamSettings(org.id);
   const { results: cohortResults } = useExamResults(org.id, cohort);
@@ -34,7 +34,7 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, courseNam
 
   async function pdf(list: Row[], title: string) {
     setBusy(true);
-    try { downloadFile(await transcriptsPdf({ transcripts: list.map(toTranscript), settings, title })); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
+    try { downloadFile(await transcriptsPdf({ transcripts: list.map((r) => ({ ...toTranscript(r), cohort: label })), settings, title })); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
 
   return (

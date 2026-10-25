@@ -1033,8 +1033,15 @@ a.kpi:hover { border-color: var(--primary); }
 .exam-mark { text-transform: uppercase; }
 .exams .badge { white-space: nowrap; }
 /* Exam Records, simple layout (Andy, 2026-10-24): cohort buttons, plain course list, folded setup sections. */
-.exam-cohorts { display: flex; flex-wrap: wrap; gap: 8px; }
-.exam-cohorts .chip { cursor: pointer; font: inherit; }
+/* Exam Records (Andy, 2026-10-25): one cohort dropdown, then each department's courses. */
+.exam-cohort-pick { align-self: flex-start; max-width: 100%; font: inherit; font-size: 1.15rem; font-weight: 600; padding: 10px 40px 10px 14px; border-radius: 12px; }
+.exam-class { margin: -6px 0 0; }
+.exam-dept + .exam-dept { margin-top: 8px; }
+@media (max-width: 600px) { .exams .page-head h1 { font-size: 1.5rem; } .exams .page-head .row-actions { flex-wrap: nowrap; } }
+.exam-dept > .card-head h2 { font-size: 1.1rem; margin: 0; }
+.exam-pick-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.exam-pick-list > li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.exam-pick-list select { max-width: 50%; }
 .exam-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .exam-list > li { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
 .exam-list-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; color: var(--text); text-decoration: none; }

@@ -6,7 +6,9 @@ import { friendlyError } from '../../lib/errors';
 import { issueCertificate, recordOutcome } from '../../lib/schoolWrites';
 import { saveGraduationGrades } from '../../lib/examWrites';
 import { readSpreadsheetSheets } from '../../lib/statementFile';
-import { useExamAccess, useExamResults } from '../../state/useExams';
+import { useExamAccess, useExamCohorts, useExamResults } from '../../state/useExams';
+import { saveExamCohort } from '../../lib/examWrites';
+import { classOf, orderCohorts, cohortLabel } from '../../../functions/src/shared/examCohorts';
 import { parseGraduationList, type GraduationRow } from '../../../functions/src/shared/graduation';
 import { admissionKey } from '../../../functions/src/shared/examResults';
 import { csvFile } from '../../lib/schoolPdf';
@@ -30,6 +32,14 @@ function Graduation({ org }: { org: Organization }) {
   const candidates = s.students.filter((st) => st.status === 'enrolled').map((st) => ({ st, name: s.nameOf(st.id) })).sort((a, b) => a.name.localeCompare(b.name));
   const picked = s.students.find((x) => x.id === studentId);
   const register = [...s.certificates].sort((a, b) => b.issuedOn.localeCompare(a.issuedOn));
+  const { byName: classes } = useExamCohorts(org.id);
+  /** "Cohort 1 · Class of 2025": each graduating class is dated (Andy, 2026-10-25). */
+  const classFor = (studentId: string, issuedOn: string) => {
+    const st = s.students.find((x) => x.id === studentId);
+    const cohort = st ? s.intakeName(st.intakeId) : '';
+    const year = classOf(classes[cohort]?.graduationDate ?? issuedOn);
+    return cohort ? `${cohort} · ${year}` : year;
+  };
   const due = s.outcomes.filter((o) => o.status == null && o.due <= s.today).sort((a, b) => a.due.localeCompare(b.due));
   const upcoming = s.outcomes.filter((o) => o.status == null && o.due > s.today).sort((a, b) => a.due.localeCompare(b.due));
   const recorded = s.outcomes.filter((o) => o.status != null).sort((a, b) => (b.recordedOn ?? '').localeCompare(a.recordedOn ?? ''));
@@ -42,8 +52,8 @@ function Graduation({ org }: { org: Organization }) {
   }
 
   function registerCsv() {
-    const rows = register.map((c) => [c.serial ?? '', s.nameOf(c.studentId), s.courseName(c.courseId), c.issuedOn]);
-    downloadFile(csvFile(`Certificate register ${s.today}.csv`, [['Serial number', 'Name', 'Programme', 'Issued on'], ...rows]));
+    const rows = register.map((c) => [c.serial ?? '', s.nameOf(c.studentId), s.courseName(c.courseId), classFor(c.studentId, c.issuedOn), c.issuedOn]);
+    downloadFile(csvFile(`Certificate register ${s.today}.csv`, [['Serial number', 'Name', 'Programme', 'Class', 'Issued on'], ...rows]));
   }
 
   return (
@@ -87,8 +97,8 @@ function Graduation({ org }: { org: Organization }) {
         {register.length === 0 ? <p className="muted small">No certificates issued yet.</p> : (
           <div className="table-scroll">
             <table className="report-table">
-              <thead><tr><th>Serial</th><th>Name</th><th>Programme</th><th>Issued</th></tr></thead>
-              <tbody>{register.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td>{s.nameOf(c.studentId)}</td><td>{s.courseName(c.courseId)}</td><td>{formatDateKey(c.issuedOn)}</td></tr>)}</tbody>
+              <thead><tr><th>Serial</th><th>Name</th><th>Programme</th><th>Class</th><th>Issued</th></tr></thead>
+              <tbody>{register.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td>{s.nameOf(c.studentId)}</td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td></tr>)}</tbody>
             </table>
           </div>
         )}
@@ -138,7 +148,16 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
   const toast = useToast();
   const exams = useExamAccess();
   const { results } = useExamResults(org.id);
+  const { byName: classes } = useExamCohorts(org.id);
+  const order = orderCohorts([...new Set(s.intakes.map((i) => i.name))], s.intakes, classes);
+  const choices = [...order.current, ...order.past];
+  const [cohort, setCohort] = useState('');
   const [issuedOn, setIssuedOn] = useState(s.today);
+  function pickClass(c: string) {
+    setCohort(c);
+    const d = classes[c]?.graduationDate;
+    if (d) setIssuedOn(d);
+  }
   const [plan, setPlan] = useState<{ file: string; matches: Match[]; problems: string[] } | null>(null);
   const [saving, setSaving] = useState(false);
   const certified = new Set(s.certificates.map((c) => c.studentId));
@@ -175,7 +194,11 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
           courseId: m.st!.courseId, points: m.row.points!, grade: m.row.grade,
         })), existing);
       }
-      toast.show(`${go.length} ${go.length === 1 ? 'certificate' : 'certificates'} issued.${exams.canManage ? ' Final points and grades saved.' : ''}`);
+      // The graduation date names the class: "Class of 2025" (Andy, 2026-10-25).
+      if (cohort && exams.canManage && classes[cohort]?.graduationDate !== issuedOn && !classes[cohort]?.closed) {
+        saveExamCohort(org.id, cohort, !!classes[cohort], { graduationDate: issuedOn }).catch((err) => toast.show(friendlyError(err)));
+      }
+      toast.show(`${go.length} ${go.length === 1 ? 'certificate' : 'certificates'} issued${cohort ? ` to ${cohort}, ${classOf(issuedOn)}` : ''}.${exams.canManage ? ' Final points and grades saved.' : ''}`);
       setPlan(null);
     } catch (err) { toast.show(friendlyError(err)); } finally { setSaving(false); }
   }
@@ -188,12 +211,18 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
       <h2>Upload the graduation list</h2>
       <p className="small muted">An Excel file with Student name, Adm No., Points and Grade, under each department's name. Everyone who passed gets their certificate; a Fail stays as it is.</p>
       <div className="row-actions">
-        <label className="field"><span>Date issued</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
+        <label className="field"><span>Graduating class</span>
+          <select value={cohort} onChange={(e) => pickClass(e.target.value)}>
+            <option value="">Choose…</option>
+            {choices.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>Graduation date</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
         <label className="btn btn-primary align-end">Choose the Excel file<input type="file" accept=".xlsx,.csv" hidden onChange={(e) => void choose(e)} /></label>
       </div>
       {plan && (
         <div className="stack">
-          <p><strong>{plan.file}</strong>: {plan.matches.length} students. <strong>{go.length}</strong> will graduate.</p>
+          <p><strong>{plan.file}</strong>: {plan.matches.length} students. <strong>{go.length}</strong> will graduate{cohort ? ` with ${cohort}, ${classOf(issuedOn)}` : ''}.</p>
           {plan.problems.length > 0 && <ul className="small up-bad">{plan.problems.map((p, i) => <li key={i}>{p}</li>)}</ul>}
           {go.length > 0 && <details open><summary>{go.length} will get a certificate</summary>{list(go)}</details>}
           {group('fail').length > 0 && <details><summary>{group('fail').length} did not pass (no certificate)</summary>{list(group('fail'))}</details>}

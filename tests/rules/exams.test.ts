@@ -125,4 +125,44 @@ describe('exam records rules', () => {
     await assertFails(getDoc(ref('grace')));
     await assertSucceeds(getDoc(ref('principal')));
   });
+  it('dates each cohort, locks a graduated one, and reopens it only with a fresh password', async () => {
+    const now = Math.floor(Date.now() / 1000);
+    const fresh = (uid: string) => env.authenticatedContext(uid, { auth_time: now }).firestore();
+    const stale = (uid: string) => env.authenticatedContext(uid, { auth_time: now - 3600 }).firestore();
+    const cohort = (uid: string, extra: Record<string, unknown> = {}) => ({ orgId: 'adia', cohort: 'September 2026', graduationDate: '2026-12-11', closed: false, ...stamps(uid), ...extra });
+    const cref = (db: ReturnType<typeof as>) => doc(db, 'organizations/adia/examCohorts/September-2026');
+    const sref = (db: ReturnType<typeof as>) => doc(db, 'organizations/adia/examSheets/net');
+    await assertSucceeds(setDoc(sref(as('principal')), sheet('principal', 'grace')));
+    await assertFails(setDoc(cref(as('grace')), cohort('grace')));
+    await assertFails(setDoc(doc(as('principal'), 'organizations/adia/examCohorts/Other'), cohort('principal')));
+    await assertFails(setDoc(cref(as('principal')), cohort('principal', { graduationDate: '11/12/2026' })));
+    await assertSucceeds(setDoc(cref(as('principal')), cohort('principal')));
+    await assertSucceeds(getDoc(cref(as('grace'))));
+    await assertSucceeds(getDoc(cref(as('staff'))));
+    // Closed: nobody changes its marks, not even the principal, and no new courses.
+    await assertSucceeds(updateDoc(cref(stale('principal')), { closed: true, closedByName: 'Principal', closedAt: serverTimestamp(), ...touched('principal') }));
+    await assertFails(updateDoc(sref(as('grace')), { 'cat1Marks.s1': 50, ...touched('grace') }));
+    await assertFails(updateDoc(sref(as('principal')), { 'cat1Marks.s1': 50, ...touched('principal') }));
+    await assertFails(setDoc(doc(as('principal'), 'organizations/adia/examSheets/net2'), sheet('principal', 'grace')));
+    // Reopening needs the password typed again lately.
+    await assertFails(updateDoc(cref(stale('principal')), { closed: false, reopenedByName: 'Principal', ...touched('principal') }));
+    await assertFails(updateDoc(cref(fresh('grace')), { closed: false, ...touched('grace') }));
+    await assertSucceeds(updateDoc(cref(fresh('principal')), { closed: false, reopenedByName: 'Principal', reopenedAt: serverTimestamp(), ...touched('principal') }));
+    await assertSucceeds(updateDoc(sref(as('grace')), { 'cat1Marks.s1': 50, ...touched('grace') }));
+  });
+
+  it('lets the principal keep the course list, add a department and start a cohort', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users/flavier'), { email: 'f@example.org', displayName: 'Flavier', roleId: 'principal', extraPermissions: [], orgIds: ['adia'], allOrgs: false, permissions: ['people.read', 'exams.manage', 'school.manage'], active: true });
+    });
+    const settings = { orgId: 'adia', passMark: 39, bands: [{ min: 39, grade: 'Pass', remark: '' }], principalName: 'F', principalTitle: 'Principal', directorName: 'A', directorTitle: 'Director', weights, courseList: [{ name: 'Networking', courseId: 'ict', semester: 1 }], ...stamps('flavier') };
+    await assertSucceeds(setDoc(doc(as('flavier'), 'organizations/adia/examSettings/main'), settings));
+    await assertFails(setDoc(doc(as('grace'), 'organizations/adia/examSettings/main'), settings));
+    const course = { orgId: 'adia', name: 'Beauty Therapy', levels: [], units: [], timetable: [], active: true, ...stamps('flavier') };
+    await assertSucceeds(setDoc(doc(as('flavier'), 'organizations/adia/courses/beauty_therapy'), course));
+    await assertFails(setDoc(doc(as('grace'), 'organizations/adia/courses/beauty_x'), course));
+    const intake = { orgId: 'adia', courseId: 'beauty_therapy', name: 'Cohort 5', startDate: '2027-01-11', capacity: null, active: true, ...stamps('flavier') };
+    await assertSucceeds(addDoc(collection(as('flavier'), 'organizations/adia/intakes'), intake));
+    await assertFails(addDoc(collection(as('grace'), 'organizations/adia/intakes'), intake));
+  });
 });

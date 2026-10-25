@@ -1,14 +1,20 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
+import { useAuth } from '../../state/AuthContext';
 import { friendlyError } from '../../lib/errors';
 import {
-  useExamAccess, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, type ExamSheetRow, type ExamTrainer,
+  useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, type ExamSheetRow, type ExamTrainer,
 } from '../../state/useExams';
 import {
-  approveExamSheet, askExamChange, createExamSheet, deleteExamSheet, emailExamNotice, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails,
-  sendExamPapers, unlockExamPaper,
+  approveExamSheet, askExamChange, closedNow, confirmPassword, createExamSheet, deleteExamSheet, emailExamNotice, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails,
+  saveExamCohort, saveExamCourseList, sendExamPapers, unlockExamPaper,
 } from '../../lib/examWrites';
+import { saveCourse, saveIntake } from '../../lib/schoolWrites';
+import {
+  classOf, classText, cohortLabel, courseListFromSheets, courseListKey, dayMonthYear, lastTrainers, missingCourses, nextCohortName, orderCohorts, sortCourseList, withCourse,
+  type CourseListItem, type ExamCohort,
+} from '../../../functions/src/shared/examCohorts';
 import { examNoticeText, type ExamNoticeKind } from '../../../functions/src/shared/examNotices';
 import { bandsText, resultSlipsPdf } from '../../lib/examPdf';
 import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
@@ -23,6 +29,7 @@ import {
 import { studentAttendance } from '../../../functions/src/shared/school';
 import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
+import type { CourseRow as Programme } from '../../state/useSchool';
 
 /**
  * ADIA Exam Records, rebuilt with Andy (2026-10-24). The principal sets up each cohort's courses and
@@ -39,14 +46,21 @@ export function ExamSheetPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type Tab = 'overview' | 'departments' | 'results' | 'setup' | 'log';
-/** Links saved before the rebuild still land on the right tab. */
-const OLD_TABS: Record<string, Tab> = { progress: 'overview', sheets: 'setup', grading: 'setup', reports: 'results', transcripts: 'results' };
+type View = 'home' | 'results' | 'setup' | 'log';
+/** Links saved before the redesign (Andy, 2026-10-25) still land on the right screen. */
+const OLD_VIEWS: Record<string, View> = {
+  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'results', setup: 'setup', sheets: 'setup', grading: 'setup', log: 'log',
+};
+type CohortOrder = ReturnType<typeof orderCohorts>;
 
 /** The intakes, by name, newest first: every programme's intake of the same name is one cohort. */
 function useCohorts(org: Organization) {
   const s = useSchoolPage(org);
-  const cohorts = useMemo(() => [...new Set(s.intakes.map((i) => i.name))], [s.intakes]);
+  const { byName: info } = useExamCohorts(org.id);
+  const names = useMemo(() => [...new Set(s.intakes.map((i) => i.name))], [s.intakes]);
+  // Many cohorts in one dropdown, newest first, the graduated ones under "Past cohorts" (Andy, 2026-10-25).
+  const order = useMemo(() => orderCohorts(names, s.intakes, info), [names, s.intakes, info]);
+  const cohorts = useMemo(() => [...order.current, ...order.past].map((c) => c.name), [order]);
   /** The students of a cohort who sit exams: enrolled or graduated, from every programme. */
   const studentsOf = (cohort: string): ExamStudent[] => s.students
     .filter((st) => !st.deletedAt && (st.status === 'enrolled' || st.status === 'graduated') && s.intakeName(st.intakeId) === cohort)
@@ -57,7 +71,7 @@ function useCohorts(org: Organization) {
   /** Attendance comes from the class registers on the Attendance page (Andy, 2026-10-24). */
   const attendance = useMemo(() => Object.fromEntries(s.students.map((st) => [st.id, studentAttendance(st.id, s.courseName(st.courseId), s.events, s.records, st.enrolledOn).percent])),
     [s.students, s.events, s.records, s.courses]); // eslint-disable-line react-hooks/exhaustive-deps
-  return { s, cohorts, studentsOf, allStudents, attendance };
+  return { s, cohorts, order, info, studentsOf, allStudents, attendance };
 }
 
 const rosterFor = (students: ExamStudent[], courseId: string | null) =>
@@ -65,46 +79,141 @@ const rosterFor = (students: ExamStudent[], courseId: string | null) =>
 const programmeOf = (courseId: string | null, courseName: (id: string) => string) => (courseId == null ? 'Common course' : courseName(courseId) || 'Programme');
 const semesterText = (n: number | null | undefined) => (n ? `Semester ${n}` : 'No semester');
 
+/**
+ * The principal's Exam Records, redesigned with Andy (2026-10-25): one screen with the cohort at the top
+ * and each department's courses under it; Results and Setup are two buttons.
+ */
 function Exams({ org }: { org: Organization }) {
   const a = useExamAccess();
-  const { s, cohorts, studentsOf, allStudents, attendance } = useCohorts(org);
+  const { can } = useAuth();
+  const { s, cohorts, order, info, studentsOf, allStudents, attendance } = useCohorts(org);
   const [params, setParams] = useSearchParams();
-  const cohort = params.get('cohort') && cohorts.includes(params.get('cohort')!) ? params.get('cohort')! : cohorts[0] ?? '';
-  const raw = params.get('tab') ?? 'overview';
-  const tab: Tab = OLD_TABS[raw] ?? (['overview', 'departments', 'results', 'setup', 'log'].includes(raw) ? (raw as Tab) : 'overview');
-  const set = (k: string, v: string) => { const p = new URLSearchParams(params); p.set(k, v); setParams(p, { replace: true }); };
+  const picked = params.get('cohort');
+  const cohort = picked && cohorts.includes(picked) ? picked : order.current[0]?.name ?? cohorts[0] ?? '';
+  const view: View = OLD_VIEWS[params.get('view') ?? params.get('tab') ?? ''] ?? 'home';
+  const go = (changes: Record<string, string>) => {
+    const p = new URLSearchParams(params);
+    p.delete('tab');
+    for (const [k, v] of Object.entries(changes)) if (v) p.set(k, v); else p.delete(k);
+    setParams(p, { replace: true });
+  };
   const { sheets } = useExamSheets(org.id, a.canManage ? cohort : '');
   const students = useMemo(() => studentsOf(cohort), [cohort, s.students, s.intakes, s.peopleLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   const courses = useMemo(() => s.courses.map((c) => ({ id: c.id, name: c.name })), [s.courses]);
+  const courseList = useCourseList(org.id, cohorts);
+  const choice = [...order.current, ...order.past].find((c) => c.name === cohort);
+  const closed = !!choice?.closed;
+  // "Cohort 1 · Class of 2025" on printouts, slips and transcripts, so each graduating class is dated.
+  const label = choice?.graduationDate ? `${cohort} · ${classOf(choice.graduationDate)}` : cohort;
+  const canStart = can('settings.manage') || can('school.manage');
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} courseName={s.courseName} />;
-  // The change log opens from a link at the bottom of Setup (Andy, 2026-10-24); Departments added 2026-10-25.
-  const tabs: [Tab, string][] = [['overview', 'Overview'], ['departments', 'Departments'], ['results', 'Results'], ['setup', 'Setup']];
-  const shown: Tab = tab === 'log' ? 'setup' : tab;
+  const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'log' ? 'Change log' : '';
 
   return (
     <div className="page narrow exams">
-      <div className="page-head"><h1>Exam Records</h1></div>
+      <div className="page-head">
+        <h1>Exam Records{sub && <span className="muted"> · {sub}</span>}</h1>
+        {cohorts.length > 0 && (
+          <span className="row-actions no-print">
+            {view === 'home'
+              ? <><button type="button" className="btn btn-quiet" onClick={() => go({ view: 'results' })}>Results</button><button type="button" className="btn btn-quiet" onClick={() => go({ view: 'setup' })}>Setup</button></>
+              : <button type="button" className="btn btn-quiet" onClick={() => go({ view: view === 'log' ? 'setup' : '' })}>← {view === 'log' ? 'Setup' : 'Courses'}</button>}
+          </span>
+        )}
+      </div>
       {cohorts.length === 0 ? (
-        <div className="notice">Exam records follow the intakes. Add a cohort under <Link to="/school/courses">Programmes</Link> first, such as "Cohort 4".</div>
+        <section className="stack">
+          <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort under <Link to="/school/courses">Programmes</Link> first.</>}</div>
+          {canStart && <NewCohort org={org} cohorts={cohorts} programmes={s.courses} today={s.today} onStarted={(c) => go({ cohort: c })} />}
+        </section>
       ) : (
         <>
-          <div className="exam-cohorts no-print" role="group" aria-label="Cohort">
-            {[...cohorts].sort((x, y) => x.localeCompare(y, undefined, { numeric: true })).map((c) => <button key={c} type="button" aria-pressed={cohort === c} className={`chip${cohort === c ? ' chip-on' : ''}`} onClick={() => set('cohort', c)}>{c}</button>)}
-          </div>
-          <div className="segmented wrap no-print" role="tablist" aria-label="Exam Records">
-            {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={shown === k} className={shown === k ? 'on' : ''} onClick={() => set('tab', k)}>{label}</button>)}
-          </div>
-          {tab === 'overview' && <Overview org={org} cohort={cohort} sheets={sheets} students={students} courseName={s.courseName} onSetup={() => set('tab', 'setup')} />}
-          {tab === 'departments' && <Departments org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} />}
-          {tab === 'results' && <Results org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} />}
-          {tab === 'setup' && <Setup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} allStudents={allStudents} onLog={() => set('tab', 'log')} />}
-          {tab === 'log' && <><button type="button" className="btn btn-quiet btn-small align-start" onClick={() => set('tab', 'setup')}>← Back to Setup</button><ChangeLog org={org} cohort={cohort} /></>}
+          <select className="exam-cohort-pick no-print" aria-label="Cohort" value={cohort} onChange={(e) => go({ cohort: e.target.value })}>
+            {order.current.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}
+            {order.past.length > 0 && <optgroup label="Past cohorts">{order.past.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
+          </select>
+          <div className="print-only exam-print-head"><strong>ADIA Training Centre</strong> · {label}</div>
+          <ClassLine org={org} cohort={cohort} closed={closed} graduationDate={choice?.graduationDate ?? null} closedByName={info[cohort]?.closedByName ?? null} today={s.today} onSetDate={() => go({ view: 'setup' })} />
+          {view === 'home' && <Home org={org} cohort={cohort} closed={closed} sheets={sheets} students={students} courses={courses} courseList={courseList} onSetup={() => go({ view: 'setup' })} />}
+          {view === 'results' && <Results org={org} cohort={cohort} label={label} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} />}
+          {view === 'setup' && (
+            <Setup org={org} cohort={cohort} cohorts={cohorts} order={order} closed={closed} info={info} sheets={sheets} students={students} courses={courses} programmes={s.courses}
+              courseList={courseList} allStudents={allStudents} today={s.today} canStart={canStart} onLog={() => go({ view: 'log' })} onStarted={(c) => go({ cohort: c, view: '' })} />
+          )}
+          {view === 'log' && <ChangeLog org={org} cohort={cohort} />}
         </>
       )}
     </div>
   );
+}
+
+/** "Class of 2026 · Graduates 11 Dec 2026", or, once closed, the reopen button (password needed). */
+function ClassLine({ org, cohort, closed, graduationDate, closedByName, today, onSetDate }: {
+  org: Organization; cohort: string; closed: boolean; graduationDate: string | null; closedByName: string | null; today: string; onSetDate: () => void;
+}) {
+  const [reopening, setReopening] = useState(false);
+  const text = classText(graduationDate, today);
+  if (closed) {
+    return (
+      <div className="notice stack exam-closed">
+        <p><strong>{text || 'Graduated'}.</strong> This cohort is closed, so its marks are read only{closedByName ? ` (closed by ${closedByName})` : ''}.</p>
+        {reopening ? <ReopenCohort org={org} cohort={cohort} onDone={() => setReopening(false)} /> : <button type="button" className="btn btn-quiet btn-small align-start no-print" onClick={() => setReopening(true)}>Reopen</button>}
+      </div>
+    );
+  }
+  return <p className="muted exam-class">{text || <>No graduation date yet. <button type="button" className="btn-link no-print" onClick={onSetDate}>Set it</button></>}</p>;
+}
+
+/** Only the principal, an admin, Andy or Doreen reopen a graduated cohort, with their own password (Andy, 2026-10-25). */
+function ReopenCohort({ org, cohort, onDone }: { org: Organization; cohort: string; onDone: () => void }) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function reopen(e: FormEvent) {
+    e.preventDefault();
+    if (!password) return;
+    setBusy(true);
+    try {
+      await confirmPassword(password);
+      await saveExamCohort(org.id, cohort, true, { closed: false, reopenedByName: a.myName.slice(0, 120), reopenedAt: closedNow() });
+      void logExam(org.id, { action: 'reopen', cohort, sheetId: null, detail: `${cohort} reopened`, byName: a.myName });
+      toast.show(`${cohort} is open again. Close it in Setup when you are done.`);
+      onDone();
+    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); setPassword(''); }
+  }
+  return (
+    <form className="row-actions no-print" onSubmit={(e) => void reopen(e)}>
+      <label className="field"><span>Your password</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+      <button type="submit" className="btn btn-primary align-end" disabled={busy || !password}>{busy ? 'Checking…' : 'Reopen'}</button>
+      <button type="button" className="btn btn-quiet align-end" onClick={onDone}>Cancel</button>
+    </form>
+  );
+}
+
+/**
+ * ADIA's course list (Andy, 2026-10-25, 3A): each programme's courses, set once. Until the principal saves
+ * one, it is every course the cohorts so far have had.
+ */
+function useCourseList(orgId: string, newestFirst: string[]) {
+  const { settings, exists } = useExamSettings(orgId);
+  const { sheets } = useAllExamSheets(orgId);
+  const list = useMemo(() => (settings.courseList ? sortCourseList(settings.courseList) : courseListFromSheets(sheets, newestFirst)), [settings.courseList, sheets, newestFirst]);
+  const last = useMemo(() => lastTrainers(sheets, newestFirst), [sheets, newestFirst]);
+  return { list, saved: !!settings.courseList, last, save: (next: CourseListItem[]) => saveExamCourseList(orgId, exists, settings, sortCourseList(next)) };
+}
+type CourseList = ReturnType<typeof useCourseList>;
+
+/** Departments in order, then the common courses. */
+function departmentsOf<T extends { courseId: string | null }>(items: T[], courses: { id: string; name: string }[]): { id: string | null; name: string; items: T[] }[] {
+  const known = new Set(courses.map((c) => c.id));
+  return [
+    ...courses.map((c) => ({ id: c.id as string | null, name: c.name, items: items.filter((x) => x.courseId === c.id) })),
+    { id: null, name: 'Common courses (every student)', items: items.filter((x) => x.courseId == null) },
+    { id: 'other', name: 'Other', items: items.filter((x) => x.courseId != null && !known.has(x.courseId)) },
+  ].filter((g) => g.items.length > 0);
 }
 
 function StatusPill({ status }: { status: ExamSheetStatus | string }) {
@@ -116,7 +225,10 @@ function StatusPill({ status }: { status: ExamSheetStatus | string }) {
 /* ---------- the trainer's screen ---------- */
 
 function MyClasses({ org, studentsOf, courseName }: { org: Organization; studentsOf: (cohort: string) => ExamStudent[]; courseName: (id: string) => string }) {
-  const { sheets, loading } = useMyExamSheets(org.id);
+  const { sheets: mine, loading } = useMyExamSheets(org.id);
+  const { byName } = useExamCohorts(org.id);
+  // A graduated (closed) cohort drops off the trainer's list (Andy, 2026-10-25).
+  const sheets = mine.filter((sh) => byName[sh.cohort]?.closed !== true);
   const cohorts = [...new Set(sheets.map((s) => s.cohort))];
   return (
     <div className="page narrow exams">
@@ -183,46 +295,125 @@ function useSheetActions(org: Organization) {
   };
 }
 
-function Overview({ org, cohort, sheets, students, courseName, onSetup }: { org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courseName: (id: string) => string; onSetup: () => void }) {
+function Home({ org, cohort, closed, sheets, students, courses, courseList, onSetup }: {
+  org: Organization; cohort: string; closed: boolean; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; courseList: CourseList; onSetup: () => void;
+}) {
   const { trainers } = useExamTrainers(org.id);
   const act = useSheetActions(org);
-  const rows = sheets.map((sh) => ({ sh, roster: rosterFor(students, sh.courseId).length, pct: sheetProgress(sh, rosterFor(students, sh.courseId).map((x) => x.id)) }))
-    .sort((x, y) => Number(!!y.sh.changeRequest) - Number(!!x.sh.changeRequest) || (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || x.pct - y.pct);
-  const count = (st: string) => sheets.filter((s) => s.status === st).length;
+  if (!sheets.length) {
+    return closed ? <p className="muted">No courses were set up for {cohort}.</p> : <NewCohortCourses org={org} cohort={cohort} sheets={sheets} courses={courses} courseList={courseList} first onSetup={onSetup} />;
+  }
+  const count = (st: string) => sheets.filter((x) => x.status === st).length;
+  const waiting = count('submitted');
+  const asks = sheets.filter((x) => x.changeRequest).length;
   const phoneOf = (uid: string) => trainers.find((t) => t.uid === uid)?.phone ?? '';
   const remind = (sh: ExamSheetRow, pctDone: number) => waLink(phoneOf(sh.ownerUid), `Hello ${sh.teacherName}, a reminder from ADIA: your ${sh.courseName} marks for ${cohort} are ${pctDone}% entered. Please key in the rest and send each paper in Insight-IQ, Exam Records. Thank you.`);
-  const waiting = count('submitted');
+  const rows = sheets.map((sh) => ({ courseId: sh.courseId ?? null, sh, pct: sheetProgress(sh, rosterFor(students, sh.courseId).map((x) => x.id)) }))
+    .sort((x, y) => Number(!!y.sh.changeRequest) - Number(!!x.sh.changeRequest) || (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || (x.sh.semester ?? 9) - (y.sh.semester ?? 9) || x.sh.courseName.localeCompare(y.sh.courseName));
   return (
     <section className="stack">
-      {rows.length === 0 ? (
-        <div className="notice stack">
-          <p>No courses are set up for {cohort} yet. Add each course in Setup and give it to its trainer.</p>
-          <button type="button" className="btn btn-primary align-start" onClick={onSetup}>Set up courses</button>
-        </div>
-      ) : (
-        <>
-          <p className="muted">{sheets.length} {sheets.length === 1 ? 'course' : 'courses'} · {count('approved')} approved{waiting ? <> · <strong className="up-bad">{waiting} waiting for you</strong></> : ''} · {students.length} students</p>
-          <ul className="exam-list">
-            {rows.map(({ sh, roster, pct }) => (
-              <li key={sh.id}>
-                <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
-                  <strong>{sh.courseName || 'Untitled'}</strong>
-                  <span className="muted small">{sh.teacherName} · {programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster} students{sentText(sh)}</span>
-                  <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
-                  {sh.changeRequest && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
-                </Link>
-                <span className="exam-list-side">
-                  {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
-                  {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
-                  {sh.status === 'draft' && <a className="btn btn-quiet btn-small" href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
-                  {sh.status === 'approved' && <Link className="btn btn-quiet btn-small" to={`${BASE}/sheet/${sh.id}`}>Open</Link>}
-                </span>
+      <p className="muted">
+        {sheets.length} {sheets.length === 1 ? 'course' : 'courses'} · {count('approved')} approved · {students.length} students
+        {waiting > 0 && <> · <strong className="up-bad">{waiting} waiting for you</strong></>}
+        {asks > 0 && <> · <strong className="up-bad">{asks} asking to change marks</strong></>}
+      </p>
+      {departmentsOf(rows, courses).map((g) => {
+        const done = g.items.filter((r) => r.sh.status === 'approved').length;
+        return (
+          <section key={g.id ?? COMMON} className="stack exam-dept">
+            <div className="card-head"><h2>{g.name}</h2><span className="muted small">{g.id == null ? students.length : rosterFor(students, g.id).length} students · {done} of {g.items.length} approved</span></div>
+            <ul className="exam-list">
+              {g.items.map(({ sh, pct }) => (
+                <li key={sh.id}>
+                  <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
+                    <strong>{sh.courseName || 'Untitled'}</strong>
+                    <span className="muted small">{sh.teacherName} · {semesterText(sh.semester)}{sentText(sh)}</span>
+                    <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
+                    {sh.changeRequest && !closed && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
+                  </Link>
+                  <span className="exam-list-side">
+                    {closed ? <StatusPill status={sh.status} /> : <>
+                      {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
+                      {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
+                      {sh.status === 'draft' && <a className="btn btn-quiet btn-small" href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
+                    </>}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        );
+      })}
+    </section>
+  );
+}
+
+/**
+ * A new cohort gets the courses on the course list in one step (Andy, 2026-10-25, 3A): each starts with the
+ * trainer who marked it last; the principal checks the trainers and creates them.
+ */
+function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onSetup }: {
+  org: Organization; cohort: string; sheets: ExamSheetRow[]; courses: { id: string; name: string }[]; courseList: CourseList; first?: boolean; onSetup?: () => void;
+}) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const { settings } = useExamSettings(org.id);
+  const { trainers, loading } = useExamTrainers(org.id);
+  const [picks, setPicks] = useState<Record<string, string>>({});
+  const missing = missingCourses(courseList.list, sheets);
+  const trainerFor = (c: CourseListItem) => {
+    const k = courseListKey(c);
+    if (k in picks) return picks[k]!;
+    const t = courseList.last.get(k);
+    return t && trainers.some((x) => x.uid === t.uid) ? t.uid : '';
+  };
+  if (!missing.length) {
+    return first ? (
+      <div className="notice stack">
+        <p>No courses are set up for {cohort} yet, and the course list is empty.</p>
+        {onSetup && <button type="button" className="btn btn-primary align-start" onClick={onSetup}>Add courses in Setup</button>}
+      </div>
+    ) : null;
+  }
+  const ready = missing.filter((c) => trainerFor(c));
+  function create() {
+    if (!ready.length) return toast.show('Pick the trainer for each course.');
+    const left = missing.length - ready.length;
+    if (!window.confirm(`Create ${ready.length} ${ready.length === 1 ? 'course' : 'courses'} for ${cohort}?${left ? ` ${left} left out are not created.` : ''} Each shows in its trainer's classes.`)) return;
+    try {
+      for (const c of ready) {
+        const t = trainers.find((x) => x.uid === trainerFor(c))!;
+        createExamSheet(org.id, { cohort, courseId: c.courseId, courseName: c.name, teacherName: t.name.slice(0, 120), weights: settings.weights, ownerUid: t.uid, ownerName: t.name.slice(0, 120), semester: c.semester })
+          .synced.catch((err) => toast.show(friendlyError(err)));
+      }
+      void logExam(org.id, { action: 'setup', cohort, sheetId: null, detail: `Created ${ready.length} courses from the course list`, byName: a.myName });
+      toast.show(`${ready.length} courses created for ${cohort}.`);
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+  return (
+    <section className="card stack">
+      <h2>{first ? `Set up ${cohort}` : 'From the course list'}</h2>
+      <p className="muted small">{first
+        ? `${cohort} gets these ${missing.length} courses from the course list. Check each trainer, then create them.`
+        : `${missing.length} ${missing.length === 1 ? 'course' : 'courses'} on the course list ${missing.length === 1 ? 'is' : 'are'} not in ${cohort} yet.`}</p>
+      {departmentsOf(missing, courses).map((g) => (
+        <div key={g.id ?? COMMON} className="stack">
+          <strong className="small">{g.name}</strong>
+          <ul className="exam-pick-list">
+            {g.items.map((c) => (
+              <li key={courseListKey(c)}>
+                <span>{c.name}<span className="muted small"> · {semesterText(c.semester)}</span></span>
+                <select value={trainerFor(c)} aria-label={`Trainer for ${c.name}`} onChange={(e) => setPicks({ ...picks, [courseListKey(c)]: e.target.value })}>
+                  <option value="">{loading ? 'Loading…' : 'Leave out'}</option>
+                  {trainers.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                </select>
               </li>
             ))}
           </ul>
-          <p className="muted small">Tap a course to see its marks. To send one back, open it and tap Send back.</p>
-        </>
-      )}
+        </div>
+      ))}
+      {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
+      <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={create}>Create {ready.length} {ready.length === 1 ? 'course' : 'courses'}</button>
     </section>
   );
 }
@@ -292,30 +483,30 @@ function Departments({ org, cohort, sheets, students, courses }: { org: Organiza
 
 /* ---------- Results: Semester 1, Semester 2 and Final ---------- */
 
-type Period = '1' | '2' | 'final' | 'none';
+type Period = 'departments' | '1' | '2' | 'final' | 'none';
 
-function Results({ org, cohort, sheets, students, courses, courseName, attendance }: {
-  org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[];
+function Results({ org, cohort, label, sheets, students, courses, courseName, attendance }: {
+  org: Organization; cohort: string; label: string; sheets: ExamSheetRow[]; students: ExamStudent[];
   courses: { id: string; name: string }[]; courseName: (id: string) => string; attendance: Record<string, number | null>;
 }) {
-  const [period, setPeriod] = useState<Period>('1');
-  const periods: [Period, string][] = [['1', 'Semester 1'], ['2', 'Semester 2'], ['final', 'Final & transcripts']];
+  const [period, setPeriod] = useState<Period>('departments');
+  const periods: [Period, string][] = [['departments', 'Departments'], ['1', 'Semester 1'], ['2', 'Semester 2'], ['final', 'Final & transcripts']];
   if (sheets.some((s) => !s.semester)) periods.push(['none', 'No semester']);
   const inPeriod = sheets.filter((s) => (period === 'none' ? !s.semester : s.semester === Number(period)));
   return (
     <section className="stack">
       <div className="segmented wrap no-print" role="tablist" aria-label="Results">
-        {periods.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={period === k} className={period === k ? 'on' : ''} onClick={() => setPeriod(k)}>{label}</button>)}
+        {periods.map(([k, text]) => <button key={k} type="button" role="tab" aria-selected={period === k} className={period === k ? 'on' : ''} onClick={() => setPeriod(k)}>{text}</button>)}
       </div>
-      {period === 'final'
-        ? <ResultsAndTranscripts org={org} cohort={cohort} sheets={sheets} students={students} courseName={courseName} />
-        : <Reports org={org} cohort={cohort} period={periods.find((p) => p[0] === period)![1]} sheets={inPeriod} students={students} courses={courses} attendance={attendance} />}
+      {period === 'departments' ? <Departments org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} />
+        : period === 'final' ? <ResultsAndTranscripts org={org} cohort={cohort} label={label} sheets={sheets} students={students} courseName={courseName} />
+          : <Reports org={org} cohort={cohort} label={label} period={periods.find((p) => p[0] === period)![1]} sheets={inPeriod} students={students} courses={courses} attendance={attendance} />}
     </section>
   );
 }
 
-function Reports({ org, cohort, period, sheets, students, courses, attendance }: {
-  org: Organization; cohort: string; period: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; attendance: Record<string, number | null>;
+function Reports({ org, cohort, label, period, sheets, students, courses, attendance }: {
+  org: Organization; cohort: string; label: string; period: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; attendance: Record<string, number | null>;
 }) {
   const a = useExamAccess();
   const toast = useToast();
@@ -342,7 +533,7 @@ function Reports({ org, cohort, period, sheets, students, courses, attendance }:
   async function slips(rows = report.rows) {
     setBusy(rows.length === 1 ? rows[0]!.studentId : 'all');
     try {
-      const file = await resultSlipsPdf({ cohort, reportTitle: title, report, rows, settings });
+      const file = await resultSlipsPdf({ cohort: label, reportTitle: title, report, rows, settings });
       if (rows.length === 1) await shareOrDownload(file, `ADIA result slip for ${rows[0]!.name}`); else downloadFile(file);
     } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
   }
@@ -368,7 +559,7 @@ function Reports({ org, cohort, period, sheets, students, courses, attendance }:
           <button type="button" className="btn btn-primary" disabled={!report.rows.length || !report.units.length || !!busy} onClick={() => void slips()}>{busy === 'all' ? 'Making slips…' : 'All result slips (PDF)'}</button>
         </span>
       </div>
-      <div className="print-only exam-print-head"><strong>ADIA Training Centre</strong> · {title} · {cohort}</div>
+      <div className="print-only exam-print-head"><strong>{title}</strong></div>
       {pending > 0 && <p className="notice small no-print">{pending} of {report.units.length} {report.units.length === 1 ? 'course is' : 'courses are'} not approved yet, so these results are provisional. Slips print with "Provisional" until every course is approved.</p>}
 
       <KpiRow label="Results at a glance">
@@ -433,16 +624,25 @@ function Reports({ org, cohort, period, sheets, students, courses, attendance }:
 
 /* ---------- Setup ---------- */
 
-function Setup({ org, cohort, cohorts, sheets, students, courses, allStudents, onLog }: {
-  org: Organization; cohort: string; cohorts: string[]; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[];
-  allStudents: Parameters<typeof ResultsUpload>[0]['allStudents']; onLog: () => void;
+function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, courses, programmes, courseList, allStudents, today, canStart, onLog, onStarted }: {
+  org: Organization; cohort: string; cohorts: string[]; order: CohortOrder; closed: boolean; info: Record<string, ExamCohort | undefined>; sheets: ExamSheetRow[]; students: ExamStudent[];
+  courses: { id: string; name: string }[]; programmes: Programme[]; courseList: CourseList; allStudents: Parameters<typeof ResultsUpload>[0]['allStudents'];
+  today: string; canStart: boolean; onLog: () => void; onStarted: (cohort: string) => void;
 }) {
+  const { can } = useAuth();
   const { settings } = useExamSettings(org.id);
   const w = settings.weights;
+  const depts = new Set(courseList.list.filter((c) => c.courseId != null).map((c) => c.courseId)).size;
   return (
     <section className="stack">
-      <CourseSetup org={org} cohort={cohort} cohorts={cohorts} sheets={sheets} students={students} courses={courses} />
+      <Graduation org={org} cohort={cohort} info={info[cohort]} sheets={sheets} today={today} />
+      {!closed && <NewCohortCourses org={org} cohort={cohort} sheets={sheets} courses={courses} courseList={courseList} />}
+      <CourseSetup org={org} cohort={cohort} closed={closed} sheets={sheets} students={students} courses={courses} courseList={courseList} />
       {/* Set once and seldom changed, so folded away (Andy, 2026-10-24). */}
+      <Fold title="Course list" note={`${courseList.list.length} courses · ${depts} ${depts === 1 ? 'department' : 'departments'}`}>
+        <CourseListEditor org={org} courses={courses} courseList={courseList} canAddDepartment={can('settings.manage') || can('school.manage')} current={order.current} />
+      </Fold>
+      {canStart && <Fold title="Start a new cohort" note={`Next: ${nextCohortName(cohorts)}`}><NewCohort org={org} cohorts={cohorts} programmes={programmes} today={today} onStarted={onStarted} /></Fold>}
       <Fold title="Starting percentages" note={EXAM_COMPONENTS.filter((c) => w[c].wt > 0).map((c) => `${EXAM_COMPONENT_LABELS[c]} ${w[c].wt}%`).join(' · ')}><Weighting org={org} /></Fold>
       <Fold title="Grading and signatures" note={`Pass mark ${settings.passMark}%`}><Grading org={org} /></Fold>
       <Fold title="Upload past results" note="From your Excel cohort files"><ResultsUpload org={org} allStudents={allStudents} /></Fold>
@@ -460,46 +660,69 @@ function Fold({ title, note, children }: { title: string; note: string; children
   );
 }
 
-function CourseSetup({ org, cohort, cohorts, sheets, students, courses }: { org: Organization; cohort: string; cohorts: string[]; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[] }) {
+/** The class's graduation date (Andy, 2026-10-25, 2A), and closing the cohort once it has graduated (5A). */
+function Graduation({ org, cohort, info, sheets, today }: { org: Organization; cohort: string; info: ExamCohort | undefined; sheets: ExamSheetRow[]; today: string }) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const date = info?.graduationDate ?? '';
+  const log = (detail: string) => void logExam(org.id, { action: 'graduation', cohort, sheetId: null, detail, byName: a.myName });
+  function setDate(v: string) {
+    if (v === date || (v && v.length !== 10)) return;
+    saveExamCohort(org.id, cohort, !!info, { graduationDate: v || null }).catch((err) => toast.show(friendlyError(err)));
+    log(v ? `Graduation date set to ${dayMonthYear(v)}` : 'Graduation date cleared');
+  }
+  function close() {
+    if (!date) return toast.show('Set the graduation date first.');
+    const open = sheets.filter((x) => x.status !== 'approved').length;
+    if (!window.confirm(`Close ${cohort}, ${classText(date, today)}?\n\nIts marks become read only. Only the principal, an admin, Andy or Doreen can reopen it, with their password.${open ? `\n\n${open} ${open === 1 ? 'course is' : 'courses are'} not approved yet.` : ''}`)) return;
+    saveExamCohort(org.id, cohort, !!info, { closed: true, closedByName: a.myName.slice(0, 120), closedAt: closedNow() })
+      .then(() => toast.show(`${cohort} is closed. It now shows under Past cohorts.`), (err) => toast.show(friendlyError(err)));
+    log(`${cohort} closed (${classText(date, today)})`);
+  }
+  if (info?.closed) return null;
+  return (
+    <section className="card stack">
+      <h2>Graduation · {cohort}</h2>
+      <div className="row-actions">
+        <label className="field"><span>Graduation date</span><input type="date" defaultValue={date} key={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <button type="button" className="btn btn-quiet align-end" disabled={!date} onClick={close}>Close {cohort} after graduation</button>
+      </div>
+      <p className="muted small">The date names the class, such as "{classOf(date || today)}", on results, transcripts and certificates. Close the cohort after graduation so nobody can change its marks.</p>
+    </section>
+  );
+}
+
+function CourseSetup({ org, cohort, closed, sheets, students, courses, courseList }: {
+  org: Organization; cohort: string; closed: boolean; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; courseList: CourseList;
+}) {
   const a = useExamAccess();
   const toast = useToast();
   const { settings } = useExamSettings(org.id);
   const { trainers, loading, problem } = useExamTrainers(org.id);
   const [adding, setAdding] = useState(false);
-  const [f, setF] = useState({ scope: courses[0]?.id ?? COMMON, courseName: '', semester: '1', trainer: '' });
-  const others = cohorts.filter((c) => c !== cohort);
-  const [from, setFrom] = useState(others[0] ?? '');
-  const { sheets: fromSheets } = useExamSheets(org.id, from && others.includes(from) ? from : '');
+  const [f, setF] = useState({ scope: courses[0]?.id ?? COMMON, courseName: '', semester: '1', trainer: '', onList: true });
   const name = (id: string | null) => programmeOf(id, (x) => courses.find((c) => c.id === x)?.name ?? '');
-  const same = (x: ExamSheetRow, y: ExamSheetRow) => x.courseId === y.courseId && x.courseName.trim().toLowerCase() === y.courseName.trim().toLowerCase() && (x.semester ?? null) === (y.semester ?? null);
-  const toCopy = fromSheets.filter((x) => !sheets.some((y) => same(x, y)));
 
   const log = (detail: string, sheetId: string | null = null) => void logExam(org.id, { action: 'setup', cohort, sheetId, detail, byName: a.myName });
   function add() {
     const t = trainers.find((x) => x.uid === f.trainer);
     if (!f.courseName.trim()) return toast.show('Type the course name.');
     if (!t) return toast.show('Pick the trainer who marks this course.');
+    const item: CourseListItem = { name: f.courseName.trim().slice(0, 120), courseId: f.scope === COMMON ? null : f.scope, semester: f.semester === '2' ? 2 : 1 };
     try {
       const { synced } = createExamSheet(org.id, {
-        cohort, courseId: f.scope === COMMON ? null : f.scope, courseName: f.courseName.trim().slice(0, 120), teacherName: t.name.slice(0, 120),
-        weights: settings.weights, ownerUid: t.uid, ownerName: t.name.slice(0, 120), semester: f.semester === '2' ? 2 : 1,
+        cohort, courseId: item.courseId, courseName: item.name, teacherName: t.name.slice(0, 120),
+        weights: settings.weights, ownerUid: t.uid, ownerName: t.name.slice(0, 120), semester: item.semester,
       });
       synced.catch((err) => toast.show(friendlyError(err)));
-      log(`Added ${f.courseName.trim()} (${name(f.scope === COMMON ? null : f.scope)}, Semester ${f.semester}) for ${t.name}`);
-      toast.show(`${f.courseName.trim()} added. It now shows in ${t.name}'s classes.`);
-      setF({ ...f, courseName: '' });
-    } catch (err) { toast.show(friendlyError(err)); }
-  }
-  function copy() {
-    if (!toCopy.length) return;
-    if (!window.confirm(`Copy ${toCopy.length} ${toCopy.length === 1 ? 'course' : 'courses'} from ${from} into ${cohort}, with the same trainers? Marks are not copied.`)) return;
-    try {
-      for (const x of toCopy) {
-        createExamSheet(org.id, { cohort, courseId: x.courseId, courseName: x.courseName, teacherName: x.teacherName, weights: settings.weights, ownerUid: x.ownerUid, ownerName: x.ownerName, semester: x.semester ?? 1 })
-          .synced.catch((err) => toast.show(friendlyError(err)));
+      // A new course goes on the course list too, so the next cohort gets it (Andy, 2026-10-25).
+      if (f.onList) {
+        const next = withCourse(courseList.list, item);
+        if (next.length !== courseList.list.length || !courseList.saved) courseList.save(next).catch((err) => toast.show(friendlyError(err)));
       }
-      log(`Copied ${toCopy.length} courses from ${from}`);
-      toast.show(`${toCopy.length} courses copied.`);
+      log(`Added ${item.name} (${name(item.courseId)}, Semester ${f.semester}) for ${t.name}`);
+      toast.show(`${item.name} added. It now shows in ${t.name}'s classes.`);
+      setF({ ...f, courseName: '' });
     } catch (err) { toast.show(friendlyError(err)); }
   }
   function change(sh: ExamSheetRow, changes: { courseName?: string; semester?: 1 | 2; trainer?: ExamTrainer }, detail: string) {
@@ -526,13 +749,13 @@ function CourseSetup({ org, cohort, cohorts, sheets, students, courses }: { org:
 
   return (
     <section className="card stack">
-      <div className="card-head"><h2>Courses and trainers · {cohort}</h2>{!adding && <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>+ Add a course</button>}</div>
-      <p className="muted small">Each course you add shows in its trainer's "My classes". Trainers key in marks; they cannot add, rename or move courses.</p>
+      <div className="card-head"><h2>Courses and trainers · {cohort}</h2>{!adding && !closed && <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>+ Add a course</button>}</div>
+      {!closed && <p className="muted small">Each course shows in its trainer's classes. Trainers key in marks; they cannot add, rename or move courses.</p>}
       {problem && <p className="up-bad small">The trainer list did not load: {problem}</p>}
-      {adding && (
+      {adding && !closed && (
         <div className="stack exam-add">
           <div className="form-grid">
-            <label className="field"><span>Programme</span>
+            <label className="field"><span>Department</span>
               <select value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}>
                 {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 <option value={COMMON}>Common course (every student)</option>
@@ -549,52 +772,153 @@ function CourseSetup({ org, cohort, cohorts, sheets, students, courses }: { org:
               </select>
             </label>
           </div>
+          <label className="check"><input type="checkbox" checked={f.onList} onChange={(e) => setF({ ...f, onList: e.target.checked })} /> Also put it on the course list for future cohorts</label>
           {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
           <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add course</button><button type="button" className="btn btn-quiet" onClick={() => setAdding(false)}>Done</button></div>
         </div>
       )}
-      {sheets.length === 0 ? (
-        <div className="stack">
-          <p className="muted">No courses for {cohort} yet.</p>
-          {others.length > 0 && (
-            <div className="row-actions">
-              <label className="field"><span>Copy the course list from</span>
-                <select value={from} onChange={(e) => setFrom(e.target.value)}>{others.map((c) => <option key={c}>{c}</option>)}</select>
-              </label>
-              <button type="button" className="btn btn-quiet" disabled={!toCopy.length} onClick={copy}>{toCopy.length ? `Copy ${toCopy.length} courses` : 'Nothing to copy'}</button>
-            </div>
-          )}
-        </div>
-      ) : (
+      {sheets.length === 0 ? <p className="muted">No courses for {cohort} yet.</p> : (
         <div className="exam-table-wrap">
           <table className="table exam-setup-table">
             <thead><tr><th>Course</th><th>Semester</th><th>Trainer</th><th>Status</th><th /></tr></thead>
             <tbody>
-              {sheets.map((sh) => (
+              {sortCourseList(sheets.map((sh) => ({ sh, name: sh.courseName, courseId: sh.courseId, semester: sh.semester ?? null }))).map(({ sh }) => (
                 <tr key={sh.id}>
                   <td>
-                    <input className="exam-remark" defaultValue={sh.courseName} key={`${sh.id}-${sh.courseName}`} maxLength={120} aria-label="Course name"
+                    <input className="exam-remark" defaultValue={sh.courseName} key={`${sh.id}-${sh.courseName}`} maxLength={120} aria-label="Course name" disabled={closed}
                       onBlur={(e) => { const v = e.target.value.trim(); if (v && v !== sh.courseName) change(sh, { courseName: v }, `renamed to ${v}`); }} />
                     <div className="muted small">{name(sh.courseId)} · {rosterFor(students, sh.courseId).length} students</div>
                   </td>
                   <td>
-                    <select value={String(sh.semester ?? '')} aria-label="Semester" onChange={(e) => change(sh, { semester: e.target.value === '2' ? 2 : 1 }, `moved to Semester ${e.target.value}`)}>
+                    <select value={String(sh.semester ?? '')} aria-label="Semester" disabled={closed} onChange={(e) => change(sh, { semester: e.target.value === '2' ? 2 : 1 }, `moved to Semester ${e.target.value}`)}>
                       {!sh.semester && <option value="">None</option>}<option value="1">Semester 1</option><option value="2">Semester 2</option>
                     </select>
                   </td>
                   <td>
-                    <select value={sh.ownerUid} aria-label="Trainer" onChange={(e) => { const t = trainers.find((x) => x.uid === e.target.value); if (t) change(sh, { trainer: t }, `given to ${t.name} (was ${sh.teacherName})`); }}>
+                    <select value={sh.ownerUid} aria-label="Trainer" disabled={closed} onChange={(e) => { const t = trainers.find((x) => x.uid === e.target.value); if (t) change(sh, { trainer: t }, `given to ${t.name} (was ${sh.teacherName})`); }}>
                       {trainerOptions(sh)}
                     </select>
                   </td>
                   <td><StatusPill status={sh.status} /></td>
-                  <td><button type="button" className="btn btn-quiet btn-small" onClick={() => remove(sh)}>Remove</button></td>
+                  <td>{!closed && <button type="button" className="btn btn-quiet btn-small" onClick={() => remove(sh)}>Remove</button>}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+/**
+ * The course list (Andy, 2026-10-25, 3A and 6A): each department's courses for every new cohort, with
+ * room to add courses and departments as ADIA grows.
+ */
+function CourseListEditor({ org, courses, courseList, canAddDepartment, current }: {
+  org: Organization; courses: { id: string; name: string }[]; courseList: CourseList; canAddDepartment: boolean; current: CohortOrder['current'];
+}) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const [f, setF] = useState({ scope: courses[0]?.id ?? COMMON, name: '', semester: '1' });
+  const [dept, setDept] = useState('');
+  const log = (detail: string) => void logExam(org.id, { action: 'course list', cohort: 'All cohorts', sheetId: null, detail, byName: a.myName });
+  function save(next: CourseListItem[], detail: string) {
+    courseList.save(next).then(() => toast.show('Course list saved.'), (err) => toast.show(friendlyError(err)));
+    log(detail);
+  }
+  function add() {
+    const item: CourseListItem = { name: f.name.trim().slice(0, 120), courseId: f.scope === COMMON ? null : f.scope, semester: f.semester === '2' ? 2 : 1 };
+    if (!item.name) return toast.show('Type the course name.');
+    const next = withCourse(courseList.list, item);
+    if (next.length === courseList.list.length) return toast.show(`${item.name} is already on the list.`);
+    save(next, `Added ${item.name} to the course list`);
+    setF({ ...f, name: '' });
+  }
+  function remove(c: CourseListItem) {
+    if (!window.confirm(`Take ${c.name} off the course list? Cohorts that already have it keep it.`)) return;
+    save(courseList.list.filter((x) => courseListKey(x) !== courseListKey(c)), `Took ${c.name} off the course list`);
+  }
+  function addDepartment() {
+    const n = dept.trim().replace(/\s+/g, ' ');
+    if (n.length < 2) return toast.show('Type the department name.');
+    if (courses.some((c) => c.name.toLowerCase() === n.toLowerCase())) return toast.show(`${n} is already a department.`);
+    try {
+      const { id, synced } = saveCourse(org.id, null, { name: n.slice(0, 120), levels: [], units: [], timetable: [], active: true });
+      synced.catch((err) => toast.show(friendlyError(err)));
+      // The new department joins every current cohort, so its students can be enrolled straight away.
+      for (const c of current.filter((x) => x.startDate)) {
+        Promise.resolve(saveIntake(org.id, null, { courseId: id, name: c.name, startDate: c.startDate!, capacity: null, active: true })).catch((err) => toast.show(friendlyError(err)));
+      }
+      log(`Added the department ${n}`);
+      toast.show(`${n} added. Now add its courses here.`);
+      setDept('');
+      setF({ ...f, scope: id });
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+  return (
+    <section className="card stack">
+      <p className="muted small">{courseList.saved ? 'A new cohort gets these courses.' : 'Taken from the courses your cohorts already have. A new cohort gets these courses.'} Each course starts with the trainer who marked it last.</p>
+      {departmentsOf(courseList.list, courses).map((g) => (
+        <div key={g.id ?? COMMON} className="stack">
+          <strong className="small">{g.name}</strong>
+          <ul className="exam-pick-list">
+            {g.items.map((c) => <li key={courseListKey(c)}><span>{c.name}<span className="muted small"> · {semesterText(c.semester)}</span></span><button type="button" className="btn btn-quiet btn-small" onClick={() => remove(c)}>Remove</button></li>)}
+          </ul>
+        </div>
+      ))}
+      <div className="form-grid exam-add">
+        <label className="field"><span>Department</span>
+          <select value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}>
+            {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value={COMMON}>Common course (every student)</option>
+          </select>
+        </label>
+        <label className="field"><span>Course name</span><input value={f.name} maxLength={120} placeholder="e.g. Web Design" onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+        <label className="field"><span>Semester</span>
+          <select value={f.semester} onChange={(e) => setF({ ...f, semester: e.target.value })}><option value="1">Semester 1</option><option value="2">Semester 2</option></select>
+        </label>
+      </div>
+      <button type="button" className="btn btn-primary align-start" onClick={add}>Add to the course list</button>
+      {canAddDepartment && (
+        <div className="row-actions">
+          <label className="field"><span>New department</span><input value={dept} maxLength={120} placeholder="e.g. Beauty Therapy" onChange={(e) => setDept(e.target.value)} /></label>
+          <button type="button" className="btn btn-quiet align-end" onClick={addDepartment}>Add department</button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** A new cohort is one intake for each programme, all starting the same day (Andy, 2026-10-25). */
+function NewCohort({ org, cohorts, programmes, today, onStarted }: { org: Organization; cohorts: string[]; programmes: Programme[]; today: string; onStarted: (cohort: string) => void }) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const [name, setName] = useState(nextCohortName(cohorts));
+  const [start, setStart] = useState(today);
+  const live = programmes.filter((p) => p.active !== false);
+  function create() {
+    const n = name.trim().replace(/\s+/g, ' ').slice(0, 80);
+    if (!n) return toast.show('Type the cohort name, such as Cohort 5.');
+    if (cohorts.some((c) => c.toLowerCase() === n.toLowerCase())) return toast.show(`${n} already exists.`);
+    if (!start) return toast.show('Pick the start date.');
+    if (!live.length) return toast.show('Add a department first.');
+    if (!window.confirm(`Start ${n} on ${dayMonthYear(start)} for ${live.length} ${live.length === 1 ? 'department' : 'departments'}?`)) return;
+    try {
+      for (const p of live) Promise.resolve(saveIntake(org.id, null, { courseId: p.id, name: n, startDate: start, capacity: null, active: true })).catch((err) => toast.show(friendlyError(err)));
+      void logExam(org.id, { action: 'setup', cohort: n, sheetId: null, detail: `${n} started on ${dayMonthYear(start)}`, byName: a.myName });
+      toast.show(`${n} started. Enrol its students under Students, then set up its courses here.`);
+      onStarted(n);
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+  return (
+    <section className="card stack">
+      <p className="muted small">The cohort starts in every department ({live.map((p) => p.name).join(', ') || 'none yet'}).</p>
+      <div className="row-actions">
+        <label className="field"><span>Name</span><input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></label>
+        <label className="field"><span>Start date</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+        <button type="button" className="btn btn-primary align-end" onClick={create}>Start {name.trim() || 'cohort'}</button>
+      </div>
     </section>
   );
 }
@@ -716,6 +1040,7 @@ function SheetEditor({ org }: { org: Organization }) {
   const { s, studentsOf } = useCohorts(org);
   const { sheet, loading } = useExamSheet(org.id, sheetId);
   const { settings } = useExamSettings(org.id);
+  const { byName } = useExamCohorts(org.id);
   const act = useSheetActions(org);
 
   if (!a.canMark) return <div className="page narrow"><h1>Marks sheet</h1><p>Exam Records are for trainers and the principal.</p></div>;
@@ -723,7 +1048,9 @@ function SheetEditor({ org }: { org: Organization }) {
 
   const roster = rosterFor(studentsOf(sheet.cohort), sheet.courseId);
   const isOwner = sheet.ownerUid === a.uid;
-  const editable = a.canManage || (isOwner && sheet.status === 'draft');
+  // A graduated cohort is closed: nobody changes its marks until it is reopened (Andy, 2026-10-25).
+  const closed = byName[sheet.cohort]?.closed === true;
+  const editable = !closed && (a.canManage || (isOwner && sheet.status === 'draft'));
   const loggedEdit = a.canManage && (sheet.status !== 'draft' || !isOwner);
   const w = sheet.weights;
   const used = usedComponents(w);
@@ -735,7 +1062,7 @@ function SheetEditor({ org }: { org: Organization }) {
   const showResit = roster.some((st) => failed(st.id) || typeof sheet.marks?.[st.id]?.resit === 'number');
   const done = roster.filter((st) => totals.get(st.id)!.complete).length;
   const pctDone = sheetProgress(sheet, roster.map((x) => x.id));
-  const back = a.canManage ? `${BASE}?cohort=${encodeURIComponent(sheet.cohort)}&tab=overview` : BASE;
+  const back = a.canManage ? `${BASE}?cohort=${encodeURIComponent(sheet.cohort)}` : BASE;
 
   function log(action: string, detail: string) {
     if (loggedEdit) void logExam(org.id, { action, cohort: sheet!.cohort, sheetId: sheet!.id, detail: `${sheet!.courseName}: ${detail}`, byName: a.myName });
@@ -764,7 +1091,7 @@ function SheetEditor({ org }: { org: Organization }) {
     } catch (err) { toast.show(friendlyError(err)); }
   }
 
-  const notice = sheet.status === 'approved'
+  const notice = closed ? `${sheet.cohort} has graduated and is closed, so these marks are read only.` : sheet.status === 'approved'
     ? `Approved${sheet.approvedByName ? ` by ${sheet.approvedByName}` : ''}. These results are final.${a.canManage ? ' Changes you make are written to the change log.' : ''}`
     : sheet.status === 'submitted'
       ? (a.canManage ? 'The trainer sent the Final exam. Check the marks, then approve or send back.' : 'Every paper is sent and locked. Waiting for the principal to approve it.')
@@ -778,10 +1105,10 @@ function SheetEditor({ org }: { org: Organization }) {
         <StatusPill status={sheet.status} />
       </div>
       <p className="lead">{programmeOf(sheet.courseId, s.courseName)} · {sheet.cohort} · {semesterText(sheet.semester)} · {sheet.teacherName}</p>
-      {notice && <div className={`notice small${sheet.status === 'draft' ? ' up-bad' : ''}`}>{notice}</div>}
-      {loggedEdit && sheet.status === 'draft' && <div className="notice small">You are changing a trainer's marks. Every change is written to the change log.</div>}
+      {notice && <div className={`notice small${sheet.status === 'draft' && !closed ? ' up-bad' : ''}`}>{notice}</div>}
+      {loggedEdit && !closed && sheet.status === 'draft' && <div className="notice small">You are changing a trainer's marks. Every change is written to the change log.</div>}
 
-      <Percentages org={org} sheet={sheet} canEdit={a.canManage || (isOwner && sheet.status === 'draft' && !used.some((c) => isLocked(sheet, c)) && !isLocked(sheet, 'final'))} onLog={log} />
+      <Percentages org={org} sheet={sheet} canEdit={!closed && (a.canManage || (isOwner && sheet.status === 'draft' && !used.some((c) => isLocked(sheet, c)) && !isLocked(sheet, 'final')))} onLog={log} />
 
       <section className="card stack">
         <div className="card-head"><h2>Marks</h2><span className="muted small">{done} of {roster.length} complete · {pctDone}% entered</span></div>
@@ -825,12 +1152,12 @@ function SheetEditor({ org }: { org: Organization }) {
         <p className="muted small">Marks save as you leave each box, even without internet; they send when you are back online. A total in brackets is the running total: the points earned so far out of 100.{showResit ? ` A resit replaces a failed total, up to the pass mark (${settings.passMark}%).` : ''}</p>
       </section>
 
-      <Papers org={org} sheet={sheet} roster={roster} isOwner={isOwner} onSubmitted={() => navigate(back)} />
+      {!closed && <Papers org={org} sheet={sheet} roster={roster} isOwner={isOwner} onSubmitted={() => navigate(back)} />}
 
       <MarksUpload org={org} sheet={sheet} roster={roster} editable={editable} withResit={showResit}
         locked={a.canManage ? [] : [...used.filter((c) => isLocked(sheet, c)), ...(isLocked(sheet, 'final') ? ['resit' as const] : [])]} onSaved={(detail) => log('upload', detail)} />
 
-      {a.canManage && (
+      {a.canManage && !closed && (
         <div className="row-actions no-print">
           {sheet.status !== 'approved' && <button type="button" className="btn btn-primary" onClick={() => { act.approve(sheet); navigate(back); }}>Approve</button>}
           {sheet.status !== 'draft' && <button type="button" className="btn btn-quiet" onClick={() => act.sendBack(sheet)}>{sheet.status === 'approved' ? 'Reopen for the trainer' : 'Send back to the trainer'}</button>}

@@ -181,11 +181,12 @@ describe('ADIA principal', () => {
     await assertFails(getDoc(doc(as('flavier'), `${O}/schoolReports/weekly_2026-10-12`)));
     await assertFails(getDoc(doc(as('flavier'), 'organizations/freedom/people/p1')));
   });
-  it('gives admission numbers and issues certificates, but cannot change programmes', async () => {
+  it('gives admission numbers, issues certificates and adds a department, but cannot change a programme', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/s2`), { orgId: 'adia', fullName: 'Student Two', firstName: 'Student', status: 'student', whatsappConsent: {}, ...stamps }); });
     await assertSucceeds(setDoc(doc(as('flavier'), `${O}/students/s2`), student('flavier', { admissionNo: 'ADIA/2026/0002' })));
     const cert = { orgId: 'adia', studentId: 's1', courseId: 'ict', issuedOn: '2026-12-10', ...created('flavier') };
     await assertSucceeds(setDoc(doc(as('flavier'), `${O}/certificates/s1`), cert));
-    await assertFails(setDoc(doc(as('flavier'), `${O}/courses/dress`), { orgId: 'adia', name: 'Dressmaking', levels: [], units: [], timetable: [], active: true, ...created('flavier') }));
+    await assertSucceeds(setDoc(doc(as('flavier'), `${O}/courses/dress`), { orgId: 'adia', name: 'Dressmaking', levels: [], units: [], timetable: [], active: true, ...created('flavier') }));
+    await assertFails(updateDoc(doc(as('flavier'), `${O}/courses/dress`), { name: 'Tailoring', updatedAt: serverTimestamp(), updatedBy: 'flavier' }));
   });
 });

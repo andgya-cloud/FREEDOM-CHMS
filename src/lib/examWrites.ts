@@ -1,11 +1,13 @@
 import { addDoc, collection, doc, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db, functions } from '../firebase';
 import type { ExamNoticeKind } from '../../functions/src/shared/examNotices';
 import { createRecord, createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { MARK_FIELDS, type ExamComponent, type ExamSettings, type ExamWeights, type MarkValue, type StudentMarks } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
+import { cohortKey, type CourseListItem, type ExamCohort } from '../../functions/src/shared/examCohorts';
 
 const sheetRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'examSheets', id);
 
@@ -84,6 +86,27 @@ export function saveExamSettings(orgId: string, exists: boolean, settings: ExamS
 }
 
 export { metaId as examMetaId };
+
+/** One cohort's graduation date and whether it is closed (Andy, 2026-10-25). */
+export function saveExamCohort(orgId: string, cohort: string, exists: boolean, changes: Partial<Omit<ExamCohort, 'cohort'>> & { closedAt?: unknown; reopenedAt?: unknown }) {
+  const ref = doc(db, 'organizations', orgId, 'examCohorts', cohortKey(cohort));
+  if (exists) return updateRecord(ref, changes);
+  return trackWrite(setDoc(ref, { orgId, cohort, graduationDate: null, closed: false, ...changes, ...createStamps() }));
+}
+export const closedNow = () => serverTimestamp();
+
+/** Reopening a graduated cohort needs the person's own password typed again (Andy, 2026-10-25). */
+export async function confirmPassword(password: string) {
+  const user = auth.currentUser;
+  if (!user?.email) throw new Error('Sign out and sign in again first.');
+  await reauthenticateWithCredential(user, EmailAuthProvider.credential(user.email, password));
+  await user.getIdToken(true);
+}
+
+/** ADIA's course list: every programme's courses, which a new cohort gets in one step. */
+export function saveExamCourseList(orgId: string, exists: boolean, settings: ExamSettings, courseList: CourseListItem[]) {
+  return saveExamSettings(orgId, exists, { ...settings, courseList: courseList.slice(0, 400) });
+}
 
 /** organizations/{org}/examResults/{studentId}_{cohort}: one student's semester results for one cohort. */
 export const examResultId = (studentId: string, cohort: string) => `${studentId}_${metaId(cohort)}`;

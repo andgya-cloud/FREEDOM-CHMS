@@ -4,6 +4,7 @@
  * percentage), submits it to lock it, and the principal compiles a report per programme with the
  * common courses, edits remarks and attendance, and prints result slips.
  */
+import type { CourseListItem } from './examCohorts.js';
 
 export const EXAM_COMPONENTS = ['cat1', 'cat2', 'cat3', 'final'] as const;
 export type ExamComponent = (typeof EXAM_COMPONENTS)[number];
@@ -96,6 +97,8 @@ export interface ExamSettings {
   directorTitle: string;
   /** ADIA's one weighting for every course (Andy, 2026-10-24); trainers cannot change it. */
   weights: ExamWeights;
+  /** ADIA's course list (Andy, 2026-10-25): every programme's courses, set once; a new cohort gets them in one step. Absent until first saved. */
+  courseList?: CourseListItem[];
 }
 /** ADIA's grade bands (Andy, 2026-10-24): Distinction 79 and above, Credit above 59, Pass 39 to 59, Fail below 39. */
 export const ADIA_BANDS: GradeBand[] = [

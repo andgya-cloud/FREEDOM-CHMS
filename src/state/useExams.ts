@@ -7,6 +7,7 @@ import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { examMetaId } from '../lib/examWrites';
 import { EXAM_COMPONENTS, examSettingsWithDefaults, mergedMarks, type ExamSettings, type ExamSheet, type ReportMeta } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
+import type { ExamCohort } from '../../functions/src/shared/examCohorts';
 
 export interface ExamSheetRow extends ExamSheet { submittedAt?: Timestamp | null; updatedAt?: Timestamp }
 export interface ExamLogRow { id: string; action: string; cohort: string; sheetId: string | null; detail: string; byName: string; at?: Timestamp }
@@ -126,4 +127,21 @@ export function useExamPrincipals(orgId: string, sheetId: string, on: boolean) {
     return () => { live = false; };
   }, [orgId, sheetId, on]);
   return principals;
+}
+
+/** Every cohort's graduation date and whether it is closed, by cohort name. */
+export function useExamCohorts(orgId: string) {
+  const { can } = useAuth();
+  const on = !!orgId && (can('exams.mark') || can('exams.manage') || can('users.manage') || can('people.read') || can('attendance.write'));
+  const q = useLiveQuery<ExamCohort & { id: string }>(() => (on ? col(orgId, 'examCohorts') : null), [orgId, on]);
+  const byName = useMemo(() => Object.fromEntries(q.rows.map((r) => [r.cohort, r])) as Record<string, ExamCohort | undefined>, [q.rows]);
+  return { byName, loading: q.loading };
+}
+
+/** Every marks sheet of every cohort, for the principal's course list. */
+export function useAllExamSheets(orgId: string) {
+  const a = useExamAccess();
+  const q = useLiveQuery<ExamSheetRow>(() => (orgId && a.canManage ? col(orgId, 'examSheets') : null), [orgId, a.canManage]);
+  const sheets = useMemo(() => q.rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt), [q.rows]);
+  return { sheets, loading: q.loading };
 }
