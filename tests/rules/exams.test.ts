@@ -138,6 +138,9 @@ describe('exam records rules', () => {
     await assertFails(setDoc(cref(as('principal')), cohort('principal', { graduationDate: '11/12/2026' })));
     await assertSucceeds(setDoc(cref(as('principal')), cohort('principal')));
     await assertSucceeds(getDoc(cref(as('grace'))));
+    await assertSucceeds(updateDoc(cref(as('principal')), { deadlines: { cat1: '2026-10-01', final: '2026-12-01' }, ...touched('principal') }));
+    await assertFails(updateDoc(cref(as('principal')), { deadlines: { cat9: '2026-10-01' }, ...touched('principal') }));
+    await assertFails(updateDoc(cref(as('principal')), { deadlines: { cat1: 'soon' }, ...touched('principal') }));
     await assertSucceeds(getDoc(cref(as('staff'))));
     // Closed: nobody changes its marks, not even the principal, and no new courses.
     await assertSucceeds(updateDoc(cref(stale('principal')), { closed: true, closedByName: 'Principal', closedAt: serverTimestamp(), ...touched('principal') }));
@@ -155,9 +158,11 @@ describe('exam records rules', () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users/flavier'), { email: 'f@example.org', displayName: 'Flavier', roleId: 'principal', extraPermissions: [], orgIds: ['adia'], allOrgs: false, permissions: ['people.read', 'exams.manage', 'school.manage'], active: true });
     });
-    const settings = { orgId: 'adia', passMark: 39, bands: [{ min: 39, grade: 'Pass', remark: '' }], principalName: 'F', principalTitle: 'Principal', directorName: 'A', directorTitle: 'Director', weights, courseList: [{ name: 'Networking', courseId: 'ict', semester: 1 }], ...stamps('flavier') };
+    const settings = { orgId: 'adia', passMark: 39, bands: [{ min: 39, grade: 'Pass', remark: '' }], principalName: 'F', principalTitle: 'Principal', directorName: 'A', directorTitle: 'Director', weights, minAttendance: 75, courseList: [{ name: 'Networking', courseId: 'ict', semester: 1 }], ...stamps('flavier') };
     await assertSucceeds(setDoc(doc(as('flavier'), 'organizations/adia/examSettings/main'), settings));
     await assertFails(setDoc(doc(as('grace'), 'organizations/adia/examSettings/main'), settings));
+    await assertFails(updateDoc(doc(as('flavier'), 'organizations/adia/examSettings/main'), { minAttendance: 150, ...touched('flavier') }));
+    await assertSucceeds(updateDoc(doc(as('flavier'), 'organizations/adia/examSettings/main'), { minAttendance: null, ...touched('flavier') }));
     const course = { orgId: 'adia', name: 'Beauty Therapy', levels: [], units: [], timetable: [], active: true, ...stamps('flavier') };
     await assertSucceeds(setDoc(doc(as('flavier'), 'organizations/adia/courses/beauty_therapy'), course));
     await assertFails(setDoc(doc(as('grace'), 'organizations/adia/courses/beauty_x'), course));

@@ -110,6 +110,24 @@ function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[
 
 const toTranscript = (r: Row): Transcript => ({ name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: r.cohort, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes });
 
+/** One student's transcript (Andy, 2026-10-25, 5A: Find a student). */
+export function TranscriptButton({ org, cohort, label = cohort, student, sheets, courseName }: {
+  org: Organization; cohort: string; label?: string; student: ExamStudent; sheets: ExamSheetRow[]; courseName: (id: string) => string;
+}) {
+  const { settings } = useExamSettings(org.id);
+  const { results } = useExamResults(org.id, cohort);
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  async function pdf() {
+    setBusy(true);
+    try {
+      const rows = buildRows(cohort, [student], results.filter((r) => r.studentId === student.id), sheets, settings, courseName);
+      downloadFile(await transcriptsPdf({ transcripts: rows.map((r) => ({ ...toTranscript(r), cohort: label })), settings, title: student.name }));
+    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
+  }
+  return <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void pdf()}>{busy ? 'Preparing…' : 'Transcript (PDF)'}</button>;
+}
+
 /** The principal's upload of past semester results, with a preview before anything is saved. */
 export function ResultsUpload({ org, allStudents }: { org: Organization; allStudents: ImportStudent[] }) {
   const toast = useToast();

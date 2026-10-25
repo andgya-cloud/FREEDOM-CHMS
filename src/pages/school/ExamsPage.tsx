@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
@@ -12,12 +12,12 @@ import {
 } from '../../lib/examWrites';
 import { saveCourse, saveIntake } from '../../lib/schoolWrites';
 import {
-  classOf, classText, cohortLabel, courseListFromSheets, courseListKey, dayMonthYear, lastTrainers, missingCourses, nextCohortName, orderCohorts, sortCourseList, withCourse,
-  type CourseListItem, type ExamCohort,
+  classOf, classText, cohortLabel, dueText, latePapers, nextDue, notEligible, courseListFromSheets, courseListKey, dayMonthYear, lastTrainers, missingCourses, nextCohortName, orderCohorts, sortCourseList, withCourse,
+  type CourseListItem, type ExamCohort, type ExamDeadlines,
 } from '../../../functions/src/shared/examCohorts';
 import { examNoticeText, type ExamNoticeKind } from '../../../functions/src/shared/examNotices';
-import { bandsText, resultSlipsPdf } from '../../lib/examPdf';
-import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
+import { bandsText, marksSheetPdf, resultSlipsPdf } from '../../lib/examPdf';
+import { MarksUpload, ResultsAndTranscripts, ResultsUpload, TranscriptButton } from './ExamResults';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
@@ -27,6 +27,7 @@ import {
   type ExamComponent, type ExamSettings, type ExamSheetStatus, type ExamStudent, type ExamWeights, type GradeBand,
 } from '../../../functions/src/shared/exams';
 import { studentAttendance } from '../../../functions/src/shared/school';
+import { localDateKey } from '../../../functions/src/shared/datetime';
 import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 import type { CourseRow as Programme } from '../../state/useSchool';
@@ -46,10 +47,11 @@ export function ExamSheetPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type View = 'home' | 'results' | 'setup' | 'log';
+type View = 'home' | 'results' | 'setup' | 'student';
 /** Links saved before the redesign (Andy, 2026-10-25) still land on the right screen. */
 const OLD_VIEWS: Record<string, View> = {
-  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'results', setup: 'setup', sheets: 'setup', grading: 'setup', log: 'log',
+  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'results', setup: 'setup', sheets: 'setup', grading: 'setup',
+  log: 'setup', student: 'student',
 };
 type CohortOrder = ReturnType<typeof orderCohorts>;
 
@@ -87,10 +89,13 @@ function Exams({ org }: { org: Organization }) {
   const a = useExamAccess();
   const { can } = useAuth();
   const { s, cohorts, order, info, studentsOf, allStudents, attendance } = useCohorts(org);
+  const { settings } = useExamSettings(org.id);
   const [params, setParams] = useSearchParams();
   const picked = params.get('cohort');
   const cohort = picked && cohorts.includes(picked) ? picked : order.current[0]?.name ?? cohorts[0] ?? '';
-  const view: View = OLD_VIEWS[params.get('view') ?? params.get('tab') ?? ''] ?? 'home';
+  const rawView = params.get('view') ?? params.get('tab') ?? '';
+  const view: View = OLD_VIEWS[rawView] ?? 'home';
+  const dept = params.get('dept') ?? '';
   const go = (changes: Record<string, string>) => {
     const p = new URLSearchParams(params);
     p.delete('tab');
@@ -109,7 +114,7 @@ function Exams({ org }: { org: Organization }) {
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} courseName={s.courseName} />;
-  const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'log' ? 'Change log' : '';
+  const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'student' ? 'Student' : '';
 
   return (
     <div className="page narrow exams">
@@ -119,7 +124,7 @@ function Exams({ org }: { org: Organization }) {
           <span className="row-actions no-print">
             {view === 'home'
               ? <><button type="button" className="btn btn-quiet" onClick={() => go({ view: 'results' })}>Results</button><button type="button" className="btn btn-quiet" onClick={() => go({ view: 'setup' })}>Setup</button></>
-              : <button type="button" className="btn btn-quiet" onClick={() => go({ view: view === 'log' ? 'setup' : '' })}>← {view === 'log' ? 'Setup' : 'Courses'}</button>}
+              : <button type="button" className="btn btn-quiet" onClick={() => go({ view: '', student: '', section: '' })}>← Courses</button>}
           </span>
         )}
       </div>
@@ -128,24 +133,119 @@ function Exams({ org }: { org: Organization }) {
           <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort under <Link to="/school/courses">Programmes</Link> first.</>}</div>
           {canStart && <NewCohort org={org} cohorts={cohorts} programmes={s.courses} today={s.today} onStarted={(c) => go({ cohort: c })} />}
         </section>
+      ) : view === 'student' ? (
+        <StudentRecord org={org} studentId={params.get('student') ?? ''} s={s} studentsOf={studentsOf} info={info} attendance={attendance} minAttendance={settings.minAttendance ?? null} />
       ) : (
         <>
-          <select className="exam-cohort-pick no-print" aria-label="Cohort" value={cohort} onChange={(e) => go({ cohort: e.target.value })}>
-            {order.current.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}
-            {order.past.length > 0 && <optgroup label="Past cohorts">{order.past.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
-          </select>
+          {/* Dropdowns keep the page uncluttered (Andy, 2026-10-25): the cohort, then one department or all. */}
+          <div className="exam-pickers no-print">
+            <select className="exam-cohort-pick" aria-label="Cohort" value={cohort} onChange={(e) => go({ cohort: e.target.value })}>
+              {order.current.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}
+              {order.past.length > 0 && <optgroup label="Past cohorts">{order.past.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
+            </select>
+            {view === 'home' && (
+              <select className="exam-dept-pick" aria-label="Department" value={dept} onChange={(e) => go({ dept: e.target.value })}>
+                <option value="">All departments</option>
+                {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value={COMMON}>Common courses</option>
+              </select>
+            )}
+          </div>
           <div className="print-only exam-print-head"><strong>ADIA Training Centre</strong> · {label}</div>
-          <ClassLine org={org} cohort={cohort} closed={closed} graduationDate={choice?.graduationDate ?? null} closedByName={info[cohort]?.closedByName ?? null} today={s.today} onSetDate={() => go({ view: 'setup' })} />
-          {view === 'home' && <Home org={org} cohort={cohort} closed={closed} sheets={sheets} students={students} courses={courses} courseList={courseList} onSetup={() => go({ view: 'setup' })} />}
-          {view === 'results' && <Results org={org} cohort={cohort} label={label} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} />}
+          <ClassLine org={org} cohort={cohort} closed={closed} graduationDate={choice?.graduationDate ?? null} closedByName={info[cohort]?.closedByName ?? null} today={s.today} onSetDate={() => go({ view: 'setup', section: 'graduation' })} />
+          {view === 'home' && (
+            <>
+              <FindStudent students={allStudents} onPick={(id) => go({ view: 'student', student: id })} />
+              <Home org={org} cohort={cohort} closed={closed} dept={dept} sheets={sheets} students={students} courses={courses} courseList={courseList}
+                deadlines={info[cohort]?.deadlines} today={s.today} onSetup={() => go({ view: 'setup', section: 'courses' })} />
+            </>
+          )}
+          {view === 'results' && <Results org={org} cohort={cohort} label={label} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} minAttendance={settings.minAttendance ?? null} />}
           {view === 'setup' && (
             <Setup org={org} cohort={cohort} cohorts={cohorts} order={order} closed={closed} info={info} sheets={sheets} students={students} courses={courses} programmes={s.courses}
-              courseList={courseList} allStudents={allStudents} today={s.today} canStart={canStart} onLog={() => go({ view: 'log' })} onStarted={(c) => go({ cohort: c, view: '' })} />
+              courseList={courseList} allStudents={allStudents} today={s.today} canStart={canStart} section={rawView === 'log' ? 'log' : params.get('section') ?? ''}
+              onSection={(x) => go({ view: 'setup', section: x })} onStarted={(c) => go({ cohort: c, view: '', section: '' })} />
           )}
-          {view === 'log' && <ChangeLog org={org} cohort={cohort} />}
         </>
       )}
     </div>
+  );
+}
+
+/** "Find a student" (Andy, 2026-10-25, 5A): any cohort, by name or admission number. */
+function FindStudent({ students, onPick }: { students: { id: string; name: string; admissionNo: string; cohort: string }[]; onPick: (id: string) => void }) {
+  const [q, setQ] = useState('');
+  const t = q.trim().toLowerCase();
+  const plain = t.replace(/[^a-z0-9]/g, '');
+  const hits = t.length < 2 ? [] : students.filter((st) => st.name.toLowerCase().includes(t) || (plain && st.admissionNo.toLowerCase().replace(/[^a-z0-9]/g, '').includes(plain))).slice(0, 8);
+  return (
+    <div className="exam-find no-print">
+      <input type="search" value={q} placeholder="Find a student by name or admission number" aria-label="Find a student" onChange={(e) => setQ(e.target.value)} />
+      {t.length >= 2 && (
+        <ul className="exam-find-hits">
+          {hits.length === 0 ? <li className="muted small">No student matches "{q.trim()}".</li> : hits.map((st) => (
+            <li key={st.id}><button type="button" onClick={() => onPick(st.id)}><strong>{st.name}</strong><span className="muted small">{st.admissionNo || 'No admission no.'} · {st.cohort || 'No cohort'}</span></button></li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** One student's record: every course's marks, their standing, attendance and transcript. */
+function StudentRecord({ org, studentId, s, studentsOf, info, attendance, minAttendance }: {
+  org: Organization; studentId: string; s: ReturnType<typeof useSchoolPage>; studentsOf: (cohort: string) => ExamStudent[];
+  info: Record<string, ExamCohort | undefined>; attendance: Record<string, number | null>; minAttendance: number | null;
+}) {
+  const { settings } = useExamSettings(org.id);
+  const st = s.students.find((x) => x.id === studentId);
+  const cohort = st ? s.intakeName(st.intakeId) : '';
+  const { sheets } = useExamSheets(org.id, cohort);
+  if (!st) return <p className="muted">{s.peopleLoading ? 'Loading…' : 'This student was not found.'}</p>;
+  const classmates = studentsOf(cohort);
+  const me: ExamStudent = classmates.find((x) => x.id === st.id) ?? { id: st.id, name: s.nameOf(st.id), admissionNo: st.admissionNo ?? '', courseId: st.courseId, courseName: s.courseName(st.courseId) };
+  const mine = sortCourseList(sheets.filter((sh) => sh.courseId == null || sh.courseId === st.courseId).map((sh) => ({ sh, name: sh.courseName, courseId: sh.courseId, semester: sh.semester ?? null })));
+  const standing = departmentSummary(st.courseId, sheets, classmates, settings).rows.find((r) => r.studentId === st.id);
+  const out = departmentSummary(st.courseId, sheets, classmates, settings).rows.filter((r) => r.position != null).length;
+  const grad = info[cohort]?.graduationDate;
+  const label = grad ? `${cohort} · ${classOf(grad)}` : cohort;
+  const att = attendance[st.id] ?? null;
+  const used = EXAM_COMPONENTS.filter((c) => mine.some(({ sh }) => usedComponents(sh.weights).includes(c)));
+  return (
+    <section className="stack">
+      <section className="card stack">
+        <div className="card-head"><h2>{me.name}</h2><TranscriptButton org={org} cohort={cohort} label={label} student={me} sheets={sheets} courseName={s.courseName} /></div>
+        <p className="muted">{me.admissionNo || 'No admission no.'} · {me.courseName || 'No department'} · {label || 'No cohort'} · {st.status}</p>
+        <KpiRow label="Standing">
+          <KpiCard label="So far" value={standing?.soFar == null ? '–' : `${standing.soFar}%`} note={standing?.grade || ''} tone="gold" />
+          <KpiCard label="Position" value={standing?.position == null ? '–' : `${standing.position} of ${out}`} note={me.courseName} />
+          <KpiCard label="Attendance" value={att == null ? '–' : `${att}%`} tone={notEligible(att, minAttendance) ? 'warn' : undefined} note={notEligible(att, minAttendance) ? `Not eligible (below ${minAttendance}%)` : ''} />
+        </KpiRow>
+      </section>
+      {mine.length === 0 ? <p className="muted">No courses for {cohort} yet.</p> : (
+        <div className="card exam-table-wrap">
+          <table className="table exam-table">
+            <thead><tr><th>Course</th><th>Semester</th>{used.map((c) => <th key={c} className="num">{EXAM_COMPONENT_LABELS[c]}</th>)}<th className="num">Total</th><th>Grade</th><th>Status</th></tr></thead>
+            <tbody>
+              {mine.map(({ sh }) => {
+                const m = sh.marks?.[st.id];
+                const u = unitTotal(sh.weights, m, settings.passMark);
+                return (
+                  <tr key={sh.id}>
+                    <td><Link to={`${BASE}/sheet/${sh.id}`}>{sh.courseName}</Link><div className="muted small">{sh.teacherName}</div></td>
+                    <td>{semesterText(sh.semester)}</td>
+                    {used.map((c) => <td key={c} className="num">{usedComponents(sh.weights).includes(c) ? (markText(m?.[c]) || '–') : ''}{usedComponents(sh.weights).includes(c) && m?.[c] != null && <span className="muted small">/{sh.weights[c].max}</span>}</td>)}
+                    <td className="num"><strong>{u.exempt ? 'EX' : u.total ?? (u.partial != null ? <span className="muted">({u.partial})</span> : '–')}</strong></td>
+                    <td>{u.exempt ? 'Exempt' : u.total == null ? '' : gradeFor(u.total, settings).grade}</td>
+                    <td><StatusPill status={sh.status} /></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -227,6 +327,7 @@ function StatusPill({ status }: { status: ExamSheetStatus | string }) {
 function MyClasses({ org, studentsOf, courseName }: { org: Organization; studentsOf: (cohort: string) => ExamStudent[]; courseName: (id: string) => string }) {
   const { sheets: mine, loading } = useMyExamSheets(org.id);
   const { byName } = useExamCohorts(org.id);
+  const today = localDateKey(new Date(), org.timeZone);
   // A graduated (closed) cohort drops off the trainer's list (Andy, 2026-10-25).
   const sheets = mine.filter((sh) => byName[sh.cohort]?.closed !== true);
   const cohorts = [...new Set(sheets.map((s) => s.cohort))];
@@ -250,6 +351,7 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
                       <span className="muted small">{programmeOf(sh.courseId, courseName)} · {semesterText(sh.semester)} · {roster.length} students</span>
                       <span className="exam-bar"><span style={{ width: `${pctDone}%` }} className={pctDone >= 100 ? 'done' : ''} /></span>
                       <span className="muted small">{pctDone}% of marks entered{sentText(sh)}</span>
+                      {(() => { const d = nextDue(sh, byName[sh.cohort]?.deadlines, today); return d && <span className={`small${d.daysLate > 0 ? ' up-bad' : ' muted'}`}>{dueText(d)}</span>; })()}
                       {sh.changeRequest && <span className="small up-bad">Waiting for the principal to unlock {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}</span>}
                       {sh.status === 'draft' && sh.returnNote && <span className="small up-bad">Sent back: {sh.returnNote}</span>}
                     </Link>
@@ -295,8 +397,9 @@ function useSheetActions(org: Organization) {
   };
 }
 
-function Home({ org, cohort, closed, sheets, students, courses, courseList, onSetup }: {
-  org: Organization; cohort: string; closed: boolean; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; courseList: CourseList; onSetup: () => void;
+function Home({ org, cohort, closed, dept, sheets, students, courses, courseList, deadlines, today, onSetup }: {
+  org: Organization; cohort: string; closed: boolean; dept: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; courseList: CourseList;
+  deadlines: ExamDeadlines | undefined; today: string; onSetup: () => void;
 }) {
   const { trainers } = useExamTrainers(org.id);
   const act = useSheetActions(org);
@@ -306,42 +409,61 @@ function Home({ org, cohort, closed, sheets, students, courses, courseList, onSe
   const count = (st: string) => sheets.filter((x) => x.status === st).length;
   const waiting = count('submitted');
   const asks = sheets.filter((x) => x.changeRequest).length;
+  const lateOf = (sh: ExamSheetRow) => (closed ? [] : latePapers(sh, deadlines, today));
+  const late = sheets.filter((x) => lateOf(x).length).length;
   const phoneOf = (uid: string) => trainers.find((t) => t.uid === uid)?.phone ?? '';
-  const remind = (sh: ExamSheetRow, pctDone: number) => waLink(phoneOf(sh.ownerUid), `Hello ${sh.teacherName}, a reminder from ADIA: your ${sh.courseName} marks for ${cohort} are ${pctDone}% entered. Please key in the rest and send each paper in Insight-IQ, Exam Records. Thank you.`);
+  const remind = (sh: ExamSheetRow, pctDone: number) => {
+    const l = lateOf(sh)[0];
+    const when = l ? ` ${EXAM_COMPONENT_LABELS[l.component]} was due on ${dayMonthYear(l.due)}, ${l.daysLate} ${l.daysLate === 1 ? 'day' : 'days'} ago.` : '';
+    return waLink(phoneOf(sh.ownerUid), `Hello ${sh.teacherName}, a reminder from ADIA: your ${sh.courseName} marks for ${cohort} are ${pctDone}% entered.${when} Please key in the rest and send each paper in Insight-IQ, Exam Records. Thank you.`);
+  };
   const rows = sheets.map((sh) => ({ courseId: sh.courseId ?? null, sh, pct: sheetProgress(sh, rosterFor(students, sh.courseId).map((x) => x.id)) }))
     .sort((x, y) => Number(!!y.sh.changeRequest) - Number(!!x.sh.changeRequest) || (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || (x.sh.semester ?? 9) - (y.sh.semester ?? 9) || x.sh.courseName.localeCompare(y.sh.courseName));
+  const groups = departmentsOf(rows, courses).filter((g) => !dept || (dept === COMMON ? g.id == null : g.id === dept));
   return (
     <section className="stack">
       <p className="muted">
         {sheets.length} {sheets.length === 1 ? 'course' : 'courses'} · {count('approved')} approved · {students.length} students
         {waiting > 0 && <> · <strong className="up-bad">{waiting} waiting for you</strong></>}
         {asks > 0 && <> · <strong className="up-bad">{asks} asking to change marks</strong></>}
+        {late > 0 && <> · <strong className="up-bad">{late} late</strong></>}
       </p>
-      {departmentsOf(rows, courses).map((g) => {
+      {groups.length === 0 && <p className="muted">No courses in this department for {cohort}.</p>}
+      {groups.map((g) => {
         const done = g.items.filter((r) => r.sh.status === 'approved').length;
+        const needs = g.items.filter((r) => r.sh.status === 'submitted' || r.sh.changeRequest || lateOf(r.sh).length).length;
         return (
-          <section key={g.id ?? COMMON} className="stack exam-dept">
-            <div className="card-head"><h2>{g.name}</h2><span className="muted small">{g.id == null ? students.length : rosterFor(students, g.id).length} students · {done} of {g.items.length} approved</span></div>
+          // Each department folds to one line (Andy, 2026-10-25, 2A); picking one department opens it.
+          <details key={g.id ?? COMMON} className="card exam-dept" open={!!dept || groups.length === 1}>
+            <summary>
+              <strong>{g.name}</strong>
+              <span className="muted small">{g.items.length} {g.items.length === 1 ? 'course' : 'courses'} · {done} approved · {g.id == null ? students.length : rosterFor(students, g.id).length} students</span>
+              {needs > 0 && !closed && <span className="badge badge-warn">{needs} need you</span>}
+            </summary>
             <ul className="exam-list">
-              {g.items.map(({ sh, pct }) => (
-                <li key={sh.id}>
-                  <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
-                    <strong>{sh.courseName || 'Untitled'}</strong>
-                    <span className="muted small">{sh.teacherName} · {semesterText(sh.semester)}{sentText(sh)}</span>
-                    <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
-                    {sh.changeRequest && !closed && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
-                  </Link>
-                  <span className="exam-list-side">
-                    {closed ? <StatusPill status={sh.status} /> : <>
-                      {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
-                      {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
-                      {sh.status === 'draft' && <a className="btn btn-quiet btn-small" href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
-                    </>}
-                  </span>
-                </li>
-              ))}
+              {g.items.map(({ sh, pct }) => {
+                const l = lateOf(sh)[0];
+                return (
+                  <li key={sh.id}>
+                    <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
+                      <strong>{sh.courseName || 'Untitled'}</strong>
+                      <span className="muted small">{sh.teacherName} · {semesterText(sh.semester)}{sentText(sh)}</span>
+                      <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
+                      {l && <span className="small up-bad">{dueText(l)}</span>}
+                      {sh.changeRequest && !closed && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
+                    </Link>
+                    <span className="exam-list-side">
+                      {closed ? <StatusPill status={sh.status} /> : <>
+                        {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
+                        {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
+                        {sh.status === 'draft' && <a className={`btn btn-small ${l ? 'btn-primary' : 'btn-quiet'}`} href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
+                      </>}
+                    </span>
+                  </li>
+                );
+              })}
             </ul>
-          </section>
+          </details>
         );
       })}
     </section>
@@ -485,28 +607,29 @@ function Departments({ org, cohort, sheets, students, courses }: { org: Organiza
 
 type Period = 'departments' | '1' | '2' | 'final' | 'none';
 
-function Results({ org, cohort, label, sheets, students, courses, courseName, attendance }: {
+function Results({ org, cohort, label, sheets, students, courses, courseName, attendance, minAttendance }: {
   org: Organization; cohort: string; label: string; sheets: ExamSheetRow[]; students: ExamStudent[];
-  courses: { id: string; name: string }[]; courseName: (id: string) => string; attendance: Record<string, number | null>;
+  courses: { id: string; name: string }[]; courseName: (id: string) => string; attendance: Record<string, number | null>; minAttendance: number | null;
 }) {
   const [period, setPeriod] = useState<Period>('departments');
-  const periods: [Period, string][] = [['departments', 'Departments'], ['1', 'Semester 1'], ['2', 'Semester 2'], ['final', 'Final & transcripts']];
+  const periods: [Period, string][] = [['departments', 'Department summary'], ['1', 'Semester 1'], ['2', 'Semester 2'], ['final', 'Final & transcripts']];
   if (sheets.some((s) => !s.semester)) periods.push(['none', 'No semester']);
   const inPeriod = sheets.filter((s) => (period === 'none' ? !s.semester : s.semester === Number(period)));
   return (
     <section className="stack">
-      <div className="segmented wrap no-print" role="tablist" aria-label="Results">
-        {periods.map(([k, text]) => <button key={k} type="button" role="tab" aria-selected={period === k} className={period === k ? 'on' : ''} onClick={() => setPeriod(k)}>{text}</button>)}
-      </div>
+      {/* One dropdown instead of tabs (Andy, 2026-10-25, 3A). */}
+      <label className="field exam-show no-print"><span>Show</span>
+        <select value={period} onChange={(e) => setPeriod(e.target.value as Period)}>{periods.map(([k, text]) => <option key={k} value={k}>{text}</option>)}</select>
+      </label>
       {period === 'departments' ? <Departments org={org} cohort={cohort} sheets={sheets} students={students} courses={courses} />
         : period === 'final' ? <ResultsAndTranscripts org={org} cohort={cohort} label={label} sheets={sheets} students={students} courseName={courseName} />
-          : <Reports org={org} cohort={cohort} label={label} period={periods.find((p) => p[0] === period)![1]} sheets={inPeriod} students={students} courses={courses} attendance={attendance} />}
+          : <Reports org={org} cohort={cohort} label={label} period={periods.find((p) => p[0] === period)![1]} sheets={inPeriod} students={students} courses={courses} attendance={attendance} minAttendance={minAttendance} />}
     </section>
   );
 }
 
-function Reports({ org, cohort, label, period, sheets, students, courses, attendance }: {
-  org: Organization; cohort: string; label: string; period: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; attendance: Record<string, number | null>;
+function Reports({ org, cohort, label, period, sheets, students, courses, attendance, minAttendance }: {
+  org: Organization; cohort: string; label: string; period: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; attendance: Record<string, number | null>; minAttendance: number | null;
 }) {
   const a = useExamAccess();
   const toast = useToast();
@@ -609,7 +732,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
                   <td className="num"><strong>{r.average ?? '–'}</strong></td>
                   <td>{r.grade}{r.provisional && r.grade && <div className="muted small">provisional</div>}</td>
                   <td><input className="exam-remark" defaultValue={r.remarks} key={`${r.studentId}-${r.remarks}`} maxLength={300} aria-label={`Remarks for ${r.name}`} onBlur={(e) => remark(r.studentId, e.target.value === r.remarksAuto ? '' : e.target.value, r.remarksEdited ? r.remarks : '')} /></td>
-                  <td className="num">{r.attendance ?? '–'}</td>
+                  <td className={`num${notEligible(r.attendance, minAttendance) ? ' up-bad' : ''}`}>{r.attendance ?? '–'}{notEligible(r.attendance, minAttendance) && <div className="small">Not eligible</div>}</td>
                   <td className="no-print"><button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => void slips([r])}>{busy === r.studentId ? '…' : 'Slip'}</button></td>
                 </tr>
               ))}
@@ -624,39 +747,88 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
 
 /* ---------- Setup ---------- */
 
-function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, courses, programmes, courseList, allStudents, today, canStart, onLog, onStarted }: {
+type Section = 'courses' | 'graduation' | 'deadlines' | 'list' | 'cohort' | 'percentages' | 'grading' | 'upload' | 'log';
+
+/** Setup: one dropdown, and only the part picked shows (Andy, 2026-10-25, 4A). */
+function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, courses, programmes, courseList, allStudents, today, canStart, section, onSection, onStarted }: {
   org: Organization; cohort: string; cohorts: string[]; order: CohortOrder; closed: boolean; info: Record<string, ExamCohort | undefined>; sheets: ExamSheetRow[]; students: ExamStudent[];
   courses: { id: string; name: string }[]; programmes: Programme[]; courseList: CourseList; allStudents: Parameters<typeof ResultsUpload>[0]['allStudents'];
-  today: string; canStart: boolean; onLog: () => void; onStarted: (cohort: string) => void;
+  today: string; canStart: boolean; section: string; onSection: (section: Section) => void; onStarted: (cohort: string) => void;
 }) {
   const { can } = useAuth();
-  const { settings } = useExamSettings(org.id);
-  const w = settings.weights;
-  const depts = new Set(courseList.list.filter((c) => c.courseId != null).map((c) => c.courseId)).size;
+  const sections: [Section, string][] = [
+    ['courses', `Courses and trainers · ${cohort}`], ['graduation', `Graduation date · ${cohort}`], ['deadlines', `Deadlines and attendance · ${cohort}`],
+    ['list', 'Course list and departments'], ...(canStart ? [['cohort', `Start a new cohort (next: ${nextCohortName(cohorts)})`] as [Section, string]] : []),
+    ['percentages', 'Starting percentages'], ['grading', 'Grading and signatures'], ['upload', 'Upload past results'], ['log', 'Change log'],
+  ];
+  const pick: Section = sections.some(([k]) => k === section) ? (section as Section) : 'courses';
   return (
     <section className="stack">
-      <Graduation org={org} cohort={cohort} info={info[cohort]} sheets={sheets} today={today} />
-      {!closed && <NewCohortCourses org={org} cohort={cohort} sheets={sheets} courses={courses} courseList={courseList} />}
-      <CourseSetup org={org} cohort={cohort} closed={closed} sheets={sheets} students={students} courses={courses} courseList={courseList} />
-      {/* Set once and seldom changed, so folded away (Andy, 2026-10-24). */}
-      <Fold title="Course list" note={`${courseList.list.length} courses · ${depts} ${depts === 1 ? 'department' : 'departments'}`}>
-        <CourseListEditor org={org} courses={courses} courseList={courseList} canAddDepartment={can('settings.manage') || can('school.manage')} current={order.current} />
-      </Fold>
-      {canStart && <Fold title="Start a new cohort" note={`Next: ${nextCohortName(cohorts)}`}><NewCohort org={org} cohorts={cohorts} programmes={programmes} today={today} onStarted={onStarted} /></Fold>}
-      <Fold title="Starting percentages" note={EXAM_COMPONENTS.filter((c) => w[c].wt > 0).map((c) => `${EXAM_COMPONENT_LABELS[c]} ${w[c].wt}%`).join(' · ')}><Weighting org={org} /></Fold>
-      <Fold title="Grading and signatures" note={`Pass mark ${settings.passMark}%`}><Grading org={org} /></Fold>
-      <Fold title="Upload past results" note="From your Excel cohort files"><ResultsUpload org={org} allStudents={allStudents} /></Fold>
-      <button type="button" className="btn-link align-start small" onClick={onLog}>See the change log</button>
+      <label className="field exam-show no-print"><span>What do you want to do?</span>
+        <select value={pick} onChange={(e) => onSection(e.target.value as Section)}>{sections.map(([k, text]) => <option key={k} value={k}>{text}</option>)}</select>
+      </label>
+      {pick === 'courses' && <>
+        {!closed && <NewCohortCourses org={org} cohort={cohort} sheets={sheets} courses={courses} courseList={courseList} />}
+        <CourseSetup org={org} cohort={cohort} closed={closed} sheets={sheets} students={students} courses={courses} courseList={courseList} />
+      </>}
+      {pick === 'graduation' && (closed
+        ? <p className="notice">{cohort} has graduated and is closed. Reopen it at the top of the page to change its date.</p>
+        : <Graduation org={org} cohort={cohort} info={info[cohort]} sheets={sheets} today={today} />)}
+      {pick === 'deadlines' && <Deadlines org={org} cohort={cohort} info={info[cohort]} closed={closed} />}
+      {pick === 'list' && <CourseListEditor org={org} courses={courses} courseList={courseList} canAddDepartment={can('settings.manage') || can('school.manage')} current={order.current} />}
+      {pick === 'cohort' && <NewCohort org={org} cohorts={cohorts} programmes={programmes} today={today} onStarted={onStarted} />}
+      {pick === 'percentages' && <Weighting org={org} />}
+      {pick === 'grading' && <Grading org={org} />}
+      {pick === 'upload' && <ResultsUpload org={org} allStudents={allStudents} />}
+      {pick === 'log' && <ChangeLog org={org} cohort={cohort} />}
     </section>
   );
 }
 
-function Fold({ title, note, children }: { title: string; note: string; children: ReactNode }) {
+/**
+ * When each paper's marks are due for the cohort (Andy, 2026-10-25, 6A), and the attendance a student
+ * needs to sit the Final (7A).
+ */
+function Deadlines({ org, cohort, info, closed }: { org: Organization; cohort: string; info: ExamCohort | undefined; closed: boolean }) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const { settings, exists } = useExamSettings(org.id);
+  const [min, setMin] = useState<string | null>(null);
+  const due = info?.deadlines ?? {};
+  function setDue(c: ExamComponent, v: string) {
+    if ((due[c] ?? '') === v || (v && v.length !== 10)) return;
+    const next: ExamDeadlines = { ...due };
+    if (v) next[c] = v; else delete next[c];
+    saveExamCohort(org.id, cohort, !!info, { deadlines: next }).catch((err) => toast.show(friendlyError(err)));
+    void logExam(org.id, { action: 'deadline', cohort, sheetId: null, detail: `${paperName(c)} due ${v ? dayMonthYear(v) : '(none)'}`, byName: a.myName });
+  }
+  function saveMin() {
+    const v = min == null || min.trim() === '' ? null : Number(min);
+    if (v != null && !(v >= 0 && v <= 100)) return toast.show('Type a percentage from 0 to 100, or leave it empty for no rule.');
+    saveExamSettings(org.id, exists, { ...settings, minAttendance: v }).then(() => toast.show(v ? `Students below ${v}% attendance are flagged.` : 'No attendance rule.'), (err) => toast.show(friendlyError(err)));
+    void logExam(org.id, { action: 'attendance rule', cohort: 'All cohorts', sheetId: null, detail: v ? `Minimum attendance for the Final: ${v}%` : 'Attendance rule removed', byName: a.myName });
+    setMin(null);
+  }
   return (
-    <details className="card exam-fold">
-      <summary><strong>{title}</strong><span className="muted small">{note}</span></summary>
-      {children}
-    </details>
+    <>
+      <section className="card stack">
+        <h2>Deadlines · {cohort}</h2>
+        <p className="muted small">When each paper's marks are due. A course that has not sent a paper by its date shows as late, and Remind says how late.</p>
+        <div className="form-grid">
+          {EXAM_COMPONENTS.map((c) => (
+            <label key={c} className="field"><span>{paperName(c)}</span><input type="date" disabled={closed} defaultValue={due[c] ?? ''} key={`${c}-${due[c] ?? ''}`} onChange={(e) => setDue(c, e.target.value)} /></label>
+          ))}
+        </div>
+      </section>
+      <section className="card stack">
+        <h2>Attendance for the Final</h2>
+        <p className="muted small">Students below this attendance are flagged "Not eligible" on marks sheets and results. Leave it empty for no rule. It applies to every cohort.</p>
+        <div className="row-actions">
+          <label className="field"><span>Minimum attendance (%)</span><input inputMode="decimal" value={min ?? String(settings.minAttendance ?? '')} placeholder="e.g. 75" onChange={(e) => setMin(e.target.value)} /></label>
+          <button type="button" className="btn btn-primary align-end" disabled={min == null} onClick={saveMin}>Save</button>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -1037,8 +1209,9 @@ function SheetEditor({ org }: { org: Organization }) {
   const a = useExamAccess();
   const toast = useToast();
   const navigate = useNavigate();
-  const { s, studentsOf } = useCohorts(org);
+  const { s, studentsOf, attendance } = useCohorts(org);
   const { sheet, loading } = useExamSheet(org.id, sheetId);
+  const [printing, setPrinting] = useState(false);
   const { settings } = useExamSettings(org.id);
   const { byName } = useExamCohorts(org.id);
   const act = useSheetActions(org);
@@ -1064,6 +1237,21 @@ function SheetEditor({ org }: { org: Organization }) {
   const pctDone = sheetProgress(sheet, roster.map((x) => x.id));
   const back = a.canManage ? `${BASE}?cohort=${encodeURIComponent(sheet.cohort)}` : BASE;
 
+  // Below the attendance rule: flagged, not blocked (Andy, 2026-10-25, 7A).
+  const flagged = (id: string) => notEligible(attendance[id], settings.minAttendance);
+  const flaggedCount = roster.filter((st) => flagged(st.id)).length;
+  async function print() {
+    setPrinting(true);
+    try {
+      const grad = byName[sheet!.cohort]?.graduationDate;
+      const file = await marksSheetPdf({
+        courseName: sheet!.courseName, programme: programmeOf(sheet!.courseId, s.courseName), cohort: grad ? `${sheet!.cohort} · ${classOf(grad)}` : sheet!.cohort,
+        semester: semesterText(sheet!.semester), teacherName: sheet!.teacherName, status: sheet!.status === 'approved' ? 'Approved' : sheet!.status === 'submitted' ? 'Waiting for approval' : 'Marking',
+        weights: w, settings, rows: roster.map((st) => ({ admissionNo: st.admissionNo, name: st.name, marks: sheet!.marks?.[st.id], flag: flagged(st.id) ? 'not eligible' : undefined })),
+      });
+      await shareOrDownload(file, `${sheet!.courseName} marks sheet`);
+    } catch (err) { toast.show(friendlyError(err)); } finally { setPrinting(false); }
+  }
   function log(action: string, detail: string) {
     if (loggedEdit) void logExam(org.id, { action, cohort: sheet!.cohort, sheetId: sheet!.id, detail: `${sheet!.courseName}: ${detail}`, byName: a.myName });
   }
@@ -1102,7 +1290,7 @@ function SheetEditor({ org }: { org: Organization }) {
       <p className="no-print"><Link to={back}>← {a.canManage ? 'Exam Records' : 'My classes'}</Link></p>
       <div className="page-head">
         <h1>{sheet.courseName || 'Untitled course'}</h1>
-        <StatusPill status={sheet.status} />
+        <span className="row-actions"><StatusPill status={sheet.status} /><button type="button" className="btn btn-quiet btn-small no-print" disabled={printing || !roster.length} onClick={() => void print()}>{printing ? 'Preparing…' : 'Print marks sheet'}</button></span>
       </div>
       <p className="lead">{programmeOf(sheet.courseId, s.courseName)} · {sheet.cohort} · {semesterText(sheet.semester)} · {sheet.teacherName}</p>
       {notice && <div className={`notice small${sheet.status === 'draft' && !closed ? ' up-bad' : ''}`}>{notice}</div>}
@@ -1114,6 +1302,7 @@ function SheetEditor({ org }: { org: Organization }) {
         <div className="card-head"><h2>Marks</h2><span className="muted small">{done} of {roster.length} complete · {pctDone}% entered</span></div>
         <span className="exam-bar"><span style={{ width: `${pctDone}%` }} className={pctDone >= 100 ? 'done' : ''} /></span>
         <p className="small muted">Type a mark, <strong>ABS</strong> for absent (counts as 0) or <strong>EX</strong> for exempt. A sent paper is locked.</p>
+        {flaggedCount > 0 && <p className="small up-bad">{flaggedCount} {flaggedCount === 1 ? 'student is' : 'students are'} below {settings.minAttendance}% attendance and not eligible for the Final.</p>}
         {roster.length === 0 ? <p className="muted">No enrolled students in {sheet.cohort}{sheet.courseId ? ` for ${s.courseName(sheet.courseId)}` : ''}. Students come from the Students list, by intake.</p> : (
           <div className="exam-table-wrap">
             <table className="table exam-marks">
@@ -1124,7 +1313,7 @@ function SheetEditor({ org }: { org: Organization }) {
                   const u = totals.get(st.id)!;
                   return (
                     <tr key={st.id}>
-                      <td>{st.name}<div className="muted small">{st.admissionNo}{sheet.courseId == null ? ` · ${st.courseName}` : ''}</div></td>
+                      <td>{st.name}<div className="muted small">{st.admissionNo}{sheet.courseId == null ? ` · ${st.courseName}` : ''}</div>{flagged(st.id) && <span className="badge badge-warn">Not eligible · {attendance[st.id]}%</span>}</td>
                       {used.map((c) => (
                         <td key={c} className="num">
                           <input className="exam-mark" disabled={!editable || lockedForMe(c)} defaultValue={markText(m?.[c])} key={`${st.id}-${c}-${markText(m?.[c])}`} autoCapitalize="characters"

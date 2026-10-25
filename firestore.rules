@@ -1550,11 +1550,18 @@ service cloud.firestore {
       function recentSignIn() {
         return request.auth.token.auth_time is int && request.time.toMillis() - request.auth.token.auth_time * 1000 < 300000;
       }
+      // When each paper's marks are due (Andy, 2026-10-25).
+      function examDeadlines(d) {
+        return d is map && d.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final'])
+          && (!('cat1' in d) || isDate(d.cat1)) && (!('cat2' in d) || isDate(d.cat2))
+          && (!('cat3' in d) || isDate(d.cat3)) && (!('final' in d) || isDate(d.final));
+      }
       match /examCohorts/{key} {
         allow read: if ex('exams.mark') || schoolRead();
         allow create, update: if ex('exams.manage')
-          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'graduationDate', 'closed', 'closedAt', 'closedByName', 'reopenedAt', 'reopenedByName',
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'graduationDate', 'closed', 'closedAt', 'closedByName', 'reopenedAt', 'reopenedByName', 'deadlines',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('deadlines' in request.resource.data) || examDeadlines(request.resource.data.deadlines))
           && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
           && key == cohortKey(request.resource.data.cohort)
           && (request.resource.data.graduationDate == null || isDate(request.resource.data.graduationDate))
@@ -1575,8 +1582,10 @@ service cloud.firestore {
       match /examSettings/{settingId} {
         allow read: if ex('exams.manage') || ex('exams.mark');
         allow create, update: if ex('exams.manage') && settingId == 'main'
-          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList',
+          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList', 'minAttendance',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('minAttendance' in request.resource.data) || request.resource.data.minAttendance == null
+              || (request.resource.data.minAttendance is number && request.resource.data.minAttendance >= 0 && request.resource.data.minAttendance <= 100))
           && (!('courseList' in request.resource.data) || listOf(request.resource.data.courseList, 400))
           && (!('weights' in request.resource.data) || examWeights(request.resource.data.weights))
           && request.resource.data.orgId == orgId

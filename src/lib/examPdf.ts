@@ -1,6 +1,6 @@
 import { crestImage } from './payrollPdf';
 import { newPdf } from './givingPdf';
-import { EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, type ExamReport, type ExamSettings, type ReportRow } from '../../functions/src/shared/exams';
+import { EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, unitTotal, type ExamReport, type ExamSettings, type ExamWeights, type ReportRow, type StudentMarks } from '../../functions/src/shared/exams';
 import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 import type { CourseLine, FinalResult, SemesterScore } from '../../functions/src/shared/examResults';
 
@@ -333,4 +333,116 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
   stampPoweredBy(pdf);
   const safe = (transcripts.length === 1 ? transcripts[0]!.name : title).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return new File([pdf.output('blob')], `Transcript-${safe}.pdf`, { type: 'application/pdf' });
+}
+
+/**
+ * One course's marks sheet for the file (Andy, 2026-10-25, 8A): every student's CAT and Final marks, total
+ * and grade, with signature lines for the trainer and the principal.
+ */
+export async function marksSheetPdf(opts: {
+  courseName: string; programme: string; cohort: string; semester: string; teacherName: string; status: string;
+  weights: ExamWeights; rows: { admissionNo: string; name: string; marks: StudentMarks | undefined; flag?: string }[]; settings: ExamSettings;
+}): Promise<File> {
+  const { weights, settings } = opts;
+  const pdf = await newPdf('a4');
+  const w = pdf.internal.pageSize.getWidth();
+  const h = pdf.internal.pageSize.getHeight();
+  const img = await crestImage();
+  const used = EXAM_COMPONENTS.filter((c) => weights[c].wt > 0 && weights[c].max > 0);
+  // Columns: No, Adm no, Name, each paper, Total, Grade.
+  const paperX = (i: number) => 100 + i * 15;
+  const totalX = paperX(used.length) + 2;
+  const gradeX = totalX + 16;
+  const head = () => {
+    pdf.setFillColor(...NAVY);
+    pdf.rect(0, 0, w, 36, 'F');
+    pdf.setFillColor(...GOLD);
+    pdf.rect(0, 36, w, 1.8, 'F');
+    pdf.setFillColor(255, 255, 255);
+    pdf.setDrawColor(...GOLD);
+    pdf.setLineWidth(0.9);
+    pdf.circle(26, 18, 12, 'FD');
+    if (img) pdf.addImage(img, 'PNG', 18, 10, 16, 16);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(17);
+    pdf.text('ADIA Training Centre', 44, 16);
+    pdf.setTextColor(...GOLD);
+    pdf.setFontSize(9);
+    pdf.setCharSpace(1.6);
+    pdf.text('MARKS SHEET', 44, 23);
+    pdf.setCharSpace(0);
+    pdf.setTextColor(220, 224, 235);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(`${opts.cohort} · ${opts.semester}`, 44, 29.5);
+    let y = 46;
+    pdf.setFillColor(...GOLD_SOFT);
+    pdf.rect(14, y - 5, w - 28, 12, 'F');
+    const who: [string, string][] = [['COURSE', opts.courseName], ['DEPARTMENT', opts.programme], ['TRAINER', opts.teacherName], ['STATUS', opts.status]];
+    const cw = (w - 34) / 4;
+    who.forEach(([k, v], i) => {
+      const x = 18 + i * cw;
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(6.5);
+      pdf.setTextColor(138, 109, 44);
+      pdf.text(k, x, y);
+      pdf.setFontSize(9);
+      pdf.setTextColor(...NAVY);
+      pdf.text(pdf.splitTextToSize(v || '–', cw - 3)[0] as string, x, y + 4.2);
+    });
+    y += 13;
+    pdf.setFillColor(...NAVY);
+    pdf.rect(14, y - 4.5, w - 28, 7, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(255, 255, 255);
+    pdf.text('No', 16, y); pdf.text('Adm no', 23, y); pdf.text('Name', 52, y);
+    used.forEach((c, i) => { pdf.text(EXAM_COMPONENT_LABELS[c], paperX(i), y - 1.2); pdf.setFontSize(6); pdf.text(`/${weights[c].max}`, paperX(i), y + 1.6); pdf.setFontSize(7.5); });
+    pdf.text('Total', totalX, y); pdf.text('Grade', gradeX, y);
+    return y + 6.5;
+  };
+  let y = head();
+  opts.rows.forEach((r, n) => {
+    if (y > h - 52) { pdf.addPage(); y = head(); }
+    const t = unitTotal(weights, r.marks, settings.passMark);
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    pdf.setTextColor(...INK);
+    pdf.text(String(n + 1), 16, y);
+    pdf.text(pdf.splitTextToSize(r.admissionNo || '–', 28)[0] as string, 23, y);
+    pdf.text(pdf.splitTextToSize(r.name + (r.flag ? ` (${r.flag})` : ''), 46)[0] as string, 52, y);
+    used.forEach((c, i) => pdf.text(fmt(r.marks?.[c] ?? null), paperX(i), y));
+    pdf.setFont('helvetica', 'bold');
+    pdf.text(t.exempt ? 'EX' : t.total != null ? String(t.total) : t.partial != null ? `(${t.partial})` : '–', totalX, y);
+    pdf.setFont('helvetica', 'normal');
+    pdf.text(t.exempt ? 'Exempt' : t.total == null ? '–' : gradeFor(t.total, settings).grade, gradeX, y);
+    pdf.setDrawColor(229, 231, 235);
+    pdf.setLineWidth(0.2);
+    pdf.line(14, y + 2, w - 14, y + 2);
+    y += 6;
+  });
+  pdf.setFontSize(7.5);
+  pdf.setTextColor(...GREY);
+  pdf.text(pdf.splitTextToSize(`ABS = absent (0). EX = exempt. A figure in brackets is a running total. Grades: ${bandsText(settings)}.`, w - 28) as string[], 14, y + 3);
+  // Signatures.
+  const sy = h - 30;
+  pdf.setDrawColor(...GREY);
+  pdf.setLineWidth(0.3);
+  pdf.line(14, sy, 84, sy);
+  pdf.line(w - 84, sy, w - 14, sy);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...NAVY);
+  pdf.text(opts.teacherName, 14, sy + 5);
+  pdf.text(settings.principalName, w - 84, sy + 5);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(...GREY);
+  pdf.text('Trainer · signature and date', 14, sy + 9.5);
+  pdf.text(`${settings.principalTitle} · signature and date`, w - 84, sy + 9.5);
+  pdf.setFillColor(...GOLD);
+  pdf.rect(0, h - 4, w, 4, 'F');
+  stampPoweredBy(pdf);
+  const safe = `${opts.courseName}-${opts.cohort}`.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  return new File([pdf.output('blob')], `Marks-sheet-${safe}.pdf`, { type: 'application/pdf' });
 }

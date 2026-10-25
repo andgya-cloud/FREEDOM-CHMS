@@ -99,6 +99,8 @@ export interface ExamSettings {
   weights: ExamWeights;
   /** ADIA's course list (Andy, 2026-10-25): every programme's courses, set once; a new cohort gets them in one step. Absent until first saved. */
   courseList?: CourseListItem[];
+  /** Students below this attendance (%) are flagged "Not eligible" for the Final (Andy, 2026-10-25, 7A). Absent or null: no rule. */
+  minAttendance?: number | null;
 }
 /** ADIA's grade bands (Andy, 2026-10-24): Distinction 79 and above, Credit above 59, Pass 39 to 59, Fail below 39. */
 export const ADIA_BANDS: GradeBand[] = [
@@ -110,7 +112,7 @@ export const ADIA_BANDS: GradeBand[] = [
 export const DEFAULT_EXAM_SETTINGS: ExamSettings = {
   passMark: 39,
   bands: ADIA_BANDS,
-  principalName: 'Flavier Akinyichange',
+  principalName: 'Flavier Akinyi',
   principalTitle: 'Principal',
   directorName: 'Andrew Guya',
   directorTitle: 'Director',

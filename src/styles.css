@@ -1034,9 +1034,22 @@ a.kpi:hover { border-color: var(--primary); }
 .exams .badge { white-space: nowrap; }
 /* Exam Records, simple layout (Andy, 2026-10-24): cohort buttons, plain course list, folded setup sections. */
 /* Exam Records (Andy, 2026-10-25): one cohort dropdown, then each department's courses. */
-.exam-cohort-pick { align-self: flex-start; max-width: 100%; font: inherit; font-size: 1.15rem; font-weight: 600; padding: 10px 40px 10px 14px; border-radius: 12px; }
+.exam-pickers { display: flex; flex-wrap: wrap; gap: 10px; }
+.exam-pickers > select { flex: 1 1 240px; width: auto; }
+.exam-cohort-pick { max-width: 100%; font: inherit; font-size: 1.15rem; font-weight: 600; padding: 10px 40px 10px 14px; border-radius: 12px; }
+.exam-dept-pick { max-width: 100%; font: inherit; padding: 10px 40px 10px 14px; border-radius: 12px; }
+.exam-show { max-width: 420px; }
+.exam-find { position: relative; }
+.exam-find input { width: 100%; }
+.exam-find-hits { list-style: none; margin: 6px 0 0; padding: 6px; display: grid; gap: 4px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.exam-find-hits button { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 0; border-radius: 8px; background: none; color: var(--text); font: inherit; cursor: pointer; }
+.exam-find-hits button:hover, .exam-find-hits button:focus-visible { background: var(--border); }
+details.exam-dept > summary { cursor: pointer; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; list-style: none; }
+details.exam-dept > summary::-webkit-details-marker { display: none; }
+details.exam-dept > summary::before { content: '▸'; color: var(--muted); }
+details.exam-dept[open] > summary::before { content: '▾'; }
+details.exam-dept[open] > summary { margin-bottom: 10px; }
 .exam-class { margin: -6px 0 0; }
-.exam-dept + .exam-dept { margin-top: 8px; }
 @media (max-width: 600px) { .exams .page-head h1 { font-size: 1.5rem; } .exams .page-head .row-actions { flex-wrap: nowrap; } }
 .exam-dept > .card-head h2 { font-size: 1.1rem; margin: 0; }
 .exam-pick-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }

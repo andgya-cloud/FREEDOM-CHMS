@@ -4,6 +4,7 @@
  * a closed (graduated) cohort is read only; and one course list for every programme, so a new cohort
  * gets its courses in one step.
  */
+import { EXAM_COMPONENT_LABELS, isLocked, usedComponents, type ExamComponent, type ExamSheet } from './exams.js';
 
 /** A cohort's record id, the same as examMeta's: "Cohort 3" → "Cohort-3". The rules work it out the same way. */
 export function cohortKey(name: string): string {
@@ -19,7 +20,10 @@ export interface ExamCohort {
   closed: boolean;
   closedByName?: string | null;
   reopenedByName?: string | null;
+  /** When each paper's marks are due (Andy, 2026-10-25, 6A): YYYY-MM-DD for CAT 1 to 3 and the Final. */
+  deadlines?: ExamDeadlines;
 }
+export type ExamDeadlines = Partial<Record<ExamComponent, string>>;
 
 export interface CohortChoice { name: string; startDate: string | null; graduationDate: string | null; closed: boolean }
 
@@ -128,4 +132,45 @@ export function missingCourses(list: readonly CourseListItem[], cohortSheets: re
 export function withCourse(list: readonly CourseListItem[], c: CourseListItem): CourseListItem[] {
   const k = courseListKey(c);
   return list.some((x) => courseListKey(x) === k) ? [...list] : sortCourseList([...list, { name: c.name.trim().slice(0, 120), courseId: c.courseId, semester: c.semester }]);
+}
+
+/* ---------- deadlines and attendance (Andy, 2026-10-25, 6A and 7A) ---------- */
+
+/** Whole days from one YYYY-MM-DD to another (positive when `to` is later). */
+export function daysBetween(from: string, to: string): number {
+  return Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000);
+}
+
+export interface PaperDue { component: ExamComponent; due: string; daysLate: number }
+
+/**
+ * The papers of a course still being marked whose deadline has passed and that the trainer has not sent,
+ * most overdue first.
+ */
+export function latePapers(sheet: Pick<ExamSheet, 'weights' | 'locked' | 'status'>, deadlines: ExamDeadlines | undefined, today: string): PaperDue[] {
+  if (!deadlines || sheet.status !== 'draft') return [];
+  return usedComponents(sheet.weights)
+    .filter((c) => deadlines[c] && !isLocked(sheet, c) && deadlines[c]! < today)
+    .map((c) => ({ component: c, due: deadlines[c]!, daysLate: daysBetween(deadlines[c]!, today) }))
+    .sort((a, b) => b.daysLate - a.daysLate);
+}
+
+/** The next paper the trainer still has to send, with its deadline (daysLate is 0 or less while it is not late). */
+export function nextDue(sheet: Pick<ExamSheet, 'weights' | 'locked' | 'status'>, deadlines: ExamDeadlines | undefined, today: string): PaperDue | null {
+  if (!deadlines || sheet.status !== 'draft') return null;
+  const open = usedComponents(sheet.weights).filter((c) => deadlines[c] && !isLocked(sheet, c)).sort((a, b) => deadlines[a]!.localeCompare(deadlines[b]!));
+  const c = open[0];
+  return c ? { component: c, due: deadlines[c]!, daysLate: daysBetween(deadlines[c]!, today) } : null;
+}
+
+/** "CAT 2 · 3 days late", "CAT 2 due today" or "CAT 2 due 12 Nov 2026". */
+export function dueText(d: PaperDue): string {
+  const name = EXAM_COMPONENT_LABELS[d.component];
+  if (d.daysLate > 0) return `${name} · ${d.daysLate} ${d.daysLate === 1 ? 'day' : 'days'} late`;
+  return d.daysLate === 0 ? `${name} due today` : `${name} due ${dayMonthYear(d.due)}`;
+}
+
+/** Below the minimum attendance: not eligible to sit the Final. Unknown attendance, or no rule, is never flagged. */
+export function notEligible(attendance: number | null | undefined, minAttendance: number | null | undefined): boolean {
+  return minAttendance != null && minAttendance > 0 && attendance != null && attendance < minAttendance;
 }

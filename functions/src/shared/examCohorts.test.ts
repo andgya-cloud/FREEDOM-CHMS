@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  classOf, classText, cohortKey, cohortLabel, courseListFromSheets, dayMonthYear, lastTrainers, missingCourses, monthYear, nextCohortName, orderCohorts, withCourse,
+  classOf, classText, cohortKey, daysBetween, dueText, latePapers, nextDue, notEligible, cohortLabel, courseListFromSheets, dayMonthYear, lastTrainers, missingCourses, monthYear, nextCohortName, orderCohorts, withCourse,
 } from './examCohorts';
 
 const sheet = (cohort: string, courseName: string, courseId: string | null, semester: 1 | 2 | null, ownerUid = 'u1', teacherName = 'Jane') =>
@@ -64,5 +64,28 @@ describe('the course list', () => {
     expect(missingCourses(list, [sheet('Cohort 4', 'NETWORKING', 'it', 1)]).map((c) => c.name)).toEqual(['Pattern Drafting', 'Life Skills']);
     expect(withCourse(list, { name: 'networking', courseId: 'it', semester: 1 })).toHaveLength(3);
     expect(withCourse(list, { name: 'Baking', courseId: 'hosp', semester: 1 })).toHaveLength(4);
+  });
+});
+
+describe('deadlines and attendance', () => {
+  const weights = { cat1: { max: 30, wt: 20 }, cat2: { max: 100, wt: 20 }, cat3: { max: 100, wt: 0 }, final: { max: 100, wt: 60 } };
+  const deadlines = { cat1: '2026-10-01', cat2: '2026-10-20', cat3: '2026-10-01', final: '2026-12-01' };
+  it('counts days', () => { expect(daysBetween('2026-10-20', '2026-10-25')).toBe(5); });
+  it('finds late papers that are not sent, leaving out unused ones', () => {
+    const late = latePapers({ weights, status: 'draft', locked: { cat1: true } }, deadlines, '2026-10-25');
+    expect(late).toEqual([{ component: 'cat2', due: '2026-10-20', daysLate: 5 }]);
+    expect(dueText(late[0]!)).toBe('CAT 2 · 5 days late');
+    expect(latePapers({ weights, status: 'submitted', locked: {} }, deadlines, '2026-10-25')).toEqual([]);
+  });
+  it('gives the next deadline', () => {
+    const d = nextDue({ weights, status: 'draft', locked: { cat1: true, cat2: true } }, deadlines, '2026-10-25')!;
+    expect(dueText(d)).toBe('Final due 1 Dec 2026');
+    expect(dueText({ component: 'cat1', due: '2026-10-25', daysLate: 0 })).toBe('CAT 1 due today');
+  });
+  it('flags attendance below the rule only', () => {
+    expect(notEligible(62, 75)).toBe(true);
+    expect(notEligible(75, 75)).toBe(false);
+    expect(notEligible(null, 75)).toBe(false);
+    expect(notEligible(40, null)).toBe(false);
   });
 });
