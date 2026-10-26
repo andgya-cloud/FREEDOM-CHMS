@@ -124,7 +124,6 @@ export function AdiaToday({ org }: { org: Organization }) {
           </div>
         </div>
         <div className="lav-scene">
-          <Mountains />
           <FirstRunChecklist variant="scene" />
         </div>
       </section>
@@ -367,25 +366,3 @@ function Watch({ icon, tone, title, badge, alert, children }: { icon: AdiaIconNa
   );
 }
 
-/** The hills in the welcome card. */
-function Mountains() {
-  const id = useId();
-  const g = (n: string) => `${id}${n}`;
-  return (
-    <svg viewBox="0 0 400 300" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
-      <defs>
-        <linearGradient id={g('sky')} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0f1838" /><stop offset="0.3" stopColor="#24336c" /><stop offset="0.52" stopColor="#c99a4c" /></linearGradient>
-        <linearGradient id={g('m1')} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#3b4a86" /><stop offset="1" stopColor="#56649c" /></linearGradient>
-        <linearGradient id={g('m2')} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#26336a" /><stop offset="1" stopColor="#3a4780" /></linearGradient>
-        <linearGradient id={g('m3')} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#18224d" /><stop offset="1" stopColor="#253062" /></linearGradient>
-        <linearGradient id={g('m4')} x1="0" y1="0" x2="0" y2="1"><stop offset="0" stopColor="#0b1230" /><stop offset="1" stopColor="#141c44" /></linearGradient>
-      </defs>
-      <rect width="400" height="300" fill={`url(#${g('sky')})`} />
-      <circle cx="300" cy="80" r="34" fill="#e9c977" opacity="0.85" />
-      <path d="M0 170 L60 120 L110 150 L170 90 L230 140 L290 100 L350 135 L400 110 V300 H0Z" fill={`url(#${g('m1')})`} />
-      <path d="M0 200 L50 165 L100 185 L160 130 L215 180 L270 150 L330 190 L400 160 V300 H0Z" fill={`url(#${g('m2')})`} />
-      <path d="M0 235 L70 190 L130 220 L190 180 L250 225 L320 200 L400 230 V300 H0Z" fill={`url(#${g('m3')})`} />
-      <path d="M0 270 L80 235 L150 260 L230 228 L310 262 L400 245 V300 H0Z" fill={`url(#${g('m4')})`} />
-    </svg>
-  );
-}
