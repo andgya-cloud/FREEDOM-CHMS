@@ -3,6 +3,7 @@ import { Navigate, NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
 import { InstallBanner } from './InstallBanner';
+import { AdiaIntro } from './AdiaIntro';
 import { usingEmulators } from '../firebase';
 import { useOrg } from '../state/OrgContext';
 import { useTemplates } from '../state/useFollowUps';
@@ -105,6 +106,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (look === 'glass' || look === 'cockpit' || look === 'aurora') {
     return (
       <div className={`shell look-${look} side-look`}>
+        <AdiaIntro orgId={current?.id} college={current?.type === 'college'} />
         <aside className="adia-side">
           <NavLink to="/" className="brand" aria-label="Insight-IQ, Today">
             <img className="brand-logo" src="/logo-mark.png" alt="" width={56} height={56} />

@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { markIntroPending } from '../components/AdiaIntro';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut as fbSignOut, type User } from 'firebase/auth';
 import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     canAccessOrg: (orgId) => canAccessOrg(profile, orgId),
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email.trim(), password);
+      markIntroPending();
       // Recorded in the audit log by the server; doesn't block the sign-in.
       httpsCallable(functions, 'recordSignIn')().catch(() => undefined);
     },

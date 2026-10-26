@@ -1351,3 +1351,44 @@ details.fold-card > summary > span:first-child { flex: 1; }
 }
 @keyframes menu-float-in { from { opacity: 0; transform: translateX(-14px); } }
 @media (prefers-reduced-motion: reduce) { .look-glass.side-look .adia-side { animation: none; } .look-glass.side-look .tabbar .tab { transition: none; } }
+
+/* ---- ADIA in navy and gold (Andy, 2026-10-26, 5A): the light blue and purple become navy, gradients run navy to gold ---- */
+:root[data-look='glass'] {
+  --navy: #1f2a5c;
+  --adia-gold: #c99a3c;
+  --gold: #c99a3c;
+  --gold-ink: #1f2a5c;
+  --lav-grad: linear-gradient(135deg, #1f2a5c 0%, #33437f 50%, #c99a3c 100%);
+  --lav-shadow: 0 1px 2px rgba(10, 14, 30, 0.05), 0 12px 32px -10px rgba(10, 14, 30, 0.22);
+  --lav-shadow-lg: 0 24px 56px -20px rgba(10, 14, 30, 0.42);
+  --c1: #1f2a5c; --c2: #c99a3c; --c3: #5b6aa8; --c4: #e3bd6a; --c5: #34c38f; --c6: #9497b3;
+  --g-from: #1f2a5c; --g-to: #c99a3c;
+}
+.look-glass .lav-chip, .look-glass .lav-eyebrow { background: rgba(31, 42, 92, 0.08); color: var(--navy); }
+.look-glass .lav-eyebrow i { background: var(--adia-gold); }
+.look-glass .lav-go, .look-glass .lav-steps a { color: var(--navy); }
+.look-glass .lav-ico.i1 { background: linear-gradient(135deg, #1f2a5c, #3a4a8c); }
+.look-glass .lav-ico.i2 { background: linear-gradient(135deg, #2b3a78, #c99a3c); }
+.look-glass .lav-ico.i3 { background: linear-gradient(135deg, #b8862f, #e3bd6a); }
+.look-glass .lav-ico.i4 { background: linear-gradient(135deg, #0f1838, #1f2a5c); }
+.look-glass .lg-a { stop-color: #1f2a5c; } .look-glass .lg-b { stop-color: #3a4a8c; } .look-glass .lg-c { stop-color: #d2a74b; }
+.look-glass .lav-bar-col { background: linear-gradient(180deg, #e3bd6a 0%, #8a7a5e 42%, #2b3a78 72%, #1f2a5c 100%); box-shadow: 0 12px 22px -10px rgba(31, 42, 92, 0.6); }
+.look-glass .lav-badge.alert { box-shadow: 0 6px 14px -6px rgba(31, 42, 92, 0.7); }
+.look-glass .side-promo { background: linear-gradient(135deg, #1f2a5c, #2f3f7e 60%, #b8862f); }
+
+/* White buttons and action cards: a fine navy outline with a soft dark shadow (Andy, 2026-10-26, 4A). */
+.look-glass .lav-btn.ghost, .look-glass.side-look .btn-quiet, .look-glass .btn:not(.btn-primary):not(.btn-danger):not(.btn-gold), .look-glass .card.lav-qa {
+  border: 1px solid rgba(31, 42, 92, 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 6px 16px -6px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 0, 0, 0.08);
+}
+.look-glass .card.lav-qa:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 30px -12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 0, 0, 0.1); }
+.look-glass .lav-hide { border: 1px solid rgba(31, 42, 92, 0.85); border-radius: 8px; padding: 3px 10px; background: #fff; color: var(--navy); box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.35); }
+
+/* ADIA's crest intro after sign-in: full screen, then it shrinks to the centre and fades into Today (1A). */
+.adia-intro { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #010810; transition: background-color 0.9s ease; }
+.adia-intro video { width: 100%; height: 100%; object-fit: cover; transition: transform 0.9s cubic-bezier(0.6, 0, 0.2, 1), opacity 0.45s ease 0.45s, border-radius 0.9s; }
+@media (orientation: portrait) { .adia-intro video { object-fit: contain; } }
+.adia-intro-out { background-color: rgba(1, 8, 16, 0); pointer-events: none; }
+.adia-intro-out video { transform: scale(0.16); opacity: 0; border-radius: 220px; }
+.adia-intro-out .adia-intro-skip { opacity: 0; }
+.adia-intro-skip { position: absolute; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); font: inherit; font-size: 0.8rem; font-weight: 600; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(210, 167, 75, 0.6); border-radius: 999px; padding: 8px 18px; cursor: pointer; transition: opacity 0.4s; }
