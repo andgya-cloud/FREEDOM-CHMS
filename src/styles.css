@@ -1321,3 +1321,33 @@ details.fold-card > summary > span:first-child { flex: 1; }
 }
 @media (prefers-reduced-motion: reduce) { .lav-bar-col { animation: none; } .lav-ring-fill { transition: none; } }
 @media print { .lav-hero, .lav-quick { display: none !important; } }
+
+/* ---- ADIA menu: a dark navy panel with a gold outline, floating on the lavender page ---- */
+.look-glass.side-look .adia-side, .look-glass.side-look .tabbar {
+  --menu-gold: 210 167 75;
+  color: #fff;
+  background: linear-gradient(165deg, #151d42 0%, #0d1433 55%, #0a1029 100%);
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid rgb(var(--menu-gold) / 0.75);
+  box-shadow: 0 26px 50px -18px rgba(20, 24, 70, 0.55), 0 6px 14px -6px rgba(20, 24, 70, 0.3), 0 0 22px rgb(var(--menu-gold) / 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.look-glass.side-look .adia-side .brand-name { color: #fff; }
+.look-glass.side-look .adia-side .brand-sub { color: rgb(var(--menu-gold) / 0.85); }
+.look-glass.side-look .adia-side .brand-logo { filter: drop-shadow(0 0 10px rgb(var(--menu-gold) / 0.35)); }
+.look-glass.side-look .adia-side .org-switcher select, .look-glass.side-look .adia-side .org-name {
+  background-color: rgba(255, 255, 255, 0.05); color: #fff; border: 1px solid rgb(var(--menu-gold) / 0.45); box-shadow: inset 0 0 10px rgb(var(--menu-gold) / 0.05);
+}
+.look-glass.side-look .adia-side .org-switcher select:focus { outline: none; border-color: rgb(var(--menu-gold)); box-shadow: 0 0 0 3px rgb(var(--menu-gold) / 0.2); }
+.look-glass.side-look .tabbar .tab { color: rgba(255, 255, 255, 0.72); border: 1px solid transparent; transition: background-color 0.25s, color 0.25s, border-color 0.25s, transform 0.25s; }
+.look-glass.side-look .tabbar .tab:hover { background: rgba(255, 255, 255, 0.06); color: #f1d590; }
+.look-glass.side-look .tabbar .tab.active { color: rgb(var(--menu-gold)); font-weight: 700; background: rgb(var(--menu-gold) / 0.1); border-color: rgb(var(--menu-gold) / 0.45); box-shadow: 0 0 14px rgb(var(--menu-gold) / 0.12); }
+@media (max-width: 899px) {
+  .look-glass.side-look .adia-side, .look-glass.side-look .tabbar { background: linear-gradient(165deg, #151d42, #0b1130); border: 1px solid rgb(var(--menu-gold) / 0.75); }
+}
+@media (min-width: 900px) {
+  .look-glass.side-look .tabbar { background: none; border: 0; box-shadow: none; }
+  .look-glass.side-look .tabbar .tab:hover { transform: translateX(3px); }
+  .look-glass.side-look .adia-side { animation: menu-float-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+}
+@keyframes menu-float-in { from { opacity: 0; transform: translateX(-14px); } }
+@media (prefers-reduced-motion: reduce) { .look-glass.side-look .adia-side { animation: none; } .look-glass.side-look .tabbar .tab { transition: none; } }
