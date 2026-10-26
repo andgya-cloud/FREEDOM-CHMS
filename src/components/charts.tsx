@@ -1,12 +1,34 @@
 import { Link } from 'react-router-dom';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { compact, niceMax, pctChange, shares } from '../lib/analytics';
 
 /**
  * The dashboard kit: KPI cards, line and column charts, donuts, gauges and
  * sparklines. Drawn as plain SVG so they work offline, print, and follow the
  * light, dark and church looks through CSS colours (--c1 to --c6).
+ * Lines are thin, smooth and drawn in a gradient (--g-from to --g-to), so each look
+ * gets its own colours (Andy, 2026-10-26, 6A and 7A).
  */
+
+/** A two-stop gradient whose colours come from CSS (.gs-a and .gs-b), so the looks can recolour it. */
+function Grad({ id, vertical, fade }: { id: string; vertical?: boolean; fade?: boolean }) {
+  return (
+    <linearGradient id={id} x1="0" y1="0" x2={vertical ? '0' : '1'} y2={vertical ? '1' : '0'}>
+      <stop offset="0" className={fade ? 'gs-a gs-soft' : 'gs-a'} />
+      <stop offset="1" className={fade ? 'gs-fade' : 'gs-b'} />
+    </linearGradient>
+  );
+}
+
+/** A smooth line through the points that never swings above or below them. */
+function smooth(pts: readonly (readonly [number, number])[]): string {
+  return pts.map(([px, py], i) => {
+    if (i === 0) return `M${px.toFixed(1)},${py.toFixed(1)}`;
+    const [qx, qy] = pts[i - 1]!;
+    const h = (px - qx) / 2;
+    return `C${(qx + h).toFixed(1)},${qy.toFixed(1)} ${(px - h).toFixed(1)},${py.toFixed(1)} ${px.toFixed(1)},${py.toFixed(1)}`;
+  }).join(' ');
+}
 
 const fmtDefault = (v: number) => v.toLocaleString('en-GB');
 
@@ -75,13 +97,15 @@ export function Sparkline({ values, width = 120, height = 30 }: { values: number
   const span = max - min || 1;
   const x = (i: number) => 2 + (i * (width - 4)) / Math.max(1, values.length - 1);
   const y = (v: number) => height - 3 - ((v - min) / span) * (height - 6);
-  const d = values.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+  const d = smooth(values.map((v, i) => [x(i), y(v)] as const));
   const i = values.length - 1;
+  const id = useId();
   return (
     <svg className="spark" viewBox={`0 0 ${width} ${height}`} aria-hidden="true" preserveAspectRatio="none">
-      <path d={`${d} L${x(i)},${height} L${x(0)},${height} Z`} className="spark-area" />
-      <path d={d} className="spark-line" />
-      <circle cx={x(i)} cy={y(values[i]!)} r={2.6} className="spark-dot" />
+      <defs><Grad id={`${id}a`} vertical fade /><Grad id={`${id}l`} /></defs>
+      <path d={`${d} L${x(i)},${height} L${x(0)},${height} Z`} className="spark-area" fill={`url(#${id}a)`} />
+      <path d={d} className="spark-line" stroke={`url(#${id}l)`} />
+      <circle cx={x(i)} cy={y(values[i]!)} r={2.2} className="spark-dot" />
     </svg>
   );
 }
@@ -100,21 +124,22 @@ export function LineChart({ labels, series, format = fmtDefault, axis = compact,
   const x = (i: number) => L + (i * (W - L - R)) / Math.max(1, n - 1);
   const y = (v: number) => T + (1 - v / top) * (H - T - B);
   const ticks = (top < 20 ? [0, 0.5, 1] : [0, 0.25, 0.5, 0.75, 1]).map((f) => f * top);
-  const pathOf = (vals: (number | null)[]) => {
-    let d = '';
-    let open = false;
+  // Each unbroken run of figures is one smooth curve; a missing week leaves a gap.
+  const runsOf = (vals: (number | null)[]) => {
+    const runs: [number, number][][] = [];
+    let run: [number, number][] = [];
     vals.forEach((v, i) => {
-      if (v == null) { open = false; return; }
-      d += `${open ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
-      open = true;
+      if (v == null) { if (run.length) runs.push(run); run = []; return; }
+      run.push([x(i), y(v)]);
     });
-    return d.trim();
+    if (run.length) runs.push(run);
+    return runs;
   };
+  const pathOf = (vals: (number | null)[]) => runsOf(vals).map(smooth).join(' ');
+  const id = useId();
   const first = series[0];
-  const firstPts = first ? first.values.map((v, i) => [i, v] as const).filter((p): p is readonly [number, number] => p[1] != null) : [];
-  const area = firstPts.length > 1
-    ? `${pathOf(first!.values)} L${x(firstPts[firstPts.length - 1]![0])},${y(0)} L${x(firstPts[0]![0])},${y(0)} Z`
-    : '';
+  const area = first ? runsOf(first.values).filter((r) => r.length > 1)
+    .map((r) => `${smooth(r)} L${r[r.length - 1]![0].toFixed(1)},${y(0)} L${r[0]![0].toFixed(1)},${y(0)} Z`).join(' ') : '';
   const every = Math.ceil(n / Math.max(3, Math.floor(W / 70)));
   return (
     <figure className="viz" ref={ref}>
@@ -124,6 +149,7 @@ export function LineChart({ labels, series, format = fmtDefault, axis = compact,
         </ul>
       )}
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        <defs><Grad id={`${id}a`} vertical fade /><Grad id={`${id}l`} /></defs>
         {ticks.map((t) => (
           <g key={t}>
             <line x1={L} x2={W - R} y1={y(t)} y2={y(t)} className="viz-grid" />
@@ -133,11 +159,17 @@ export function LineChart({ labels, series, format = fmtDefault, axis = compact,
         {labels.map((l, i) => ((i % every === 0 && n - 1 - i >= every) || i === n - 1) && (
           <text key={l + i} x={x(i)} y={H - 6} textAnchor={i === 0 ? 'start' : i === n - 1 ? 'end' : 'middle'} className="viz-tick">{l}</text>
         ))}
-        {area && <path d={area} className="viz-area" />}
-        {series.map((s, k) => <path key={s.name} d={pathOf(s.values)} className={`viz-line c${k + 1}${s.dashed ? ' dashed' : ''}`} />)}
-        {series.map((s, k) => s.values.map((v, i) => v != null && (
-          <circle key={`${k}-${i}`} cx={x(i)} cy={y(v)} r={k === 0 ? 3 : 2.2} className={`viz-dot c${k + 1}${s.dashed ? ' dashed' : ''}`} />
-        )))}
+        {area && <path d={area} className="viz-area" fill={`url(#${id}a)`} />}
+        {series.map((s, k) => <path key={s.name} d={pathOf(s.values)} className={`viz-line c${k + 1}${s.dashed ? ' dashed' : ''}`} stroke={k === 0 && !s.dashed ? `url(#${id}l)` : undefined} />)}
+        {series.map((s, k) => {
+          const last = s.values.reduce<number>((at, v, i) => (v != null ? i : at), -1);
+          return s.values.map((v, i) => v != null && (
+            <g key={`${k}-${i}`}>
+              {i === last && !s.dashed && <circle cx={x(i)} cy={y(v)} r={6} className={`viz-halo c${k + 1}`} />}
+              <circle cx={x(i)} cy={y(v)} r={i === last ? 3 : 1.6} className={`viz-dot c${k + 1}${s.dashed ? ' dashed' : ''}`} />
+            </g>
+          ));
+        })}
         {labels.map((l, i) => (
           <rect key={`h${i}`} x={x(i) - (W - L - R) / Math.max(1, n - 1) / 2} y={T} width={(W - L - R) / Math.max(1, n - 1)} height={H - T - B} className="viz-hit">
             <title>{`${l}\n${series.map((s) => `${s.name}: ${s.values[i] == null ? '–' : format(s.values[i]!)}`).join('\n')}`}</title>
@@ -158,7 +190,8 @@ export function ColumnChart({ rows, format = fmtDefault, axis = compact, label, 
   const L = 42, R = 8, T = 18, B = 24;
   const top = niceMax(Math.max(0, ...rows.map((r) => r.value)));
   const slot = (W - L - R) / Math.max(1, rows.length);
-  const bw = Math.min(46, slot * 0.62);
+  const bw = Math.min(26, slot * 0.46);
+  const id = useId();
   const y = (v: number) => T + (1 - v / top) * (H - T - B);
   const hi = highlight ?? rows.length - 1;
   const showValues = rows.length <= 8 || slot >= 40;
@@ -168,6 +201,7 @@ export function ColumnChart({ rows, format = fmtDefault, axis = compact, label, 
   return (
     <figure className="viz" ref={ref}>
       <svg viewBox={`0 0 ${W} ${H}`} role="img" aria-label={label}>
+        <defs><Grad id={`${id}b`} vertical /></defs>
         {[0, 0.5, 1].map((f) => (
           <g key={f}>
             <line x1={L} x2={W - R} y1={y(f * top)} y2={y(f * top)} className="viz-grid" />
@@ -179,7 +213,7 @@ export function ColumnChart({ rows, format = fmtDefault, axis = compact, label, 
           const h = Math.max(0, y(0) - y(r.value));
           return (
             <g key={r.label + i}>
-              <rect x={cx - bw / 2} y={y(0) - h} width={bw} height={h} rx={3} className={i === hi ? 'viz-bar hi' : 'viz-bar'}>
+              <rect x={cx - bw / 2} y={y(0) - h} width={bw} height={h} rx={Math.min(bw / 2, h / 2, 8)} className={i === hi ? 'viz-bar hi' : 'viz-bar'} fill={`url(#${id}b)`}>
                 <title>{`${r.label}: ${format(r.value)}`}</title>
               </rect>
               {showValues && r.value > 0 && <text x={cx} y={y(0) - h - 4} textAnchor="middle" className="viz-val">{axis(r.value)}</text>}
@@ -212,7 +246,7 @@ export function Donut({ rows, format = fmtDefault, center, centerNote, label }: 
         <circle cx={70} cy={70} r={R} className="donut-track" />
         {total > 0 && parts.map((p, i) => {
           const len = (p.value / total) * C;
-          const seg = <circle key={p.label} cx={70} cy={70} r={R} className={`donut-seg c${i + 1}`} strokeDasharray={`${Math.max(0, len - 1.5)} ${C}`} strokeDashoffset={-at} transform="rotate(-90 70 70)"><title>{`${p.label}: ${format(p.value)} (${pct[i]}%)`}</title></circle>;
+          const seg = <circle key={p.label} cx={70} cy={70} r={R} className={`donut-seg c${i + 1}`} strokeDasharray={`${Math.max(0.1, len - (parts.length > 1 ? 9 : 0))} ${C}`} strokeDashoffset={-at} transform="rotate(-90 70 70)"><title>{`${p.label}: ${format(p.value)} (${pct[i]}%)`}</title></circle>;
           at += len;
           return seg;
         })}
@@ -243,12 +277,18 @@ export function Gauge({ value, max, label, display, caption, bands }: {
     return `M${70 - R},74 A${R},${R} 0 0 1 ${(70 + R * Math.cos(a)).toFixed(2)},${(74 - R * Math.sin(a)).toFixed(2)}`;
   };
   const tone = !bands ? 'g-plain' : f >= bands[1] ? 'g-good' : f >= bands[0] ? 'g-fair' : 'g-low';
+  // A dash means there is no figure yet: say so in words rather than draw an empty dial (Andy, 2026-10-26, 6A).
+  const empty = display === '–';
+  const end = Math.PI * (1 - f);
+  const id = useId();
   return (
-    <figure className="viz gauge">
-      <svg viewBox="0 0 140 86" role="img" aria-label={`${label}: ${display}`}>
+    <figure className={`viz gauge${empty ? ' gauge-none' : ''}`}>
+      <svg viewBox="0 0 140 86" role="img" aria-label={`${label}: ${empty ? 'no data yet' : display}`} className={tone}>
+        <defs><Grad id={`${id}g`} /></defs>
         <path d={arc(1)} className="gauge-track" />
-        {f > 0 && <path d={arc(f)} className={`gauge-fill ${tone}`} />}
-        <text x={70} y={68} textAnchor="middle" className="gauge-value">{display}</text>
+        {!empty && f > 0 && <path d={arc(f)} className="gauge-fill" stroke={`url(#${id}g)`} />}
+        {!empty && f > 0 && <circle cx={70 + R * Math.cos(end)} cy={74 - R * Math.sin(end)} r={4} className="gauge-cap" />}
+        <text x={70} y={empty ? 66 : 68} textAnchor="middle" className={empty ? 'gauge-empty' : 'gauge-value'}>{empty ? 'No data yet' : display}</text>
       </svg>
       <figcaption><strong>{label}</strong>{caption && <span className="muted small"> {caption}</span>}</figcaption>
     </figure>

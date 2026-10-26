@@ -185,7 +185,7 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
     const course = school.courses.find((c) => c.name === (event.activity ?? event.name));
     if (course) {
       return {
-        back: { to: '/school', label: 'School' },
+        back: { to: '/attendance', label: 'Attendance' },
         roster: {
           ids: new Set(school.students.filter((st) => st.courseId === course.id && st.status === 'enrolled').map((st) => st.id)),
           title: `${course.name} register`,

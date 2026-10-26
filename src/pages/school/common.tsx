@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
 import { usePeople } from '../../state/PeopleContext';
@@ -28,20 +28,27 @@ export function SchoolGate({ title, children }: { title: string; children: (org:
   );
 }
 
-/** The row of school sections shown at the top of every ADIA page. */
+/**
+ * One "Go to" dropdown at the top of every school page, in place of a row of buttons (Andy, 2026-10-26, 2A).
+ * The dashboard is Today and Exam Records sits in the side menu, so neither is repeated here (1A, 3A).
+ */
 export function SchoolNav({ feesAllowed }: { feesAllowed: boolean }) {
   const { can } = useAuth();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const items: [string, string, boolean][] = [
-    ['/school', 'Overview', true], ['/school/students', 'Students', true], ['/school/courses', 'Programmes', true],
-    ['/school/exams', 'Exam Records', can('exams.mark') || can('exams.manage') || can('users.manage')], ['/school/fees', 'Fees', feesAllowed], ['/school/graduation', 'Graduation', true],
-    ['/school/reports', 'Reports', can('finance.reports')],
+    ['/school/students', 'Students', true], ['/school/courses', 'Programmes', true], ['/school/fees', 'Fees', feesAllowed],
+    ['/school/graduation', 'Graduation', true], ['/school/reports', 'Reports', can('finance.reports')],
   ];
+  const shown = items.filter((i) => i[2]);
+  const here = shown.find(([to]) => pathname === to || pathname.startsWith(`${to}/`))?.[0] ?? '';
   return (
-    <nav className="chips" aria-label="School">
-      {items.filter((i) => i[2]).map(([to, label]) => (
-        <NavLink key={to} to={to} end={to === '/school'} className={({ isActive }) => `chip${isActive ? ' chip-on' : ''}`}>{label}</NavLink>
-      ))}
-    </nav>
+    <label className="field school-goto no-print"><span>Go to</span>
+      <select value={here} onChange={(e) => navigate(e.target.value)}>
+        {!here && <option value="">Choose…</option>}
+        {shown.map(([to, label]) => <option key={to} value={to}>{label}</option>)}
+      </select>
+    </label>
   );
 }
 

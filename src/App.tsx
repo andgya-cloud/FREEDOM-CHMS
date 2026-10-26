@@ -50,7 +50,6 @@ const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => (
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
 const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
-const SchoolHome = lazy(() => import('./pages/school/SchoolHome').then((m) => ({ default: m.SchoolHome })));
 const StudentsPage = lazy(() => import('./pages/school/StudentsPage').then((m) => ({ default: m.StudentsPage })));
 const EnrolPage = lazy(() => import('./pages/school/EnrolPage').then((m) => ({ default: m.EnrolPage })));
 const StudentPage = lazy(() => import('./pages/school/StudentPage').then((m) => ({ default: m.StudentPage })));
@@ -153,7 +152,7 @@ function AppRoutes() {
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId" element={<RequirePermission permission="people.read"><PersonPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId/edit" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
-        <Route path="/school" element={<RequirePermission permission="people.read"><SchoolHome /></RequirePermission>} />
+        <Route path="/school" element={<Navigate to="/school/students" replace />} />
         <Route path="/school/students" element={<RequirePermission permission="people.read"><StudentsPage /></RequirePermission>} />
         <Route path="/school/students/new" element={<RequirePermission permission="people.write"><EnrolPage /></RequirePermission>} />
         <Route path="/school/students/import" element={<RequirePermission permission="people.write"><StudentImportPage /></RequirePermission>} />

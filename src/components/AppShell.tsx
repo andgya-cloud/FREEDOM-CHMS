@@ -44,18 +44,19 @@ export function AppShell({ children }: { children: ReactNode }) {
         {adia ? <AdiaIcon name="today" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>}
         Today
       </NavLink>
-      <NavLink to="/people" className="tab">
+      {current?.type !== 'college' && <NavLink to="/people" className="tab">
         {adia ? <AdiaIcon name="people" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19a3 3 0 0 0-4-2.8M17 11a2.5 2.5 0 1 0 0-5M3 19a3 3 0 0 1 4-2.8M7 11a2.5 2.5 0 1 1 0-5" /></svg>}
         People
-      </NavLink>
+      </NavLink>}
       <NavLink to="/attendance" className="tab">
         {adia ? <AdiaIcon name="attendance" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>}
         {adia ? <TabLabel full="Attendance" short="Register" /> : 'Attendance'}
       </NavLink>
       {current?.type === 'college' ? (
-        <NavLink to="/school" className={({ isActive }) => `tab${isActive && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>
+        // "School" opens the school pages; Students, Programmes, Fees and the rest are in its Go to dropdown (Andy, 2026-10-26, 4A and 5A).
+        <NavLink to="/school/students" className={() => `tab${/^\/school(\/|$)/.test(location.pathname) && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>
           {adia ? <AdiaIcon name="programmes" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>}
-          {adia ? <TabLabel full="Programmes" short="Programs" /> : 'School'}
+          School
         </NavLink>
       ) : current?.type === 'ministry' ? (
         <NavLink to="/hope" className={({ isActive }) => `tab${isActive && !location.pathname.startsWith('/hope/petty-cash') ? ' active' : ''}`}>
