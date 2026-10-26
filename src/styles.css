@@ -1377,11 +1377,13 @@ details.fold-card > summary > span:first-child { flex: 1; }
 .look-glass .side-promo { background: linear-gradient(135deg, #1f2a5c, #2f3f7e 60%, #b8862f); }
 
 /* White buttons and action cards: a fine navy outline with a soft dark shadow (Andy, 2026-10-26, 4A). */
-.look-glass .lav-btn.ghost, .look-glass.side-look .btn-quiet, .look-glass .btn:not(.btn-primary):not(.btn-danger):not(.btn-gold), .look-glass .card.lav-qa {
+.look-glass .lav-btn.ghost, .look-glass.side-look .btn-quiet, .look-glass .btn:not(.btn-primary):not(.btn-danger):not(.btn-gold), .look-glass .card.lav-qa, .look-glass .card.lav-kpi {
   border: 1px solid rgba(31, 42, 92, 0.85);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 6px 16px -6px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 0, 0, 0.08);
 }
-.look-glass .card.lav-qa:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 30px -12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 0, 0, 0.1); }
+.look-glass .card.lav-kpi { transition: transform 0.2s, box-shadow 0.2s; }
+.look-glass .card.lav-kpi:hover { transform: translateY(-3px); }
+.look-glass .card.lav-qa:hover, .look-glass .card.lav-kpi:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 30px -12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 0, 0, 0.1); }
 .look-glass .lav-hide { border: 1px solid rgba(31, 42, 92, 0.85); border-radius: 8px; padding: 3px 10px; background: #fff; color: var(--navy); box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.35); }
 
 /* ADIA's crest intro after sign-in: full screen, then it shrinks to the centre and fades into Today (1A). */
