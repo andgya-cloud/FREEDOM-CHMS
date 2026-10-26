@@ -108,10 +108,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         <aside className="adia-side">
           <NavLink to="/" className="brand" aria-label="Insight-IQ, Today">
             <img className="brand-logo" src="/logo-mark.png" alt="" width={56} height={56} />
-            <span className="brand-name">Insight-IQ</span>
+            <span className="brand-name">Insight-IQ{adia && <small className="brand-sub">Freedom ChMS</small>}</span>
           </NavLink>
           <OrgSwitcher />
           {tabs}
+          {adia && <InstallBanner variant="side" />}
         </aside>
         <div className={`adia-body${/^\/((school|hope)\/)?petty-cash|^\/school\/payroll/.test(location.pathname) ? ' petty-light' : ''}`}>
           <header className="adia-head">

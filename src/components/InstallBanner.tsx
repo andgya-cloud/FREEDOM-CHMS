@@ -18,7 +18,7 @@ function isIos(): boolean {
  * Asks staff to install the app. On iPhone and iPad this matters: Safari can
  * clear offline data for sites not added to the Home Screen.
  */
-export function InstallBanner() {
+export function InstallBanner({ variant }: { variant?: 'side' } = {}) {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
   const [hidden, setHidden] = useState(() => isStandalone() || readPref('installDismissed') === 'yes');
 
@@ -38,6 +38,20 @@ export function InstallBanner() {
     writePref('installDismissed', 'yes');
     setHidden(true);
   };
+
+  // In ADIA's side menu it is a small card at the bottom (Andy's design, 2026-10-26).
+  if (variant === 'side') {
+    return (
+      <div className="side-promo">
+        <b>Install Insight-IQ</b>
+        <span>{deferred ? 'Work offline on phones, tablets and laptops.' : 'Tap Share, then “Add to Home Screen”, to keep offline work safe.'}</span>
+        <span className="side-promo-actions">
+          {deferred && <button type="button" onClick={async () => { await deferred.prompt(); await deferred.userChoice; setDeferred(null); }}>Install app</button>}
+          <button type="button" onClick={dismiss}>Not now</button>
+        </span>
+      </div>
+    );
+  }
 
   return (
     <div className="install-banner">

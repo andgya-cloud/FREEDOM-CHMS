@@ -77,6 +77,9 @@ export function TodayPage() {
     return <Navigate to={pettyCashBase(current.type)} replace />;
   }
 
+  // ADIA's own Today, from Andy's design (2026-10-26).
+  if (glass && current?.type === 'college' && can('people.read')) return <AdiaToday org={current} />;
+
   return (
     <div className={`page${sided ? ' glass-today' : ''}`}>
       <p className="muted">{formatDate(new Date())}</p>
