@@ -1396,3 +1396,15 @@ details.fold-card > summary > span:first-child { flex: 1; }
 .adia-intro-skip { position: absolute; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); font: inherit; font-size: 0.8rem; font-weight: 600; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(210, 167, 75, 0.6); border-radius: 999px; padding: 8px 18px; cursor: pointer; transition: opacity 0.4s; }
 /* Getting started sits on a photo of an ADIA class (Andy, 2026-10-26). */
 .look-glass .lav-scene { background: linear-gradient(180deg, rgba(15, 24, 56, 0.05) 30%, rgba(15, 24, 56, 0.55) 100%), url('/adia-class.jpg') center 35% / cover no-repeat, #1f2a5c; }
+
+/* Register: which day, and past months (Andy, 2026-10-26) */
+.which-day { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 4px 0 6px; }
+.which-day-label { font-weight: 700; margin-right: 4px; }
+.which-day-pick input { min-height: 44px; padding: 8px 12px; border-radius: 12px; font: inherit; font-weight: 600; }
+.which-day-note { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgba(201, 154, 60, 0.12); border: 1px solid rgba(201, 154, 60, 0.45); font-size: 0.9rem; }
+.past-month select { min-width: 170px; }
+/* A graduate's certificate buttons */
+.cert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cert-actions-compact { flex-wrap: nowrap; gap: 6px; }
+.cert-note { flex-basis: 100%; margin: 0; }
+.cert-select { min-width: 150px; min-height: 36px; padding: 6px 10px; border-radius: 10px; font: inherit; font-size: 0.85rem; font-weight: 600; }

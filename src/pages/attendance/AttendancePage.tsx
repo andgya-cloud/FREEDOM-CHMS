@@ -8,6 +8,7 @@ import { useEvents } from '../../state/useAttendance';
 import { createEvent } from '../../lib/attendanceWrites';
 import { friendlyError } from '../../lib/errors';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
+import { PRINCIPAL_ROLE_ID } from '../../../functions/src/shared/permissions';
 import {
   EVENT_TYPE_LABELS,
   eventChoices,
@@ -17,13 +18,30 @@ import {
 } from '../../../functions/src/shared/attendance';
 
 const RECENT_DAYS = 56;
+/** ADIA's registers go back to 1 August 2025, and only the pastor, Admin and the Principal fill in past days (Andy, 2026-10-26, 2A and 3B). */
+const ADIA_FIRST_DAY = '2025-08-01';
+const BACKDATE_ROLES = ['pastor', 'admin', PRINCIPAL_ROLE_ID];
+const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "2025-08" to the month before `today`'s, newest first. */
+function monthsSince(first: string, today: string): string[] {
+  const out: string[] = [];
+  let [y, m] = today.slice(0, 7).split('-').map(Number);
+  const [fy, fm] = first.slice(0, 7).split('-').map(Number);
+  while (y > fy || (y === fy && m >= fm)) {
+    out.push(`${y}-${String(m).padStart(2, '0')}`);
+    if (--m === 0) { m = 12; y--; }
+  }
+  return out;
+}
+const monthLabel = (ym: string) => `${MONTH_NAMES[Number(ym.slice(5, 7)) - 1]} ${ym.slice(0, 4)}`;
 
 /**
  * Attendance home: open today's service, class or session in one tap, or
  * pick up one already open. Works offline; everything syncs later.
  */
 export function AttendancePage() {
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { current, isCombined, organizations, select } = useOrg();
   const toast = useToast();
   const navigate = useNavigate();
@@ -32,7 +50,11 @@ export function AttendancePage() {
   const today = localDateKey(new Date(), tz);
   const [date, setDate] = useState(today);
   const [otherName, setOtherName] = useState('');
-  const { events, loading } = useEvents(orgId, localDateKey(new Date(Date.now() - RECENT_DAYS * 86_400_000), tz));
+  const [month, setMonth] = useState('');
+  const recentStart = localDateKey(new Date(Date.now() - RECENT_DAYS * 86_400_000), tz);
+  const since = [recentStart, date, month ? `${month}-01` : recentStart].sort()[0];
+  const { events: loaded, loading } = useEvents(orgId, since);
+  const events = loaded.filter((e) => (month ? e.date.startsWith(month) : e.date >= recentStart));
   const canRecord = can('attendance.write');
   // ADIA classes are the programmes set up under School, so the register lists that programme's students.
   const school = useSchool(current?.type === 'college' ? current.id : '');
@@ -57,14 +79,18 @@ export function AttendancePage() {
 
   const org = current;
   const choices = [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
-  const todays = events.filter((e) => e.date === date);
+  const todays = loaded.filter((e) => e.date === date);
+  const adia = org.type === 'college';
+  const canBackdate = !adia || BACKDATE_ROLES.includes(profile?.roleId ?? '');
+  const firstDay = adia ? ADIA_FIRST_DAY : undefined;
+  const yesterday = localDateKey(new Date(Date.now() - 86_400_000), tz);
   const noun = org.type === 'church_campus' ? 'service' : org.type === 'college' ? 'class' : 'session';
 
   function open(name: string) {
     const clean = name.trim().replace(/\s+/g, ' ');
     if (!clean) return;
     const id = eventIdFor(date, clean);
-    if (!events.some((e) => e.id === id)) {
+    if (!loaded.some((e) => e.id === id)) {
       try {
         const { synced } = createEvent(org.id, { date, type: eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean });
         synced.catch((err) => toast.show(friendlyError(err)));
@@ -88,14 +114,31 @@ export function AttendancePage() {
 
       {canRecord && (
         <section className="card">
-          <div className="card-head">
-            <h2>Take attendance</h2>
-            <label className="date-pick">
-              <span className="visually-hidden">Date</span>
-              <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
-            </label>
-          </div>
-          {date !== today && <p className="muted small">For {formatDateKey(date)}, not today.</p>}
+          {adia ? (
+            <>
+              <h2>Take attendance</h2>
+              {canBackdate ? (
+                <div className="which-day" role="group" aria-label="Which day?">
+                  <span className="which-day-label">Which day?</span>
+                  <button type="button" className={`chip${date === today ? ' chip-on' : ''}`} aria-pressed={date === today} onClick={() => setDate(today)}>Today</button>
+                  <button type="button" className={`chip${date === yesterday ? ' chip-on' : ''}`} aria-pressed={date === yesterday} onClick={() => setDate(yesterday)}>Yesterday</button>
+                  <label className="which-day-pick">
+                    <span className="visually-hidden">Another day</span>
+                    <input type="date" value={date} min={firstDay} max={today} onChange={(e) => setDate(e.target.value && (!firstDay || e.target.value >= firstDay) && e.target.value <= today ? e.target.value : today)} />
+                  </label>
+                </div>
+              ) : <p className="muted small">For today, {formatDateKey(today)}.</p>}
+            </>
+          ) : (
+            <div className="card-head">
+              <h2>Take attendance</h2>
+              <label className="date-pick">
+                <span className="visually-hidden">Date</span>
+                <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
+              </label>
+            </div>
+          )}
+          {date !== today && <p className="which-day-note">Filling in the register for <strong>{formatDateKey(date)}</strong>, not today.</p>}
           <div className="start-grid">
             {choices.map((name) => {
               const already = todays.some((e) => e.id === eventIdFor(date, name));
@@ -117,9 +160,20 @@ export function AttendancePage() {
       )}
 
       <section>
-        <h2>Last 8 weeks</h2>
+        {adia ? (
+          <div className="card-head">
+            <h2>{month ? monthLabel(month) : 'Last 8 weeks'}</h2>
+            <label className="field past-month">
+              <span className="visually-hidden">Show registers for</span>
+              <select value={month} onChange={(e) => setMonth(e.target.value)}>
+                <option value="">Last 8 weeks</option>
+                {monthsSince(ADIA_FIRST_DAY, today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+              </select>
+            </label>
+          </div>
+        ) : <h2>Last 8 weeks</h2>}
         {loading && events.length === 0 ? <p className="muted">Loading…</p> : events.length === 0 ? (
-          <p className="muted">Nothing recorded yet.</p>
+          <p className="muted">{month ? `Nothing recorded in ${monthLabel(month)}.` : 'Nothing recorded yet.'}</p>
         ) : (
           <ul className="link-list">
             {events.map((e) => {

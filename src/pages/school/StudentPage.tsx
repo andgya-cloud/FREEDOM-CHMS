@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../state/AuthContext';
+import { CertificateActions } from '../../components/CertificateActions';
 import { useToast } from '../../state/ToastContext';
 import { usePersonGifts } from '../../state/useGiving';
 import { FeeReminderSheet } from '../../components/FeeReminderSheet';
@@ -168,6 +169,7 @@ function Student({ org }: { org: Organization }) {
         <section className="card stack">
           <h2>Graduation</h2>
           {cert && <p>Certificate <strong>{cert.serial ?? 'number pending'}</strong> issued {formatDateKey(cert.issuedOn)}.</p>}
+          {cert && <CertificateActions orgId={org.id} cert={cert} canManage={can('school.manage') || can('settings.manage')} email={s.byId(st.id)?.email} />}
           <ul className="link-list">
             {outcomes.map((o) => <li key={o.id}><div><span className="link-title">{o.months}-month check</span><span className="link-detail">{o.status ? `${OUTCOME_LABELS[o.status]}${o.note ? ` · ${o.note}` : ''}` : `due ${formatDateKey(o.due)}`}</span></div></li>)}
           </ul>

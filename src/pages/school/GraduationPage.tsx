@@ -16,6 +16,9 @@ import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { OUTCOME_LABELS, OUTCOME_STATUSES, type OutcomeStatus } from '../../../functions/src/shared/school';
 import { SchoolGate, SchoolNav, useSchoolPage } from './common';
+import { CertificateActions } from '../../components/CertificateActions';
+import { uploadCertificate } from '../../lib/certificateFiles';
+import { fileAdmissionKey } from '../../../functions/src/shared/certificateFiles';
 import type { Organization } from '../../state/OrgContext';
 import type { OutcomeRow } from '../../state/useSchool';
 
@@ -50,6 +53,8 @@ function Graduation({ org }: { org: Organization }) {
     toast.show(`Certificate issued to ${s.nameOf(picked.id)}`);
     setStudentId('');
   }
+
+  const canFiles = can('school.manage') || can('settings.manage');
 
   function registerCsv() {
     const rows = register.map((c) => [c.serial ?? '', s.nameOf(c.studentId), s.courseName(c.courseId), classFor(c.studentId, c.issuedOn), c.issuedOn]);
@@ -94,11 +99,13 @@ function Graduation({ org }: { org: Organization }) {
 
       <section className="card stack">
         <div className="card-head"><h2>Certificate register</h2>{register.length > 0 && <button type="button" className="btn btn-quiet" onClick={registerCsv}>Download</button>}</div>
+        {register.length > 0 && canFiles && <UploadMany org={org} s={s} />}
         {register.length === 0 ? <p className="muted small">No certificates issued yet.</p> : (
           <div className="table-scroll">
             <table className="report-table">
-              <thead><tr><th>Serial</th><th>Name</th><th>Programme</th><th>Class</th><th>Issued</th></tr></thead>
-              <tbody>{register.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td>{s.nameOf(c.studentId)}</td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td></tr>)}</tbody>
+              <thead><tr><th>Serial</th><th>Name</th><th>Programme</th><th>Class</th><th>Issued</th><th>Certificate</th></tr></thead>
+              <tbody>{register.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td><Link to={`/school/students/${c.studentId}`}>{s.nameOf(c.studentId)}</Link></td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td>
+                <td><CertificateActions orgId={org.id} cert={c} canManage={canFiles} email={s.byId(c.studentId)?.email} compact /></td></tr>)}</tbody>
             </table>
           </div>
         )}
@@ -237,5 +244,55 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Many certificates at once (Andy, 2026-10-26, 5A): PDFs named by admission number, e.g. ADIA-2025-014.pdf,
+ * each kept for the graduate with that number. Files that match nobody with a certificate are listed and skipped.
+ */
+function UploadMany({ org, s }: { org: Organization; s: ReturnType<typeof useSchoolPage> }) {
+  const toast = useToast();
+  const [plan, setPlan] = useState<{ file: File; studentId: string | null }[] | null>(null);
+  const [done, setDone] = useState<number | null>(null);
+  const certified = new Set(s.certificates.map((c) => c.studentId));
+  function choose(e: ChangeEvent<HTMLInputElement>) {
+    const files = [...(e.target.files ?? [])];
+    e.target.value = '';
+    const byAdm = new Map(s.students.filter((st) => certified.has(st.id) && st.admissionNo).map((st) => [fileAdmissionKey(st.admissionNo!), st.id]));
+    setPlan(files.map((file) => ({ file, studentId: byAdm.get(fileAdmissionKey(file.name)) ?? null })));
+    setDone(null);
+  }
+  const go = (plan ?? []).filter((p) => p.studentId);
+  const skip = (plan ?? []).filter((p) => !p.studentId);
+  async function upload() {
+    let n = 0;
+    const failed: string[] = [];
+    setDone(0);
+    for (const p of go) {
+      try { await uploadCertificate(org.id, p.studentId!, p.file); } catch (err) { failed.push(`${p.file.name}: ${friendlyError(err)}`); }
+      setDone(++n);
+    }
+    toast.show(`${go.length - failed.length} ${go.length - failed.length === 1 ? 'certificate' : 'certificates'} uploaded${failed.length ? `, ${failed.length} failed` : ''}.`);
+    if (failed.length) setPlan(go.filter((p) => failed.some((f) => f.startsWith(p.file.name))));
+    else setPlan(null);
+    setDone(null);
+  }
+  return (
+    <details className="fold-card">
+      <summary>Upload many certificates</summary>
+      <p className="small muted">Choose the PDFs together. Name each file by the graduate's admission number, for example ADIA-2025-014.pdf. Each is kept for that graduate; a file for the same graduate replaces the earlier one.</p>
+      <label className="btn align-start">Choose PDFs<input type="file" accept="application/pdf,.pdf" multiple hidden onChange={choose} /></label>
+      {plan && (
+        <div className="stack">
+          {go.length > 0 && <details open><summary>{go.length} matched</summary><ul className="small">{go.map((p) => <li key={p.file.name}>{p.file.name} → {s.nameOf(p.studentId!)}</li>)}</ul></details>}
+          {skip.length > 0 && <details open><summary className="up-bad">{skip.length} not matched to a graduate</summary><ul className="small">{skip.map((p) => <li key={p.file.name}>{p.file.name}</li>)}</ul></details>}
+          <div className="row-actions">
+            <button type="button" className="btn btn-primary" disabled={!go.length || done !== null} onClick={() => void upload()}>{done !== null ? `Uploading ${done} of ${go.length}…` : `Upload ${go.length}`}</button>
+            <button type="button" className="btn btn-quiet" disabled={done !== null} onClick={() => setPlan(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </details>
   );
 }

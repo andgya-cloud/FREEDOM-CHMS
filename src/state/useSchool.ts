@@ -20,7 +20,7 @@ export interface IntakeRow extends Intake { orgId: string }
 export interface InvoiceRow extends Invoice { orgId: string; voidReason?: string; createdAt?: Timestamp }
 export interface BalanceRow { id: string; studentId: string; billedCents: number; paidCents: number; balanceCents: number; oldestDue: string | null }
 export interface FeeStructureRow { id: string; courseId: string; intakeId: string; items: FeeItem[]; deletedAt?: unknown }
-export interface CertificateRow { id: string; studentId: string; courseId: string; issuedOn: string; serial?: string }
+export interface CertificateRow { id: string; studentId: string; courseId: string; issuedOn: string; serial?: string; file?: { size: number } | null; emailedTo?: string; emailedAt?: unknown }
 export interface OutcomeRow { id: string; studentId: string; months: number; due: string; status: OutcomeStatus | null; note: string; recordedOn: string | null }
 
 const col = (orgId: string, name: string) => collection(db, 'organizations', orgId, name);
