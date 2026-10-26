@@ -105,7 +105,7 @@ function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[
     };
     const sems: [RowSem, RowSem] = [sem(1), sem(2)];
     return { key: p.id, name: p.name, admissionNo: p.admissionNo, programme: p.programme, cohort, sems, final: finalResult(sems[0].points, sems[1].points, settings), printed: res?.printed ?? null, notes: res?.notes ?? [] };
-  }).sort((a, b) => a.programme.localeCompare(b.programme) || a.admissionNo.localeCompare(b.admissionNo));
+  }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.admissionNo.localeCompare(b.admissionNo));
 }
 
 const toTranscript = (r: Row): Transcript => ({ name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: r.cohort, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes });

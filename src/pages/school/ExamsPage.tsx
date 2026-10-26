@@ -584,7 +584,7 @@ function Departments({ org, cohort, sheets, students, courses }: { org: Organiza
             <table className="table exam-table">
               <thead><tr><th className="num">Pos</th><th>Name</th><th>Adm no</th><th className="num">Courses marked</th><th className="num">So far</th><th>Grade</th></tr></thead>
               <tbody>
-                {[...d.rows].sort((x, y) => (x.position ?? 9999) - (y.position ?? 9999) || x.name.localeCompare(y.name)).map((r) => (
+                {[...d.rows].sort(byName).map((r) => (
                   <tr key={r.studentId}>
                     <td className="num">{r.position ?? '–'}</td>
                     <td>{r.name}</td>
@@ -627,6 +627,9 @@ function Results({ org, cohort, label, sheets, students, courses, courseName, at
     </section>
   );
 }
+
+/** Names A to Z on screen so a student is easy to find by eye; Pos still shows each one's place (Andy, 2026-10-26). */
+const byName = (x: { name: string }, y: { name: string }) => x.name.localeCompare(y.name, undefined, { sensitivity: 'base' });
 
 function Reports({ org, cohort, label, period, sheets, students, courses, attendance, minAttendance }: {
   org: Organization; cohort: string; label: string; period: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[]; attendance: Record<string, number | null>; minAttendance: number | null;
@@ -719,7 +722,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
               </tr>
             </thead>
             <tbody>
-              {[...report.rows].sort((x, y) => (x.position ?? 9999) - (y.position ?? 9999) || x.name.localeCompare(y.name)).map((r) => (
+              {[...report.rows].sort(byName).map((r) => (
                 <tr key={r.studentId}>
                   <td className="num">{r.position ?? '–'}</td>
                   <td>{r.name}<div className="muted small">{courseId == null ? r.programme : ''}</div></td>
