@@ -122,3 +122,53 @@ describe('check-in', () => {
     })));
   });
 });
+
+describe('a trainer marks only their own class register (Andy, 2026-10-26)', () => {
+  const IT = 'organizations/adia/events/2026-10-27_it_ict';
+  const OTHER = 'organizations/adia/events/2026-10-27_catering';
+  const cls = (uid: string, name: string, overrides: Record<string, unknown> = {}) => ({
+    orgId: 'adia', date: '2026-10-27', type: 'class', name, activity: name, headcounts: {}, notes: '', ...created(uid), ...overrides,
+  });
+  const mark = (uid: string, eventId: string, overrides: Record<string, unknown> = {}) => ({
+    orgId: 'adia', eventId, personId: 's1', date: '2026-10-27', status: 'present', method: 'register',
+    checkedInAt: Timestamp.now(), ...created(uid), ...overrides,
+  });
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users/alphonse'), {
+        email: 'alphonse@example.org', displayName: 'Alphonse', roleId: 'trainer', extraPermissions: [], orgIds: ['adia'], allOrgs: false,
+        permissions: ['people.read', 'exams.mark'], active: true, registerClasses: ['IT / ICT'],
+      });
+    });
+  });
+
+  it('lets him open his class and mark a student', async () => {
+    await assertSucceeds(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
+    await assertSucceeds(setDoc(doc(as('alphonse'), 'organizations/adia/attendance/2026-10-27_it_ict_s1'), mark('alphonse', '2026-10-27_it_ict')));
+    await assertSucceeds(updateDoc(doc(as('alphonse'), 'organizations/adia/attendance/2026-10-27_it_ict_s1'), { status: 'late', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+    await assertSucceeds(updateDoc(doc(as('alphonse'), IT), { notes: 'Networking basics', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+  });
+
+  it('never lets him open or mark another class', async () => {
+    await assertFails(setDoc(doc(as('alphonse'), OTHER), cls('alphonse', 'Catering')));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), OTHER), { ...cls('pastor', 'Catering'), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    });
+    await assertFails(setDoc(doc(as('alphonse'), 'organizations/adia/attendance/2026-10-27_catering_s1'), mark('alphonse', '2026-10-27_catering')));
+    await assertFails(updateDoc(doc(as('alphonse'), OTHER), { notes: 'x', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+  });
+
+  it('does not let him rename, recount or delete his class', async () => {
+    await assertSucceeds(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
+    await assertFails(updateDoc(doc(as('alphonse'), IT), { headcounts: { students: 5 }, updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+    await assertFails(updateDoc(doc(as('alphonse'), IT), { deletedAt: serverTimestamp(), deletedBy: 'alphonse', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+    await assertFails(setDoc(doc(as('alphonse'), 'organizations/adia/events/2026-10-27_catering'), cls('alphonse', 'IT / ICT', { name: 'Catering' })));
+  });
+
+  it('gives a trainer with no register classes nothing to mark', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await updateDoc(doc(ctx.firestore(), 'users/alphonse'), { registerClasses: [] });
+    });
+    await assertFails(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
+  });
+});

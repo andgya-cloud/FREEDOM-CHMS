@@ -21,13 +21,14 @@ import { useEnrollments, useGroupMembers, useGroups, usePrograms } from '../../s
 import { enrol } from '../../lib/programWrites';
 import { EVENT_TYPE_LABELS } from '../../../functions/src/shared/attendance';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
+import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import type { Person } from '../../state/PeopleContext';
 import type { Program } from '../../state/usePrograms';
 
 /** One service, class or session: the headcount, who came, and the door tablet. */
 export function EventPage() {
   const { orgId = '', eventId = '' } = useParams();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { organizations, currentId, select } = useOrg();
   const toast = useToast();
   const navigate = useNavigate();
@@ -36,7 +37,10 @@ export function EventPage() {
   const [notes, setNotes] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const org = organizations.find((o) => o.id === orgId);
-  const canRecord = can('attendance.write');
+  // A trainer marks the register of their own classes only, and changes nothing else (Andy, 2026-10-26).
+  const trainer = profile?.roleId === TRAINER_ROLE_ID;
+  const mine = !!event && event.type === 'class' && (profile?.registerClasses ?? []).includes(event.name);
+  const canRecord = trainer ? mine : can('attendance.write');
   const linked = useLinkedRoster(orgId, event);
 
   useEffect(() => { setNotes(event?.notes ?? ''); }, [event?.id, event?.notes]);
@@ -58,6 +62,15 @@ export function EventPage() {
       <div className="page narrow">
         <p><Link to="/attendance">← Attendance</Link></p>
         <p>{missing || event?.deletedAt ? 'This was not found. It may have been deleted.' : 'Loading…'}</p>
+      </div>
+    );
+  }
+
+  if (trainer && !mine) {
+    return (
+      <div className="page narrow">
+        <p><Link to="/attendance">← Attendance</Link></p>
+        <p>This isn't one of your classes.</p>
       </div>
     );
   }
@@ -85,9 +98,9 @@ export function EventPage() {
       </div>
 
       {linked.program && <ProgramSessionPanel key={event.id} orgId={orgId} event={event} program={linked.program} canEdit={canRecord} />}
-      <HeadcountEditor event={event} canEdit={canRecord} />
+      {!trainer && <HeadcountEditor event={event} canEdit={canRecord} />}
       {isClass
-        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} />
+        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} rosterOnly={trainer} />
         : <CheckInPanel org={org} event={event} byPerson={byPerson} canRecord={canRecord} />}
 
       <section className="card">
@@ -104,7 +117,7 @@ export function EventPage() {
         </label>
       </section>
 
-      {canRecord && (
+      {canRecord && !trainer && (
         <button type="button" className="btn btn-quiet danger-text align-start" onClick={() => setConfirmDelete(true)}>Delete this {EVENT_TYPE_LABELS[event.type].toLowerCase()}</button>
       )}
       <ConfirmDialog

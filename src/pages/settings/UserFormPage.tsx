@@ -7,6 +7,7 @@ import { db, functions } from '../../firebase';
 import { useAuth, type Profile } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { useRoles } from '../../state/useRoles';
+import { useSchool } from '../../state/useSchool';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { generateTemporaryPassword } from '../../lib/generatePassword';
@@ -28,6 +29,7 @@ interface FormState {
   active: boolean;
   pettyTitle: string;
   phone: string;
+  registerClasses: string[];
 }
 
 const ROLE_HINTS: Record<string, string> = {
@@ -39,7 +41,7 @@ const ROLE_HINTS: Record<string, string> = {
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '' };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', registerClasses: [] };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -72,7 +74,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '',
+          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', registerClasses: u.registerClasses ?? [],
         });
       }
       setLoaded(true);
@@ -85,6 +87,9 @@ export function UserFormPage() {
   // A trainer works at ADIA only too, in Exam Records (Andy, 2026-10-25).
   const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID;
   const colleges = organizations.filter((o) => o.type === 'college').map((o) => o.id);
+  // The classes whose register a trainer marks: ADIA's programmes (Andy, 2026-10-26).
+  const school = useSchool(form.roleId === TRAINER_ROLE_ID ? colleges[0] ?? '' : '');
+  const programmes = [...new Set(school.courses.filter((c) => c.active !== false).map((c) => c.name))].sort((a, b) => a.localeCompare(b));
   // The voucher title is for the petty cash signatories, the pastor included when they sign.
   const showTitle = !teamOnly && (signatory || !!role?.isOwner);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -110,6 +115,7 @@ export function UserFormPage() {
           extraPermissions: role?.isOwner || signatory || principal ? [] : form.extraPermissions,
           pettyTitle: showTitle ? form.pettyTitle : '',
           phone: form.phone.trim(),
+          registerClasses: form.roleId === TRAINER_ROLE_ID ? form.registerClasses : [],
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -221,6 +227,20 @@ export function UserFormPage() {
               ))}
             </fieldset>}
           </>
+        )}
+
+        {form.roleId === TRAINER_ROLE_ID && !teamOnly && (
+          <fieldset className="field">
+            <legend>Register: which classes they mark</legend>
+            {programmes.length === 0 ? <p className="small muted">ADIA has no programmes yet.</p> : programmes.map((name) => (
+              <label key={name} className="check">
+                <input type="checkbox" checked={form.registerClasses.includes(name)}
+                  onChange={() => setForm((f) => ({ ...f, registerClasses: f.registerClasses.includes(name) ? f.registerClasses.filter((x) => x !== name) : [...f.registerClasses, name] }))} />
+                {name}
+              </label>
+            ))}
+            <small className="hint">They see only these classes in Attendance, mark today's register, and key in marks for the courses given to them in Exam Records. Nothing else.</small>
+          </fieldset>
         )}
 
         {showTitle && (

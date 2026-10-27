@@ -37,7 +37,9 @@ export function AppShell({ children }: { children: ReactNode }) {
     return () => { delete document.documentElement.dataset.look; };
   }, [look]);
   // A trainer's only pages are their marks sheets and their own settings.
-  if (trainer && !/^\/(school\/exams|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/school/exams" replace />;
+  // A trainer with register classes also marks those classes' registers (Andy, 2026-10-26).
+  const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
+  if (trainer && !(trainerRegister ? /^\/(school\/exams|settings|attendance)(\/|$)/ : /^\/(school\/exams|settings)(\/|$)/).test(location.pathname)) return <Navigate to="/school/exams" replace />;
   const tabs = (
     <nav className="tabbar" aria-label="Main">
       {full && (<>
@@ -53,6 +55,14 @@ export function AppShell({ children }: { children: ReactNode }) {
         {adia ? <AdiaIcon name="attendance" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>}
         {adia ? <TabLabel full="Attendance" short="Register" /> : 'Attendance'}
       </NavLink>
+      </>)}
+      {trainerRegister && current?.type === 'college' && (
+        <NavLink to="/attendance" className="tab">
+          <AdiaIcon name="attendance" />
+          <TabLabel full="Attendance" short="Register" />
+        </NavLink>
+      )}
+      {full && (<>
       {current?.type === 'college' ? (
         // "School" opens the school pages; Students, Programmes, Fees and the rest are in its Go to dropdown (Andy, 2026-10-26, 4A and 5A).
         <NavLink to="/school/students" className={() => `tab${/^\/school(\/|$)/.test(location.pathname) && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>

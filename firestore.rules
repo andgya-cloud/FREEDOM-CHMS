@@ -272,9 +272,23 @@ service cloud.firestore {
             && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/groups/$(d.groupId));
       }
 
+      // An ADIA trainer marks the register of their own classes only, named on their account
+      // (Andy, 2026-10-26): no other class, no headcounts, no deleting.
+      function registerTrainer(orgId, e) {
+        return canAccessOrg(orgId) && has('exams.mark') && e.type == 'class'
+          && e.name in me().get('registerClasses', [])
+          && request.resource.data.orgId == orgId
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+      }
+      function trainerEvent(orgId) {
+        let d = request.resource.data;
+        return registerTrainer(orgId, d) && d.get('deletedAt', null) == null
+          && d.get('programId', null) == null && d.get('groupId', null) == null
+          && (resource == null || (resource.data.name == d.name && resource.data.headcounts == d.headcounts));
+      }
       match /events/{eventId} {
         allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
-        allow create, update: if orgWrite(orgId, 'attendance.write') && validEvent(eventId);
+        allow create, update: if (orgWrite(orgId, 'attendance.write') || trainerEvent(orgId)) && validEvent(eventId);
         allow delete: if false;
       }
 
@@ -291,7 +305,8 @@ service cloud.firestore {
 
       match /attendance/{recordId} {
         allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
-        allow create, update: if orgWrite(orgId, 'attendance.write')
+        allow create, update: if (orgWrite(orgId, 'attendance.write')
+               || registerTrainer(orgId, getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data))
           && request.resource.data.keys().hasOnly(['orgId', 'eventId', 'personId', 'date', 'status', 'method', 'checkedInAt',
                'programId', 'groupId', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && recordId == request.resource.data.eventId + '_' + request.resource.data.personId

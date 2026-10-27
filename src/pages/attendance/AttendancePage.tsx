@@ -8,7 +8,7 @@ import { useEvents } from '../../state/useAttendance';
 import { createEvent } from '../../lib/attendanceWrites';
 import { friendlyError } from '../../lib/errors';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
-import { PRINCIPAL_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { PRINCIPAL_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import {
   EVENT_TYPE_LABELS,
   eventChoices,
@@ -54,8 +54,11 @@ export function AttendancePage() {
   const recentStart = localDateKey(new Date(Date.now() - RECENT_DAYS * 86_400_000), tz);
   const since = [recentStart, date, month ? `${month}-01` : recentStart].sort()[0];
   const { events: loaded, loading } = useEvents(orgId, since);
-  const events = loaded.filter((e) => (month ? e.date.startsWith(month) : e.date >= recentStart));
-  const canRecord = can('attendance.write');
+  // A trainer sees and marks only the classes on their account, today only (Andy, 2026-10-26).
+  const trainer = profile?.roleId === TRAINER_ROLE_ID;
+  const myClasses = profile?.registerClasses ?? [];
+  const events = loaded.filter((e) => (month ? e.date.startsWith(month) : e.date >= recentStart) && (!trainer || (e.type === 'class' && myClasses.includes(e.name))));
+  const canRecord = can('attendance.write') || (trainer && myClasses.length > 0);
   // ADIA classes are the programmes set up under School, so the register lists that programme's students.
   const school = useSchool(current?.type === 'college' ? current.id : '');
 
@@ -78,10 +81,10 @@ export function AttendancePage() {
   }
 
   const org = current;
-  const choices = [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
+  const choices = trainer ? myClasses : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
   const todays = loaded.filter((e) => e.date === date);
   const adia = org.type === 'college';
-  const canBackdate = !adia || BACKDATE_ROLES.includes(profile?.roleId ?? '');
+  const canBackdate = !trainer && (!adia || BACKDATE_ROLES.includes(profile?.roleId ?? ''));
   const firstDay = adia ? ADIA_FIRST_DAY : undefined;
   const yesterday = localDateKey(new Date(Date.now() - 86_400_000), tz);
   const noun = org.type === 'church_campus' ? 'service' : org.type === 'college' ? 'class' : 'session';
@@ -92,7 +95,7 @@ export function AttendancePage() {
     const id = eventIdFor(date, clean);
     if (!loaded.some((e) => e.id === id)) {
       try {
-        const { synced } = createEvent(org.id, { date, type: eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean });
+        const { synced } = createEvent(org.id, { date, type: trainer ? 'class' : eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean });
         synced.catch((err) => toast.show(friendlyError(err)));
       } catch (err) {
         toast.show(friendlyError(err));
@@ -150,17 +153,19 @@ export function AttendancePage() {
               );
             })}
           </div>
+          {!trainer && <>
           <form className="input-with-button" onSubmit={openOther}>
             <input placeholder={`Another ${noun}, for example ${org.type === 'church_campus' ? 'Youth night' : org.type === 'college' ? 'ICT make-up class' : 'Holiday club'}`} value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label={`Name of another ${noun}`} />
             <button type="submit" className="btn" disabled={!otherName.trim()}>Start</button>
           </form>
           {org.type === 'church_campus' && <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
           {org.type !== 'church_campus' && <p className="hint">The programme list is in <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
+          </>}
         </section>
       )}
 
       <section>
-        {adia ? (
+        {adia && !trainer ? (
           <div className="card-head">
             <h2>{month ? monthLabel(month) : 'Last 8 weeks'}</h2>
             <label className="field past-month">
@@ -171,7 +176,7 @@ export function AttendancePage() {
               </select>
             </label>
           </div>
-        ) : <h2>Last 8 weeks</h2>}
+        ) : <h2>{trainer ? 'Your class, last 8 weeks' : 'Last 8 weeks'}</h2>}
         {loading && events.length === 0 ? <p className="muted">Loading…</p> : events.length === 0 ? (
           <p className="muted">{month ? `Nothing recorded in ${monthLabel(month)}.` : 'Nothing recorded yet.'}</p>
         ) : (

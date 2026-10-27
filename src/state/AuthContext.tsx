@@ -21,6 +21,8 @@ export interface Profile {
   /** Petty cash voucher title, such as Accountant. */
   pettyTitle?: string;
   phone?: string;
+  /** A trainer's classes whose register they mark (ADIA programme names). */
+  registerClasses?: string[];
   lastSignInAt?: Timestamp;
 }
 

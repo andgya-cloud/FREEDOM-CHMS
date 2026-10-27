@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, TEAM_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -69,6 +69,11 @@ async function countActiveOwners(): Promise<number> {
   return owners.size;
 }
 
+/** A trainer's register classes: up to ten ADIA programme names. */
+function registerClassesFrom(value: unknown): string[] {
+  return requireStringArray(value ?? [], 'the classes').map((c) => c.trim()).filter((c) => c && c.length <= 120).slice(0, 10);
+}
+
 /** Pastor (or an organization head, for their own Staff) creates an account with a temporary password. */
 export const createUser = onCall(CALLABLE, async (request) => {
   const { caller, teamOnly } = await requireAccountManager(request);
@@ -81,6 +86,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
   const password = checkPassword(data.password, email);
   const pettyTitle = teamOnly ? '' : pettyTitleFrom(data.pettyTitle);
   const phone = phoneFrom(data.phone);
+  const registerClasses = roleId === TRAINER_ROLE_ID ? registerClassesFrom(data.registerClasses) : [];
   const role = await loadRole(roleId, caller.uid);
   const allOrgs = role.isOwner ? true : !teamOnly && data.allOrgs === true;
   if (teamOnly && !canManageTeamAccount(caller.profile, { roleId, allOrgs, orgIds })) {
@@ -107,6 +113,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
     allOrgs,
     pettyTitle,
     phone,
+    registerClasses,
     permissions: effectivePermissions(role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -146,6 +153,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   if (data.active !== undefined) next.active = data.active === true;
   if (data.pettyTitle !== undefined && !teamOnly) next.pettyTitle = pettyTitleFrom(data.pettyTitle);
   if (data.phone !== undefined) next.phone = phoneFrom(data.phone);
+  const registerClasses = data.registerClasses !== undefined ? registerClassesFrom(data.registerClasses) : ((current as { registerClasses?: string[] }).registerClasses ?? []);
 
   const merged = { ...current, ...next };
   if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
@@ -171,6 +179,8 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     active: merged.active,
     pettyTitle: merged.pettyTitle ?? '',
     phone: merged.phone ?? '',
+    // The classes whose register a trainer marks (Andy, 2026-10-26); nobody else carries any.
+    registerClasses: merged.roleId === TRAINER_ROLE_ID ? registerClasses : [],
     permissions: effectivePermissions(role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,
@@ -182,7 +192,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
 
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'update', path: `users/${uid}`,
-    collection: 'users', docId: uid, orgId: null, changedFields: Object.keys(next),
+    collection: 'users', docId: uid, orgId: null, changedFields: [...Object.keys(next), ...(data.registerClasses !== undefined ? ['registerClasses'] : [])],
   });
   return { ok: true };
 });
