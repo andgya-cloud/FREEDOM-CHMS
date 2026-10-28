@@ -1443,3 +1443,16 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .past-results .mark-input { width: 76px; padding: 6px 8px; text-align: right; border: 1px solid var(--line, #d6d9e6); border-radius: 8px; font: inherit; }
 .past-results .mark-input.bad { border-color: #c0392b; background: #fff3f2; }
 .past-results .mark-input:disabled { background: transparent; border-style: dashed; }
+
+/* Common courses card and panel on Attendance (v115) */
+.start-tile.common-tile { box-shadow: inset 0 0 0 2px rgb(var(--menu-gold, 201 154 60)); }
+.start-tile.common-tile .start-hint { color: rgb(var(--menu-gold, 201 154 60)); opacity: 1; font-weight: 600; }
+.start-tile.common-tile-on { box-shadow: inset 0 0 0 2px rgb(var(--menu-gold, 201 154 60)), 0 0 0 3px color-mix(in srgb, rgb(var(--menu-gold, 201 154 60)) 30%, transparent); }
+.common-panel { margin-top: 12px; padding: 14px 16px; border: 1px solid var(--line, rgb(0 0 0 / .12)); border-top: 3px solid rgb(var(--menu-gold, 201 154 60)); border-radius: 12px; display: grid; gap: 12px; }
+.common-panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.common-panel-head h3 { margin: 0; }
+.common-pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; }
+.common-pick .field { margin: 0; }
+.common-tutor { margin: 0; }
+.common-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.common-add { display: grid; gap: 10px; }

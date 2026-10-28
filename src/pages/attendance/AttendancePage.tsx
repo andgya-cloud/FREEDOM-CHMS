@@ -1,6 +1,7 @@
 import { useSchool } from '../../state/useSchool';
-import { useAllExamSheets, useExamCohorts } from '../../state/useExams';
+import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type ExamSheetRow } from '../../state/useExams';
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
+import { CommonCoursesPanel } from './CommonCourses';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -63,15 +64,30 @@ export function AttendancePage() {
   const mine = useClassEvents(trainer ? orgId : '', myClasses);
   const loaded = trainer ? mine.events : all.events;
   const loading = trainer ? mine.loading : all.loading;
-  const events = loaded.filter((e) => (month ? e.date.startsWith(month) : e.date >= recentStart) && (!trainer || (e.type === 'class' && myClasses.includes(e.name))));
   const canRecord = can('attendance.write') || (trainer && myClasses.length > 0);
   // ADIA classes are the programmes set up under School, so the register lists that programme's students.
   const school = useSchool(current?.type === 'college' ? current.id : '');
   // The principal and the pastor can open any common course's register too, such as a course they teach themselves (Andy, 2026-10-28).
-  const examSheets = useAllExamSheets(current?.type === 'college' && !trainer ? current.id : '');
-  const examCohorts = useExamCohorts(current?.type === 'college' && !trainer ? current.id : '');
-  const commonRegisters = [...new Set(examSheets.sheets.filter((sh) => sh.courseId == null && examCohorts.byName[sh.cohort]?.closed !== true)
-    .map((sh) => commonClassName(sh.courseName, sh.cohort)))].sort();
+  // They open it from the Common courses card: cohort, course, tutor, then Mark register or Key in results (Andy, 2026-10-28, 1A-5A).
+  const college = current?.type === 'college' ? current.id : '';
+  const examAccess = useExamAccess();
+  const allSheets = useAllExamSheets(!trainer ? college : '');
+  const mySheets = useMyExamSheets(trainer ? college : '');
+  const examCohorts = useExamCohorts(college);
+  const commonSheets = (trainer ? mySheets.sheets : allSheets.sheets).filter((sh) => sh.courseId == null && examCohorts.byName[sh.cohort]?.closed !== true) as ExamSheetRow[];
+  const commonRegisters = [...new Set(commonSheets.map((sh) => commonClassName(sh.courseName, sh.cohort)))].sort();
+  const commonNames = new Set(commonSheets.map((sh) => sh.courseName.trim().toLowerCase()));
+  const [commonOpen, setCommonOpen] = useState(false);
+  // Cohorts newest first: the intakes, and any cohort a common course names.
+  const commonCohorts = trainer
+    ? [...new Set(commonSheets.map((sh) => sh.cohort))].sort((x, y) => y.localeCompare(x, undefined, { numeric: true }))
+    : [...new Set([...school.intakes.map((i) => i.name.trim()), ...commonSheets.map((sh) => sh.cohort)])]
+      .filter((c) => c && examCohorts.byName[c]?.closed !== true)
+      .sort((x, y) => (school.intakes.find((i) => i.name.trim() === y)?.startDate ?? y).localeCompare(school.intakes.find((i) => i.name.trim() === x)?.startDate ?? x, undefined, { numeric: true }));
+  const showCommon = !!college && (trainer ? commonSheets.length > 0 : examAccess.canManage);
+  const events = loaded.filter((e) => (month ? e.date.startsWith(month) : e.date >= recentStart) && (!trainer || (e.type === 'class' && myClasses.includes(e.name)))
+    // An early register named only by its common course ("Leadership") is left out; its cohort's register replaces it (Andy, 2026-10-28, 6).
+    && !(e.type === 'class' && !e.name.includes(' · ') && commonNames.has(e.name.trim().toLowerCase())));
 
   if (isCombined || !current) {
     return (
@@ -92,7 +108,7 @@ export function AttendancePage() {
   }
 
   const org = current;
-  const choices = trainer ? myClasses : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...commonRegisters, ...eventChoices(org)])];
+  const choices = trainer ? myClasses.filter((c) => !c.includes(' · ')) : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
   const todays = loaded.filter((e) => e.date === date);
   const adia = org.type === 'college';
   const canBackdate = !trainer && (!adia || BACKDATE_ROLES.includes(profile?.roleId ?? ''));
@@ -172,7 +188,17 @@ export function AttendancePage() {
                 </button>
               );
             })}
+            {showCommon && (
+              <button type="button" className={`start-tile common-tile${commonOpen ? ' common-tile-on' : ''}`} aria-expanded={commonOpen} onClick={() => setCommonOpen(!commonOpen)}>
+                <span className="start-name">Common courses</span>
+                <span className="start-hint">{commonNames.size === 1 ? '1 course' : `${commonNames.size || 'No'} courses`} ›</span>
+              </button>
+            )}
           </div>
+          {showCommon && commonOpen && (
+            <CommonCoursesPanel orgId={org.id} cohorts={commonCohorts} sheets={commonSheets}
+              onRegister={(sh) => open(commonClassName(sh.courseName, sh.cohort))} onClose={() => setCommonOpen(false)} />
+          )}
           {!trainer && <>
           <form className="input-with-button" onSubmit={openOther}>
             <input placeholder={`Another ${noun}, for example ${org.type === 'church_campus' ? 'Youth night' : org.type === 'college' ? 'ICT make-up class' : 'Holiday club'}`} value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label={`Name of another ${noun}`} />
