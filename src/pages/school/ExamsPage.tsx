@@ -80,8 +80,11 @@ function useCohorts(org: Organization) {
 const rosterFor = (students: ExamStudent[], courseId: string | null) =>
   (courseId == null ? students : students.filter((x) => x.courseId === courseId)).sort((a, b) => a.name.localeCompare(b.name));
 const programmeOf = (courseId: string | null, courseName: (id: string) => string) => (courseId == null ? 'Common courses' : courseName(courseId) || 'Programme');
-/** A common course goes to a lecturer with "Common courses" ticked (Andy, 2026-10-28, 5A); other courses to anyone who marks. */
-const trainersFor = (trainers: ExamTrainer[], courseId: string | null) => (courseId == null ? trainers.filter((t) => t.departments?.includes(COMMON)) : trainers);
+/**
+ * A common course goes to a lecturer with "Common courses" ticked (Andy, 2026-10-28, 5A), or to the principal
+ * or the pastor, who may teach one themselves (Andy teaches Leadership); other courses to anyone who marks.
+ */
+const trainersFor = (trainers: ExamTrainer[], courseId: string | null) => (courseId == null ? trainers.filter((t) => t.lecturer === false || t.departments?.includes(COMMON)) : trainers);
 const semesterText = (n: number | null | undefined) => (n ? `Semester ${n}` : 'No semester');
 
 /**

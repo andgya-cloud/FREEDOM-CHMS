@@ -1,4 +1,6 @@
 import { useSchool } from '../../state/useSchool';
+import { useAllExamSheets, useExamCohorts } from '../../state/useExams';
+import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -65,6 +67,11 @@ export function AttendancePage() {
   const canRecord = can('attendance.write') || (trainer && myClasses.length > 0);
   // ADIA classes are the programmes set up under School, so the register lists that programme's students.
   const school = useSchool(current?.type === 'college' ? current.id : '');
+  // The principal and the pastor can open any common course's register too, such as a course they teach themselves (Andy, 2026-10-28).
+  const examSheets = useAllExamSheets(current?.type === 'college' && !trainer ? current.id : '');
+  const examCohorts = useExamCohorts(current?.type === 'college' && !trainer ? current.id : '');
+  const commonRegisters = [...new Set(examSheets.sheets.filter((sh) => sh.courseId == null && examCohorts.byName[sh.cohort]?.closed !== true)
+    .map((sh) => commonClassName(sh.courseName, sh.cohort)))].sort();
 
   if (isCombined || !current) {
     return (
@@ -85,7 +92,7 @@ export function AttendancePage() {
   }
 
   const org = current;
-  const choices = trainer ? myClasses : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
+  const choices = trainer ? myClasses : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...commonRegisters, ...eventChoices(org)])];
   const todays = loaded.filter((e) => e.date === date);
   const adia = org.type === 'college';
   const canBackdate = !trainer && (!adia || BACKDATE_ROLES.includes(profile?.roleId ?? ''));

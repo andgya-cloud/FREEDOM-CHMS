@@ -5,7 +5,7 @@ import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import nodemailer from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { canAccessOrg, PRINCIPAL_ROLE_ID } from './shared/permissions.js';
+import { canAccessOrg, PRINCIPAL_ROLE_ID, TRAINER_ROLE_ID } from './shared/permissions.js';
 import { EXAM_COMPONENTS, type ExamComponent } from './shared/exams.js';
 import { examNoticeHtml, examNoticeSubject, examNoticeText, type ExamNotice, type ExamNoticeKind } from './shared/examNotices.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
@@ -31,7 +31,7 @@ export const listExamTrainers = onCall(CALLABLE, async (request) => {
   const users = await db.collection('users').where('active', '==', true).get();
   const trainers = users.docs
     .filter((d) => { const u = d.data() as UserProfile; const p = perms(u); return canAccessOrg(u, orgId) && (p.includes('exams.mark') || p.includes('exams.manage') || p.includes('users.manage')); })
-    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, phone: u.phone ?? '', departments: (u as { trainerCourseIds?: string[] }).trainerCourseIds ?? [] }; })
+    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, phone: u.phone ?? '', departments: (u as { trainerCourseIds?: string[] }).trainerCourseIds ?? [], lecturer: u.roleId === TRAINER_ROLE_ID }; })
     .sort((a, b) => a.name.localeCompare(b.name));
   return { trainers };
 });
