@@ -19,6 +19,7 @@ export { examNotify, listExamTrainers } from './exams.js';
 export { certificateFile } from './certificates.js';
 export { rosterOnStudent, rosterOnPerson } from './rosters.js';
 export { examSheetToLecturer } from './examAssign.js';
+export { commonCourseAccess } from './commonCourses.js';
 export { raisePettyRequest } from './pettyRaise.js';
 export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail, listPettyContacts } from './pettyNotify.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';

@@ -31,7 +31,7 @@ export const listExamTrainers = onCall(CALLABLE, async (request) => {
   const users = await db.collection('users').where('active', '==', true).get();
   const trainers = users.docs
     .filter((d) => { const u = d.data() as UserProfile; const p = perms(u); return canAccessOrg(u, orgId) && (p.includes('exams.mark') || p.includes('exams.manage') || p.includes('users.manage')); })
-    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, phone: u.phone ?? '' }; })
+    .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, phone: u.phone ?? '', departments: (u as { trainerCourseIds?: string[] }).trainerCourseIds ?? [] }; })
     .sort((a, b) => a.name.localeCompare(b.name));
   return { trainers };
 });

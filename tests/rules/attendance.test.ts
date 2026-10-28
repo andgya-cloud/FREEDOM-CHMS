@@ -204,6 +204,31 @@ describe('a trainer marks only their own class register (Andy, 2026-10-26)', () 
     await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/events/${D}_catering`), cls('alphonse', 'IT / ICT', { name: 'Catering' })));
   });
 
+  it('lets a common-course lecturer see and mark the whole cohort, on that course\'s register only (Andy, 2026-10-28)', async () => {
+    const COMMS = `organizations/adia/events/${D}_communication_skills_cohort_4`;
+    const NAME = 'Communication Skills · Cohort 4';
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users/claire'), {
+        email: 'claire@example.org', displayName: 'Claire', roleId: 'trainer', extraPermissions: [], orgIds: ['adia'], allOrgs: false,
+        permissions: ['exams.mark'], active: true, trainerCourseIds: ['common'], registerClasses: [NAME], commonClasses: [NAME], commonRosters: ['common-Cohort-4'],
+      });
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/rosters/common-Cohort-4'), { orgId: 'adia', courseId: 'common', cohort: 'Cohort 4', students: [] });
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/rosters/common-Cohort-3'), { orgId: 'adia', courseId: 'common', cohort: 'Cohort 3', students: [] });
+    });
+    const db = as('claire');
+    await assertSucceeds(getDoc(doc(db, 'organizations/adia/rosters/common-Cohort-4')));
+    await assertFails(getDoc(doc(db, 'organizations/adia/rosters/common-Cohort-3')));
+    await assertFails(getDoc(doc(db, 'organizations/adia/rosters/it')));
+    await assertSucceeds(setDoc(doc(db, COMMS), cls('claire', NAME)));
+    // Students of two departments, on the one common register.
+    await assertSucceeds(setDoc(doc(db, `organizations/adia/attendance/${D}_communication_skills_cohort_4_s1`), mark('claire', `${D}_communication_skills_cohort_4`)));
+    await assertSucceeds(setDoc(doc(db, `organizations/adia/attendance/${D}_communication_skills_cohort_4_s2`), mark('claire', `${D}_communication_skills_cohort_4`, { personId: 's2' })));
+    await assertFails(setDoc(doc(db, `organizations/adia/attendance/${D}_communication_skills_cohort_4_nobody`), mark('claire', `${D}_communication_skills_cohort_4`, { personId: 'nobody' })));
+    // Not a department register, and not Alphonse's common course either.
+    await assertFails(setDoc(doc(db, IT), cls('claire', 'IT / ICT')));
+    await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/attendance/${D}_communication_skills_cohort_4_s2`), mark('alphonse', `${D}_communication_skills_cohort_4`, { personId: 's2' })));
+  });
+
   it('gives a trainer with no register classes nothing to mark', async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await updateDoc(doc(ctx.firestore(), 'users/alphonse'), { registerClasses: [] });

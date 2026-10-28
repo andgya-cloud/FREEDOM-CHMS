@@ -22,6 +22,7 @@ import { enrol } from '../../lib/programWrites';
 import { EVENT_TYPE_LABELS } from '../../../functions/src/shared/attendance';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { cohortOfCommonClass } from '../../../functions/src/shared/commonCourses';
 import type { Person } from '../../state/PeopleContext';
 import type { Program } from '../../state/usePrograms';
 
@@ -204,6 +205,21 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
           ids: new Set(school.students.filter((st) => st.courseId === course.id && st.status === 'enrolled').map((st) => st.id)),
           title: `${course.name} register`,
           empty: 'No students are enrolled in this programme yet. Enrol them under School → Students.',
+          addLabel: 'Add guest',
+        },
+      };
+    }
+    // A common course's register, "Communication Skills · Cohort 4": every enrolled student of that cohort (Andy, 2026-10-28).
+    const cohort = cohortOfCommonClass(event.name);
+    const intakeIds = new Set(school.intakes.filter((i) => i.name === cohort).map((i) => i.id));
+    if (cohort && intakeIds.size) {
+      return {
+        back: { to: '/attendance', label: 'Attendance' },
+        names: school.rosterNames,
+        roster: {
+          ids: new Set(school.students.filter((st) => intakeIds.has(st.intakeId) && st.status === 'enrolled').map((st) => st.id)),
+          title: `${event.name} register`,
+          empty: `No students are enrolled in ${cohort} yet.`,
           addLabel: 'Add guest',
         },
       };

@@ -65,7 +65,7 @@ export function useExamSheet(orgId: string, sheetId: string) {
   return { sheet, loading };
 }
 
-export interface ExamTrainer { uid: string; name: string; phone: string }
+export interface ExamTrainer { uid: string; name: string; phone: string; /** A lecturer's departments; "common" for Common courses. */ departments?: string[] }
 /** The accounts the principal can give a course to. */
 export function useExamTrainers(orgId: string) {
   const a = useExamAccess();

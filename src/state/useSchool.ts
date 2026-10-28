@@ -6,6 +6,7 @@ import { useLiveQuery } from '../lib/useQuery';
 import { ESTIMATE } from '../lib/firestoreOptions';
 import { useClassEvents } from './useAttendance';
 import { TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { COMMON_DEPARTMENT } from '../../functions/src/shared/commonCourses';
 import { withDefaults, type FeeItem, type Assessment, type ClassEvent, type ClassRecord, type Course, type Intake, type Invoice, type Mark, type OutcomeStatus, type SchoolSettings, type Student } from '../../functions/src/shared/school';
 
 export interface StudentRow extends Student {
@@ -43,7 +44,8 @@ export function useSchool(orgId: string) {
   // A trainer reads only their department's names-only class list (Andy, 2026-10-28), never people or students.
   const trainer = profile?.roleId === TRAINER_ROLE_ID;
   const full = on && !trainer;
-  const roster = useRosters(on && trainer ? orgId : '', profile?.trainerCourseIds ?? []);
+  // A common-course lecturer also reads the whole class list of each cohort they teach a common course to.
+  const roster = useRosters(on && trainer ? orgId : '', [...(profile?.trainerCourseIds ?? []).filter((id) => id !== COMMON_DEPARTMENT), ...(profile?.commonRosters ?? [])]);
   const classEvents = useClassEvents(on && trainer ? orgId : '', profile?.registerClasses ?? []);
 
   const courses = useLiveQuery<CourseRow>(() => (on ? col(orgId, 'courses') : null), [orgId, on]);
@@ -108,7 +110,7 @@ export interface StoredSchoolReport {
 /** A trainer's departments' names-only class lists (functions/src/rosters.ts), as student rows. */
 function useRosters(orgId: string, courseIds: string[]) {
   const key = courseIds.join(',');
-  const [lists, setLists] = useState<Record<string, { courseId: string; students: { id: string; name: string; admissionNo: string; intakeId: string; status: string; enrolledOn: string | null }[] }>>({});
+  const [lists, setLists] = useState<Record<string, { courseId: string; students: { id: string; name: string; admissionNo: string; intakeId: string; status: string; enrolledOn: string | null; courseId?: string }[] }>>({});
   const [loading, setLoading] = useState(true);
   useEffect(() => {
     setLists({});
@@ -122,7 +124,9 @@ function useRosters(orgId: string, courseIds: string[]) {
     return () => offs.forEach((off) => off());
   }, [orgId, key]);
   return useMemo(() => {
-    const all = Object.values(lists).flatMap((l) => l.students.map((st) => ({ ...st, courseId: l.courseId })));
+    // A cohort's common list names each student's own department; a student on two lists counts once.
+    const byId = new Map(Object.values(lists).flatMap((l) => l.students.map((st) => [st.id, { ...st, courseId: st.courseId || l.courseId }] as const)));
+    const all = [...byId.values()];
     const students = all.map((st) => ({
       id: st.id, orgId, courseId: st.courseId, intakeId: st.intakeId, level: '', status: st.status, admissionNo: st.admissionNo, enrolledOn: st.enrolledOn,
     }) as StudentRow);

@@ -25,6 +25,9 @@ export interface Profile {
   registerClasses?: string[];
   /** A trainer's departments (ADIA programme ids). */
   trainerCourseIds?: string[];
+  /** A common-course lecturer's registers ("Communication Skills · Cohort 4") and cohort class lists (functions/src/commonCourses.ts). */
+  commonClasses?: string[];
+  commonRosters?: string[];
   lastSignInAt?: Timestamp;
 }
 

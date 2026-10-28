@@ -1,6 +1,7 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import { FieldValue } from 'firebase-admin/firestore';
 import { db } from './common.js';
+import { cohortOfIntake, rebuildCommonRoster } from './commonCourses.js';
 
 /**
  * A lecturer sees only their own department (Andy, 2026-10-28, 1A-3A): names
@@ -39,6 +40,9 @@ export const rosterOnStudent = onDocumentWritten('organizations/{orgId}/students
   const after = event.data?.after.data();
   const courses = new Set([before?.courseId, after?.courseId].filter((c): c is string => typeof c === 'string' && !!c));
   for (const courseId of courses) await rebuildRoster(event.params.orgId, courseId);
+  // The whole cohort's list, for its common-course lecturers.
+  const cohorts = new Set([await cohortOfIntake(event.params.orgId, before?.intakeId), await cohortOfIntake(event.params.orgId, after?.intakeId)].filter(Boolean));
+  for (const cohort of cohorts) await rebuildCommonRoster(event.params.orgId, cohort);
 });
 
 /** A student's name changing, or their record being deleted, changes their class list. */
@@ -49,4 +53,6 @@ export const rosterOnPerson = onDocumentWritten('organizations/{orgId}/people/{p
   const student = await db.doc(`organizations/${event.params.orgId}/students/${event.params.personId}`).get();
   const courseId = student.get('courseId');
   if (student.exists && typeof courseId === 'string') await rebuildRoster(event.params.orgId, courseId);
+  const cohort = student.exists ? await cohortOfIntake(event.params.orgId, student.get('intakeId')) : '';
+  if (cohort) await rebuildCommonRoster(event.params.orgId, cohort);
 });

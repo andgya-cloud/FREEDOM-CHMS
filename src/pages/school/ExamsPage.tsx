@@ -79,7 +79,9 @@ function useCohorts(org: Organization) {
 
 const rosterFor = (students: ExamStudent[], courseId: string | null) =>
   (courseId == null ? students : students.filter((x) => x.courseId === courseId)).sort((a, b) => a.name.localeCompare(b.name));
-const programmeOf = (courseId: string | null, courseName: (id: string) => string) => (courseId == null ? 'Common course' : courseName(courseId) || 'Programme');
+const programmeOf = (courseId: string | null, courseName: (id: string) => string) => (courseId == null ? 'Common courses' : courseName(courseId) || 'Programme');
+/** A common course goes to a lecturer with "Common courses" ticked (Andy, 2026-10-28, 5A); other courses to anyone who marks. */
+const trainersFor = (trainers: ExamTrainer[], courseId: string | null) => (courseId == null ? trainers.filter((t) => t.departments?.includes(COMMON)) : trainers);
 const semesterText = (n: number | null | undefined) => (n ? `Semester ${n}` : 'No semester');
 
 /**
@@ -312,7 +314,7 @@ function departmentsOf<T extends { courseId: string | null }>(items: T[], course
   const known = new Set(courses.map((c) => c.id));
   return [
     ...courses.map((c) => ({ id: c.id as string | null, name: c.name, items: items.filter((x) => x.courseId === c.id) })),
-    { id: null, name: 'Common courses (every student)', items: items.filter((x) => x.courseId == null) },
+    { id: null, name: 'Common courses', items: items.filter((x) => x.courseId == null) },
     { id: 'other', name: 'Other', items: items.filter((x) => x.courseId != null && !known.has(x.courseId)) },
   ].filter((g) => g.items.length > 0);
 }
@@ -366,7 +368,7 @@ function MyClasses({ org, studentsOf, allStudents, courseName }: { org: Organiza
           </section>
         );
       })}
-      {departments && departments.length > 0 && <PastResults org={org} students={allStudents} departments={departments} courseName={courseName} />}
+      {departments && departments.some((d) => d !== COMMON) && <PastResults org={org} students={allStudents} departments={departments.filter((d) => d !== COMMON)} courseName={courseName} />}
     </div>
   );
 }
@@ -633,7 +635,7 @@ function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onS
                 <span>{c.name}<span className="muted small"> · {semesterText(c.semester)}</span></span>
                 <select value={trainerFor(c)} aria-label={`Trainer for ${c.name}`} onChange={(e) => setPicks({ ...picks, [courseListKey(c)]: e.target.value })}>
                   <option value="">{loading ? 'Loading…' : 'Leave out'}</option>
-                  {trainers.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+                  {trainersFor(trainers, c.courseId).map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
                 </select>
               </li>
             ))}
@@ -1021,12 +1023,15 @@ function CourseSetup({ org, cohort, closed, sheets, students, courses, courseLis
     deleteExamSheet(org.id, sh.id).catch((err) => toast.show(friendlyError(err)));
     log(`Removed ${sh.courseName} (${sh.teacherName})`, sh.id);
   }
-  const trainerOptions = (sh?: ExamSheetRow) => (
-    <>
-      {sh && !trainers.some((t) => t.uid === sh.ownerUid) && <option value={sh.ownerUid}>{sh.teacherName || sh.ownerName}</option>}
-      {trainers.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
-    </>
-  );
+  const trainerOptions = (courseId: string | null, sh?: ExamSheetRow) => {
+    const list = trainersFor(trainers, courseId);
+    return (
+      <>
+        {sh && !list.some((t) => t.uid === sh.ownerUid) && <option value={sh.ownerUid}>{sh.teacherName || sh.ownerName}</option>}
+        {list.map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
+      </>
+    );
+  };
 
   return (
     <section className="card stack">
@@ -1039,7 +1044,7 @@ function CourseSetup({ org, cohort, closed, sheets, students, courses, courseLis
             <label className="field"><span>Department</span>
               <select value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}>
                 {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value={COMMON}>Common course (every student)</option>
+                <option value={COMMON}>Common courses</option>
               </select>
             </label>
             <label className="field"><span>Course name</span><input value={f.courseName} maxLength={120} placeholder="e.g. Computer Networking" onChange={(e) => setF({ ...f, courseName: e.target.value })} /></label>
@@ -1049,12 +1054,13 @@ function CourseSetup({ org, cohort, closed, sheets, students, courses, courseLis
             <label className="field"><span>Trainer</span>
               <select value={f.trainer} onChange={(e) => setF({ ...f, trainer: e.target.value })}>
                 <option value="">{loading ? 'Loading…' : 'Pick the trainer'}</option>
-                {trainerOptions()}
+                {trainerOptions(f.scope === COMMON ? null : f.scope)}
               </select>
             </label>
           </div>
           <label className="check"><input type="checkbox" checked={f.onList} onChange={(e) => setF({ ...f, onList: e.target.checked })} /> Also put it on the course list for future cohorts</label>
           {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
+          {!loading && f.scope === COMMON && trainersFor(trainers, null).length === 0 && <p className="small muted">No lecturer has Common courses ticked yet. Tick it on their account under Settings, Staff accounts.</p>}
           <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add course</button><button type="button" className="btn btn-quiet" onClick={() => setAdding(false)}>Done</button></div>
         </div>
       )}
@@ -1077,7 +1083,7 @@ function CourseSetup({ org, cohort, closed, sheets, students, courses, courseLis
                   </td>
                   <td>
                     <select value={sh.ownerUid} aria-label="Trainer" disabled={closed} onChange={(e) => { const t = trainers.find((x) => x.uid === e.target.value); if (t) change(sh, { trainer: t }, `given to ${t.name} (was ${sh.teacherName})`); }}>
-                      {trainerOptions(sh)}
+                      {trainerOptions(sh.courseId, sh)}
                     </select>
                   </td>
                   <td><StatusPill status={sh.status} /></td>
@@ -1152,7 +1158,7 @@ function CourseListEditor({ org, courses, courseList, canAddDepartment, current 
         <label className="field"><span>Department</span>
           <select value={f.scope} onChange={(e) => setF({ ...f, scope: e.target.value })}>
             {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            <option value={COMMON}>Common course (every student)</option>
+            <option value={COMMON}>Common courses</option>
           </select>
         </label>
         <label className="field"><span>Course name</span><input value={f.name} maxLength={120} placeholder="e.g. Web Design" onChange={(e) => setF({ ...f, name: e.target.value })} /></label>

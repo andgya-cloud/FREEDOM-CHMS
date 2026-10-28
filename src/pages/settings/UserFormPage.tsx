@@ -13,6 +13,7 @@ import { friendlyError } from '../../lib/errors';
 import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
@@ -248,7 +249,14 @@ export function UserFormPage() {
                 {c.name}
               </label>
             ))}
-            <small className="hint">They see only this department's students (names and admission numbers), mark its register for today or yesterday, and key in marks for its courses given to them in Exam Records. Nothing else.</small>
+            {programmes.length > 0 && (
+              <label className="check">
+                <input type="checkbox" checked={form.departments.includes(COMMON_DEPARTMENT)}
+                  onChange={() => setForm((f) => ({ ...f, departments: f.departments.includes(COMMON_DEPARTMENT) ? f.departments.filter((x) => x !== COMMON_DEPARTMENT) : [...f.departments, COMMON_DEPARTMENT] }))} />
+                Common courses
+              </label>
+            )}
+            <small className="hint">They see only this department's students (names and admission numbers), mark its register for today or yesterday, and key in marks for its courses given to them in Exam Records. With Common courses, they also see the cohorts their common courses are taught to. Nothing else.</small>
           </fieldset>
         )}
 

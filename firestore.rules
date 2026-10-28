@@ -322,12 +322,20 @@ service cloud.firestore {
           && d.get('groupId', null) == e.get('groupId', null);
       }
 
+      // A lecturer marks their own department's students; on a common-course register (Andy, 2026-10-28),
+      // any student of the school, since the class is the whole cohort.
+      function trainerMark(orgId) {
+        let e = getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data;
+        let student = /databases/$(database)/documents/organizations/$(orgId)/students/$(request.resource.data.personId);
+        return registerTrainer(orgId, e)
+          && (e.name in me().get('commonClasses', []) ? exists(student) : get(student).data.courseId in myDepartments());
+      }
+
       match /attendance/{recordId} {
         allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write')
           || (isTrainer() && get(/databases/$(database)/documents/organizations/$(orgId)/events/$(resource.data.eventId)).data.name in myClasses()));
         allow create, update: if (orgWrite(orgId, 'attendance.write')
-               || (registerTrainer(orgId, getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data)
-                   && get(/databases/$(database)/documents/organizations/$(orgId)/students/$(request.resource.data.personId)).data.courseId in myDepartments()))
+               || trainerMark(orgId))
           && request.resource.data.keys().hasOnly(['orgId', 'eventId', 'personId', 'date', 'status', 'method', 'checkedInAt',
                'programId', 'groupId', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && recordId == request.resource.data.eventId + '_' + request.resource.data.personId
@@ -882,7 +890,8 @@ service cloud.firestore {
       // number is added by a Cloud Function, and "graduated" only by issuing a certificate.
       // A department's names-only class list, for its lecturers (functions/src/rosters.ts).
       match /rosters/{courseId} {
-        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer() && courseId in myDepartments());
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer()
+          && (courseId in myDepartments() || courseId in me().get('commonRosters', [])));
         allow write: if false;
       }
 

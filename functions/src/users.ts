@@ -6,6 +6,8 @@ import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
 import { rebuildRoster } from './rosters.js';
 import { giveDepartmentCourses } from './examAssign.js';
+import { refreshCommonAccess } from './commonCourses.js';
+import { COMMON_DEPARTMENT } from './shared/commonCourses.js';
 
 // The browser calls these directly, so anyone may reach them; each one checks
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
@@ -80,6 +82,8 @@ async function trainerDepartments(value: unknown, orgIds: string[]): Promise<{ t
   const ids = [...new Set(requireStringArray(value ?? [], 'the departments'))].filter((id) => /^[a-z0-9_]{2,40}$/.test(id)).slice(0, 10);
   const found: { id: string; name: string }[] = [];
   for (const id of ids) {
+    // "Common courses" has no programme of its own (Andy, 2026-10-28); its registers come from the courses given to them.
+    if (id === COMMON_DEPARTMENT) { found.push({ id, name: '' }); continue; }
     for (const orgId of orgIds) {
       const course = await db.doc(`organizations/${orgId}/courses/${id}`).get();
       if (course.exists && !course.get('deletedAt')) { found.push({ id, name: String(course.get('name') ?? '') }); break; }
@@ -152,6 +156,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
   });
   await saveSigningPassword(uid, password);
   await refreshRosters(orgIds, dept.trainerCourseIds);
+  await refreshCommonAccess(uid);
   await giveDepartmentCourses(uid, profile as UserProfile, caller.uid);
   return { uid };
 });
@@ -218,6 +223,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   }
   if (next.active === false) await auth.revokeRefreshTokens(uid);
   await refreshRosters(merged.orgIds, dept.trainerCourseIds);
+  await refreshCommonAccess(uid);
   await giveDepartmentCourses(uid, { ...merged, ...dept } as UserProfile, caller.uid);
 
   await writeAudit({
