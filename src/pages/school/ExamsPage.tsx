@@ -131,7 +131,7 @@ function Exams({ org }: { org: Organization }) {
       </div>
       {cohorts.length === 0 ? (
         <section className="stack">
-          <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort under <Link to="/school/courses">Programmes</Link> first.</>}</div>
+          <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort in <Link to="/school/courses">Settings → Programmes</Link> first.</>}</div>
           {canStart && <NewCohort org={org} cohorts={cohorts} programmes={s.courses} today={s.today} onStarted={(c) => go({ cohort: c })} />}
         </section>
       ) : view === 'student' ? (

@@ -7,6 +7,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { to: '/settings/pipeline', label: 'Journey stages', detail: 'Visitor, Salvation, Baptism, Growth Track…', permission: 'settings.manage' },
   { to: '/settings/custom-fields', label: 'Extra fields', detail: 'Your own fields on every person', permission: 'settings.manage' },
   { to: '/settings/funds', label: 'Funds', detail: 'Tithes, Offerings and other funds for giving', permission: 'settings.manage' },
+  { to: '/school/courses', label: 'Programmes', detail: 'ADIA programmes (departments) and their cohorts', permission: 'settings.manage', orPermission: 'school.manage' },
   { to: '/school/settings', label: 'School settings', detail: 'ADIA grading scale, pass mark, attendance alert and director', permission: 'settings.manage' },
   { to: '/settings/templates', label: 'WhatsApp messages', detail: 'The words for welcomes, check-ins, care and receipts', permission: 'settings.manage' },
   { to: '/settings/whatsapp', label: 'WhatsApp automation', detail: 'Let welcomes and check-ins send themselves, with your approval first', permission: 'settings.manage' },

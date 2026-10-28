@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { saveCourse, saveIntake } from '../../lib/schoolWrites';
 import { capacityOf } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, useSchoolPage } from './common';
+import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 import type { CourseRow, IntakeRow } from '../../state/useSchool';
 
@@ -42,12 +43,11 @@ function Programmes({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow">
+      <p><Link to="/settings">← Settings</Link></p>
       <div className="page-head">
         <h1>Programmes</h1>
         {editable && !adding && <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>+ New programme</button>}
       </div>
-      <SchoolNav feesAllowed={s.feesAllowed} />
-      <p className="muted">Each programme has its cohorts. Students enrol into a cohort, and Exam Records, Fees and Graduation follow them. Add each programme's courses and trainers in Exam Records, Setup.</p>
       {adding && (
         <section className="card stack">
           <label className="field"><span>Programme name</span><input autoFocus value={name} maxLength={80} placeholder="e.g. Plumbing" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} /></label>

@@ -1104,7 +1104,32 @@ details.fold-card > summary::before { content: '▸'; color: var(--muted); }
 details.fold-card[open] > summary::before { content: '▾'; }
 details.fold-card[open] > summary { margin-bottom: 10px; }
 details.fold-card > summary > span:first-child { flex: 1; }
-.school-goto { max-width: 320px; margin-bottom: 12px; }
+/* School pages, simplified (Andy, 2026-10-28): the title is the "Go to" dropdown, one "+ Add students"
+   menu, status/cohort/department side by side, and rarely used parts folded away. */
+.school-head { margin-bottom: 14px; flex-wrap: wrap; }
+.title-select { margin: 0; }
+.page-head .title-select select {
+  font: inherit; color: inherit; background-color: transparent; border: 0; box-shadow: none; padding: 0 1.4em 0 0; cursor: pointer; width: auto; max-width: 100%;
+  appearance: none; -webkit-appearance: none; border-radius: 8px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 0.55em) 55%, calc(100% - 0.3em) 55%; background-size: 0.25em 0.25em; background-repeat: no-repeat;
+}
+.page-head .title-select select:focus-visible { outline: 2px solid rgb(var(--acc)); outline-offset: 4px; }
+.add-menu { position: relative; }
+.add-menu > summary { list-style: none; }
+.add-menu > summary::-webkit-details-marker { display: none; }
+.add-menu-pop {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 210px; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 30px rgb(0 0 0 / 0.14); padding: 6px;
+}
+.add-menu-pop a { padding: 10px 12px; border-radius: 8px; text-decoration: none; color: inherit; font-weight: 600; }
+.add-menu-pop a:hover { background: rgb(var(--acc) / 0.08); }
+.filter-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 12px 0 16px; }
+@media (max-width: 600px) { .filter-row { grid-template-columns: 1fr 1fr; } .filter-row > :first-child { grid-column: 1 / -1; } }
+details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
+@supports (field-sizing: content) { .page-head .title-select select { field-sizing: content; } }
+/* Plain number tiles (Fees) on ADIA's light pages: the label was white on white. */
+.look-glass .tiles .tile-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-shadow: none; }
 
 /* ======================================================================================
    ADIA Training Centre, light lavender look (Andy's design, 2026-10-26). It re-skins the

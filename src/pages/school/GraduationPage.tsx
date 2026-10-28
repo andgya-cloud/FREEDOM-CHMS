@@ -15,7 +15,7 @@ import { csvFile } from '../../lib/schoolPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { OUTCOME_LABELS, OUTCOME_STATUSES, type OutcomeStatus } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, useSchoolPage } from './common';
+import { SchoolGate, SchoolTitle, useSchoolPage } from './common';
 import { CertificateActions } from '../../components/CertificateActions';
 import { uploadCertificate } from '../../lib/certificateFiles';
 import { fileAdmissionKey } from '../../../functions/src/shared/certificateFiles';
@@ -63,43 +63,11 @@ function Graduation({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>Graduation</h1></div>
-      <SchoolNav feesAllowed={s.feesAllowed} />
-      {(can('settings.manage') || can('school.manage')) && (
-        <section className="card stack">
-          <h2>Issue a certificate</h2>
-          <p className="small muted">The certificate gets the next serial number, the student becomes a graduate, and follow-ups at 3, 6 and 12 months are created. This cannot be undone.</p>
-          <label className="field"><span>Student</span>
-            <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
-              <option value="">Choose…</option>
-              {candidates.map(({ st, name }) => <option key={st.id} value={st.id}>{name} · {s.courseName(st.courseId)}</option>)}
-            </select>
-          </label>
-          <label className="field"><span>Date issued</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
-          <button type="button" className="btn btn-primary align-start" disabled={!picked || !issuedOn} onClick={issue}>Issue certificate</button>
-        </section>
-      )}
+      <SchoolTitle feesAllowed={s.feesAllowed} />
 
-      {(can('settings.manage') || can('school.manage')) && <GraduationUpload org={org} s={s} />}
-
+      {/* The certificate list first; issuing, uploading and follow-ups fold away until needed (Andy, 2026-10-28, 7A). */}
       <section className="card stack">
-        <h2>Follow-ups due</h2>
-        {due.length === 0 ? <p className="muted small">Nothing due now.</p> : due.map((o) => <OutcomeForm key={o.id} orgId={org.id} outcome={o} name={s.nameOf(o.studentId)} today={s.today} canRecord={can('people.write')} />)}
-        {upcoming.length > 0 && <p className="small muted">Coming up: {upcoming.slice(0, 5).map((o) => `${s.nameOf(o.studentId)} (${o.months} months, ${formatDateKey(o.due)})`).join('; ')}.</p>}
-      </section>
-
-      {recorded.length > 0 && (
-        <section className="card stack">
-          <h2>Recorded answers</h2>
-          <ul className="link-list">
-            {recorded.map((o) => <li key={o.id}><Link to={`/school/students/${o.studentId}`}><span className="link-title">{s.nameOf(o.studentId)} · {o.months} months</span><span className="link-detail">{OUTCOME_LABELS[o.status as OutcomeStatus]}{o.note ? ` · ${o.note}` : ''}</span></Link></li>)}
-          </ul>
-        </section>
-      )}
-
-      <section className="card stack">
-        <div className="card-head"><h2>Certificate register</h2>{register.length > 0 && <button type="button" className="btn btn-quiet" onClick={registerCsv}>Download</button>}</div>
-        {register.length > 0 && canFiles && <UploadMany org={org} s={s} />}
+        <div className="card-head"><h2>Certificates</h2>{register.length > 0 && <button type="button" className="btn btn-quiet" onClick={registerCsv}>Download</button>}</div>
         {register.length === 0 ? <p className="muted small">No certificates issued yet.</p> : (
           <div className="table-scroll">
             <table className="report-table">
@@ -110,6 +78,42 @@ function Graduation({ org }: { org: Organization }) {
           </div>
         )}
       </section>
+
+      {(can('settings.manage') || can('school.manage')) && (
+        <details className="card fold-card">
+          <summary><span>Issue one certificate</span></summary>
+          <div className="stack">
+            <p className="small muted">The student becomes a graduate with the next serial number. This cannot be undone.</p>
+            <label className="field"><span>Student</span>
+              <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
+                <option value="">Choose…</option>
+                {candidates.map(({ st, name }) => <option key={st.id} value={st.id}>{name} · {s.courseName(st.courseId)}</option>)}
+              </select>
+            </label>
+            <label className="field"><span>Date issued</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
+            <button type="button" className="btn btn-primary align-start" disabled={!picked || !issuedOn} onClick={issue}>Issue certificate</button>
+          </div>
+        </details>
+      )}
+
+      {(can('settings.manage') || can('school.manage')) && <GraduationUpload org={org} s={s} />}
+      {register.length > 0 && canFiles && <UploadMany org={org} s={s} />}
+
+      <details className="card fold-card">
+        <summary><span>Follow-ups with graduates</span>{due.length > 0 && <span className="badge">{due.length} due</span>}</summary>
+        <div className="stack">
+          {due.length === 0 ? <p className="muted small">Nothing due now.</p> : due.map((o) => <OutcomeForm key={o.id} orgId={org.id} outcome={o} name={s.nameOf(o.studentId)} today={s.today} canRecord={can('people.write')} />)}
+          {upcoming.length > 0 && <p className="small muted">Coming up: {upcoming.slice(0, 5).map((o) => `${s.nameOf(o.studentId)} (${o.months} months, ${formatDateKey(o.due)})`).join('; ')}.</p>}
+          {recorded.length > 0 && (
+            <>
+              <h3>Recorded answers</h3>
+              <ul className="link-list">
+                {recorded.map((o) => <li key={o.id}><Link to={`/school/students/${o.studentId}`}><span className="link-title">{s.nameOf(o.studentId)} · {o.months} months</span><span className="link-detail">{OUTCOME_LABELS[o.status as OutcomeStatus]}{o.note ? ` · ${o.note}` : ''}</span></Link></li>)}
+              </ul>
+            </>
+          )}
+        </div>
+      </details>
     </div>
   );
 }
@@ -214,8 +218,9 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
   const list = (ms: Match[]) => <ul className="small">{ms.map((m) => <li key={m.row.row}>{m.row.name} · {m.row.admissionNo}{m.row.points != null ? ` · ${m.row.points}` : ''}{m.row.grade ? ` ${m.row.grade}` : ''}</li>)}</ul>;
   const go = group('graduate');
   return (
-    <section className="card stack">
-      <h2>Upload the graduation list</h2>
+    <details className="card fold-card">
+      <summary><span>Upload the graduation list</span></summary>
+      <div className="stack">
       <p className="small muted">An Excel file with Student name, Adm No., Points and Grade, under each department's name. Everyone who passed gets their certificate; a Fail stays as it is.</p>
       <div className="row-actions">
         <label className="field"><span>Graduating class</span>
@@ -243,7 +248,8 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
           <p className="small muted">Certificates get the next serial numbers and cannot be undone.</p>
         </div>
       )}
-    </section>
+      </div>
+    </details>
   );
 }
 

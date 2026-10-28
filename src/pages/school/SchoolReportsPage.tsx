@@ -13,7 +13,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { lastCompletePeriod, periodFor, periodLabel, type ReportType } from '../../../functions/src/shared/metrics';
 import type { SchoolReportDoc } from '../../../functions/src/shared/school';
 import type { StoredSchoolReport } from '../../state/useSchool';
-import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
+import { SchoolGate, SchoolTitle, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function SchoolReportsPage() {
@@ -47,39 +47,43 @@ function Reports({ org }: { org: Organization }) {
   }, [requestId, org.id, setParams, toast]);
 
   if (!allowed) return <div className="page narrow"><h1>School reports</h1><p>Reports are for the pastor and the people the pastor has given access.</p></div>;
-  const open = rows.find((r) => r.id === openId);
+  // The chosen report, or else the newest one, shows straight away (Andy, 2026-10-28, 7A).
+  const open = rows.find((r) => r.id === openId) ?? rows[0];
 
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>School reports</h1><Link to="/school/settings" className="btn btn-quiet">School settings</Link></div>
-      <SchoolNav feesAllowed={s.feesAllowed} />
-      <p className="small muted">A weekly attendance and alerts report is made every Monday at 07:00, and a monthly enrolment, results and fee report on the 1st.</p>
-      <section className="card stack">
-        <h2>Make a report</h2>
-        <div className="segmented" role="radiogroup" aria-label="Report">
-          {(['weekly', 'monthly'] as const).map((t) => (
-            <button key={t} type="button" role="radio" aria-checked={type === t} className={`chip${type === t ? ' chip-on' : ''}`} onClick={() => setType(t)}>{t === 'weekly' ? 'Week' : 'Month'}</button>
-          ))}
+      <SchoolTitle feesAllowed={s.feesAllowed} />
+      {loading ? <p className="muted">Loading…</p> : open ? <ReportView org={org} report={open} /> : <div className="card"><p>No reports yet. The first weekly report comes on Monday morning.</p></div>}
+
+      <details className="card fold-card">
+        <summary><span>Make a report</span></summary>
+        <div className="stack">
+          <p className="small muted">Weekly reports come every Monday and monthly ones on the 1st on their own.</p>
+          <div className="segmented" role="radiogroup" aria-label="Report">
+            {(['weekly', 'monthly'] as const).map((t) => (
+              <button key={t} type="button" role="radio" aria-checked={type === t} className={`chip${type === t ? ' chip-on' : ''}`} onClick={() => setType(t)}>{t === 'weekly' ? 'Week' : 'Month'}</button>
+            ))}
+          </div>
+          {type === 'weekly'
+            ? <label className="field"><span>Any day in the week</span><input type="date" value={day} max={s.today} onChange={(e) => setDay(e.target.value)} /></label>
+            : <label className="field"><span>Month</span><input type="month" value={month} max={s.today.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} /></label>}
+          <p className="small">{periodLabel(type, period)}</p>
+          <button type="button" className="btn btn-primary align-start" disabled={!!requestId || period.from > s.today || !user}
+            onClick={() => user && setRequestId(requestSchoolReport(org.id, user.uid, type, period.from))}>
+            {requestId ? 'Making the report…' : 'Make the report'}
+          </button>
         </div>
-        {type === 'weekly'
-          ? <label className="field"><span>Any day in the week</span><input type="date" value={day} max={s.today} onChange={(e) => setDay(e.target.value)} /></label>
-          : <label className="field"><span>Month</span><input type="month" value={month} max={s.today.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} /></label>}
-        <p className="small">{periodLabel(type, period)}</p>
-        <button type="button" className="btn btn-primary align-start" disabled={!!requestId || period.from > s.today || !user}
-          onClick={() => user && setRequestId(requestSchoolReport(org.id, user.uid, type, period.from))}>
-          {requestId ? 'Making the report…' : 'Make the report'}
-        </button>
-      </section>
+      </details>
 
-      {open && <ReportView org={org} report={open} />}
-
-      <h2>Archive</h2>
-      {loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="card"><p>No reports yet.</p></div> : (
-        <ul className="link-list">
-          {rows.map((r) => (
-            <li key={r.id}><Link to={`/school/reports?report=${r.id}`}><span className="link-title">{r.label}</span><span className="link-detail">{r.type === 'weekly' ? 'Weekly' : 'Monthly'} · {r.metrics.enrolled} enrolled · attendance {pct(r.metrics.attendanceRate)}</span></Link></li>
-          ))}
-        </ul>
+      {rows.length > 1 && (
+        <details className="card fold-card">
+          <summary><span>Earlier reports</span><span className="muted small">{rows.length}</span></summary>
+          <ul className="link-list">
+            {rows.map((r) => (
+              <li key={r.id}><Link to={`/school/reports?report=${r.id}`}><span className="link-title">{r.label}{r.id === open?.id ? ' (showing)' : ''}</span><span className="link-detail">{r.type === 'weekly' ? 'Weekly' : 'Monthly'} · {r.metrics.enrolled} enrolled · attendance {pct(r.metrics.attendanceRate)}</span></Link></li>
+            ))}
+          </ul>
+        </details>
       )}
     </div>
   );

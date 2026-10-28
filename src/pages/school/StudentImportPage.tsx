@@ -10,7 +10,7 @@ import { toCsv } from '../../lib/analytics';
 import { KpiCard, KpiRow } from '../../components/charts';
 import { IMPORT_TEMPLATE_HEAD, planStudentImport, type ImportRow, type ImportSheet } from '../../../functions/src/shared/studentImport';
 import { STUDENT_STATUS_LABELS } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, useSchoolPage } from './common';
+import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function StudentImportPage() {
@@ -96,7 +96,6 @@ function StudentImport({ org }: { org: Organization }) {
     <div className="page narrow wide-table">
       <p><Link to="/school/students">← Students</Link></p>
       <h1>Import students from Excel</h1>
-      <SchoolNav feesAllowed={s.feesAllowed} />
 
       {done != null && (
         <div className="notice">

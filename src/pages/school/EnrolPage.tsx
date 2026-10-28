@@ -10,7 +10,7 @@ import type { Sponsor } from '../../state/useSchool';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 import { capacityOf } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, useSchoolPage } from './common';
+import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function EnrolPage() {
@@ -79,8 +79,7 @@ function Enrol({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/school/students">← Students</Link></p>
       <h1>Enrol a student</h1>
-      <SchoolNav feesAllowed={s.feesAllowed} />
-      {s.courses.length === 0 && <p className="notice notice-warn">Set up the programmes on the <Link to="/school">overview</Link> first.</p>}
+      {s.courses.length === 0 && <p className="notice notice-warn">Add the programmes in <Link to="/school/courses">Settings → Programmes</Link> first.</p>}
       <form className="form" onSubmit={submit} noValidate>
         <PersonPicker label="Student's name" value={who} onChange={setWho} allowFreeText orgId={org.id}
           hint="Pick someone already in the system, or type a new name." />
@@ -103,7 +102,7 @@ function Enrol({ org }: { org: Organization }) {
                 <option value="">Choose…</option>
                 {intakes.map((i) => { const c = capacityOf(i, s.students); return <option key={i.id} value={i.id}>{i.name}{i.capacity != null ? ` (${c.taken} of ${i.capacity} taken)` : ''}</option>; })}
               </select>
-              {intakes.length === 0 && <small className="hint">No intake yet for this programme. Add one under <Link to="/school/courses">Programmes</Link>.</small>}
+              {intakes.length === 0 && <small className="hint">No intake yet for this programme. Add one in <Link to="/school/courses">Settings → Programmes</Link>.</small>}
               {cap?.full && <small className="hint danger-text">This intake is full.</small>}
             </label>
             {course.levels.length > 0 && (

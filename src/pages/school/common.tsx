@@ -29,26 +29,30 @@ export function SchoolGate({ title, children }: { title: string; children: (org:
 }
 
 /**
- * One "Go to" dropdown at the top of every school page, in place of a row of buttons (Andy, 2026-10-26, 2A).
- * The dashboard is Today and Exam Records sits in the side menu, so neither is repeated here (1A, 3A).
+ * The page title is the "Go to" dropdown (Andy, 2026-10-28, 1A): "Students ▾" opens the other School
+ * pages, so a page has one control at the top instead of a heading plus a separate dropdown.
+ * Programmes moved to Settings (6A); Today and Exam Records are in the side menu.
  */
-export function SchoolNav({ feesAllowed }: { feesAllowed: boolean }) {
+export function SchoolTitle({ feesAllowed, children }: { feesAllowed: boolean; children?: ReactNode }) {
   const { can } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const items: [string, string, boolean][] = [
-    ['/school/students', 'Students', true], ['/school/courses', 'Programmes', true], ['/school/fees', 'Fees', feesAllowed],
-    ['/school/graduation', 'Graduation', true], ['/school/reports', 'Reports', can('finance.reports')],
+    ['/school/students', 'Students', true], ['/school/fees', 'Fees', feesAllowed],
+    ['/school/graduation', 'Graduation', true], ['/school/reports', 'Reports', can('finance.reports') || can('settings.manage')],
   ];
   const shown = items.filter((i) => i[2]);
   const here = shown.find(([to]) => pathname === to || pathname.startsWith(`${to}/`))?.[0] ?? '';
   return (
-    <label className="field school-goto no-print"><span>Go to</span>
-      <select value={here} onChange={(e) => navigate(e.target.value)}>
-        {!here && <option value="">Choose…</option>}
-        {shown.map(([to, label]) => <option key={to} value={to}>{label}</option>)}
-      </select>
-    </label>
+    <div className="page-head school-head">
+      <h1 className="title-select">
+        <select value={here} aria-label="Go to" onChange={(e) => navigate(e.target.value)}>
+          {!here && <option value="">School</option>}
+          {shown.map(([to, label]) => <option key={to} value={to}>{label}</option>)}
+        </select>
+      </h1>
+      {children}
+    </div>
   );
 }
 

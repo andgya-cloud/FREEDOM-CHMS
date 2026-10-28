@@ -17,7 +17,7 @@ import { formatPhone } from '../../../functions/src/shared/phone';
 import {
   OUTCOME_LABELS, overallResult, STUDENT_STATUS_LABELS, studentAttendance, studentResults, type StudentStatus,
 } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
+import { SchoolGate, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function StudentPage() {
@@ -72,9 +72,8 @@ function Student({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/school/students">← Students</Link></p>
       <div className="page-head"><h1>{name}</h1><Link to={`/people/${org.id}/${st.id}`} className="btn btn-quiet">Person record</Link></div>
-      <SchoolNav feesAllowed={s.feesAllowed} />
       <section className="card stack">
-        <p><strong>{st.admissionNo ?? 'Admission number pending'}</strong> · {course.name}</p>
+        <p><strong>{st.admissionNo ?? 'Admission number pending'}</strong> · {course.name}{s.byId(st.id)?.phone && <> · <a href={`tel:${s.byId(st.id)?.phone}`}>{s.byId(st.id)?.phone}</a></>}</p>
         <div className="field-row">
           <label className="field"><span>Status</span>
             <select value={st.status} disabled={!canEdit || st.status === 'graduated'}

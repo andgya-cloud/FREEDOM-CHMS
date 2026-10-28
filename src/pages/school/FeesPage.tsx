@@ -9,7 +9,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { parseAmount } from '../../../functions/src/shared/giving';
 import { arrearsList, collectionRate, invoiceTotal, type FeeItem } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
+import { SchoolGate, SchoolTitle, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function FeesPage() {
@@ -35,11 +35,7 @@ function Fees({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow">
-      <div className="page-head">
-        <h1>Fees</h1>
-        {can('gifts.write') && <Link to="/giving/import" className="btn btn-quiet">Import Paybill statement</Link>}
-      </div>
-      <SchoolNav feesAllowed />
+      <SchoolTitle feesAllowed />
       <ul className="tiles">
         <li><div className="tile"><span className="tile-label">Billed</span><span className="tile-value">{money(org, billed)}</span></div></li>
         <li><div className="tile"><span className="tile-label">Paid</span><span className="tile-value">{money(org, paid)}</span></div></li>
@@ -49,7 +45,6 @@ function Fees({ org }: { org: Organization }) {
 
       <section className="card stack">
         <div className="card-head"><h2>Arrears</h2>{arrears.length > 0 && <button type="button" className="btn btn-quiet" onClick={download}>Download</button>}</div>
-        <p className="small muted">Students who owe money, largest first. Payments recorded as School fees for the student are counted automatically.</p>
         {arrears.length === 0 ? <p className="muted">Nobody owes fees.</p> : (
           <ul className="link-list">
             {arrears.map((a) => (
@@ -101,8 +96,10 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
   }
 
   return (
-    <section className="card stack">
-      <h2>Fee structure and billing</h2>
+    <details className="card fold-card">
+      <summary><span>Bill students</span></summary>
+      <div className="stack">
+      <Link to="/giving/import" className="btn btn-quiet align-start">Import Paybill statement</Link>
       <div className="field-row">
         <label className="field"><span>Programme</span>
           <select value={courseId} onChange={(e) => { setCourseId(e.target.value); setIntakeId(''); setLoadedFor(''); }}>
@@ -134,10 +131,11 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
             <label className="field"><span>Due date</span><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
           </div>
           <button type="button" className="btn btn-primary align-start" onClick={bill}>Bill all enrolled students</button>
-          <p className="small muted">Students who already have this bill are skipped, so it is safe to press again after new students join.</p>
+          <p className="small muted">Anyone who already has this bill is skipped.</p>
         </>
       )}
-    </section>
+      </div>
+    </details>
   );
 }
 
@@ -147,8 +145,9 @@ function Invoices({ org, s, canVoid }: { org: Organization; s: Page; canVoid: bo
   const [reason, setReason] = useState('');
   const recent = [...s.invoices].sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)).filter((i) => i.status !== 'void').slice(0, 30);
   return (
-    <section className="card stack">
-      <h2>Recent bills</h2>
+    <details className="card fold-card">
+      <summary><span>Recent bills</span>{recent.length > 0 && <span className="muted small">{recent.length}</span>}</summary>
+      <div className="stack">
       {recent.length === 0 ? <p className="muted small">No bills yet.</p> : (
         <ul className="link-list">
           {recent.map((i) => (
@@ -166,6 +165,7 @@ function Invoices({ org, s, canVoid }: { org: Organization; s: Page; canVoid: bo
           ))}
         </ul>
       )}
-    </section>
+      </div>
+    </details>
   );
 }

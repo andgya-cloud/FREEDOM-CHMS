@@ -191,7 +191,7 @@ export function AdiaToday({ org }: { org: Organization }) {
         <div className="lav-head"><div><h2>Needs attention</h2><p className="lav-sub">Lists that update as records come in</p></div></div>
         <div className="lav-watch">
           <Watch icon="cohorts" tone={1} title="Students in each cohort and department" badge={`${placesIn(intakes)} places`}>
-            {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">School → Programmes</Link>.</p> : (
+            {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Settings → Programmes</Link>.</p> : (
               <div className="exam-table-wrap">
                 <table className="table">
                   <thead><tr><th>Cohort</th>{deptIds.map((id) => <th key={id} className="num">{s.courseName(id)}</th>)}<th className="num">Total</th></tr></thead>

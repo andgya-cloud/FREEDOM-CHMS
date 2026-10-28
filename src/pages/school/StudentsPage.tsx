@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { STUDENT_STATUSES, STUDENT_STATUS_LABELS, studentAttendance, type StudentStatus } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
+import { SchoolGate, SchoolTitle, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 /** "Cohort 2" before "Cohort 10", then other names in order. */
@@ -50,25 +50,25 @@ function Students({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow wide-table">
-      <div className="page-head">
-        <h1>Students</h1>
+      <SchoolTitle feesAllowed={s.feesAllowed}>
         {can('people.write') && (
-          <div className="row-actions">
-            <Link to="/school/students/import" className="btn btn-quiet">Import from Excel</Link>
-            <Link to="/school/students/new" className="btn btn-primary">Enrol a student</Link>
-          </div>
+          <details className="add-menu">
+            <summary className="btn btn-primary">+ Add students</summary>
+            <div className="add-menu-pop">
+              <Link to="/school/students/new">Enrol one student</Link>
+              <Link to="/school/students/import">Import from Excel</Link>
+            </div>
+          </details>
         )}
-      </div>
-      <SchoolNav feesAllowed={s.feesAllowed} />
+      </SchoolTitle>
       <input type="search" className="search" placeholder="Find by name or admission number" aria-label="Find a student" value={q} onChange={(e) => setQ(e.target.value)} />
-      <div className="chips" role="group" aria-label="Status">
-        {(['all', ...STUDENT_STATUSES] as const).map((v) => (
-          <button key={v} type="button" className={`chip${status === v ? ' chip-on' : ''}`} aria-pressed={status === v} onClick={() => setStatus(v)}>
-            {v === 'all' ? 'All' : STUDENT_STATUS_LABELS[v]}
-          </button>
-        ))}
-      </div>
-      <div className="field-row">
+      {/* Status, cohort and department side by side, in place of a row of chips (Andy, 2026-10-28, 2A). */}
+      <div className="filter-row">
+        <label className="field"><span>Status</span>
+          <select value={status} onChange={(e) => setStatus(e.target.value as StudentStatus | 'all')}>
+            {(['all', ...STUDENT_STATUSES] as const).map((v) => <option key={v} value={v}>{v === 'all' ? 'Everyone' : STUDENT_STATUS_LABELS[v]}</option>)}
+          </select>
+        </label>
         <label className="field"><span>Cohort</span>
           <select value={cohort} onChange={(e) => setCohort(e.target.value)}>
             <option value="">All cohorts</option>
@@ -88,26 +88,26 @@ function Students({ org }: { org: Organization }) {
             <details key={g.name} className="card cohort-group" open={groups.length === 1 || !!cohort || !!q.trim()}>
               <summary>
                 <span className="cohort-name">{g.name}</span>
-                <span className="muted small">{g.count} {g.count === 1 ? 'student' : 'students'} · {g.departments.map((d) => `${s.courseName(d.id) || 'No department'} ${d.list.length}`).join(' · ')}</span>
+                <span className="muted small">{g.count} {g.count === 1 ? 'student' : 'students'}</span>
               </summary>
               {g.departments.map((d) => (
                 <section key={d.id} className="dept-group">
                   <h3>{s.courseName(d.id) || 'No department'} <span className="muted small">{d.list.length}</span></h3>
                   <div className="exam-table-wrap">
                     <table className="table student-table">
-                      <thead><tr><th>Name</th><th>Adm no</th><th>Phone</th><th>Status</th><th className="num">Attendance</th>{s.balancesAllowed && <th className="num">Owes</th>}</tr></thead>
+                      <thead><tr><th>Name</th><th className="num">Attendance</th>{s.balancesAllowed && <th className="num">Owes</th>}</tr></thead>
                       <tbody>
                         {d.list.map(({ st, name }) => {
                           const course = s.courses.find((c) => c.id === st.courseId);
                           const att = course ? studentAttendance(st.id, course.name, s.events, s.records, st.enrolledOn) : null;
                           const bal = s.balances.find((b) => b.studentId === st.id);
-                          const phone = s.byId(st.id)?.phone;
                           return (
                             <tr key={st.id}>
-                              <td><Link to={`/school/students/${st.id}`}>{name}</Link>{st.level && <span className="muted small"> · {st.level}</span>}</td>
-                              <td className="nowrap">{st.admissionNo ?? <span className="muted small">pending</span>}</td>
-                              <td className="nowrap">{phone ? <a href={`tel:${phone}`}>{phone}</a> : <span className="muted small">none</span>}</td>
-                              <td>{STUDENT_STATUS_LABELS[st.status]}</td>
+                              <td>
+                                <Link to={`/school/students/${st.id}`}>{name}</Link>
+                                {st.status !== 'enrolled' && <span className="badge"> {STUDENT_STATUS_LABELS[st.status]}</span>}
+                                <div className="muted small">{st.admissionNo ?? 'Admission number pending'}{st.level ? ` · ${st.level}` : ''}</div>
+                              </td>
                               <td className="num">{att?.percent != null ? pct(att.percent) : '–'}</td>
                               {s.balancesAllowed && <td className="num">{bal && bal.balanceCents > 0 ? money(org, bal.balanceCents) : '–'}</td>}
                             </tr>
