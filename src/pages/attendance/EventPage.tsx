@@ -13,6 +13,7 @@ import { CheckInPanel } from '../../components/CheckInPanel';
 import { ClassRegister, type RosterSpec } from '../../components/ClassRegister';
 import { ProgramSessionPanel } from '../../components/ProgramSessionPanel';
 import { useSchool } from '../../state/useSchool';
+import { useAllExamSheets, useExamCohorts } from '../../state/useExams';
 import { useChildren } from '../../state/useHope';
 import { updateChild } from '../../lib/hopeWrites';
 import { MEALS_PROGRAMME, normalizeCode, programmeOf } from '../../../functions/src/shared/hope';
@@ -154,6 +155,8 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
   const tz = orgInfo?.timeZone;
   const isClass = orgInfo?.type === 'college' && event?.type === 'class' && !programId && !groupId;
   const school = useSchool(isClass ? orgId : '');
+  const commonSheets = useAllExamSheets(isClass ? orgId : '');
+  const commonCohorts = useExamCohorts(isClass ? orgId : '');
   const isHope = orgInfo?.type === 'ministry' && (event?.type === 'session' || event?.type === 'meal') && !programId && !groupId;
   const hope = useChildren(isHope ? orgId : '');
 
@@ -210,7 +213,10 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
       };
     }
     // A common course's register, "Communication Skills · Cohort 4": every enrolled student of that cohort (Andy, 2026-10-28).
-    const cohort = cohortOfCommonClass(event.name);
+    // A register named only by the course ("Leadership") takes the one open cohort that has that common course.
+    const named = [...new Set(commonSheets.sheets.filter((sh) => sh.courseId == null && sh.courseName.trim().toLowerCase() === event.name.trim().toLowerCase()
+      && commonCohorts.byName[sh.cohort]?.closed !== true).map((sh) => sh.cohort))];
+    const cohort = cohortOfCommonClass(event.name) || (named.length === 1 ? named[0]! : '');
     const intakeIds = new Set(school.intakes.filter((i) => i.name === cohort).map((i) => i.id));
     if (cohort && intakeIds.size) {
       return {
@@ -218,7 +224,7 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
         names: school.rosterNames,
         roster: {
           ids: new Set(school.students.filter((st) => intakeIds.has(st.intakeId) && st.status === 'enrolled').map((st) => st.id)),
-          title: `${event.name} register`,
+          title: event.name.includes(' · ') ? `${event.name} register` : `${event.name} · ${cohort} register`,
           empty: `No students are enrolled in ${cohort} yet.`,
           addLabel: 'Add guest',
         },

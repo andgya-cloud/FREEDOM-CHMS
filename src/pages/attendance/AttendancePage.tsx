@@ -101,8 +101,11 @@ export function AttendancePage() {
   const noun = org.type === 'church_campus' ? 'service' : org.type === 'college' ? 'class' : 'session';
 
   function open(name: string) {
-    const clean = name.trim().replace(/\s+/g, ' ');
+    let clean = name.trim().replace(/\s+/g, ' ');
     if (!clean) return;
+    // Typing a common course's name ("Leadership") opens its cohort's register when only one cohort has it.
+    const common = adia && !clean.includes(' · ') ? commonRegisters.filter((r) => r.toLowerCase().startsWith(`${clean.toLowerCase()} · `)) : [];
+    if (common.length === 1) clean = common[0]!;
     const id = eventIdFor(date, clean);
     if (!loaded.some((e) => e.id === id)) {
       try {
