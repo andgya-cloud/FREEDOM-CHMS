@@ -1,9 +1,10 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, effectivePermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
+import { rebuildRoster } from './rosters.js';
 
 // The browser calls these directly, so anyone may reach them; each one checks
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
@@ -69,9 +70,30 @@ async function countActiveOwners(): Promise<number> {
   return owners.size;
 }
 
-/** A trainer's register classes: up to ten ADIA programme names. */
-function registerClassesFrom(value: unknown): string[] {
-  return requireStringArray(value ?? [], 'the classes').map((c) => c.trim()).filter((c) => c && c.length <= 120).slice(0, 10);
+/**
+ * A trainer's departments (Andy, 2026-10-28, 1A): the ADIA programmes ticked on
+ * their account. They decide the register classes (the programme names) and
+ * the students the trainer may see. Unknown programmes are dropped.
+ */
+async function trainerDepartments(value: unknown, orgIds: string[]): Promise<{ trainerCourseIds: string[]; registerClasses: string[] }> {
+  const ids = [...new Set(requireStringArray(value ?? [], 'the departments'))].filter((id) => /^[a-z0-9_]{2,40}$/.test(id)).slice(0, 10);
+  const found: { id: string; name: string }[] = [];
+  for (const id of ids) {
+    for (const orgId of orgIds) {
+      const course = await db.doc(`organizations/${orgId}/courses/${id}`).get();
+      if (course.exists && !course.get('deletedAt')) { found.push({ id, name: String(course.get('name') ?? '') }); break; }
+    }
+  }
+  return { trainerCourseIds: found.map((c) => c.id), registerClasses: found.map((c) => c.name).filter(Boolean) };
+}
+
+/** Fill in the names-only class lists a trainer reads, so a new or changed trainer sees their students straight away. */
+async function refreshRosters(orgIds: string[], courseIds: string[]) {
+  for (const orgId of orgIds) {
+    for (const courseId of courseIds) {
+      if ((await db.doc(`organizations/${orgId}/courses/${courseId}`).get()).exists) await rebuildRoster(orgId, courseId);
+    }
+  }
 }
 
 /** Pastor (or an organization head, for their own Staff) creates an account with a temporary password. */
@@ -86,7 +108,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
   const password = checkPassword(data.password, email);
   const pettyTitle = teamOnly ? '' : pettyTitleFrom(data.pettyTitle);
   const phone = phoneFrom(data.phone);
-  const registerClasses = roleId === TRAINER_ROLE_ID ? registerClassesFrom(data.registerClasses) : [];
+  const dept = roleId === TRAINER_ROLE_ID ? await trainerDepartments(data.departments, orgIds) : { trainerCourseIds: [], registerClasses: [] };
   const role = await loadRole(roleId, caller.uid);
   const allOrgs = role.isOwner ? true : !teamOnly && data.allOrgs === true;
   if (teamOnly && !canManageTeamAccount(caller.profile, { roleId, allOrgs, orgIds })) {
@@ -113,8 +135,8 @@ export const createUser = onCall(CALLABLE, async (request) => {
     allOrgs,
     pettyTitle,
     phone,
-    registerClasses,
-    permissions: effectivePermissions(role, extraPermissions),
+    ...dept,
+    permissions: accountPermissions(roleId, role, extraPermissions),
     active: true,
     mustChangePassword: true,
     createdAt: FieldValue.serverTimestamp(),
@@ -128,6 +150,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
     collection: 'users', docId: uid, orgId: null, note: `Created account for ${email} as ${role.name}`,
   });
   await saveSigningPassword(uid, password);
+  await refreshRosters(orgIds, dept.trainerCourseIds);
   return { uid };
 });
 
@@ -153,7 +176,6 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   if (data.active !== undefined) next.active = data.active === true;
   if (data.pettyTitle !== undefined && !teamOnly) next.pettyTitle = pettyTitleFrom(data.pettyTitle);
   if (data.phone !== undefined) next.phone = phoneFrom(data.phone);
-  const registerClasses = data.registerClasses !== undefined ? registerClassesFrom(data.registerClasses) : ((current as { registerClasses?: string[] }).registerClasses ?? []);
 
   const merged = { ...current, ...next };
   if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
@@ -169,6 +191,10 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   if (uid === caller.uid && merged.active === false) {
     throw new HttpsError('failed-precondition', 'You cannot deactivate your own account.');
   }
+  const kept = current as { trainerCourseIds?: string[]; registerClasses?: string[] };
+  const dept = merged.roleId !== TRAINER_ROLE_ID ? { trainerCourseIds: [], registerClasses: [] }
+    : data.departments !== undefined ? await trainerDepartments(data.departments, merged.orgIds)
+      : { trainerCourseIds: kept.trainerCourseIds ?? [], registerClasses: kept.registerClasses ?? [] };
 
   await ref.update({
     displayName: merged.displayName,
@@ -179,9 +205,9 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     active: merged.active,
     pettyTitle: merged.pettyTitle ?? '',
     phone: merged.phone ?? '',
-    // The classes whose register a trainer marks (Andy, 2026-10-26); nobody else carries any.
-    registerClasses: merged.roleId === TRAINER_ROLE_ID ? registerClasses : [],
-    permissions: effectivePermissions(role, merged.extraPermissions),
+    // A trainer's departments and their register classes (Andy, 2026-10-28); nobody else carries any.
+    ...dept,
+    permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,
   });
@@ -189,10 +215,11 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     await auth.updateUser(uid, { displayName: merged.displayName, disabled: !merged.active });
   }
   if (next.active === false) await auth.revokeRefreshTokens(uid);
+  await refreshRosters(merged.orgIds, dept.trainerCourseIds);
 
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'update', path: `users/${uid}`,
-    collection: 'users', docId: uid, orgId: null, changedFields: [...Object.keys(next), ...(data.registerClasses !== undefined ? ['registerClasses'] : [])],
+    collection: 'users', docId: uid, orgId: null, changedFields: [...Object.keys(next), ...(data.departments !== undefined ? ['departments'] : [])],
   });
   return { ok: true };
 });

@@ -138,8 +138,8 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   staff: { name: 'Staff', permissions: [...TEAM_WORK] },
   signatory: { name: 'Petty cash signatory', permissions: ['pettycash.request', 'pettycash.approve', 'pettycash.authorize'] },
   principal: { name: 'Principal', permissions: ['people.read', 'people.write', 'attendance.write', 'exams.manage', 'school.manage', 'fees.balances'] },
-  // people.read gives the trainer their students' names; the menu shows them Exam Records only.
-  trainer: { name: 'Trainer', permissions: ['people.read', 'exams.mark'] },
+  // A trainer reads only their department's names-only class list, never people or students (Andy, 2026-10-28).
+  trainer: { name: 'Trainer', permissions: ['exams.mark'] },
 };
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {
@@ -216,4 +216,14 @@ export function canManageTeamAccount(head: AccessProfile | null | undefined, acc
   if (account.roleId !== TEAM_ROLE_ID || account.allOrgs) return false;
   const orgIds = account.orgIds ?? [];
   return orgIds.length > 0 && orgIds.every((id) => !!head?.orgIds?.includes(id));
+}
+
+/**
+ * A user's permissions as stored on their account. A trainer never gets
+ * people.read, whatever their role document says: they read only their
+ * department's names-only class list (Andy, 2026-10-28).
+ */
+export function accountPermissions(roleId: string, role: RoleDefinition | undefined, extraPermissions: readonly string[] = []): Permission[] {
+  const all = effectivePermissions(role, extraPermissions);
+  return roleId === TRAINER_ROLE_ID ? all.filter((p) => p !== 'people.read') : all;
 }

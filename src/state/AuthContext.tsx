@@ -5,7 +5,7 @@ import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
 import { auth, db, functions } from '../firebase';
-import { can as canDo, canAccessOrg, type Permission } from '../../functions/src/shared/permissions';
+import { TRAINER_ROLE_ID, can as canDo, canAccessOrg, type Permission } from '../../functions/src/shared/permissions';
 
 export interface Profile {
   uid: string;
@@ -23,6 +23,8 @@ export interface Profile {
   phone?: string;
   /** A trainer's classes whose register they mark (ADIA programme names). */
   registerClasses?: string[];
+  /** A trainer's departments (ADIA programme ids). */
+  trainerCourseIds?: string[];
   lastSignInAt?: Timestamp;
 }
 
@@ -75,7 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     profile,
     loading: !authReady || (!!user && !profileReady),
-    can: (p) => canDo(profile, p),
+    // A trainer never reads people, even on an account saved before that rule (Andy, 2026-10-28).
+    can: (p) => !(p === 'people.read' && profile?.roleId === TRAINER_ROLE_ID) && canDo(profile, p),
     canAccessOrg: (orgId) => canAccessOrg(profile, orgId),
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email.trim(), password);

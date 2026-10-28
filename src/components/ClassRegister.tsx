@@ -35,14 +35,17 @@ interface Props {
   roster?: RosterSpec;
   /** Only the people on the list, with no adding others and no links to their records (a trainer's register). */
   rosterOnly?: boolean;
+  /** Names from a trainer's class list, in place of People (which a trainer never reads). */
+  names?: Map<string, string>;
 }
 
 /**
  * A class register for ADIA: every student on one screen, one tap each for
  * present, late, absent or excused. Works on a tablet with no internet.
  */
-export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, rosterOnly = false }: Props) {
-  const { people } = usePeople();
+export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, rosterOnly = false, names }: Props) {
+  const { people: everyone } = usePeople();
+  const people = useMemo(() => (names ? [...names].map(([id, fullName]) => ({ id, fullName, orgId: org.id, status: 'student' }) as unknown as Person) : everyone), [names, everyone, org.id]);
   const toast = useToast();
   const saved = useSavedMessage();
   const [filter, setFilter] = useState('');
@@ -55,7 +58,7 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, r
       .filter((p) => p.orgId === org.id && ((!spec && !rosterOnly && p.status === 'student') || ids.has(p.id)))
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [people, byPerson, extraIds, org.id, spec, rosterOnly]);
-  const find = spec?.search ?? matchesSearch;
+  const find = rosterOnly ? (p: Person, text: string) => p.fullName.toLowerCase().includes(text.trim().toLowerCase()) : spec?.search ?? matchesSearch;
   const shown = filter.trim().length >= 2 ? roster.filter((p) => find(p, filter)) : roster;
   const others = !rosterOnly && filter.trim().length >= 2
     ? people.filter((p) => p.orgId === org.id && !roster.includes(p) && find(p, filter)).slice(0, 5)

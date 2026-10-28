@@ -2,6 +2,7 @@ import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
+import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import {
   useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, type ExamSheetRow, type ExamTrainer,
@@ -328,8 +329,10 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
   const { sheets: mine, loading } = useMyExamSheets(org.id);
   const { byName } = useExamCohorts(org.id);
   const today = localDateKey(new Date(), org.timeZone);
-  // A graduated (closed) cohort drops off the trainer's list (Andy, 2026-10-25).
-  const sheets = mine.filter((sh) => byName[sh.cohort]?.closed !== true);
+  const { profile } = useAuth();
+  const departments = profile?.roleId === TRAINER_ROLE_ID ? profile.trainerCourseIds ?? [] : null;
+  // A graduated (closed) cohort drops off the trainer's list (Andy, 2026-10-25), and so does any course outside their department (Andy, 2026-10-28).
+  const sheets = mine.filter((sh) => byName[sh.cohort]?.closed !== true && (!departments || sh.courseId == null || departments.includes(sh.courseId)));
   const cohorts = [...new Set(sheets.map((s) => s.cohort))];
   return (
     <div className="page narrow exams">

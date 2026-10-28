@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
-import { useEvents } from '../../state/useAttendance';
+import { useClassEvents, useEvents } from '../../state/useAttendance';
 import { createEvent } from '../../lib/attendanceWrites';
 import { friendlyError } from '../../lib/errors';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
@@ -53,10 +53,14 @@ export function AttendancePage() {
   const [month, setMonth] = useState('');
   const recentStart = localDateKey(new Date(Date.now() - RECENT_DAYS * 86_400_000), tz);
   const since = [recentStart, date, month ? `${month}-01` : recentStart].sort()[0];
-  const { events: loaded, loading } = useEvents(orgId, since);
-  // A trainer sees and marks only the classes on their account, today only (Andy, 2026-10-26).
+  // A trainer sees and marks only their department's classes, today or yesterday (Andy, 2026-10-26 and 2026-10-28, 4B).
+  // They may read only those classes, so each is asked for by name.
   const trainer = profile?.roleId === TRAINER_ROLE_ID;
   const myClasses = profile?.registerClasses ?? [];
+  const all = useEvents(trainer ? '' : orgId, since);
+  const mine = useClassEvents(trainer ? orgId : '', myClasses);
+  const loaded = trainer ? mine.events : all.events;
+  const loading = trainer ? mine.loading : all.loading;
   const events = loaded.filter((e) => (month ? e.date.startsWith(month) : e.date >= recentStart) && (!trainer || (e.type === 'class' && myClasses.includes(e.name))));
   const canRecord = can('attendance.write') || (trainer && myClasses.length > 0);
   // ADIA classes are the programmes set up under School, so the register lists that programme's students.
@@ -129,6 +133,12 @@ export function AttendancePage() {
                     <span className="visually-hidden">Another day</span>
                     <input type="date" value={date} min={firstDay} max={today} onChange={(e) => setDate(e.target.value && (!firstDay || e.target.value >= firstDay) && e.target.value <= today ? e.target.value : today)} />
                   </label>
+                </div>
+              ) : trainer ? (
+                <div className="which-day" role="group" aria-label="Which day?">
+                  <span className="which-day-label">Which day?</span>
+                  <button type="button" className={`chip${date === today ? ' chip-on' : ''}`} aria-pressed={date === today} onClick={() => setDate(today)}>Today</button>
+                  <button type="button" className={`chip${date === yesterday ? ' chip-on' : ''}`} aria-pressed={date === yesterday} onClick={() => setDate(yesterday)}>Yesterday</button>
                 </div>
               ) : <p className="muted small">For today, {formatDateKey(today)}.</p>}
             </>

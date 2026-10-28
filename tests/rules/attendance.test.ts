@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { collection, deleteDoc, doc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
+import { collection, deleteDoc, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where, writeBatch } from 'firebase/firestore';
 import { created, makeEnv, person, seed } from './helpers';
 
 let env: RulesTestEnvironment;
@@ -123,29 +123,68 @@ describe('check-in', () => {
   });
 });
 
+// Trainers mark only today or yesterday, so their tests use today's date.
+const D = new Date().toISOString().slice(0, 10);
+const LONG_AGO = '2026-01-05';
+
 describe('a trainer marks only their own class register (Andy, 2026-10-26)', () => {
-  const IT = 'organizations/adia/events/2026-10-27_it_ict';
-  const OTHER = 'organizations/adia/events/2026-10-27_catering';
+  const IT = `organizations/adia/events/${D}_it_ict`;
+  const OTHER = `organizations/adia/events/${D}_catering`;
   const cls = (uid: string, name: string, overrides: Record<string, unknown> = {}) => ({
-    orgId: 'adia', date: '2026-10-27', type: 'class', name, activity: name, headcounts: {}, notes: '', ...created(uid), ...overrides,
+    orgId: 'adia', date: `${D}`, type: 'class', name, activity: name, headcounts: {}, notes: '', ...created(uid), ...overrides,
   });
   const mark = (uid: string, eventId: string, overrides: Record<string, unknown> = {}) => ({
-    orgId: 'adia', eventId, personId: 's1', date: '2026-10-27', status: 'present', method: 'register',
+    orgId: 'adia', eventId, personId: 's1', date: `${D}`, status: 'present', method: 'register',
     checkedInAt: Timestamp.now(), ...created(uid), ...overrides,
   });
   beforeEach(async () => {
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'users/alphonse'), {
         email: 'alphonse@example.org', displayName: 'Alphonse', roleId: 'trainer', extraPermissions: [], orgIds: ['adia'], allOrgs: false,
-        permissions: ['people.read', 'exams.mark'], active: true, registerClasses: ['IT / ICT'],
+        permissions: ['exams.mark'], active: true, registerClasses: ['IT / ICT'], trainerCourseIds: ['it'],
       });
+      const db = ctx.firestore();
+      const st = { deletedAt: null, deletedBy: null, createdAt: Timestamp.now(), createdBy: 'pastor', updatedAt: Timestamp.now(), updatedBy: 'pastor' };
+      await setDoc(doc(db, 'organizations/adia/people/s2'), { ...person('adia'), fullName: 'Student Two', ...st });
+      await setDoc(doc(db, 'organizations/adia/students/s1'), { orgId: 'adia', courseId: 'it', intakeId: 'sep', level: '', status: 'enrolled', ...st });
+      await setDoc(doc(db, 'organizations/adia/students/s2'), { orgId: 'adia', courseId: 'ctr', intakeId: 'sep', level: '', status: 'enrolled', ...st });
+      await setDoc(doc(db, 'organizations/adia/rosters/it'), { orgId: 'adia', courseId: 'it', students: [{ id: 's1', name: 'Student One' }] });
+      await setDoc(doc(db, 'organizations/adia/rosters/ctr'), { orgId: 'adia', courseId: 'ctr', students: [{ id: 's2', name: 'Student Two' }] });
+      await setDoc(doc(db, 'organizations/adia/courses/it'), { orgId: 'adia', name: 'IT / ICT', ...st });
     });
+  });
+
+  it('reads only his department: its class list, its registers, never people or students (Andy, 2026-10-28)', async () => {
+    const db = as('alphonse');
+    await assertSucceeds(getDoc(doc(db, 'organizations/adia/rosters/it')));
+    await assertFails(getDoc(doc(db, 'organizations/adia/rosters/ctr')));
+    await assertFails(getDoc(doc(db, 'organizations/adia/people/s1')));
+    await assertFails(getDocs(collection(db, 'organizations/adia/people')));
+    await assertFails(getDoc(doc(db, 'organizations/adia/students/s1')));
+    await assertSucceeds(getDoc(doc(db, 'organizations/adia/courses/it')));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), IT), { ...cls('pastor', 'IT / ICT'), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+      await setDoc(doc(ctx.firestore(), OTHER), { ...cls('pastor', 'Catering'), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+      await setDoc(doc(ctx.firestore(), `organizations/adia/attendance/${D}_it_ict_s1`), { ...mark('pastor', `${D}_it_ict`), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+      await setDoc(doc(ctx.firestore(), `organizations/adia/attendance/${D}_catering_s2`), { ...mark('pastor', `${D}_catering`, { personId: 's2' }), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    });
+    await assertSucceeds(getDocs(query(collection(db, 'organizations/adia/events'), where('name', '==', 'IT / ICT'), where('type', '==', 'class'))));
+    await assertFails(getDocs(query(collection(db, 'organizations/adia/events'), where('type', '==', 'class'))));
+    await assertFails(getDoc(doc(db, OTHER)));
+    await assertSucceeds(getDocs(query(collection(db, 'organizations/adia/attendance'), where('eventId', '==', `${D}_it_ict`))));
+    await assertFails(getDocs(query(collection(db, 'organizations/adia/attendance'), where('eventId', '==', `${D}_catering`))));
+    await assertFails(getDocs(collection(db, 'organizations/adia/attendance')));
+  });
+
+  it('marks only students of his department, even in his own class', async () => {
+    await assertSucceeds(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
+    await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/attendance/${D}_it_ict_s2`), mark('alphonse', `${D}_it_ict`, { personId: 's2' })));
   });
 
   it('lets him open his class and mark a student', async () => {
     await assertSucceeds(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
-    await assertSucceeds(setDoc(doc(as('alphonse'), 'organizations/adia/attendance/2026-10-27_it_ict_s1'), mark('alphonse', '2026-10-27_it_ict')));
-    await assertSucceeds(updateDoc(doc(as('alphonse'), 'organizations/adia/attendance/2026-10-27_it_ict_s1'), { status: 'late', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+    await assertSucceeds(setDoc(doc(as('alphonse'), `organizations/adia/attendance/${D}_it_ict_s1`), mark('alphonse', `${D}_it_ict`)));
+    await assertSucceeds(updateDoc(doc(as('alphonse'), `organizations/adia/attendance/${D}_it_ict_s1`), { status: 'late', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
     await assertSucceeds(updateDoc(doc(as('alphonse'), IT), { notes: 'Networking basics', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
   });
 
@@ -154,7 +193,7 @@ describe('a trainer marks only their own class register (Andy, 2026-10-26)', () 
     await env.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), OTHER), { ...cls('pastor', 'Catering'), createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
     });
-    await assertFails(setDoc(doc(as('alphonse'), 'organizations/adia/attendance/2026-10-27_catering_s1'), mark('alphonse', '2026-10-27_catering')));
+    await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/attendance/${D}_catering_s1`), mark('alphonse', `${D}_catering`)));
     await assertFails(updateDoc(doc(as('alphonse'), OTHER), { notes: 'x', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
   });
 
@@ -162,7 +201,7 @@ describe('a trainer marks only their own class register (Andy, 2026-10-26)', () 
     await assertSucceeds(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
     await assertFails(updateDoc(doc(as('alphonse'), IT), { headcounts: { students: 5 }, updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
     await assertFails(updateDoc(doc(as('alphonse'), IT), { deletedAt: serverTimestamp(), deletedBy: 'alphonse', updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
-    await assertFails(setDoc(doc(as('alphonse'), 'organizations/adia/events/2026-10-27_catering'), cls('alphonse', 'IT / ICT', { name: 'Catering' })));
+    await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/events/${D}_catering`), cls('alphonse', 'IT / ICT', { name: 'Catering' })));
   });
 
   it('gives a trainer with no register classes nothing to mark', async () => {
@@ -170,5 +209,24 @@ describe('a trainer marks only their own class register (Andy, 2026-10-26)', () 
       await updateDoc(doc(ctx.firestore(), 'users/alphonse'), { registerClasses: [] });
     });
     await assertFails(setDoc(doc(as('alphonse'), IT), cls('alphonse', 'IT / ICT')));
+  });
+  it('lets him mark the rest of his class in one go', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      const st = { deletedAt: null, deletedBy: null, createdAt: Timestamp.now(), createdBy: 'pastor', updatedAt: Timestamp.now(), updatedBy: 'pastor' };
+      for (const id of ['s3', 's4', 's5', 's6']) {
+        await setDoc(doc(db, `organizations/adia/people/${id}`), { ...person('adia'), fullName: id, ...st });
+        await setDoc(doc(db, `organizations/adia/students/${id}`), { orgId: 'adia', courseId: 'it', intakeId: 'sep', level: '', status: 'enrolled', ...st });
+      }
+    });
+    const db = as('alphonse');
+    await assertSucceeds(setDoc(doc(db, IT), cls('alphonse', 'IT / ICT')));
+    const batch = writeBatch(db);
+    for (const id of ['s1', 's3', 's4', 's5', 's6']) batch.set(doc(db, `organizations/adia/attendance/${D}_it_ict_${id}`), mark('alphonse', `${D}_it_ict`, { personId: id, status: 'absent' }));
+    await assertSucceeds(batch.commit());
+  });
+
+  it('does not let him fill in a register from long ago', async () => {
+    await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/events/${LONG_AGO}_it_ict`), cls('alphonse', 'IT / ICT', { date: LONG_AGO })));
   });
 });

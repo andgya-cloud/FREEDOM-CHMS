@@ -55,7 +55,7 @@ export function SchoolNav({ feesAllowed }: { feesAllowed: boolean }) {
 export function useSchoolPage(org: Organization) {
   const data = useSchool(org.id);
   const { byId, loading: peopleLoading } = usePeople();
-  const nameOf = (id: string) => byId(id)?.fullName ?? (peopleLoading ? '…' : 'Unknown student');
+  const nameOf = (id: string) => byId(id)?.fullName ?? data.rosterNames.get(id) ?? (peopleLoading ? '…' : 'Unknown student');
   const today = localDateKey(new Date(), org.timeZone);
   const courseName = (id: string) => data.courses.find((c) => c.id === id)?.name ?? '';
   const intakeName = (id: string) => data.intakes.find((i) => i.id === id)?.name ?? '';

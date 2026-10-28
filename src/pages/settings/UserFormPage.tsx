@@ -29,7 +29,10 @@ interface FormState {
   active: boolean;
   pettyTitle: string;
   phone: string;
-  registerClasses: string[];
+  /** A trainer's departments: ADIA programme ids. */
+  departments: string[];
+  /** Classes ticked under v107, by name, until the programmes load. */
+  legacyClasses: string[];
 }
 
 const ROLE_HINTS: Record<string, string> = {
@@ -41,7 +44,7 @@ const ROLE_HINTS: Record<string, string> = {
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', registerClasses: [] };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [] };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -74,7 +77,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', registerClasses: u.registerClasses ?? [],
+          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [],
         });
       }
       setLoaded(true);
@@ -87,9 +90,14 @@ export function UserFormPage() {
   // A trainer works at ADIA only too, in Exam Records (Andy, 2026-10-25).
   const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID;
   const colleges = organizations.filter((o) => o.type === 'college').map((o) => o.id);
-  // The classes whose register a trainer marks: ADIA's programmes (Andy, 2026-10-26).
+  // A trainer's department: one of ADIA's programmes (Andy, 2026-10-28, 1A).
   const school = useSchool(form.roleId === TRAINER_ROLE_ID ? colleges[0] ?? '' : '');
-  const programmes = [...new Set(school.courses.filter((c) => c.active !== false).map((c) => c.name))].sort((a, b) => a.localeCompare(b));
+  const programmes = school.courses.filter((c) => c.active !== false);
+  // An account saved with register classes by name picks up those programmes once they load.
+  useEffect(() => {
+    if (!form.legacyClasses.length || !programmes.length) return;
+    setForm((f) => ({ ...f, departments: programmes.filter((c) => f.legacyClasses.includes(c.name)).map((c) => c.id), legacyClasses: [] }));
+  }, [form.legacyClasses, programmes.length]); // eslint-disable-line react-hooks/exhaustive-deps
   // The voucher title is for the petty cash signatories, the pastor included when they sign.
   const showTitle = !teamOnly && (signatory || !!role?.isOwner);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
@@ -105,6 +113,7 @@ export function UserFormPage() {
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
     if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : 'principal'} works at ADIA only. Untick the other organizations.`);
+    if (form.roleId === TRAINER_ROLE_ID && !teamOnly && form.departments.length === 0) return setError('Tick the department this trainer teaches.');
     if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
     setBusy(true);
     try {
@@ -115,7 +124,7 @@ export function UserFormPage() {
           extraPermissions: role?.isOwner || signatory || principal ? [] : form.extraPermissions,
           pettyTitle: showTitle ? form.pettyTitle : '',
           phone: form.phone.trim(),
-          registerClasses: form.roleId === TRAINER_ROLE_ID ? form.registerClasses : [],
+          departments: form.roleId === TRAINER_ROLE_ID ? form.departments : [],
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -231,15 +240,15 @@ export function UserFormPage() {
 
         {form.roleId === TRAINER_ROLE_ID && !teamOnly && (
           <fieldset className="field">
-            <legend>Register: which classes they mark</legend>
-            {programmes.length === 0 ? <p className="small muted">ADIA has no programmes yet.</p> : programmes.map((name) => (
-              <label key={name} className="check">
-                <input type="checkbox" checked={form.registerClasses.includes(name)}
-                  onChange={() => setForm((f) => ({ ...f, registerClasses: f.registerClasses.includes(name) ? f.registerClasses.filter((x) => x !== name) : [...f.registerClasses, name] }))} />
-                {name}
+            <legend>Department</legend>
+            {programmes.length === 0 ? <p className="small muted">ADIA has no programmes yet.</p> : programmes.map((c) => (
+              <label key={c.id} className="check">
+                <input type="checkbox" checked={form.departments.includes(c.id)}
+                  onChange={() => setForm((f) => ({ ...f, departments: f.departments.includes(c.id) ? f.departments.filter((x) => x !== c.id) : [...f.departments, c.id] }))} />
+                {c.name}
               </label>
             ))}
-            <small className="hint">They see only these classes in Attendance, mark today's register, and key in marks for the courses given to them in Exam Records. Nothing else.</small>
+            <small className="hint">They see only this department's students (names and admission numbers), mark its register for today or yesterday, and key in marks for its courses given to them in Exam Records. Nothing else.</small>
           </fieldset>
         )}
 

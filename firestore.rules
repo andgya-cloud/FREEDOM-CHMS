@@ -30,6 +30,17 @@ service cloud.firestore {
     function has(permission) {
       return isActive() && permission in me().permissions;
     }
+    // A trainer reads only their department's class list (rosters), never people
+    // or students: their accounts carry no people.read (Andy, 2026-10-28).
+    function isTrainer() {
+      return isActive() && me().roleId == 'trainer';
+    }
+    function myClasses() {
+      return me().get('registerClasses', []);
+    }
+    function myDepartments() {
+      return me().get('trainerCourseIds', []);
+    }
     function hasAllOrgs() {
       return isActive() && me().allOrgs == true;
     }
@@ -274,9 +285,16 @@ service cloud.firestore {
 
       // An ADIA trainer marks the register of their own classes only, named on their account
       // (Andy, 2026-10-26): no other class, no headcounts, no deleting.
+      function dayOf(d) {
+        let p = d.split('-');
+        return timestamp.date(int(p[0]), int(p[1]), int(p[2]));
+      }
       function registerTrainer(orgId, e) {
         return canAccessOrg(orgId) && has('exams.mark') && e.type == 'class'
-          && e.name in me().get('registerClasses', [])
+          && e.name in myClasses()
+        // Today or yesterday only (Andy, 2026-10-28, 4B); a day's leeway for Nairobi time.
+        && dayOf(e.date) >= request.time - duration.value(2, 'd')
+        && dayOf(e.date) <= request.time + duration.value(1, 'd')
           && request.resource.data.orgId == orgId
           && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
       }
@@ -287,7 +305,8 @@ service cloud.firestore {
           && (resource == null || (resource.data.name == d.name && resource.data.headcounts == d.headcounts));
       }
       match /events/{eventId} {
-        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
+        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write')
+          || (isTrainer() && resource.data.type == 'class' && resource.data.name in myClasses()));
         allow create, update: if (orgWrite(orgId, 'attendance.write') || trainerEvent(orgId)) && validEvent(eventId);
         allow delete: if false;
       }
@@ -304,9 +323,11 @@ service cloud.firestore {
       }
 
       match /attendance/{recordId} {
-        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
+        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write')
+          || (isTrainer() && get(/databases/$(database)/documents/organizations/$(orgId)/events/$(resource.data.eventId)).data.name in myClasses()));
         allow create, update: if (orgWrite(orgId, 'attendance.write')
-               || registerTrainer(orgId, getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data))
+               || (registerTrainer(orgId, getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data)
+                   && get(/databases/$(database)/documents/organizations/$(orgId)/students/$(request.resource.data.personId)).data.courseId in myDepartments()))
           && request.resource.data.keys().hasOnly(['orgId', 'eventId', 'personId', 'date', 'status', 'method', 'checkedInAt',
                'programId', 'groupId', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && recordId == request.resource.data.eventId + '_' + request.resource.data.personId
@@ -815,7 +836,7 @@ service cloud.firestore {
       }
 
       match /courses/{courseId} {
-        allow read: if schoolRead();
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
         // The principal (school.manage) may add a department too, but not change one (Andy, 2026-10-25).
         allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
           && courseId.matches('^[a-z0-9_]{2,40}$')
@@ -830,7 +851,7 @@ service cloud.firestore {
       }
 
       match /intakes/{intakeId} {
-        allow read: if schoolRead();
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
         // ...and start a new cohort, which is one new intake for each programme.
         allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
           && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'name', 'startDate', 'capacity', 'active',
@@ -845,7 +866,7 @@ service cloud.firestore {
 
       // Grading scale, pass mark, weights and the attendance alert threshold.
       match /schoolSettings/{settingId} {
-        allow read: if schoolRead();
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
         allow create, update: if orgWrite(orgId, 'settings.manage')
           && settingId == 'main'
           && request.resource.data.keys().hasOnly(['orgId', 'gradingScale', 'passMark', 'attendanceThreshold', 'weights', 'director',
@@ -859,6 +880,12 @@ service cloud.firestore {
 
       // One record per student, with the person's id as its id. The admission
       // number is added by a Cloud Function, and "graduated" only by issuing a certificate.
+      // A department's names-only class list, for its lecturers (functions/src/rosters.ts).
+      match /rosters/{courseId} {
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer() && courseId in myDepartments());
+        allow write: if false;
+      }
+
       match /students/{studentId} {
         allow read: if schoolRead();
         allow create, update: if orgWrite(orgId, 'people.write')

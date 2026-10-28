@@ -100,7 +100,7 @@ export function EventPage() {
       {linked.program && <ProgramSessionPanel key={event.id} orgId={orgId} event={event} program={linked.program} canEdit={canRecord} />}
       {!trainer && <HeadcountEditor event={event} canEdit={canRecord} />}
       {isClass
-        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} rosterOnly={trainer} />
+        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} rosterOnly={trainer} names={trainer ? linked.names : undefined} />
         : <CheckInPanel org={org} event={event} byPerson={byPerson} canRecord={canRecord} />}
 
       <section className="card">
@@ -137,7 +137,7 @@ export function EventPage() {
  * For a programme class or a group meeting: who belongs on the register,
  * and where "back" goes. Ordinary services and ADIA classes get nothing extra.
  */
-function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: RosterSpec; program?: Program; back: { to: string; label: string } } {
+function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: RosterSpec; program?: Program; back: { to: string; label: string }; names?: Map<string, string> } {
   const { can } = useAuth();
   const { organizations } = useOrg();
   const toast = useToast();
@@ -199,6 +199,7 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
     if (course) {
       return {
         back: { to: '/attendance', label: 'Attendance' },
+        names: school.rosterNames,
         roster: {
           ids: new Set(school.students.filter((st) => st.courseId === course.id && st.status === 'enrolled').map((st) => st.id)),
           title: `${course.name} register`,
