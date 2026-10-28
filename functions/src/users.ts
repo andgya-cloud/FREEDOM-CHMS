@@ -5,6 +5,7 @@ import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
 import { rebuildRoster } from './rosters.js';
+import { giveDepartmentCourses } from './examAssign.js';
 
 // The browser calls these directly, so anyone may reach them; each one checks
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
@@ -151,6 +152,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
   });
   await saveSigningPassword(uid, password);
   await refreshRosters(orgIds, dept.trainerCourseIds);
+  await giveDepartmentCourses(uid, profile as UserProfile, caller.uid);
   return { uid };
 });
 
@@ -216,6 +218,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
   }
   if (next.active === false) await auth.revokeRefreshTokens(uid);
   await refreshRosters(merged.orgIds, dept.trainerCourseIds);
+  await giveDepartmentCourses(uid, { ...merged, ...dept } as UserProfile, caller.uid);
 
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'update', path: `users/${uid}`,

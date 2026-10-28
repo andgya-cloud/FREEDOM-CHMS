@@ -1,9 +1,10 @@
-import { collection, doc, query, where, type Timestamp } from 'firebase/firestore';
+import { collection, doc, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
+import { ESTIMATE } from '../lib/firestoreOptions';
 import { examMetaId } from '../lib/examWrites';
 import { EXAM_COMPONENTS, examSettingsWithDefaults, mergedMarks, type ExamSettings, type ExamSheet, type ReportMeta } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
@@ -103,7 +104,7 @@ export function useExamLog(orgId: string, cohort: string) {
   return useMemo(() => [...rows].sort((x, y) => (y.at?.toMillis() ?? Date.now()) - (x.at?.toMillis() ?? Date.now())), [rows]);
 }
 
-export interface ExamResultRow extends ExamResult { id: string; deletedAt?: unknown; updatedAt?: Timestamp }
+export interface ExamResultRow extends ExamResult { id: string; deletedAt?: unknown; updatedAt?: Timestamp; createdBy?: string }
 
 /** Past semester results from Excel, for the principal: every cohort's, or one cohort's. */
 export function useExamResults(orgId: string, cohort?: string) {
@@ -144,4 +145,20 @@ export function useAllExamSheets(orgId: string) {
   const q = useLiveQuery<ExamSheetRow>(() => (orgId && a.canManage ? col(orgId, 'examSheets') : null), [orgId, a.canManage]);
   const sheets = useMemo(() => q.rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt), [q.rows]);
   return { sheets, loading: q.loading };
+}
+
+/** A lecturer's own department's past results (Andy, 2026-10-28): they may read only those, so each department is asked for by itself. */
+export function useDepartmentResults(orgId: string, courseIds: string[]) {
+  const key = courseIds.join(',');
+  const [byCourse, setByCourse] = useState<Record<string, ExamResultRow[]>>({});
+  useEffect(() => {
+    setByCourse({});
+    const ids = key ? key.split(',') : [];
+    if (!orgId || !ids.length) return;
+    const offs = ids.map((id) => onSnapshot(query(col(orgId, 'examResults'), where('courseId', '==', id)), (snap) => {
+      setByCourse((m) => ({ ...m, [id]: snap.docs.map((d) => ({ id: d.id, ...d.data(ESTIMATE) }) as ExamResultRow) }));
+    }, () => {}));
+    return () => offs.forEach((off) => off());
+  }, [orgId, key]);
+  return useMemo(() => Object.values(byCourse).flat().filter((r) => !r.deletedAt), [byCourse]);
 }

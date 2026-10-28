@@ -1562,9 +1562,18 @@ service cloud.firestore {
         return v is map && v.keys().hasOnly(['points', 'grade']) && v.points is number && v.points >= 0 && v.points <= 100
           && (v.grade == null || shortText(v.grade, 40));
       }
+      // A lecturer types in past results for their own department's students (Andy, 2026-10-28). They can
+      // change only what they typed: results the principal uploaded stay as they are.
+      function trainerResult() {
+        let d = request.resource.data;
+        return isTrainer() && canAccessOrg(orgId) && d.courseId in myDepartments()
+          && get(/databases/$(database)/documents/organizations/$(orgId)/students/$(d.studentId)).data.courseId == d.courseId
+          && d.printed == null
+          && (resource == null || (resource.data.createdBy == request.auth.uid && resource.data.courseId == d.courseId));
+      }
       match /examResults/{resultId} {
-        allow read: if ex('exams.manage');
-        allow create, update: if ex('exams.manage')
+        allow read: if ex('exams.manage') || (isTrainer() && canAccessOrg(orgId) && resource.data.courseId in myDepartments());
+        allow create, update: if (ex('exams.manage') || trainerResult())
           && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'studentId', 'admissionNo', 'studentName', 'courseId', 'semesters', 'printed', 'notes',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1

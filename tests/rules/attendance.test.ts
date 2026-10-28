@@ -226,6 +226,25 @@ describe('a trainer marks only their own class register (Andy, 2026-10-26)', () 
     await assertSucceeds(batch.commit());
   });
 
+  it('lets him type in past results for his own department only (Andy, 2026-10-28)', async () => {
+    const result = (studentId: string, courseId: string, extra: Record<string, unknown> = {}) => ({
+      orgId: 'adia', cohort: 'Cohort 1', studentId, admissionNo: 'ADIA/IT/2025/1/001', studentName: 'Student', courseId,
+      semesters: { 1: { points: 64.5, grade: 'Credit' } }, printed: null, notes: [], ...created('alphonse'), ...extra,
+    });
+    const db = as('alphonse');
+    await assertSucceeds(setDoc(doc(db, 'organizations/adia/examResults/s1_Cohort-1'), result('s1', 'it')));
+    await assertSucceeds(updateDoc(doc(db, 'organizations/adia/examResults/s1_Cohort-1'), { semesters: { 1: { points: 70, grade: 'Credit' }, 2: { points: 66, grade: 'Credit' } }, updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+    await assertSucceeds(getDocs(query(collection(db, 'organizations/adia/examResults'), where('courseId', '==', 'it'))));
+    await assertFails(getDocs(query(collection(db, 'organizations/adia/examResults'), where('courseId', '==', 'ctr'))));
+    await assertFails(setDoc(doc(db, 'organizations/adia/examResults/s2_Cohort-1'), result('s2', 'ctr')));
+    await assertFails(setDoc(doc(db, 'organizations/adia/examResults/s2_Cohort-1'), result('s2', 'it')));
+    await assertFails(setDoc(doc(db, 'organizations/adia/examResults/s1_Cohort-2'), result('s1', 'it', { cohort: 'Cohort 2', printed: { points: 60, grade: 'Credit' } })));
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/examResults/s1_Cohort-3'), { ...result('s1', 'it', { cohort: 'Cohort 3' }), createdBy: 'principal', updatedBy: 'principal', createdAt: Timestamp.now(), updatedAt: Timestamp.now() });
+    });
+    await assertFails(updateDoc(doc(db, 'organizations/adia/examResults/s1_Cohort-3'), { semesters: {}, updatedAt: serverTimestamp(), updatedBy: 'alphonse' }));
+  });
+
   it('does not let him fill in a register from long ago', async () => {
     await assertFails(setDoc(doc(as('alphonse'), `organizations/adia/events/${LONG_AGO}_it_ict`), cls('alphonse', 'IT / ICT', { date: LONG_AGO })));
   });

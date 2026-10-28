@@ -5,11 +5,11 @@ import { useAuth } from '../../state/AuthContext';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import {
-  useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, type ExamSheetRow, type ExamTrainer,
+  useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, useDepartmentResults, type ExamSheetRow, type ExamTrainer,
 } from '../../state/useExams';
 import {
   approveExamSheet, askExamChange, closedNow, confirmPassword, createExamSheet, deleteExamSheet, emailExamNotice, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails,
-  saveExamCohort, saveExamCourseList, sendExamPapers, unlockExamPaper,
+  saveExamCohort, saveExamCourseList, saveTypedResults, sendExamPapers, unlockExamPaper,
 } from '../../lib/examWrites';
 import { saveCourse, saveIntake } from '../../lib/schoolWrites';
 import {
@@ -114,7 +114,7 @@ function Exams({ org }: { org: Organization }) {
   const canStart = can('settings.manage') || can('school.manage');
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
-  if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} courseName={s.courseName} />;
+  if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} allStudents={allStudents} courseName={s.courseName} />;
   const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'student' ? 'Student' : '';
 
   return (
@@ -325,7 +325,7 @@ function StatusPill({ status }: { status: ExamSheetStatus | string }) {
 
 /* ---------- the trainer's screen ---------- */
 
-function MyClasses({ org, studentsOf, courseName }: { org: Organization; studentsOf: (cohort: string) => ExamStudent[]; courseName: (id: string) => string }) {
+function MyClasses({ org, studentsOf, allStudents, courseName }: { org: Organization; studentsOf: (cohort: string) => ExamStudent[]; allStudents: PastStudent[]; courseName: (id: string) => string }) {
   const { sheets: mine, loading } = useMyExamSheets(org.id);
   const { byName } = useExamCohorts(org.id);
   const today = localDateKey(new Date(), org.timeZone);
@@ -337,6 +337,7 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
   return (
     <div className="page narrow exams">
       <div className="page-head"><h1>My classes</h1></div>
+      {departments && departments.length === 0 && <div className="notice">Your department hasn't been set yet. Ask the office to set it on your account; your students and classes then show here.</div>}
       <p className="muted">Tap a class to key in marks or upload them from Excel. When a CAT's marks are in, send it to the principal; it locks.</p>
       {sheets.length === 0 ? <p className="muted">{loading ? 'Loading…' : 'No classes yet. The principal sets up the courses and gives each one to its trainer; yours will show here.'}</p> : cohorts.map((c) => {
         const students = studentsOf(c);
@@ -365,7 +366,109 @@ function MyClasses({ org, studentsOf, courseName }: { org: Organization; student
           </section>
         );
       })}
+      {departments && departments.length > 0 && <PastResults org={org} students={allStudents} departments={departments} courseName={courseName} />}
     </div>
+  );
+}
+
+type PastStudent = { id: string; admissionNo: string; name: string; courseId: string; cohort: string };
+
+/**
+ * A lecturer types in past semester results for their own department (Andy, 2026-10-28): every student of
+ * the cohort is listed with their admission number, ready for the points. Results the principal uploaded
+ * show but can't be changed here.
+ */
+function PastResults({ org, students, departments, courseName }: { org: Organization; students: PastStudent[]; departments: string[]; courseName: (id: string) => string }) {
+  const toast = useToast();
+  const { profile } = useAuth();
+  const { settings } = useExamSettings(org.id);
+  const results = useDepartmentResults(org.id, departments);
+  const mine = students.filter((st) => departments.includes(st.courseId) && st.cohort);
+  const cohorts = [...new Set(mine.map((st) => st.cohort))].sort((x, y) => y.localeCompare(x, undefined, { numeric: true }));
+  const [cohort, setCohort] = useState('');
+  const [dept, setDept] = useState('');
+  const [typed, setTyped] = useState<Record<string, { '1': string; '2': string }>>({});
+  const [busy, setBusy] = useState(false);
+  const pickedCohort = cohort && cohorts.includes(cohort) ? cohort : cohorts[0] ?? '';
+  const pickedDept = dept && departments.includes(dept) ? dept : departments[0] ?? '';
+  const rows = mine.filter((st) => st.cohort === pickedCohort && st.courseId === pickedDept).sort((x, y) => x.name.localeCompare(y.name));
+  const saved = new Map(results.filter((r) => r.cohort === pickedCohort).map((r) => [r.studentId, r]));
+  const shown = (v: number | undefined) => (v == null ? '' : String(v));
+  const valueOf = (id: string, sem: '1' | '2') => typed[id]?.[sem] ?? shown(saved.get(id)?.semesters[sem]?.points);
+  const points = (t: string) => { const n = Number(t.trim()); return t.trim() === '' ? null : Number.isFinite(n) && n >= 0 && n <= 100 ? Math.round(n * 100) / 100 : NaN; };
+  const changed = rows.filter((st) => typed[st.id] && (['1', '2'] as const).some((k) => typed[st.id]![k] !== shown(saved.get(st.id)?.semesters[k]?.points)));
+  const bad = changed.filter((st) => (['1', '2'] as const).some((k) => Number.isNaN(points(valueOf(st.id, k)))));
+
+  async function save(e: FormEvent) {
+    e.preventDefault();
+    if (bad.length) return toast.show(`Check ${bad[0]!.name}: points go from 0 to 100.`);
+    if (!changed.length) return;
+    setBusy(true);
+    try {
+      await saveTypedResults(org.id, changed.map((st) => {
+        const semesters: Partial<Record<'1' | '2', { points: number; grade: string | null }>> = {};
+        for (const k of ['1', '2'] as const) { const p = points(valueOf(st.id, k)); if (p != null) semesters[k] = { points: p, grade: gradeFor(p, settings).grade || null }; }
+        return { result: { cohort: pickedCohort, studentId: st.id, admissionNo: st.admissionNo, studentName: st.name, courseId: st.courseId, semesters, printed: null, notes: [] }, exists: saved.has(st.id) };
+      }));
+      setTyped({});
+      toast.show(`${changed.length} ${changed.length === 1 ? 'result' : 'results'} saved.`);
+    } catch (err) {
+      toast.show(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details className="fold-card past-results">
+      <summary>Type in past results</summary>
+      <p className="muted small">Semester points out of 100 for each student. The grade is worked out for you. Results the principal uploaded can't be changed here.</p>
+      {cohorts.length === 0 ? <p className="muted">No students in your department yet.</p> : (
+        <form className="stack" onSubmit={(e) => void save(e)}>
+          <div className="exam-pickers">
+            <select aria-label="Cohort" value={pickedCohort} onChange={(e) => { setCohort(e.target.value); setTyped({}); }}>
+              {cohorts.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            {departments.length > 1 && (
+              <select aria-label="Department" value={pickedDept} onChange={(e) => { setDept(e.target.value); setTyped({}); }}>
+                {departments.map((d) => <option key={d} value={d}>{courseName(d) || d}</option>)}
+              </select>
+            )}
+          </div>
+          {rows.length === 0 ? <p className="muted">No {courseName(pickedDept)} students in {pickedCohort}.</p> : (
+            <div className="table-wrap">
+              <table className="data-table past-table">
+                <thead><tr><th>Student</th><th>Admission no.</th><th className="num">Sem 1</th><th className="num">Sem 2</th><th className="num">Final</th></tr></thead>
+                <tbody>
+                  {rows.map((st) => {
+                    const r = saved.get(st.id);
+                    const locked = !!r && r.createdBy !== profile?.uid;
+                    const p1 = points(valueOf(st.id, '1'));
+                    const p2 = points(valueOf(st.id, '2'));
+                    const fin = p1 != null && p2 != null && !Number.isNaN(p1) && !Number.isNaN(p2) ? Math.round(((p1 + p2) / 2) * 100) / 100 : null;
+                    const cell = (k: '1' | '2') => (
+                      <td className="num">
+                        <input className={`mark-input${Number.isNaN(points(valueOf(st.id, k))) ? ' bad' : ''}`} inputMode="decimal" aria-label={`${st.name}, semester ${k}`} disabled={locked || busy}
+                          value={valueOf(st.id, k)} onChange={(e) => setTyped((t) => ({ ...t, [st.id]: { '1': valueOf(st.id, '1'), '2': valueOf(st.id, '2'), [k]: e.target.value } }))} />
+                      </td>
+                    );
+                    return (
+                      <tr key={st.id}>
+                        <td>{st.name}{locked && <div className="muted small">From the principal</div>}</td>
+                        <td className="small">{st.admissionNo}</td>
+                        {cell('1')}{cell('2')}
+                        <td className="num">{fin == null ? '–' : `${fin} ${gradeFor(fin, settings).grade}`}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {rows.length > 0 && <button type="submit" className="btn btn-primary align-start" disabled={busy || !changed.length}>{busy ? 'Saving…' : changed.length ? `Save ${changed.length} ${changed.length === 1 ? 'result' : 'results'}` : 'Nothing to save'}</button>}
+        </form>
+      )}
+    </details>
   );
 }
 

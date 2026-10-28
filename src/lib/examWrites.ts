@@ -3,7 +3,7 @@ import { httpsCallable } from 'firebase/functions';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db, functions } from '../firebase';
 import type { ExamNoticeKind } from '../../functions/src/shared/examNotices';
-import { createRecord, createStamps, softDelete, updateRecord } from './records';
+import { createRecord, createStamps, softDelete, updateRecord, updateStamps } from './records';
 import { trackWrite } from './sync';
 import { MARK_FIELDS, type ExamComponent, type ExamSettings, type ExamWeights, type MarkValue, type StudentMarks } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
@@ -125,6 +125,22 @@ export async function saveExamResults(orgId: string, results: ExamResult[], exis
       const ref = doc(db, 'organizations', orgId, 'examResults', id);
       if (existing.has(id)) batch.update(ref, { ...data, deletedAt: null, deletedBy: null, updatedAt: stamps.updatedAt, updatedBy: stamps.updatedBy });
       else batch.set(ref, { ...data, ...stamps });
+    }
+    await trackWrite(batch.commit());
+  }
+}
+
+/** A lecturer's typed-in past results for their own department (Andy, 2026-10-28); a row they saved before is updated. */
+export async function saveTypedResults(orgId: string, rows: { result: ExamResult; exists: boolean }[]) {
+  for (let i = 0; i < rows.length; i += 5) {
+    const batch = writeBatch(db);
+    for (const { result: r, exists } of rows.slice(i, i + 5)) {
+      const ref = doc(db, 'organizations', orgId, 'examResults', examResultId(r.studentId, r.cohort));
+      if (exists) batch.update(ref, { semesters: r.semesters, ...updateStamps() });
+      else batch.set(ref, {
+        orgId, cohort: r.cohort, studentId: r.studentId, admissionNo: r.admissionNo.slice(0, 80), studentName: r.studentName.slice(0, 160), courseId: r.courseId,
+        semesters: r.semesters, printed: null, notes: [], ...createStamps(),
+      });
     }
     await trackWrite(batch.commit());
   }
