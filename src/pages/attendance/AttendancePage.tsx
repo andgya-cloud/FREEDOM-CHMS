@@ -197,7 +197,7 @@ export function AttendancePage() {
           </div>
           {showCommon && commonOpen && (
             <CommonCoursesPanel orgId={org.id} cohorts={commonCohorts} sheets={commonSheets}
-              onRegister={(sh) => open(commonClassName(sh.courseName, sh.cohort))} onClose={() => setCommonOpen(false)} />
+              onRegister={(course, cohort) => open(commonClassName(course, cohort))} onClose={() => setCommonOpen(false)} />
           )}
           {!trainer && <>
           <form className="input-with-button" onSubmit={openOther}>
