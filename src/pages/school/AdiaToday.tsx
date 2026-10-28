@@ -9,6 +9,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { attendanceAlerts, arrearsList, capacityOf, collectionRate, schoolMetrics, STUDENT_STATUSES, STUDENT_STATUS_LABELS } from '../../../functions/src/shared/school';
 import { ADIA_PROGRAMMES } from '../../../functions/src/shared/schoolSetup';
 import { LineChart, Sparkline } from '../../components/charts';
+import { SceneVideo } from '../../components/SceneVideo';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
 import { money, pct, useSchoolPage } from './common';
@@ -124,6 +125,7 @@ export function AdiaToday({ org }: { org: Organization }) {
           </div>
         </div>
         <div className="lav-scene">
+          <SceneVideo />
           <FirstRunChecklist variant="scene" />
         </div>
       </section>
