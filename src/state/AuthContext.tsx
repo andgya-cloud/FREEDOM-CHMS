@@ -28,6 +28,8 @@ export interface Profile {
   /** A common-course lecturer's registers ("Communication Skills · Cohort 4") and cohort class lists (functions/src/commonCourses.ts). */
   commonClasses?: string[];
   commonRosters?: string[];
+  /** The ADIA departments (programme ids) whose inventory they count (Andy, 2026-10-29). */
+  inventoryCourseIds?: string[];
   lastSignInAt?: Timestamp;
 }
 

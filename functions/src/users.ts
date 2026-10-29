@@ -92,6 +92,24 @@ async function trainerDepartments(value: unknown, orgIds: string[]): Promise<{ t
   return { trainerCourseIds: found.map((c) => c.id), registerClasses: found.map((c) => c.name).filter(Boolean) };
 }
 
+/**
+ * The departments whose inventory a person counts (Andy, 2026-10-29, 2A): ADIA programme ids ticked on their
+ * account, whatever their role. Unknown programmes are dropped.
+ */
+async function inventoryDepartments(value: unknown, orgIds: string[], allOrgs: boolean): Promise<string[]> {
+  const ids = [...new Set(requireStringArray(value ?? [], 'the inventory departments'))].filter((id) => /^[a-z0-9_]{2,40}$/.test(id)).slice(0, 10);
+  if (!ids.length) return [];
+  const orgs = allOrgs ? (await db.collection('organizations').where('type', '==', 'college').get()).docs.map((d) => d.id) : orgIds;
+  const found: string[] = [];
+  for (const id of ids) {
+    for (const orgId of orgs) {
+      const course = await db.doc(`organizations/${orgId}/courses/${id}`).get();
+      if (course.exists && !course.get('deletedAt')) { found.push(id); break; }
+    }
+  }
+  return found;
+}
+
 /** Fill in the names-only class lists a trainer reads, so a new or changed trainer sees their students straight away. */
 async function refreshRosters(orgIds: string[], courseIds: string[]) {
   for (const orgId of orgIds) {
@@ -141,6 +159,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
     pettyTitle,
     phone,
     ...dept,
+    inventoryCourseIds: await inventoryDepartments(data.inventoryDepartments, orgIds, allOrgs),
     permissions: accountPermissions(roleId, role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -203,6 +222,10 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     : data.departments !== undefined ? await trainerDepartments(data.departments, merged.orgIds)
       : { trainerCourseIds: kept.trainerCourseIds ?? [], registerClasses: kept.registerClasses ?? [] };
 
+  const inventoryCourseIds = data.inventoryDepartments !== undefined
+    ? await inventoryDepartments(data.inventoryDepartments, merged.orgIds, merged.allOrgs)
+    : (current as { inventoryCourseIds?: string[] }).inventoryCourseIds ?? [];
+
   await ref.update({
     displayName: merged.displayName,
     roleId: merged.roleId,
@@ -214,6 +237,8 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     phone: merged.phone ?? '',
     // A trainer's departments and their register classes (Andy, 2026-10-28); nobody else carries any.
     ...dept,
+    // The departments whose inventory they count (Andy, 2026-10-29).
+    inventoryCourseIds,
     permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,
@@ -228,7 +253,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
 
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'update', path: `users/${uid}`,
-    collection: 'users', docId: uid, orgId: null, changedFields: [...Object.keys(next), ...(data.departments !== undefined ? ['departments'] : [])],
+    collection: 'users', docId: uid, orgId: null, changedFields: [...Object.keys(next), ...(data.departments !== undefined ? ['departments'] : []), ...(data.inventoryDepartments !== undefined ? ['inventoryDepartments'] : [])],
   });
   return { ok: true };
 });

@@ -14,7 +14,7 @@ import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
-import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -34,6 +34,7 @@ interface FormState {
   departments: string[];
   /** Classes ticked under v107, by name, until the programmes load. */
   legacyClasses: string[];
+  inventory: string[];
 }
 
 const ROLE_HINTS: Record<string, string> = {
@@ -43,9 +44,10 @@ const ROLE_HINTS: Record<string, string> = {
   signatory: ': raises and signs petty cash requests, top-ups and resets, and sees nothing else',
   principal: ': ADIA students, attendance, Exam Records and graduation, with each student\'s fee balance; nothing else',
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
+  labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [] };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [] };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -78,7 +80,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [],
+          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [],
         });
       }
       setLoaded(true);
@@ -89,10 +91,13 @@ export function UserFormPage() {
   const signatory = form.roleId === SIGNATORY_ROLE_ID;
   // The principal works at ADIA only, with no extra ticks (Andy, 2026-10-25).
   // A trainer works at ADIA only too, in Exam Records (Andy, 2026-10-25).
-  const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID;
+  // A lab technician works at ADIA only, on inventory (Andy, 2026-10-29).
+  const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID || form.roleId === LABTECH_ROLE_ID;
+  // Trainers, lab technicians and staff can be in charge of a department's inventory (Andy, 2026-10-29, 2A).
+  const counts = !teamOnly && ['trainer', 'labtech', 'staff', 'head'].includes(form.roleId);
   const colleges = organizations.filter((o) => o.type === 'college').map((o) => o.id);
   // A trainer's department: one of ADIA's programmes (Andy, 2026-10-28, 1A).
-  const school = useSchool(form.roleId === TRAINER_ROLE_ID ? colleges[0] ?? '' : '');
+  const school = useSchool(form.roleId === TRAINER_ROLE_ID || counts ? colleges[0] ?? '' : '');
   const programmes = school.courses.filter((c) => c.active !== false);
   // An account saved with register classes by name picks up those programmes once they load.
   useEffect(() => {
@@ -113,7 +118,8 @@ export function UserFormPage() {
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
-    if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : 'principal'} works at ADIA only. Untick the other organizations.`);
+    if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : form.roleId === LABTECH_ROLE_ID ? 'lab technician' : 'principal'} works at ADIA only. Untick the other organizations.`);
+    if (form.roleId === LABTECH_ROLE_ID && form.inventory.length === 0) return setError('Tick the department whose inventory they count.');
     if (form.roleId === TRAINER_ROLE_ID && !teamOnly && form.departments.length === 0) return setError('Tick the department this trainer teaches.');
     if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
     setBusy(true);
@@ -126,6 +132,7 @@ export function UserFormPage() {
           pettyTitle: showTitle ? form.pettyTitle : '',
           phone: form.phone.trim(),
           departments: form.roleId === TRAINER_ROLE_ID ? form.departments : [],
+          inventoryDepartments: counts ? form.inventory : [],
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -202,7 +209,7 @@ export function UserFormPage() {
             <legend>Role</legend>
             {roles.map((r) => (
               <label key={r.id} className="check">
-                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID || r.id === TRAINER_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
+                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID || r.id === TRAINER_ROLE_ID || r.id === LABTECH_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
                 <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ROLE_HINTS[r.id] ?? ''}</span>
               </label>
             ))}
@@ -257,6 +264,20 @@ export function UserFormPage() {
               </label>
             )}
             <small className="hint">They see only this department's students (names and admission numbers), mark its register for today or yesterday, and key in marks for its courses given to them in Exam Records. With Common courses, they also see the cohorts their common courses are taught to. Nothing else.</small>
+          </fieldset>
+        )}
+
+        {counts && (
+          <fieldset className="field">
+            <legend>In charge of inventory</legend>
+            {programmes.length === 0 ? <p className="small muted">ADIA has no programmes yet.</p> : programmes.map((c) => (
+              <label key={c.id} className="check">
+                <input type="checkbox" checked={form.inventory.includes(c.id)}
+                  onChange={() => setForm((f) => ({ ...f, inventory: f.inventory.includes(c.id) ? f.inventory.filter((x) => x !== c.id) : [...f.inventory, c.id] }))} />
+                {c.name}
+              </label>
+            ))}
+            <small className="hint">They fill in this department's inventory form at the start and the end of each cohort and get the deadline reminders. Leave empty if they don't count inventory.</small>
           </fieldset>
         )}
 

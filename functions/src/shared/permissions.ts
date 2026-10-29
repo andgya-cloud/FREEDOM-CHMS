@@ -106,6 +106,18 @@ export const PRINCIPAL_ROLE_ID = 'principal';
 /** An ADIA trainer: keys in their own classes' marks in Exam Records and sees nothing else (Andy, 2026-10-25). */
 export const TRAINER_ROLE_ID = 'trainer';
 
+/** An ADIA lab technician: counts their department's inventory and sees nothing else (Andy, 2026-10-29). */
+export const LABTECH_ROLE_ID = 'labtech';
+
+/**
+ * Inventory counts go to Admin and the Principal, who verify them, set deadlines and reopen late forms;
+ * the pastor and Doreen (users.manage) have full access too (Andy, 2026-10-29, 3).
+ */
+export const INVENTORY_MANAGER_ROLES = ['admin', PRINCIPAL_ROLE_ID] as const;
+export function isInventoryManager(profile: (AccessProfile & { roleId?: string }) | null | undefined): boolean {
+  return can(profile, 'users.manage') || (!!profile?.active && (INVENTORY_MANAGER_ROLES as readonly string[]).includes(profile.roleId ?? ''));
+}
+
 /** The role for the petty cash signatories: they raise and sign requests, top-ups and resets, and see nothing else. */
 export const SIGNATORY_ROLE_ID = 'signatory';
 
@@ -118,7 +130,7 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
   return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -140,6 +152,8 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   principal: { name: 'Principal', permissions: ['people.read', 'people.write', 'attendance.write', 'exams.manage', 'school.manage', 'fees.balances'] },
   // A trainer reads only their department's names-only class list, never people or students (Andy, 2026-10-28).
   trainer: { name: 'Trainer', permissions: ['exams.mark'] },
+  // Inventory only, for the departments ticked on their account (Andy, 2026-10-29, 2A).
+  labtech: { name: 'Lab technician', permissions: [] },
 };
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {

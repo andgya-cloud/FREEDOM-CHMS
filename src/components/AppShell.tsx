@@ -13,7 +13,8 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { SIGNATORY_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
 function TabLabel({ full, short }: { full: string; short: string }) {
@@ -26,7 +27,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const { can, profile } = useAuth();
   // The petty cash signatories see Petty Cash and Settings only; trainers see Exam Records and Settings (Andy, 2026-10-25).
   const trainer = profile?.roleId === TRAINER_ROLE_ID;
-  const full = profile?.roleId !== SIGNATORY_ROLE_ID && !trainer;
+  // A lab technician only counts their department's inventory (Andy, 2026-10-29).
+  const labtech = profile?.roleId === LABTECH_ROLE_ID;
+  const full = profile?.roleId !== SIGNATORY_ROLE_ID && !trainer && !labtech;
+  const counter = (profile?.inventoryCourseIds?.length ?? 0) > 0;
+  const inventoryTab = current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile)));
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
   useTemplates();
   const look = lookFor(current);
@@ -39,7 +44,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A trainer's only pages are their marks sheets and their own settings.
   // A trainer with register classes also marks those classes' registers (Andy, 2026-10-26).
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
-  if (trainer && !(trainerRegister ? /^\/(school\/exams|settings|attendance)(\/|$)/ : /^\/(school\/exams|settings)(\/|$)/).test(location.pathname)) return <Navigate to="/school/exams" replace />;
+  if (trainer && !new RegExp(`^/(school/exams|settings${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
+  if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   const tabs = (
     <nav className="tabbar" aria-label="Main">
       {full && (<>
@@ -99,6 +105,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}
         </NavLink>
       )}
+      {inventoryTab && (
+        <NavLink to="/inventory" className="tab">
+          {adia ? <AdiaIcon name="inventory" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" /></svg>}
+          Inventory
+        </NavLink>
+      )}
       <NavLink to="/settings" className="tab">
         {adia ? <AdiaIcon name="settings" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.6 6.5l1.6-1.6 1.6 1.1a7 7 0 0 1 1.7-.7l.4-1.9h2.2l.4 1.9a7 7 0 0 1 1.7.7l1.6-1.1 1.6 1.6-1.1 1.6a7 7 0 0 1 .7 1.7l1.9.4z" /></svg>}
         Settings
@@ -110,6 +122,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}
       {current?.training && <div className="dev-ribbon" role="status">Practice mode. Everything here is made up and is never mixed with real records.</div>}
       <InstallBanner />
+      {current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile))) && <InventoryDueBanner />}
     </>
   );
   // ADIA Training Centre, Freedom Church and Freedom Hope Center: the menu down a side panel on wide screens (a bottom dock on phones).
