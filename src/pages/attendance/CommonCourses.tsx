@@ -2,9 +2,9 @@ import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { useExamAccess, useExamSettings, useExamTrainers, type ExamSheetRow, type ExamTrainer } from '../../state/useExams';
-import { createExamSheet, logExam } from '../../lib/examWrites';
+import { createExamSheet, logExam, saveExamSheetDetails } from '../../lib/examWrites';
 import { friendlyError } from '../../lib/errors';
-import { COMMON_DEPARTMENT, STANDARD_COMMON_COURSES, matchTutor } from '../../../functions/src/shared/commonCourses';
+import { COMMON_DEPARTMENT, STANDARD_COMMON_COURSES, matchTutor, standardCourse, standardOrder } from '../../../functions/src/shared/commonCourses';
 
 const ADD = '__add';
 const READY = '__ready';
@@ -23,8 +23,20 @@ function coursesOf(sheets: ExamSheetRow[]): Course[] {
     by.set(k, c);
   }
   for (const c of by.values()) c.sheets.sort((x, y) => (x.semester ?? 9) - (y.semester ?? 9));
-  return [...by.values()].sort((x, y) => x.name.localeCompare(y.name));
+  return [...by.values()].sort((x, y) => standardOrder(x.name) - standardOrder(y.name) || x.name.localeCompare(y.name));
 }
+
+/** The courses under a heading for each tutor, in the order of Andy's list (Andy, 2026-10-29, 1C). */
+function byTutor(courses: Course[]): { tutor: string; courses: Course[] }[] {
+  const groups: { tutor: string; courses: Course[] }[] = [];
+  for (const c of courses) {
+    const g = groups.find((x) => x.tutor === c.tutor);
+    if (g) g.courses.push(c); else groups.push({ tutor: c.tutor, courses: [c] });
+  }
+  return groups;
+}
+/** The ready-made course a cohort already has, under its name or an older one. */
+const haveStandard = (courses: Course[], name: string) => courses.find((c) => standardCourse(c.name)?.name === name);
 
 /** Common courses go to lecturers with Common courses ticked, or to the principal or the pastor (Andy, 2026-10-28). */
 const tutorsOf = (trainers: ExamTrainer[]) => trainers.filter((t) => t.lecturer === false || t.departments?.includes(COMMON_DEPARTMENT));
@@ -60,7 +72,7 @@ export function CommonCoursesPanel({ orgId, cohorts, sheets, onRegister, onClose
   const [pick, setPick] = useState('');
   const courses = useMemo(() => coursesOf(sheets.filter((s) => s.cohort === cohort)), [sheets, cohort]);
   const missing = STANDARD_COMMON_COURSES.filter((sc) => {
-    const c = courses.find((x) => x.key === key(sc.name));
+    const c = haveStandard(courses, sc.name);
     return !c || BOTH.some((sem) => !c.sheets.some((s) => s.semester === sem));
   });
   const offerReady = a.canManage && missing.length > 0;
@@ -85,7 +97,11 @@ export function CommonCoursesPanel({ orgId, cohorts, sheets, onRegister, onClose
             <label className="field"><span>Course</span>
               <select value={mode || chosen?.key || ''} onChange={(e) => setPick(e.target.value)}>
                 {!mode && !chosen && <option value="">{courses.length ? 'Pick the course' : 'No common course yet'}</option>}
-                {courses.map((c) => <option key={c.key} value={c.key}>{c.name} · {c.tutor}</option>)}
+                {byTutor(courses).map((g) => (
+                  <optgroup key={g.tutor} label={g.tutor}>
+                    {g.courses.map((c) => <option key={c.key} value={c.key}>{c.name}</option>)}
+                  </optgroup>
+                ))}
                 {offerReady && <option value={READY}>+ Ready-made courses ({missing.length})</option>}
                 {a.canManage && <option value={ADD}>+ Add another common course</option>}
               </select>
@@ -99,6 +115,7 @@ export function CommonCoursesPanel({ orgId, cohorts, sheets, onRegister, onClose
           ) : chosen ? (
             <>
               <p className="common-tutor"><span className="muted">Tutor</span> <strong>{chosen.tutor}</strong></p>
+              {a.canManage && <MoveTutor orgId={orgId} cohort={cohort} course={chosen} />}
               <div className="common-actions">
                 <button type="button" className="btn btn-primary" onClick={() => onRegister(chosen.name, cohort)}>Mark register</button>
                 {chosen.sheets.map((s) => (
@@ -106,12 +123,49 @@ export function CommonCoursesPanel({ orgId, cohorts, sheets, onRegister, onClose
                     {chosen.sheets.length > 1 && s.semester ? `Semester ${s.semester} results` : 'Key in results'}
                   </button>
                 ))}
+                {finalsOf(chosen) && <button type="button" className="btn" onClick={() => navigate(`/school/exams/finals/${finalsOf(chosen)!.join('/')}`)}>Finals</button>}
               </div>
             </>
           ) : null}
         </>
       )}
     </div>
+  );
+}
+
+/** The Semester 1 and Semester 2 sheets whose average is the course's Finals (Andy, 2026-10-29, 4A). */
+const finalsOf = (c: Course): [string, string] | null => {
+  const one = c.sheets.find((x) => x.semester === 1);
+  const two = c.sheets.find((x) => x.semester === 2);
+  return one && two ? [one.id, two.id] : null;
+};
+
+/**
+ * When a ready-made course sits with someone other than its tutor on Andy's list, e.g. Critical Thinking set up
+ * for Flavier before it moved to Alphonse (Andy, 2026-10-29, 3A): one tap moves both semesters, marks kept.
+ */
+function MoveTutor({ orgId, cohort, course }: { orgId: string; cohort: string; course: Course }) {
+  const a = useExamAccess();
+  const toast = useToast();
+  const { trainers, loading } = useExamTrainers(orgId);
+  const sc = standardCourse(course.name);
+  if (!sc || loading) return null;
+  const usual = matchTutor(sc.tutor, tutorsOf(trainers));
+  if (matchTutor(sc.tutor, [{ name: course.tutor }])) return null;
+  if (!usual) return <p className="ready-note small">{course.name} is taught by {sc.tutor[0]} now. Tick Common courses on their account under Settings → Staff accounts, then move it here.</p>;
+  if (usual.uid === course.ownerUid) return null;
+  function move() {
+    for (const sh of course.sheets) {
+      saveExamSheetDetails(orgId, sh.id, { ownerUid: usual!.uid, ownerName: usual!.name.slice(0, 120), teacherName: usual!.name.slice(0, 120) }).catch((err) => toast.show(friendlyError(err)));
+      void logExam(orgId, { action: 'setup', cohort, sheetId: sh.id, detail: `${course.name}: given to ${usual!.name} (was ${course.tutor})`, byName: a.myName }).catch(() => {});
+    }
+    toast.show(`${course.name} for ${cohort} moved to ${usual!.name}. The marks already keyed in are kept.`);
+  }
+  return (
+    <p className="ready-note small">
+      {course.name} is taught by {usual.name} now.{' '}
+      <button type="button" className="btn btn-small" onClick={move}>Move to {usual.name}</button>
+    </p>
   );
 }
 
@@ -126,7 +180,7 @@ function ReadyCourses({ orgId, cohort, courses, onDone, onCancel }: {
   const tutors = tutorsOf(trainers);
   const [chosen, setChosen] = useState<Record<string, string>>({});
   const rows = STANDARD_COMMON_COURSES.map((sc) => {
-    const have = courses.find((c) => c.key === key(sc.name));
+    const have = haveStandard(courses, sc.name);
     const semesters = BOTH.filter((sem) => !have?.sheets.some((s) => s.semester === sem));
     // A course already set up keeps its tutor; otherwise the usual tutor is picked, if their account can teach common courses.
     const usual = matchTutor(sc.tutor, tutors);
@@ -153,8 +207,10 @@ function ReadyCourses({ orgId, cohort, courses, onDone, onCancel }: {
     <div className="common-add">
       <p className="small muted">Each course gets a Semester 1 and a Semester 2 marks sheet, and one register.</p>
       <ul className="ready-list">
-        {todo.map((r) => (
-          <li key={r.name}>
+        {/* Under a heading for each tutor (Andy, 2026-10-29, 1C). */}
+        {todo.map((r, i) => (
+          <li key={r.name} className={i === 0 || todo[i - 1]!.tutor[0] !== r.tutor[0] ? 'ready-first' : undefined}
+            data-tutor={i === 0 || todo[i - 1]!.tutor[0] !== r.tutor[0] ? r.tutor[0] : undefined}>
             <span className="ready-name">{r.name}{r.have && <span className="muted small"> · adds Semester {r.semesters.join(' and ')}</span>}</span>
             {r.have ? <span className="ready-tutor">{r.have.tutor}</span> : (
               <select aria-label={`Tutor for ${r.name}`} value={r.uid} onChange={(e) => setChosen({ ...chosen, [r.name]: e.target.value })}>

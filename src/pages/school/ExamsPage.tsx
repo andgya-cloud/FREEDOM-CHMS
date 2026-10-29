@@ -28,6 +28,7 @@ import {
   type ExamComponent, type ExamSettings, type ExamSheetStatus, type ExamStudent, type ExamWeights, type GradeBand,
 } from '../../../functions/src/shared/exams';
 import { studentAttendance } from '../../../functions/src/shared/school';
+import { commonFinal } from '../../../functions/src/shared/commonCourses';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -44,6 +45,10 @@ export function ExamsPage() {
 }
 export function ExamSheetPage() {
   return <SchoolGate title="Marks sheet">{(org) => <SheetEditor org={org} />}</SchoolGate>;
+}
+
+export function CommonFinalsPage() {
+  return <SchoolGate title="Finals">{(org) => <CommonFinals org={org} />}</SchoolGate>;
 }
 
 const BASE = '/school/exams';
@@ -1590,5 +1595,62 @@ function Papers({ org, sheet, roster, isOwner, onSubmitted }: { org: Organizatio
         })}
       </ul>
     </section>
+  );
+}
+
+/**
+ * Finals for a common course (Andy, 2026-10-29, 4A): each student's Semester 1 and Semester 2 totals and their
+ * average, with its grade. Opened from the Common courses card on Attendance.
+ */
+function CommonFinals({ org }: { org: Organization }) {
+  const { one = '', two = '' } = useParams();
+  const a = useExamAccess();
+  const { studentsOf } = useCohorts(org);
+  const { settings } = useExamSettings(org.id);
+  const s1 = useExamSheet(org.id, one);
+  const s2 = useExamSheet(org.id, two);
+  const first = s1.sheet;
+  if (!a.canMark) return <div className="page narrow"><h1>Finals</h1><p>Exam Records are for trainers and the principal.</p></div>;
+  if (!first || !s2.sheet) return <div className="page narrow"><h1>Finals</h1><p className="muted">{s1.loading || s2.loading ? 'Loading…' : 'This course was not found.'}</p><Link to="/attendance">Back to Attendance</Link></div>;
+  const second = s2.sheet;
+  const roster = rosterFor(studentsOf(first.cohort), first.courseId);
+  const totalOf = (sh: typeof first, id: string) => unitTotal(sh.weights, sh.marks?.[id], settings.passMark).total;
+  const rows = roster.map((st) => {
+    const a1 = totalOf(first, st.id);
+    const a2 = totalOf(second, st.id);
+    const fin = commonFinal(a1, a2);
+    return { st, a1, a2, fin, grade: gradeFor(fin, settings).grade };
+  });
+  const done = rows.filter((r) => r.fin != null).length;
+  const n = (v: number | null) => (v == null ? '–' : v.toFixed(1));
+  return (
+    <div className="page exams common-finals">
+      <Link to="/attendance" className="btn-link">← Attendance</Link>
+      <div className="page-head">
+        <h1>{first.courseName}<span className="muted"> · Finals</span></h1>
+      </div>
+      <p className="muted">{first.cohort} · Tutor {first.teacherName || first.ownerName} · Finals is the average of Semester 1 and Semester 2. {done} of {rows.length} students have both.</p>
+      <div className="row-actions">
+        <Link className="btn" to={`${BASE}/sheet/${first.id}`}>Semester 1 marks</Link>
+        <Link className="btn" to={`${BASE}/sheet/${second.id}`}>Semester 2 marks</Link>
+        <CsvButton name={`${first.courseName}-${first.cohort}-Finals.csv`.replace(/[^A-Za-z0-9.-]+/g, '-')}
+          csv={() => toCsv(['No', 'Admission No', 'Name', 'Semester 1', 'Semester 2', 'Finals', 'Grade'], rows.map((r, i) => [i + 1, r.st.admissionNo, r.st.name, r.a1, r.a2, r.fin, r.grade]))} />
+      </div>
+      <div className="table-scroll">
+        <table>
+          <thead><tr><th>No</th><th>Adm. No</th><th>Name</th><th className="num">Sem 1</th><th className="num">Sem 2</th><th className="num final-col">Finals</th><th>Grade</th></tr></thead>
+          <tbody>
+            {rows.map((r, i) => (
+              <tr key={r.st.id}>
+                <td>{i + 1}</td><td>{r.st.admissionNo}</td><td>{r.st.name}</td>
+                <td className="num">{n(r.a1)}</td><td className="num">{n(r.a2)}</td>
+                <td className="num final-col">{r.fin == null ? <span className="muted small">{r.a1 == null && r.a2 == null ? '–' : 'Incomplete'}</span> : n(r.fin)}</td>
+                <td>{r.grade}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }

@@ -1530,3 +1530,9 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   .inv-banner { margin: 8px 12px 0; }
 }
 @media print { .inv-tools, .inv-share, .inv-admin, .inv-banner { display: none; } }
+/* The ready-made common courses under a heading for each tutor (Andy, 2026-10-29). */
+.ready-list li.ready-first::before { content: attr(data-tutor); grid-column: 1 / -1; font-size: 0.75rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: rgb(var(--menu-gold, 201 154 60)); padding-top: 6px; }
+.common-finals table { width: 100%; border-collapse: collapse; }
+.common-finals th, .common-finals td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: left; }
+.common-finals td.num, .common-finals th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.common-finals .final-col { font-weight: 700; background: rgb(var(--menu-gold, 201 154 60) / .1); }
