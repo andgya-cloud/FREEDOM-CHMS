@@ -1536,3 +1536,13 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .common-finals th, .common-finals td { padding: 8px 6px; border-bottom: 1px solid var(--border); text-align: left; }
 .common-finals td.num, .common-finals th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .common-finals .final-col { font-weight: 700; background: rgb(var(--menu-gold, 201 154 60) / .1); }
+/* Student search with an A to Z bar on every list of students (Andy, 2026-10-29). */
+.student-finder { display: grid; gap: 6px; margin: 8px 0 10px; }
+.student-finder .search { margin: 0; }
+.az-bar { display: flex; flex-wrap: wrap; gap: 3px; }
+.az { min-width: 28px; height: 28px; padding: 0 6px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; }
+.az:disabled { opacity: .3; cursor: default; }
+.az-on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.az-all { padding: 0 10px; }
+.finder-count { margin: 0; }
+@media (max-width: 560px) { .az { min-width: 24px; height: 26px; padding: 0 4px; font-size: 0.75rem; } }

@@ -4,6 +4,7 @@ import { useAuth } from '../../state/AuthContext';
 import { STUDENT_STATUSES, STUDENT_STATUS_LABELS, studentAttendance, type StudentStatus } from '../../../functions/src/shared/school';
 import { SchoolGate, SchoolTitle, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
+import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 
 /** "Cohort 2" before "Cohort 10", then other names in order. */
 const byCohort = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
@@ -15,20 +16,17 @@ export function StudentsPage() {
 function Students({ org }: { org: Organization }) {
   const s = useSchoolPage(org);
   const { can } = useAuth();
-  const [q, setQ] = useState('');
+  const finder = useStudentFinder();
   const [status, setStatus] = useState<StudentStatus | 'all'>('enrolled');
   const [courseId, setCourseId] = useState('');
   const [cohort, setCohort] = useState('');
 
-  const rows = useMemo(() => {
-    const text = q.trim().toLowerCase();
-    return s.students
-      .map((st) => ({ st, name: s.nameOf(st.id) }))
-      .filter(({ st, name }) => (status === 'all' || st.status === status) && (!courseId || st.courseId === courseId)
-        && (!cohort || s.intakeName(st.intakeId) === cohort)
-        && (!text || name.toLowerCase().includes(text) || (st.admissionNo ?? '').toLowerCase().includes(text)))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [s.students, s.nameOf, s.intakeName, q, status, courseId, cohort]);
+  // The status, cohort and department filters first; then the search box and the A to Z bar.
+  const listed = useMemo(() => s.students
+    .map((st) => ({ st, name: s.nameOf(st.id) }))
+    .filter(({ st }) => (status === 'all' || st.status === status) && (!courseId || st.courseId === courseId) && (!cohort || s.intakeName(st.intakeId) === cohort))
+    .sort((a, b) => a.name.localeCompare(b.name)), [s.students, s.nameOf, s.intakeName, status, courseId, cohort]);
+  const rows = listed.filter(({ st, name }) => finder.match(name, st.admissionNo ?? ''));
 
   // Cohort (the intake name every programme shares), then department (programme), as the school organises its classes.
   const cohorts = useMemo(() => [...new Set(s.intakes.map((i) => i.name))].sort(byCohort), [s.intakes]);
@@ -61,7 +59,6 @@ function Students({ org }: { org: Organization }) {
           </details>
         )}
       </SchoolTitle>
-      <input type="search" className="search" placeholder="Find by name or admission number" aria-label="Find a student" value={q} onChange={(e) => setQ(e.target.value)} />
       {/* Status, cohort and department side by side, in place of a row of chips (Andy, 2026-10-28, 2A). */}
       <div className="filter-row">
         <label className="field"><span>Status</span>
@@ -82,10 +79,11 @@ function Students({ org }: { org: Organization }) {
           </select>
         </label>
       </div>
+      <StudentFinder finder={finder} names={listed.map((x) => x.name)} shown={rows.length} total={listed.length} />
       {s.loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="card"><p>No students match. {s.students.length === 0 && 'Enrol the first student with the button above.'}</p></div> : (
         <div className="stack">
           {groups.map((g) => (
-            <details key={g.name} className="card cohort-group" open={groups.length === 1 || !!cohort || !!q.trim()}>
+            <details key={g.name} className="card cohort-group" open={groups.length === 1 || !!cohort || finder.active}>
               <summary>
                 <span className="cohort-name">{g.name}</span>
                 <span className="muted small">{g.count} {g.count === 1 ? 'student' : 'students'}</span>

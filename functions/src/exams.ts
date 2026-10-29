@@ -30,7 +30,8 @@ export const listExamTrainers = onCall(CALLABLE, async (request) => {
   }
   const users = await db.collection('users').where('active', '==', true).get();
   const trainers = users.docs
-    .filter((d) => { const u = d.data() as UserProfile; const p = perms(u); return canAccessOrg(u, orgId) && (p.includes('exams.mark') || p.includes('exams.manage') || p.includes('users.manage')); })
+    .filter((d) => { const u = d.data() as UserProfile; const p = perms(u); // The principal is in every list, whatever her saved permissions say (Andy, 2026-10-29, 1C).
+      return canAccessOrg(u, orgId) && (u.roleId === PRINCIPAL_ROLE_ID || p.includes('exams.mark') || p.includes('exams.manage') || p.includes('users.manage')); })
     .map((d) => { const u = d.data() as UserProfile; return { uid: d.id, name: u.displayName || u.email, phone: u.phone ?? '', departments: (u as { trainerCourseIds?: string[] }).trainerCourseIds ?? [], lecturer: u.roleId === TRAINER_ROLE_ID }; })
     .sort((a, b) => a.name.localeCompare(b.name));
   return { trainers };

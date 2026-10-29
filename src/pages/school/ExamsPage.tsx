@@ -29,6 +29,7 @@ import {
 } from '../../../functions/src/shared/exams';
 import { studentAttendance } from '../../../functions/src/shared/school';
 import { commonFinal } from '../../../functions/src/shared/commonCourses';
+import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -399,6 +400,7 @@ function PastResults({ org, students, departments, courseName }: { org: Organiza
   const [dept, setDept] = useState('');
   const [typed, setTyped] = useState<Record<string, { '1': string; '2': string }>>({});
   const [busy, setBusy] = useState(false);
+  const finder = useStudentFinder();
   const pickedCohort = cohort && cohorts.includes(cohort) ? cohort : cohorts[0] ?? '';
   const pickedDept = dept && departments.includes(dept) ? dept : departments[0] ?? '';
   const rows = mine.filter((st) => st.cohort === pickedCohort && st.courseId === pickedDept).sort((x, y) => x.name.localeCompare(y.name));
@@ -445,12 +447,13 @@ function PastResults({ org, students, departments, courseName }: { org: Organiza
               </select>
             )}
           </div>
+          {rows.length > 0 && <StudentFinder finder={finder} names={rows.map((st) => st.name)} shown={rows.filter((st) => finder.match(st.name, st.admissionNo)).length} total={rows.length} />}
           {rows.length === 0 ? <p className="muted">No {courseName(pickedDept)} students in {pickedCohort}.</p> : (
             <div className="table-wrap">
               <table className="data-table past-table">
                 <thead><tr><th>Student</th><th>Admission no.</th><th className="num">Sem 1</th><th className="num">Sem 2</th><th className="num">Final</th></tr></thead>
                 <tbody>
-                  {rows.map((st) => {
+                  {rows.filter((st) => finder.match(st.name, st.admissionNo)).map((st) => {
                     const r = saved.get(st.id);
                     const locked = !!r && r.createdBy !== profile?.uid;
                     const p1 = points(valueOf(st.id, '1'));
@@ -758,6 +761,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
   const [busy, setBusy] = useState('');
   const courseId = scope === COMMON ? null : scope;
   const title = `${courseId == null ? 'Common courses' : courses.find((c) => c.id === courseId)?.name ?? 'Programme'} · ${period}`;
+  const finder = useStudentFinder();
   const report = useMemo(() => buildExamReport(courseId, sheets, students, settings, { remarks: meta.remarks, attendance }), [courseId, sheets, students, settings, meta, attendance]);
   const graded = report.rows.filter((r) => r.average != null);
   const passed = graded.filter((r) => r.average! >= settings.passMark).length;
@@ -827,6 +831,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
         </div>
       )}
 
+      {report.units.length > 0 && report.rows.length > 0 && <StudentFinder finder={finder} names={report.rows.map((x) => x.name)} shown={report.rows.filter((x) => finder.match(x.name, x.admissionNo)).length} total={report.rows.length} />}
       {report.units.length === 0 ? <p className="muted">No {period} courses for this programme yet. Add them in Setup.</p> : (
         <div className="card exam-table-wrap">
           <table className="table exam-table">
@@ -838,7 +843,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
               </tr>
             </thead>
             <tbody>
-              {[...report.rows].sort(byName).map((r) => (
+              {[...report.rows].filter((x) => finder.match(x.name, x.admissionNo)).sort(byName).map((r) => (
                 <tr key={r.studentId}>
                   <td className="num">{r.position ?? '–'}</td>
                   <td>{r.name}<div className="muted small">{courseId == null ? r.programme : ''}</div></td>
@@ -1338,6 +1343,7 @@ function SheetEditor({ org }: { org: Organization }) {
   const { settings } = useExamSettings(org.id);
   const { byName } = useExamCohorts(org.id);
   const act = useSheetActions(org);
+  const finder = useStudentFinder();
 
   if (!a.canMark) return <div className="page narrow"><h1>Marks sheet</h1><p>Exam Records are for trainers and the principal.</p></div>;
   if (!sheet) return <div className="page narrow"><h1>Marks sheet</h1><p className="muted">{loading ? 'Loading…' : 'This class was not found.'}</p><Link to={BASE}>Back to Exam Records</Link></div>;
@@ -1427,11 +1433,13 @@ function SheetEditor({ org }: { org: Organization }) {
         <p className="small muted">Type a mark, <strong>ABS</strong> for absent (counts as 0) or <strong>EX</strong> for exempt. A sent paper is locked.</p>
         {flaggedCount > 0 && <p className="small up-bad">{flaggedCount} {flaggedCount === 1 ? 'student is' : 'students are'} below {settings.minAttendance}% attendance and not eligible for the Final.</p>}
         {roster.length === 0 ? <p className="muted">No enrolled students in {sheet.cohort}{sheet.courseId ? ` for ${s.courseName(sheet.courseId)}` : ''}. Students come from the Students list, by intake.</p> : (
+          <>
+          <StudentFinder finder={finder} names={roster.map((st) => st.name)} shown={roster.filter((st) => finder.match(st.name, st.admissionNo)).length} total={roster.length} />
           <div className="exam-table-wrap">
             <table className="table exam-marks">
               <thead><tr><th>Student</th>{used.map((c) => <th key={c} className="num">{EXAM_COMPONENT_LABELS[c]}<div className="muted small">/{w[c].max}{isLocked(sheet, c) ? ' · sent' : ''}</div></th>)}<th className="num">Total</th><th>Grade</th>{showResit && <th className="num">Resit<div className="muted small">/100</div></th>}</tr></thead>
               <tbody>
-                {roster.map((st) => {
+                {roster.filter((st) => finder.match(st.name, st.admissionNo)).map((st) => {
                   const m = sheet.marks?.[st.id];
                   const u = totals.get(st.id)!;
                   return (
@@ -1460,6 +1468,7 @@ function SheetEditor({ org }: { org: Organization }) {
               </tbody>
             </table>
           </div>
+          </>
         )}
         <p className="muted small">Marks save as you leave each box, even without internet; they send when you are back online. A total in brackets is the running total: the points earned so far out of 100.{showResit ? ` A resit replaces a failed total, up to the pass mark (${settings.passMark}%).` : ''}</p>
       </section>
@@ -1609,6 +1618,7 @@ function CommonFinals({ org }: { org: Organization }) {
   const { settings } = useExamSettings(org.id);
   const s1 = useExamSheet(org.id, one);
   const s2 = useExamSheet(org.id, two);
+  const finder = useStudentFinder();
   const first = s1.sheet;
   if (!a.canMark) return <div className="page narrow"><h1>Finals</h1><p>Exam Records are for trainers and the principal.</p></div>;
   if (!first || !s2.sheet) return <div className="page narrow"><h1>Finals</h1><p className="muted">{s1.loading || s2.loading ? 'Loading…' : 'This course was not found.'}</p><Link to="/attendance">Back to Attendance</Link></div>;
@@ -1623,6 +1633,7 @@ function CommonFinals({ org }: { org: Organization }) {
   });
   const done = rows.filter((r) => r.fin != null).length;
   const n = (v: number | null) => (v == null ? '–' : v.toFixed(1));
+  const listed = rows.filter((r) => finder.match(r.st.name, r.st.admissionNo));
   return (
     <div className="page exams common-finals">
       <Link to="/attendance" className="btn-link">← Attendance</Link>
@@ -1636,13 +1647,14 @@ function CommonFinals({ org }: { org: Organization }) {
         <CsvButton name={`${first.courseName}-${first.cohort}-Finals.csv`.replace(/[^A-Za-z0-9.-]+/g, '-')}
           csv={() => toCsv(['No', 'Admission No', 'Name', 'Semester 1', 'Semester 2', 'Finals', 'Grade'], rows.map((r, i) => [i + 1, r.st.admissionNo, r.st.name, r.a1, r.a2, r.fin, r.grade]))} />
       </div>
+      <StudentFinder finder={finder} names={rows.map((r) => r.st.name)} shown={listed.length} total={rows.length} />
       <div className="table-scroll">
         <table>
           <thead><tr><th>No</th><th>Adm. No</th><th>Name</th><th className="num">Sem 1</th><th className="num">Sem 2</th><th className="num final-col">Finals</th><th>Grade</th></tr></thead>
           <tbody>
-            {rows.map((r, i) => (
+            {listed.map((r) => (
               <tr key={r.st.id}>
-                <td>{i + 1}</td><td>{r.st.admissionNo}</td><td>{r.st.name}</td>
+                <td>{rows.indexOf(r) + 1}</td><td>{r.st.admissionNo}</td><td>{r.st.name}</td>
                 <td className="num">{n(r.a1)}</td><td className="num">{n(r.a2)}</td>
                 <td className="num final-col">{r.fin == null ? <span className="muted small">{r.a1 == null && r.a2 == null ? '–' : 'Incomplete'}</span> : n(r.fin)}</td>
                 <td>{r.grade}</td>

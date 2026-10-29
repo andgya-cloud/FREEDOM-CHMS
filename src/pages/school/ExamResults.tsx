@@ -1,4 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { readSpreadsheetSheets } from '../../lib/statementFile';
@@ -28,6 +29,7 @@ export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, stu
   const { results: cohortResults } = useExamResults(org.id, cohort);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const finder = useStudentFinder();
   const rows = useMemo(() => buildRows(cohort, students, cohortResults, sheets, settings, courseName), [cohort, students, cohortResults, sheets, settings, courseName]);
   const counts = { provisional: rows.filter((r) => r.sems.some((x) => x.provisional)).length, done: rows.filter((r) => r.final.complete).length, incomplete: rows.filter((r) => !r.final.complete).length, differ: rows.filter((r) => printedDiffers(r.printed, r.final.final, settings)).length };
   const byGrade = (g: string) => rows.filter((r) => r.final.grade === g).length;
@@ -59,11 +61,12 @@ export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, stu
                 rows.map((r) => [r.admissionNo, r.name, r.programme, r.sems[0].points ?? '', r.sems[1].points ?? '', r.final.final ?? '', r.final.grade, r.printed?.points ?? '', r.printed?.grade ?? '',
                   r.printed ? (printedDiffers(r.printed, r.final.final, settings) ? 'No' : 'Yes') : '']))} />
             </div>
+            <StudentFinder finder={finder} names={rows.map((r) => r.name)} shown={rows.filter((r) => finder.match(r.name, r.admissionNo)).length} total={rows.length} />
             <div className="exam-table-wrap">
               <table className="table">
                 <thead><tr><th>Student</th><th className="num">Sem 1</th><th className="num">Sem 2</th><th className="num">Final</th><th>Grade</th><th>Printed list</th><th className="no-print" /></tr></thead>
                 <tbody>
-                  {rows.map((r) => (
+                  {rows.filter((r) => finder.match(r.name, r.admissionNo)).map((r) => (
                     <tr key={r.key}>
                       <td>{r.name}<div className="muted small">{r.admissionNo} · {r.programme}</div></td>
                       {r.sems.map((s, i) => <td key={i} className="num">{s.points != null ? <>{s.points}{s.provisional && <div className="muted small">provisional</div>}</> : s.partial != null ? <span className="muted">({s.partial})</span> : '–'}</td>)}

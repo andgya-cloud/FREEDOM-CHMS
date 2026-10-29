@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -19,9 +20,12 @@ export function FeesPage() {
 function Fees({ org }: { org: Organization }) {
   const s = useSchoolPage(org);
   const { can } = useAuth();
+  const finder = useStudentFinder();
   if (!s.feesAllowed) return <div className="page narrow"><h1>Fees</h1><p>Fees are for the pastor and the people the pastor has given access.</p></div>;
 
   const arrears = arrearsList(s.balances, s.today);
+  const admOf = (id: string) => s.students.find((x) => x.id === id)?.admissionNo ?? '';
+  const listed = arrears.filter((a) => finder.match(s.nameOf(a.studentId), admOf(a.studentId)));
   const billed = s.balances.reduce((a, b) => a + b.billedCents, 0);
   const paid = s.balances.reduce((a, b) => a + b.paidCents, 0);
 
@@ -45,9 +49,10 @@ function Fees({ org }: { org: Organization }) {
 
       <section className="card stack">
         <div className="card-head"><h2>Arrears</h2>{arrears.length > 0 && <button type="button" className="btn btn-quiet" onClick={download}>Download</button>}</div>
+        {arrears.length > 8 && <StudentFinder finder={finder} names={arrears.map((a) => s.nameOf(a.studentId))} shown={listed.length} total={arrears.length} />}
         {arrears.length === 0 ? <p className="muted">Nobody owes fees.</p> : (
           <ul className="link-list">
-            {arrears.map((a) => (
+            {listed.map((a) => (
               <li key={a.studentId}><Link to={`/school/students/${a.studentId}`}><span className="link-title">{s.nameOf(a.studentId)}</span><span className="link-detail">{money(org, a.balanceCents)}{a.overdue ? ' · overdue' : ''}</span></Link></li>
             ))}
           </ul>

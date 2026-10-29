@@ -1,4 +1,5 @@
 import { useState, type ChangeEvent } from 'react';
+import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -35,6 +36,8 @@ function Graduation({ org }: { org: Organization }) {
   const candidates = s.students.filter((st) => st.status === 'enrolled').map((st) => ({ st, name: s.nameOf(st.id) })).sort((a, b) => a.name.localeCompare(b.name));
   const picked = s.students.find((x) => x.id === studentId);
   const register = [...s.certificates].sort((a, b) => b.issuedOn.localeCompare(a.issuedOn));
+  const finder = useStudentFinder();
+  const listed = register.filter((c) => finder.match(s.nameOf(c.studentId), s.students.find((x) => x.id === c.studentId)?.admissionNo ?? ''));
   const { byName: classes } = useExamCohorts(org.id);
   /** "Cohort 1 · Class of 2025": each graduating class is dated (Andy, 2026-10-25). */
   const classFor = (studentId: string, issuedOn: string) => {
@@ -69,13 +72,16 @@ function Graduation({ org }: { org: Organization }) {
       <section className="card stack">
         <div className="card-head"><h2>Certificates</h2>{register.length > 0 && <button type="button" className="btn btn-quiet" onClick={registerCsv}>Download</button>}</div>
         {register.length === 0 ? <p className="muted small">No certificates issued yet.</p> : (
+          <>
+          {register.length > 8 && <StudentFinder finder={finder} names={register.map((c) => s.nameOf(c.studentId))} shown={listed.length} total={register.length} />}
           <div className="table-scroll">
             <table className="report-table">
               <thead><tr><th>Serial</th><th>Name</th><th>Programme</th><th>Class</th><th>Issued</th><th>Certificate</th></tr></thead>
-              <tbody>{register.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td><Link to={`/school/students/${c.studentId}`}>{s.nameOf(c.studentId)}</Link></td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td>
+              <tbody>{listed.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td><Link to={`/school/students/${c.studentId}`}>{s.nameOf(c.studentId)}</Link></td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td>
                 <td><CertificateActions orgId={org.id} cert={c} canManage={canFiles} email={s.byId(c.studentId)?.email} compact /></td></tr>)}</tbody>
             </table>
           </div>
+          </>
         )}
       </section>
 

@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { AzBar } from './StudentFinder';
+import { initialOf } from '../lib/studentSearch';
 import { Link } from 'react-router-dom';
 import { usePeople, type Person } from '../state/PeopleContext';
 import { useToast } from '../state/ToastContext';
@@ -49,6 +51,7 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, r
   const toast = useToast();
   const saved = useSavedMessage();
   const [filter, setFilter] = useState('');
+  const [letter, setLetter] = useState('');
   const [extraIds, setExtraIds] = useState<string[]>([]);
 
   // The class list: students (or the roster given), plus anyone already marked or added here.
@@ -59,7 +62,7 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, r
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
   }, [people, byPerson, extraIds, org.id, spec, rosterOnly]);
   const find = rosterOnly ? (p: Person, text: string) => p.fullName.toLowerCase().includes(text.trim().toLowerCase()) : spec?.search ?? matchesSearch;
-  const shown = filter.trim().length >= 2 ? roster.filter((p) => find(p, filter)) : roster;
+  const shown = (filter.trim().length >= 2 ? roster.filter((p) => find(p, filter)) : roster).filter((p) => !letter || initialOf(p.fullName) === letter);
   const others = !rosterOnly && filter.trim().length >= 2
     ? people.filter((p) => p.orgId === org.id && !roster.includes(p) && find(p, filter)).slice(0, 5)
     : [];
@@ -101,6 +104,7 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, r
             setFilter('');
           } else toast.show(shown.length === 0 ? 'Nobody with that name or code is on this list.' : 'More than one match. Tap the right name.');
         }} />
+      {roster.length > 8 && <AzBar names={roster.map((p) => p.fullName)} letter={letter} onLetter={setLetter} onAll={letter ? () => setLetter('') : undefined} />}
       {roster.length === 0 && filter.trim().length < 2 && (rosterOnly ? <p className="muted">No students are on this class list yet.</p> : spec ? <p className="muted">{spec.empty}</p> : (
         <p className="muted">No students yet. Add people with the status Student in <Link to="/people/new">People</Link>, or search above to add someone to this class.</p>
       ))}
