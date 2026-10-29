@@ -1546,3 +1546,11 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .az-all { padding: 0 10px; }
 .finder-count { margin: 0; }
 @media (max-width: 560px) { .az { min-width: 24px; height: 26px; padding: 0 4px; font-size: 0.75rem; } }
+/* The editable common course list (Andy, 2026-10-29). */
+.manage-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.manage-list li { display: grid; grid-template-columns: 1fr minmax(170px, 240px) auto; gap: 8px; align-items: center; }
+@media (max-width: 560px) { .manage-list li { grid-template-columns: 1fr auto; } .manage-list li select { grid-column: 1 / -1; grid-row: 2; } }
+.my-common h2 { margin-top: 0; }
+.my-common-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.my-common-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.my-common-list li:last-child { border-bottom: 0; }

@@ -30,6 +30,7 @@ import {
 import { studentAttendance } from '../../../functions/src/shared/school';
 import { commonFinal } from '../../../functions/src/shared/commonCourses';
 import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
+import { MyCommonCourses } from '../attendance/CommonCourses';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -348,6 +349,7 @@ function MyClasses({ org, studentsOf, allStudents, courseName }: { org: Organiza
   return (
     <div className="page narrow exams">
       <div className="page-head"><h1>My classes</h1></div>
+      <MyCommonCourses orgId={org.id} />
       {departments && departments.length === 0 && <div className="notice">Your department hasn't been set yet. Ask the office to set it on your account; your students and classes then show here.</div>}
       <p className="muted">Tap a class to key in marks or upload them from Excel. When a CAT's marks are in, send it to the principal; it locks.</p>
       {sheets.length === 0 ? <p className="muted">{loading ? 'Loading…' : 'No classes yet. The principal sets up the courses and gives each one to its trainer; yours will show here.'}</p> : cohorts.map((c) => {

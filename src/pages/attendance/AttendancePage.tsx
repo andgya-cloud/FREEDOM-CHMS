@@ -2,8 +2,8 @@ import { useSchool } from '../../state/useSchool';
 import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type ExamSheetRow } from '../../state/useExams';
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
-import { useState, type FormEvent } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
@@ -78,6 +78,10 @@ export function AttendancePage() {
   const commonRegisters = [...new Set(commonSheets.map((sh) => commonClassName(sh.courseName, sh.cohort)))].sort();
   const commonNames = new Set(commonSheets.map((sh) => sh.courseName.trim().toLowerCase()));
   const [commonOpen, setCommonOpen] = useState(false);
+  // "Register" on a tutor's My common courses card opens that register here (Andy, 2026-10-29, 6B).
+  const pending = (useLocation().state as { register?: string } | null)?.register;
+  const openRef = useRef<((name: string) => void) | null>(null);
+  useEffect(() => { if (pending && !loading && openRef.current) openRef.current(pending); }, [pending, loading]);
   // Cohorts newest first: the intakes, and any cohort a common course names.
   const commonCohorts = trainer
     ? [...new Set(commonSheets.map((sh) => sh.cohort))].sort((x, y) => y.localeCompare(x, undefined, { numeric: true }))
@@ -134,6 +138,8 @@ export function AttendancePage() {
     }
     navigate(`/attendance/${org.id}/${id}`);
   }
+
+  openRef.current = open;
 
   function openOther(e: FormEvent) {
     e.preventDefault();

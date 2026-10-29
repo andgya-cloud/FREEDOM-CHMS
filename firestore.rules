@@ -1702,8 +1702,9 @@ service cloud.firestore {
       match /examSettings/{settingId} {
         allow read: if ex('exams.manage') || ex('exams.mark');
         allow create, update: if ex('exams.manage') && settingId == 'main'
-          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList', 'minAttendance',
+          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList', 'minAttendance', 'commonCourses',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('commonCourses' in request.resource.data) || (request.resource.data.commonCourses is list && request.resource.data.commonCourses.size() <= 40))
           && (!('minAttendance' in request.resource.data) || request.resource.data.minAttendance == null
               || (request.resource.data.minAttendance is number && request.resource.data.minAttendance >= 0 && request.resource.data.minAttendance <= 100))
           && (!('courseList' in request.resource.data) || listOf(request.resource.data.courseList, 400))

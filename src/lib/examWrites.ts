@@ -81,6 +81,9 @@ export function saveExamRemark(orgId: string, cohort: string, exists: boolean, s
 
 export function saveExamSettings(orgId: string, exists: boolean, settings: ExamSettings) {
   const ref = doc(db, 'organizations', orgId, 'examSettings', 'main');
+  // Settings read from the database carry the document's id, which is not a field to write back.
+  const { id: _id, ...fields } = settings as ExamSettings & { id?: string };
+  settings = fields;
   if (exists) return updateRecord(ref, { orgId, ...settings });
   return trackWrite(setDoc(ref, { orgId, ...settings, ...createStamps() }));
 }

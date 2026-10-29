@@ -1,4 +1,5 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
+import { MyCommonCourses } from '../attendance/CommonCourses';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -105,6 +106,7 @@ export function AdiaToday({ org }: { org: Organization }) {
 
   return (
     <div className="page lav-today">
+      <MyCommonCourses orgId={org.id} />
       {needsSetup && (
         <section className="card stack">
           <h2>Set up the school</h2>

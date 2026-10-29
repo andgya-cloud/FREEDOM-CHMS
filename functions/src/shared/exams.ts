@@ -101,6 +101,8 @@ export interface ExamSettings {
   courseList?: CourseListItem[];
   /** Students below this attendance (%) are flagged "Not eligible" for the Final (Andy, 2026-10-25, 7A). Absent or null: no rule. */
   minAttendance?: number | null;
+  /** ADIA's common courses and their tutors (Andy, 2026-10-29), edited on the Common courses card. Absent until first saved. */
+  commonCourses?: { name: string; tutorUid: string; tutorName: string }[];
 }
 /** ADIA's grade bands (Andy, 2026-10-24): Distinction 79 and above, Credit above 59, Pass 39 to 59, Fail below 39. */
 export const ADIA_BANDS: GradeBand[] = [

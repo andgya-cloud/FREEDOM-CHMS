@@ -57,3 +57,54 @@ export function matchTutor<T extends { name: string }>(names: string[], people: 
   }
   return undefined;
 }
+
+/** One common course on ADIA's own list (Andy, 2026-10-29): its name and its tutor. Kept in examSettings.commonCourses. */
+export interface CommonCourseItem { name: string; tutorUid: string; tutorName: string }
+
+/** The list as saved, or Andy's seven courses with each usual tutor found among the accounts, until it is first saved. */
+export function commonCourseList<T extends { uid: string; name: string }>(saved: CommonCourseItem[] | null | undefined, tutors: T[]): CommonCourseItem[] {
+  if (saved) return saved;
+  return STANDARD_COMMON_COURSES.map((c) => {
+    const t = matchTutor(c.tutor, tutors);
+    return { name: c.name, tutorUid: t?.uid ?? '', tutorName: t?.name ?? '' };
+  });
+}
+
+export interface CommonSheet { id: string; cohort: string; courseName: string; ownerUid: string; semester: 1 | 2 | null; hasMarks: boolean }
+export type CommonChange =
+  | { kind: 'add'; cohort: string; name: string; semester: 1 | 2; tutorUid: string; tutorName: string }
+  | { kind: 'move'; sheetId: string; cohort: string; name: string; tutorUid: string; tutorName: string }
+  | { kind: 'rename'; sheetId: string; cohort: string; name: string; from: string }
+  | { kind: 'remove'; sheetId: string; cohort: string; name: string };
+
+/**
+ * What saving the list changes in the open cohorts (Andy, 2026-10-29, 3A 4A 5AB): a new course is added to every
+ * open cohort (Semester 1 and 2); a new tutor takes the course over, marks kept; a renamed course keeps its sheets;
+ * a course taken off the list leaves the open cohorts where no marks are in yet, and stays where there are marks.
+ * `renamed` maps a new name to the name it had before.
+ */
+export function planCommonChanges(before: CommonCourseItem[], after: CommonCourseItem[], renamed: Record<string, string>, openCohorts: string[], sheets: CommonSheet[]): CommonChange[] {
+  const k = (s: string) => courseKey(s);
+  const out: CommonChange[] = [];
+  const kept = new Set(after.map((c) => k(renamed[c.name] ?? c.name)));
+  for (const cohort of openCohorts) {
+    const here = sheets.filter((s) => s.cohort === cohort);
+    for (const c of after) {
+      const old = renamed[c.name] ?? c.name;
+      const mine = here.filter((s) => k(s.courseName) === k(old) || k(s.courseName) === k(c.name));
+      for (const s of mine) {
+        if (k(s.courseName) !== k(c.name)) out.push({ kind: 'rename', sheetId: s.id, cohort, name: c.name, from: s.courseName });
+        if (c.tutorUid && s.ownerUid !== c.tutorUid) out.push({ kind: 'move', sheetId: s.id, cohort, name: c.name, tutorUid: c.tutorUid, tutorName: c.tutorName });
+      }
+      if (!c.tutorUid) continue;
+      for (const semester of [1, 2] as const) {
+        if (!mine.some((s) => s.semester === semester)) out.push({ kind: 'add', cohort, name: c.name, semester, tutorUid: c.tutorUid, tutorName: c.tutorName });
+      }
+    }
+    for (const b of before) {
+      if (kept.has(k(b.name))) continue;
+      for (const s of here) if (k(s.courseName) === k(b.name) && !s.hasMarks) out.push({ kind: 'remove', sheetId: s.id, cohort, name: s.courseName });
+    }
+  }
+  return out;
+}
