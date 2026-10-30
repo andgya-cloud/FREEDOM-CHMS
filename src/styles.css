@@ -1438,7 +1438,7 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .adia-intro-skip { position: absolute; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); font: inherit; font-size: 0.8rem; font-weight: 600; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(210, 167, 75, 0.6); border-radius: 999px; padding: 8px 18px; cursor: pointer; transition: opacity 0.4s; }
 /* Getting started sits on a photo of an ADIA class (Andy, 2026-10-26). */
 /* v108: Andy's sunrise video behind Getting started, replaying every ten seconds (SceneVideo.tsx). */
-.look-glass .lav-scene { background: url('/adia-scene.jpg') center / cover no-repeat, #1f2a5c; }
+.look-glass .lav-scene { background: url('/adia-crest-scene.jpg') center / cover no-repeat, #1f2a5c; }
 .look-glass .lav-scene .lav-scene-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .look-glass .lav-scene::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(15, 24, 56, 0) 40%, rgba(15, 24, 56, 0.45) 100%); }
 .look-glass .lav-scene .lav-tag, .look-glass .lav-scene .lav-steps { z-index: 1; }
