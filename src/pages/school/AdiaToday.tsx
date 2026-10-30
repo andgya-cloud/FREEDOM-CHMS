@@ -134,7 +134,7 @@ export function AdiaToday({ org }: { org: Organization }) {
       <section className="card lav-hero">
         <div className="lav-hero-text">
           <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: org.timeZone || 'Africa/Nairobi' }).format(new Date())}</span>
-          <h1>{greet}</h1>
+          <h1 className="lav-greet">{greet}</h1>
           <p className="lav-org"><em>{org.name}</em></p>
           <p>{summary}</p>
         </div>
