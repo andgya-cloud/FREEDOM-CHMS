@@ -3,13 +3,13 @@ import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { canKeepAccounts, type Permission } from '../../../functions/src/shared/permissions';
 
-const ITEMS: { to: string; label: string; detail: string; permission?: Permission; orPermission?: Permission; keepersOnly?: boolean; petty?: boolean; churchOnly?: boolean }[] = [
+const ITEMS: { to: string; label: string; detail: string; permission?: Permission; orPermission?: Permission; keepersOnly?: boolean; petty?: boolean; churchOnly?: boolean; collegeOnly?: boolean }[] = [
   { to: '/settings/organizations', label: 'Organizations', detail: 'Campuses, the college and ministries', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/pipeline', label: 'Journey stages', detail: 'Visitor, Salvation, Baptism, Growth Track…', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/custom-fields', label: 'Extra fields', detail: 'Your own fields on every person', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/funds', label: 'Funds', detail: 'Tithes, Offerings and other funds for giving', permission: 'settings.manage' },
-  { to: '/school/courses', label: 'Departments', detail: 'ADIA departments and their cohorts', permission: 'settings.manage', orPermission: 'school.manage' },
-  { to: '/school/settings', label: 'School settings', detail: 'ADIA grading scale, pass mark, attendance alert and director', permission: 'settings.manage' },
+  { collegeOnly: true, to: '/school/courses', label: 'Departments', detail: 'ADIA departments and their cohorts', permission: 'settings.manage', orPermission: 'school.manage' },
+  { collegeOnly: true, to: '/school/settings', label: 'School settings', detail: 'ADIA grading scale, pass mark, attendance alert and director', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/templates', label: 'WhatsApp messages', detail: 'The words for welcomes, check-ins, care and receipts', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/whatsapp', label: 'WhatsApp automation', detail: 'Let welcomes and check-ins send themselves, with your approval first', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/reports', label: 'Reports', detail: 'Regular attenders, who gets reports by email, giving budget', permission: 'settings.manage' },
@@ -33,7 +33,7 @@ export function SettingsPage() {
     <div className="page">
       <h1>Settings</h1>
       <ul className="link-list">
-        {ITEMS.filter((i) => !(college && i.churchOnly) && (!i.keepersOnly || canKeepAccounts(profile)) && (!i.petty || PETTY_PERMS.some((x) => can(x)) || can('users.manage')) && (!i.permission || can(i.permission) || (!!i.orPermission && can(i.orPermission)))).map((i) => (
+        {ITEMS.filter((i) => !(college && i.churchOnly) && !(!college && i.collegeOnly) && (!i.keepersOnly || canKeepAccounts(profile)) && (!i.petty || PETTY_PERMS.some((x) => can(x)) || can('users.manage')) && (!i.permission || can(i.permission) || (!!i.orPermission && can(i.orPermission)))).map((i) => (
           <li key={i.to}>
             <Link to={i.to}>
               <span className="link-title">{i.label}</span>
