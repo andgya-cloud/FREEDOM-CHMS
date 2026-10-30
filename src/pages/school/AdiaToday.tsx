@@ -13,6 +13,9 @@ import { LineChart, Sparkline } from '../../components/charts';
 import { SceneVideo } from '../../components/SceneVideo';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
+import { usePettyCashAccess } from '../../state/usePettyCash';
+import { usePayrollAccess } from '../../state/usePayroll';
+import { useInventoryAccess } from '../../state/useInventory';
 import { money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -43,6 +46,9 @@ function lastWeeks(today: string): { from: string; to: string; label: string }[]
 export function AdiaToday({ org }: { org: Organization }) {
   const s = useSchoolPage(org);
   const { can } = useAuth();
+  const petty = usePettyCashAccess();
+  const payroll = usePayrollAccess();
+  const inventory = useInventoryAccess();
   const { funds } = useFunds(org.id);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -96,11 +102,17 @@ export function AdiaToday({ org }: { org: Organization }) {
   const summary = `${metrics.enrolled} ${metrics.enrolled === 1 ? 'student is' : 'students are'} enrolled across ${depts.length} ${depts.length === 1 ? 'department' : 'departments'}.`
     + (thisWeek == null ? ' Mark today’s register to start tracking the weekly attendance trend.' : ` Attendance this week is ${thisWeek}%.`);
   const canRegister = can('attendance.write') || can('people.read');
-  const actions: { to: string; icon: AdiaIconName; label: string; sub: string; go: string; tone: number; show: boolean }[] = [
-    { to: '/attendance', icon: 'register', label: 'Class register', sub: 'Mark today’s attendance', go: 'Open', tone: 1, show: canRegister },
-    { to: '/school/students/new', icon: 'addStudent', label: 'Add student', sub: 'Enrol into a cohort', go: 'Start', tone: 2, show: can('people.write') },
-    { to: '/school/fees', icon: 'fees', label: 'Record fees', sub: 'M-Pesa or cash receipt', go: 'Record', tone: 3, show: s.feesAllowed },
-    { to: '/school/exams', icon: 'exams', label: 'Exam Records', sub: 'Marks and result slips', go: 'View', tone: 4, show: can('exams.mark') || can('exams.manage') || can('users.manage') },
+  // Big buttons for this person's own jobs only (Andy, 2026-10-30, 1A): what they came to do, in plain words.
+  const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
+    { to: '/attendance', icon: 'register', label: 'Mark register', sub: 'Who came to class today', show: canRegister },
+    { to: '/school/exams', icon: 'exams', label: can('exams.manage') || can('users.manage') ? 'Exam Records' : 'Enter marks', sub: 'CATs, finals and results', show: can('exams.mark') || can('exams.manage') || can('users.manage') },
+    { to: '/school/students', icon: 'people', label: 'Find a student', sub: 'By name or admission number', show: can('people.read') },
+    { to: '/school/students/new', icon: 'addStudent', label: 'Add a student', sub: 'Enrol into a cohort', show: can('people.write') },
+    { to: '/school/fees', icon: 'fees', label: 'Record fees', sub: 'M-Pesa or cash', show: s.feesAllowed },
+    { to: '/school/petty-cash/new', icon: 'pettyCash', label: 'New requisition', sub: 'Ask for petty cash', show: petty.canRequest },
+    { to: '/school/petty-cash', icon: 'pettyCash', label: 'Sign requisitions', sub: 'Approve what is waiting', show: petty.canSign },
+    { to: '/school/payroll', icon: 'payroll', label: 'Payroll', sub: 'This month’s pay', show: payroll.any },
+    { to: '/inventory', icon: 'inventory', label: 'Inventory', sub: 'Count your department’s items', show: inventory.counts },
   ];
   const attendanceChange = thisWeek != null && lastWeek != null ? Math.round(thisWeek - lastWeek) : null;
 
@@ -110,9 +122,9 @@ export function AdiaToday({ org }: { org: Organization }) {
       {needsSetup && (
         <section className="card stack">
           <h2>Set up the school</h2>
-          <p className="small">This adds the four programmes ({ADIA_PROGRAMMES.join(', ')}), the grading settings and a School fees fund. Levels, units, trainers and timetables are for the school to enter. Nothing else is filled in for you.</p>
+          <p className="small">This adds the four departments ({ADIA_PROGRAMMES.join(', ')}), the grading settings and a School fees fund. Levels, units, trainers and timetables are for the school to enter. Nothing else is filled in for you.</p>
           {can('settings.manage') ? <button type="button" className="btn btn-primary align-start" disabled={busy} onClick={() => void setup()}>{busy ? 'Setting up…' : 'Set up now'}</button>
-            : <p className="muted small">Ask the pastor to set this up.</p>}
+            : <p className="muted small">Ask the Director to set this up.</p>}
         </section>
       )}
 
@@ -121,10 +133,6 @@ export function AdiaToday({ org }: { org: Organization }) {
           <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: org.timeZone || 'Africa/Nairobi' }).format(new Date())}</span>
           <h1>{greet},<br /><em>{org.name}</em></h1>
           <p>{summary}</p>
-          <div className="lav-cta">
-            {canRegister && <Link to="/attendance" className="lav-btn dark">Open class register</Link>}
-            {can('people.write') && <Link to="/school/students/new" className="lav-btn ghost">Add student</Link>}
-          </div>
         </div>
         <div className="lav-scene">
           <SceneVideo />
@@ -132,16 +140,24 @@ export function AdiaToday({ org }: { org: Organization }) {
         </div>
       </section>
 
-      <section className="lav-quick" aria-label="Quick actions">
-        {actions.filter((a) => a.show).map((a) => (
-          <Link key={a.to} to={a.to} className="card lav-qa">
-            <span className={`lav-ico i${a.tone}`}><AdiaIcon name={a.icon} /></span>
-            <span><b>{a.label}</b><span className="lav-sub">{a.sub}</span></span>
-            <span className="lav-go">{a.go} →</span>
-          </Link>
-        ))}
+      <section className="lav-jobs" aria-label="What do you want to do?">
+        <h2>What do you want to do?</h2>
+        <div className="lav-jobs-grid">
+          {jobs.filter((j) => j.show).map((j, i) => (
+            <Link key={j.to} to={j.to} className="card lav-job">
+              <span className={`lav-ico i${(i % 4) + 1}`}><AdiaIcon name={j.icon} /></span>
+              <b>{j.label}</b>
+              <span className="lav-sub">{j.sub}</span>
+            </Link>
+          ))}
+        </div>
       </section>
 
+      {can('people.read') && (
+        <details className="lav-figs">
+          <summary><span className="lav-ico small i5"><AdiaIcon name="trend" /></span><b>See figures</b><span className="lav-sub">Students, attendance, fees and charts</span>
+            <svg className="lav-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></summary>
+          <div className="lav-figs-body">
       <section className="lav-kpis" aria-label="ADIA key figures">
         <Kpi to="/school/students" label="Students enrolled" chip={`${depts.length} ${depts.length === 1 ? 'dept' : 'depts'}`} value={String(metrics.enrolled)}
           sub={`${statusCount('applicant')} ${statusCount('applicant') === 1 ? 'applicant' : 'applicants'} waiting`} />
@@ -188,12 +204,15 @@ export function AdiaToday({ org }: { org: Organization }) {
       </section>
 
       <StatusDonut rows={STUDENT_STATUSES.map((k) => ({ label: STUDENT_STATUS_LABELS[k], value: statusCount(k) }))} />
+          </div>
+        </details>
+      )}
 
-      <section className="stack">
+      {can('people.read') && <section className="stack">
         <div className="lav-head"><div><h2>Needs attention</h2><p className="lav-sub">Lists that update as records come in</p></div></div>
         <div className="lav-watch">
           <Watch icon="cohorts" tone={1} title="Students in each cohort and department" badge={`${placesIn(intakes)} places`}>
-            {intakes.length === 0 ? <p className="muted small">No intakes yet. Add one under <Link to="/school/courses">Settings → Programmes</Link>.</p> : (
+            {intakes.length === 0 ? <p className="muted small">No cohorts yet. Add one under <Link to="/school/courses">Settings → Departments</Link>.</p> : (
               <div className="exam-table-wrap">
                 <table className="table">
                   <thead><tr><th>Cohort</th>{deptIds.map((id) => <th key={id} className="num">{s.courseName(id)}</th>)}<th className="num">Total</th></tr></thead>
@@ -252,7 +271,7 @@ export function AdiaToday({ org }: { org: Organization }) {
             )}
           </Watch>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

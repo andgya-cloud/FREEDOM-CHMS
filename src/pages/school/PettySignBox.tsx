@@ -98,11 +98,11 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
       {loadError && <p className="small danger-text">{loadError} <button type="button" className="btn btn-quiet" onClick={() => setReload((n) => n + 1)}>Try again</button></p>}
       <div className="petty-signer-row">
         {!keeper ? (
-          <label className="field"><span>Stakeholder</span>
+          <label className="field"><span>Signer</span>
             <input value={signers ? (chosen ? chosen.name : 'You have already signed this, or you cannot sign it') : 'Loading…'} readOnly disabled />
           </label>
         ) : (
-        <label className="field"><span>Stakeholder</span>
+        <label className="field"><span>Signer</span>
           <select value={chosen?.uid ?? ''} onChange={(e) => { setUid(e.target.value); setPin(''); }} disabled={busy || !signers}>
             <option value="">{signers ? (choices.length ? 'Choose your name' : 'Nobody else can sign this') : 'Loading names…'}</option>
             {choices.map((s) => <option key={s.uid} value={s.uid} disabled={lockedOut(s)}>{s.name}{lockedOut(s) ? ' (signs from his own account)' : s.title ? ` (${s.title})` : ''}</option>)}

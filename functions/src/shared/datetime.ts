@@ -89,13 +89,15 @@ export function monthContaining(date: Date, timeZone = DEFAULT_TIME_ZONE): Perio
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-/** DD/MM/YYYY */
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "1 Sep 2026": every date is written this one way (Andy, 2026-10-30, 9A). */
 export function formatDate(date: Date, timeZone = DEFAULT_TIME_ZONE): string {
   const p = zonedParts(date, timeZone);
-  return `${pad(p.day)}/${pad(p.month)}/${p.year}`;
+  return `${p.day} ${MONTHS[p.month - 1]} ${p.year}`;
 }
 
-/** DD/MM/YYYY HH:MM (24-hour) */
+/** "1 Sep 2026 14:05" (24-hour) */
 export function formatDateTime(date: Date, timeZone = DEFAULT_TIME_ZONE): string {
   const p = zonedParts(date, timeZone);
   return `${formatDate(date, timeZone)} ${pad(p.hour)}:${pad(p.minute)}`;
@@ -123,8 +125,8 @@ export function localDateKey(date: Date = new Date(), timeZone = DEFAULT_TIME_ZO
   return `${p.year}-${pad(p.month)}-${pad(p.day)}`;
 }
 
-/** YYYY-MM-DD -> DD/MM/YYYY; empty for anything else. */
+/** YYYY-MM-DD -> "1 Sep 2026"; empty for anything else. */
 export function formatDateKey(key: string | null | undefined): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(key ?? '');
-  return m ? `${m[3]}/${m[2]}/${m[1]}` : '';
+  return m && Number(m[2]) >= 1 && Number(m[2]) <= 12 ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : '';
 }

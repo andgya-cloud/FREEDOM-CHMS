@@ -11,7 +11,7 @@ export const IMPORT_FIELDS = ['name', 'admissionNo', 'idNumber', 'phone', 'gende
 export type ImportField = (typeof IMPORT_FIELDS)[number];
 
 /** The column titles in the template, in order. */
-export const IMPORT_TEMPLATE_HEAD = ['Name', 'Admission no', 'Phone', 'Gender', 'Programme', 'Intake', 'Level', 'Status', 'Start date', 'Sponsor name', 'Sponsor phone', 'Sponsor relation'];
+export const IMPORT_TEMPLATE_HEAD = ['Name', 'Admission no', 'Phone', 'Gender', 'Department', 'Cohort', 'Level', 'Status', 'Start date', 'Sponsor name', 'Sponsor phone', 'Sponsor relation'];
 
 /** Other titles people commonly use for the same column (lower case, letters and digits only). */
 const ALIASES: Record<ImportField, string[]> = {
@@ -229,7 +229,7 @@ export function planStudentImport(
     if (!found) { if (sheet.rows.some((r) => r.some((c) => text(c)))) sheetsSkipped.push(sheet.name || 'the file'); continue; }
     anySheet = true;
     const { headerRow, columns, nameParts } = found;
-    for (const f of ['programme', 'intake'] as const) if (columns[f] == null && !defaults[f] && !(f === 'intake' && columns.admissionNo != null)) missing.add(f === 'programme' ? 'Programme' : 'Intake');
+    for (const f of ['programme', 'intake'] as const) if (columns[f] == null && !defaults[f] && !(f === 'intake' && columns.admissionNo != null)) missing.add(f === 'programme' ? 'Department' : 'Cohort');
     const cell = (r: readonly ImportCell[], f: ImportField) => (columns[f] == null ? null : r[columns[f]!]);
 
     sheet.rows.forEach((r, i) => {

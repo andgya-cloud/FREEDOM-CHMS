@@ -21,7 +21,7 @@ function Fees({ org }: { org: Organization }) {
   const s = useSchoolPage(org);
   const { can } = useAuth();
   const finder = useStudentFinder();
-  if (!s.feesAllowed) return <div className="page narrow"><h1>Fees</h1><p>Fees are for the pastor and the people the pastor has given access.</p></div>;
+  if (!s.feesAllowed) return <div className="page narrow"><h1>Fees</h1><p>Fees are for the Director and the people the Director has given access.</p></div>;
 
   const arrears = arrearsList(s.balances, s.today);
   const admOf = (id: string) => s.students.find((x) => x.id === id)?.admissionNo ?? '';
@@ -34,7 +34,7 @@ function Fees({ org }: { org: Organization }) {
       const st = s.students.find((x) => x.id === a.studentId);
       return [st?.admissionNo ?? '', s.nameOf(a.studentId), st ? s.courseName(st.courseId) : '', (a.balanceCents / 100).toFixed(2), a.overdue ? 'Overdue' : ''];
     });
-    downloadFile(csvFile(`Fee arrears ${s.today}.csv`, [['Admission number', 'Name', 'Programme', 'Balance', 'Overdue'], ...rows]));
+    downloadFile(csvFile(`Fee arrears ${s.today}.csv`, [['Admission number', 'Name', 'Department', 'Balance', 'Overdue'], ...rows]));
   }
 
   return (
@@ -97,7 +97,7 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
     const ids = s.students.filter((st) => st.intakeId === intakeId && st.status === 'enrolled').map((st) => st.id);
     const { count, synced } = billStudents(org.id, ids, parsed, label.trim().slice(0, 60), due || null, intakeId, existing);
     synced.catch((err) => toast.show(friendlyError(err)));
-    toast.show(count ? `${count} bill${count === 1 ? '' : 's'} made` : 'Everyone in this intake already has this bill.');
+    toast.show(count ? `${count} bill${count === 1 ? '' : 's'} made` : 'Everyone in this cohort already has this bill.');
   }
 
   return (
@@ -106,12 +106,12 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
       <div className="stack">
       <Link to="/giving/import" className="btn btn-quiet align-start">Import Paybill statement</Link>
       <div className="field-row">
-        <label className="field"><span>Programme</span>
+        <label className="field"><span>Department</span>
           <select value={courseId} onChange={(e) => { setCourseId(e.target.value); setIntakeId(''); setLoadedFor(''); }}>
             <option value="">Choose…</option>{s.courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
-        <label className="field"><span>Intake</span>
+        <label className="field"><span>Cohort</span>
           <select value={intakeId} onChange={(e) => { setIntakeId(e.target.value); setLoadedFor(''); }}>
             <option value="">Choose…</option>{s.intakes.filter((i) => i.courseId === courseId).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
@@ -119,7 +119,7 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
       </div>
       {courseId && intakeId && (
         <>
-          <h3>Fees for this intake</h3>
+          <h3>Fees for this cohort</h3>
           {items.map((it, i) => (
             <div key={i} className="field-row">
               <label className="field"><span>Fee</span><input value={it.name} onChange={(e) => setItems((l) => l.map((x, n) => (n === i ? { ...x, name: e.target.value } : x)))} placeholder="Tuition, Exam fee, Materials" /></label>
@@ -130,7 +130,7 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
           <button type="button" className="btn btn-quiet align-start" onClick={() => setItems((l) => [...l, { name: '', amount: '' }])}>Add a fee</button>
           <p className="small">Total per student: <strong>{money(org, invoiceTotal(parsed))}</strong></p>
           <button type="button" className="btn align-start" onClick={saveStructure}>Save fee structure</button>
-          <h3>Bill the intake</h3>
+          <h3>Bill the cohort</h3>
           <div className="field-row">
             <label className="field"><span>Bill name</span><input value={label} onChange={(e) => setLabel(e.target.value)} /></label>
             <label className="field"><span>Due date</span><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>

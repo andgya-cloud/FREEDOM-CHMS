@@ -87,7 +87,7 @@ function useCohorts(org: Organization) {
 
 const rosterFor = (students: ExamStudent[], courseId: string | null) =>
   (courseId == null ? students : students.filter((x) => x.courseId === courseId)).sort((a, b) => a.name.localeCompare(b.name));
-const programmeOf = (courseId: string | null, courseName: (id: string) => string) => (courseId == null ? 'Common courses' : courseName(courseId) || 'Programme');
+const programmeOf = (courseId: string | null, courseName: (id: string) => string) => (courseId == null ? 'Common courses' : courseName(courseId) || 'Department');
 /**
  * A common course goes to a lecturer with "Common courses" ticked (Andy, 2026-10-28, 5A), or to the principal
  * or the pastor, who may teach one themselves (Andy teaches Leadership); other courses to anyone who marks.
@@ -126,7 +126,7 @@ function Exams({ org }: { org: Organization }) {
   const label = choice?.graduationDate ? `${cohort} · ${classOf(choice.graduationDate)}` : cohort;
   const canStart = can('settings.manage') || can('school.manage');
 
-  if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the pastor to tick it for your account.</p></div>;
+  if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the Director to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} allStudents={allStudents} courseName={s.courseName} />;
   const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'student' ? 'Student' : '';
 
@@ -144,7 +144,7 @@ function Exams({ org }: { org: Organization }) {
       </div>
       {cohorts.length === 0 ? (
         <section className="stack">
-          <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort in <Link to="/school/courses">Settings → Programmes</Link> first.</>}</div>
+          <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort in <Link to="/school/courses">Settings → Departments</Link> first.</>}</div>
           {canStart && <NewCohort org={org} cohorts={cohorts} programmes={s.courses} today={s.today} onStarted={(c) => go({ cohort: c })} />}
         </section>
       ) : view === 'student' ? (
@@ -308,7 +308,7 @@ function ReopenCohort({ org, cohort, onDone }: { org: Organization; cohort: stri
 }
 
 /**
- * ADIA's course list (Andy, 2026-10-25, 3A): each programme's courses, set once. Until the principal saves
+ * ADIA's course list (Andy, 2026-10-25, 3A): each department's courses, set once. Until the principal saves
  * one, it is every course the cohorts so far have had.
  */
 function useCourseList(orgId: string, newestFirst: string[]) {
@@ -656,7 +656,7 @@ function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onS
           </ul>
         </div>
       ))}
-      {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
+      {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The Director creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
       <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={create}>Create {ready.length} {ready.length === 1 ? 'course' : 'courses'}</button>
     </section>
   );
@@ -763,7 +763,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
   const [scope, setScope] = useState(courses[0]?.id ?? COMMON);
   const [busy, setBusy] = useState('');
   const courseId = scope === COMMON ? null : scope;
-  const title = `${courseId == null ? 'Common courses' : courses.find((c) => c.id === courseId)?.name ?? 'Programme'} · ${period}`;
+  const title = `${courseId == null ? 'Common courses' : courses.find((c) => c.id === courseId)?.name ?? 'Department'} · ${period}`;
   const finder = useStudentFinder();
   const report = useMemo(() => buildExamReport(courseId, sheets, students, settings, { remarks: meta.remarks, attendance }), [courseId, sheets, students, settings, meta, attendance]);
   const graded = report.rows.filter((r) => r.average != null);
@@ -788,7 +788,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
   }
   const cellText = (c: (typeof report.rows)[number]['cells'][string] | undefined) => (c?.exempt ? 'EX' : c?.total ?? null);
   const csv = () => toCsv(
-    ['Position', 'Name', 'Admission No', 'Programme', ...report.units.map((u) => `${u.courseName}${u.common ? ' (common)' : ''}`), 'Total', 'Average', 'Grade', 'Remarks', 'Attendance %', 'Provisional'],
+    ['Position', 'Name', 'Admission No', 'Department', ...report.units.map((u) => `${u.courseName}${u.common ? ' (common)' : ''}`), 'Total', 'Average', 'Grade', 'Remarks', 'Attendance %', 'Provisional'],
     [...report.rows].sort((x, y) => (x.position ?? 9999) - (y.position ?? 9999)).map((r) => [r.position, r.name, r.admissionNo, r.programme,
       ...report.units.map((u) => cellText(r.cells[u.sheetId])), r.total, r.average, r.grade, r.remarks, r.attendance, r.provisional ? 'Yes' : 'No']),
   );
@@ -796,7 +796,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
   return (
     <section className="stack exam-report">
       <div className="dash-controls no-print">
-        <label className="field"><span>Programme</span>
+        <label className="field"><span>Department</span>
           <select value={scope} onChange={(e) => setScope(e.target.value)}>
             {courses.map((c) => <option key={c.id} value={c.id}>{c.name} (with common courses)</option>)}
             <option value={COMMON}>Common courses, every student</option>
@@ -835,7 +835,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
       )}
 
       {report.units.length > 0 && report.rows.length > 0 && <StudentFinder finder={finder} names={report.rows.map((x) => x.name)} shown={report.rows.filter((x) => finder.match(x.name, x.admissionNo)).length} total={report.rows.length} />}
-      {report.units.length === 0 ? <p className="muted">No {period} courses for this programme yet. Add them in Setup.</p> : (
+      {report.units.length === 0 ? <p className="muted">No {period} courses for this department yet. Add them in Setup.</p> : (
         <div className="card exam-table-wrap">
           <table className="table exam-table">
             <thead>
@@ -1075,7 +1075,7 @@ function CourseSetup({ org, cohort, closed, sheets, students, courses, courseLis
             </label>
           </div>
           <label className="check"><input type="checkbox" checked={f.onList} onChange={(e) => setF({ ...f, onList: e.target.checked })} /> Also put it on the course list for future cohorts</label>
-          {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The pastor creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
+          {!loading && trainers.length === 0 && <p className="small muted">No trainers yet. The Director creates each trainer's account under Settings, Staff accounts, with the role Trainer.</p>}
           {!loading && f.scope === COMMON && trainersFor(trainers, null).length === 0 && <p className="small muted">No lecturer has Common courses ticked yet. Tick it on their account under Settings, Staff accounts.</p>}
           <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add course</button><button type="button" className="btn btn-quiet" onClick={() => setAdding(false)}>Done</button></div>
         </div>
@@ -1435,7 +1435,7 @@ function SheetEditor({ org }: { org: Organization }) {
         <span className="exam-bar"><span style={{ width: `${pctDone}%` }} className={pctDone >= 100 ? 'done' : ''} /></span>
         <p className="small muted">Type a mark, <strong>ABS</strong> for absent (counts as 0) or <strong>EX</strong> for exempt. A sent paper is locked.</p>
         {flaggedCount > 0 && <p className="small up-bad">{flaggedCount} {flaggedCount === 1 ? 'student is' : 'students are'} below {settings.minAttendance}% attendance and not eligible for the Final.</p>}
-        {roster.length === 0 ? <p className="muted">No enrolled students in {sheet.cohort}{sheet.courseId ? ` for ${s.courseName(sheet.courseId)}` : ''}. Students come from the Students list, by intake.</p> : (
+        {roster.length === 0 ? <p className="muted">No enrolled students in {sheet.cohort}{sheet.courseId ? ` for ${s.courseName(sheet.courseId)}` : ''}. Students come from the Students list, by cohort.</p> : (
           <>
           <StudentFinder finder={finder} names={roster.map((st) => st.name)} shown={roster.filter((st) => finder.match(st.name, st.admissionNo)).length} total={roster.length} />
           <div className="exam-table-wrap">

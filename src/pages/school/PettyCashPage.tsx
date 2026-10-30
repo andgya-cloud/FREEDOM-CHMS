@@ -63,7 +63,7 @@ function waText(org: Organization, r: RequisitionRow, approvedBy: string[]) {
   const head = `${label(r)} for ${money(org, r.totalCents)} (${categoryLabel(r)}), raised by ${r.requesterName}`;
   return r.status === 'approved'
     ? `*${org.name}: petty cash approved*\nRequisition ${head}, has been approved by ${approvedBy.join(' and ')}.\nThe signed payment voucher is attached.\n${link}`
-    : `*${org.name}: petty cash approval needed*\nRequisition ${head}.\nItems: ${r.items.map((i) => i.description).join('; ')}\nAny ${REQUEST_SIGNATURES_NEEDED} stakeholders please review and sign here:\n${link}`;
+    : `*${org.name}: petty cash approval needed*\nRequisition ${head}.\nItems: ${r.items.map((i) => i.description).join('; ')}\nAny ${REQUEST_SIGNATURES_NEEDED} signers please review and sign here:\n${link}`;
 }
 const waLink = (text: string) => `https://wa.me/?text=${encodeURIComponent(text)}`;
 /** Phones share the PDF straight into WhatsApp; computers save it and open WhatsApp. */
@@ -76,7 +76,7 @@ function canSharePdf() {
   }
 }
 
-const SUBMITTED_TEXT = `Request submitted. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`;
+const SUBMITTED_TEXT = `Request submitted. It now needs ${REQUEST_SIGNATURES_NEEDED} signatures.`;
 /** Signatures in the order they were given. */
 const signaturesOf = (r: RequisitionRow) => Object.entries(r.signatures ?? {}).sort(([, a], [, b]) => (millis(a.at) ?? Date.now()) - (millis(b.at) ?? Date.now()));
 
@@ -183,8 +183,8 @@ function Stats({ org }: { org: Organization }) {
 
 
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
-  topup: { title: 'Top-Up', sub: 'Any one stakeholder tops up with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
-  reset: { title: 'Reset Budget Authorization', sub: 'Any two stakeholders approve the reset: each picks their name and types their PIN.', done: 'Budget reset. It now starts again from zero.' },
+  topup: { title: 'Top-Up', sub: 'Any one signer tops up with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
+  reset: { title: 'Reset Budget Authorization', sub: 'Any two signers approve the reset: each picks their name and types their PIN.', done: 'Budget reset. It now starts again from zero.' },
 };
 
 /**
@@ -225,7 +225,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
       </div>
       <div className="petty-auth-body">
         {kind === 'topup' && (open ? (
-          <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a stakeholder'}</p>
+          <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a signer'}</p>
         ) : (
           <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
             <input ref={amountBox} inputMode="decimal" className={ready ? '' : 'petty-amount-empty'} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Type the amount here, e.g. 500000" disabled={!p.canAuthorize} />
@@ -333,6 +333,9 @@ function Home({ org }: { org: Organization }) {
   const canTopUpHere = org.type !== 'college' || p.isKeeper || (p.canAuthorize && canTopUpAlone('college', profile?.displayName ?? '', p.isPastor));
   const { receipts } = useReceipts(org);
   const noReceipt = approved.filter((r) => !receipts.some((rc) => rc.reqId === r.id));
+  const [topUpOpen, setTopUpOpen] = useState(false);
+  // An older top-up still waiting for a signature stays open so it can be finished.
+  const topUpWaiting = p.funds.some((f) => f.kind === 'topup' && f.status === 'collecting');
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
@@ -341,8 +344,15 @@ function Home({ org }: { org: Organization }) {
         {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}
       </div>
       <PettyNav org={org} />
+      {/* Simplicity (Andy 5A, 2026-10-30): what waits for you comes first; the top-up is a button; charts fold away. */}
+      {p.canSign && (
+        <section className="card stack">
+          <h2>Waiting for you</h2>
+          <RequisitionList org={org} rows={waiting} empty="Nothing needs your signature." />
+        </section>
+      )}
       {p.seesAll && p.summary.remainingCents < LOW_CASH_CENTS && (
-        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, LOW_CASH_CENTS)}.{canTopUpHere ? ' Use the top-up box below; it can fill in what was spent since the last top-up.' : ' Ask someone who may top up.'}</p>
+        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, LOW_CASH_CENTS)}.{canTopUpHere ? ' Press Top up below; it can fill in what was spent since the last top-up.' : ' Ask someone who may top up.'}</p>
       )}
       {p.seesAll && noReceipt.length > 0 && (
         <p className="petty-warn">
@@ -351,21 +361,22 @@ function Home({ org }: { org: Organization }) {
         </p>
       )}
       {p.seesAll && <Stats org={org} />}
-      {p.seesAll && canTopUpHere && <FundCard org={org} kind="topup" />}
+      {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting
+        ? <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />
+        : <div className="row-actions"><button type="button" className="btn" onClick={() => setTopUpOpen(true)}>Top up</button></div>)}
       {p.canSign && <BinNotice org={org} />}
-      {p.canSign && (
-        <section className="card stack">
-          <h2>Waiting for you</h2>
-          <RequisitionList org={org} rows={waiting} empty="Nothing needs your signature." />
-        </section>
-      )}
       {p.canRequest && (
         <section className="card stack">
           <h2>My requests</h2>
           <RequisitionList org={org} rows={mine} empty="You have not made a request yet." />
         </section>
       )}
-      {p.seesAll && !p.loading && <PettyInsights org={org} month={p.month} requisitions={p.requisitions} summary={p.summary} />}
+      {p.seesAll && !p.loading && (
+        <details className="card fold-card">
+          <summary>See spending charts</summary>
+          <PettyInsights org={org} month={p.month} requisitions={p.requisitions} summary={p.summary} />
+        </details>
+      )}
       {p.loading && <p className="muted small">Loading…</p>}
     </div>
   );
@@ -453,7 +464,7 @@ function NewRequisition({ org }: { org: Organization }) {
     setBusy(true);
     try {
       const res = await raisePettyRequest({ orgId: org.id, requesterUid: chosen.uid, pin, ...input() });
-      toast.show(`Request raised for ${res.name}. It now needs ${REQUEST_SIGNATURES_NEEDED} stakeholder signatures.`);
+      toast.show(`Request raised for ${res.name}. It now needs ${REQUEST_SIGNATURES_NEEDED} signatures.`);
       navigate(`${pettyCashBase(org.type)}/${res.id}`);
     } catch (err) {
       const e = err as { code?: string; message?: string };
@@ -692,10 +703,10 @@ function Requisition({ org }: { org: Organization }) {
       {locked && <p className="notice">🔒 This requisition is in a closed month, so nothing in it can change. Only the Director can reopen the month.</p>}
       {canSend && (
         <section className="card stack no-print">
-          <h2>{r.status === 'approved' ? 'Send the signed voucher' : 'Ask the stakeholders to approve'}</h2>
+          <h2>{r.status === 'approved' ? 'Send the signed voucher' : 'Ask the signers to approve'}</h2>
           <p className="small muted">{r.status === 'approved'
-            ? `The petty cash voucher with its details and the ${REQUEST_SIGNATURES_NEEDED} signatures, to every stakeholder and ${r.requesterName}.`
-            : `Tells the stakeholders that any ${REQUEST_SIGNATURES_NEEDED} of them must sign, with a link to this request. ${r.requesterName} cannot sign it.`}</p>
+            ? `The petty cash voucher with its details and the ${REQUEST_SIGNATURES_NEEDED} signatures, to every signer and ${r.requesterName}.`
+            : `Tells the signers that any ${REQUEST_SIGNATURES_NEEDED} of them must sign, with a link to this request. ${r.requesterName} cannot sign it.`}</p>
           {!numbered && <p className="small muted">Giving this requisition its number… The buttons work in a moment{navigator.onLine ? '' : ', once this device is online'}.</p>}
           <div className="row-actions">
             <button type="button" className="btn btn-primary" disabled={sending || !numbered} onClick={() => void sendEmail()}>{sending ? 'Sending…' : 'Send Email'}</button>
@@ -737,7 +748,7 @@ function Requisition({ org }: { org: Organization }) {
       </section>
       <section className="card stack">
         <h2>{r.signatures ? 'Authorization' : 'Approval history'}</h2>
-        {r.signatures && <p className="small muted">Any two to approve. A stakeholder cannot approve twice, and the requester cannot approve their own request. Each signs from their own account or with their name and PIN.</p>}
+        {r.signatures && <p className="small muted">Any two to approve. A signer cannot approve twice, and the requester cannot approve their own request. Each signs from their own account or with their name and PIN.</p>}
         {r.notice && <p className="small muted petty-notice-line">{noticeLine(r.notice)}</p>}
         {needsAccountant && <p className="notice">Waiting for the accountant's signature. It is the last one needed.</p>}
         {overDirectorLimit(r) && r.status === 'submitted' && <p className="notice">{needsDirector ? "Waiting for the Director's signature. " : ''}This request is over {money(org, DIRECTOR_LIMIT_CENTS)}, so the Director must be one of the two signatures.</p>}
@@ -774,7 +785,7 @@ function Requisition({ org }: { org: Organization }) {
       )}
       {!step && waitingToSign && sigs.length < REQUEST_SIGNATURES_NEEDED && (
         <section className="card stack no-print">
-          <h2>Another stakeholder signs on this device</h2>
+          <h2>Another signer signs on this device</h2>
           {cashNote}
           <PettySignBox ready={!shortOfCash} label={`Signature ${sigs.length + 1} of ${REQUEST_SIGNATURES_NEEDED}${needsAccountant ? ', the accountant' : ''}. The signatory picks their name and types their own PIN. You stay signed in.`} orgId={org.id} directorOnly={needsDirector} exclude={[r.requesterId, ...Object.keys(r.signatures ?? {})]}
             sign={async (uid, pin) => `Signed by ${await signWithPin(org.id, 'request', r.id, uid, pin)}.`} />
@@ -784,7 +795,7 @@ function Requisition({ org }: { org: Organization }) {
       {(p.canSign || r.requesterId === p.uid) && (r.status !== 'approved' || p.isKeeper) && (
         <section className="card stack no-print">
           <h2>Delete this request</h2>
-          <p className="small muted">{p.isPastor ? 'You can delete it on your own.' : 'Any two stakeholders must approve.'} It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
+          <p className="small muted">{p.isPastor ? 'You can delete it on your own.' : 'Any two signers must approve.'} It then moves to the Bin, out of every list and the budget figures, and can be put back from there.</p>
           <div className="row-actions"><button type="button" className="btn btn-danger" onClick={() => setConfirmDelete(true)}>Delete request</button></div>
         </section>
       )}
@@ -920,7 +931,7 @@ export function ReceiptsBox({ org, req, receipts, locked = false }: { org: Organ
           ))}
         </ul>
       )}
-      <p className="small muted">Photos (JPG, PNG, HEIC and more), PDF, Word, Excel or CSV, up to 10 MB each and {MAX_RECEIPTS_PER_REQUEST} per requisition. Big photos are made smaller. {p.isPastor ? 'You can remove a receipt on your own; others need two stakeholders.' : 'Removing a receipt needs two stakeholders.'}</p>
+      <p className="small muted">Photos (JPG, PNG, HEIC and more), PDF, Word, Excel or CSV, up to 10 MB each and {MAX_RECEIPTS_PER_REQUEST} per requisition. Big photos are made smaller. {p.isPastor ? 'You can remove a receipt on your own; others need two signers.' : 'Removing a receipt needs two signers.'}</p>
       <AskDeleteDialog org={org} kind="receipt" targetId={removing?.id ?? ''} open={!!removing} onClose={() => setRemoving(null)}
         title="Remove this receipt?" body={removing ? `${removing.name}, added by ${removing.uploadedByName}.` : ''} />
       {viewing && createPortal(

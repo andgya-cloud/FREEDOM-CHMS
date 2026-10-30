@@ -46,7 +46,7 @@ function Reports({ org }: { org: Organization }) {
     });
   }, [requestId, org.id, setParams, toast]);
 
-  if (!allowed) return <div className="page narrow"><h1>School reports</h1><p>Reports are for the pastor and the people the pastor has given access.</p></div>;
+  if (!allowed) return <div className="page narrow"><h1>School reports</h1><p>Reports are for the Director and the people the Director has given access.</p></div>;
   // The chosen report, or else the newest one, shows straight away (Andy, 2026-10-28, 7A).
   const open = rows.find((r) => r.id === openId) ?? rows[0];
 
@@ -113,9 +113,9 @@ function ReportView({ org, report }: { org: Organization; report: SchoolReportDo
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
       <table className="report-table"><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
-      <h3>By programme</h3>
+      <h3>By department</h3>
       <table className="report-table">
-        <thead><tr><th>Programme</th><th className="num">Students</th><th className="num">Trainers</th><th className="num">Per trainer</th></tr></thead>
+        <thead><tr><th>Department</th><th className="num">Students</th><th className="num">Trainers</th><th className="num">Per trainer</th></tr></thead>
         <tbody>{m.byCourse.map((c) => <tr key={c.courseId}><td>{c.name}</td><td className="num">{c.enrolled}</td><td className="num">{c.trainers}</td><td className="num">{c.ratio ?? '–'}</td></tr>)}</tbody>
       </table>
       <h3>Attendance alerts</h3>

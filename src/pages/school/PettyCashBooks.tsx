@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatDate } from '../../../functions/src/shared/datetime';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
@@ -17,7 +18,7 @@ import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, Re
 import { needsReceipt, receiptStatus } from '../../lib/receiptNames';
 import type { Organization } from '../../state/OrgContext';
 
-const day = (ms: number) => new Date(ms).toLocaleDateString('en-KE', { day: '2-digit', month: 'short', year: 'numeric' });
+const day = (ms: number) => formatDate(new Date(ms));
 
 /** Every requisition's receipts in one place, one folder per requisition, for those who see all requisitions. */
 export function PettyReceiptsPage() {
@@ -294,7 +295,7 @@ function BudgetTracker({ org }: { org: Organization }) {
               </tbody>
             </table>
           </div>
-          {!p.canAuthorize && <p className="small muted">The signing stakeholders set the category budgets.</p>}
+          {!p.canAuthorize && <p className="small muted">The signers set the category budgets.</p>}
         </>
       )}
     </div>
@@ -367,7 +368,7 @@ function MonthEnd({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head"><h1>Month end</h1></div>
       <PettyNav org={org} /><ReportsNav org={org} />
-      <p className="small muted">Once a month has ended, any two stakeholders close it. After that no requisition, signature, receipt or deletion in that month can change. Only the Director can reopen a closed month, and must give a reason.</p>
+      <p className="small muted">Once a month has ended, any two signers close it. After that no requisition, signature, receipt or deletion in that month can change. Only the Director can reopen a closed month, and must give a reason.</p>
       {list.length === 0 && <p className="muted small">No past months yet.</p>}
       {list.map((m) => {
         const f = facts(m);

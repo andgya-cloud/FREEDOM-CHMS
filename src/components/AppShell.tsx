@@ -2,6 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { Navigate, NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
+import { PageHelp } from './PageHelp';
 import { InstallBanner } from './InstallBanner';
 import { AdiaIntro } from './AdiaIntro';
 import { usingEmulators } from '../firebase';
@@ -143,6 +144,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="adia-head">
             {can('people.read') && !trainer && <QuickSearch className="adia-search" />}
             {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
+            {adia && <PageHelp />}
             <SyncBadge />
             {look === 'glass' ? <img className="org-mark" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
               : look === 'cockpit' ? <img className="org-mark org-mark-church" src="/org/church-logo.png" alt="Freedom Church" width={90} height={126} />

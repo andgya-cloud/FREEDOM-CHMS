@@ -6,6 +6,7 @@ import { friendlyError } from '../../lib/errors';
 import { saveCourse, saveIntake } from '../../lib/schoolWrites';
 import { capacityOf } from '../../../functions/src/shared/school';
 import { SchoolGate, useSchoolPage } from './common';
+import { formatDateKey } from '../../../functions/src/shared/datetime';
 import type { Organization } from '../../state/OrgContext';
 import type { CourseRow, IntakeRow } from '../../state/useSchool';
 
@@ -15,7 +16,7 @@ import type { CourseRow, IntakeRow } from '../../state/useSchool';
  * units, trainers and timetable boxes are gone (saved data is kept untouched).
  */
 export function CoursesPage() {
-  return <SchoolGate title="Programmes">{(org) => <Programmes org={org} />}</SchoolGate>;
+  return <SchoolGate title="Departments">{(org) => <Programmes org={org} />}</SchoolGate>;
 }
 
 type StudentLite = { intakeId: string; courseId: string; status: string; deletedAt?: unknown };
@@ -30,7 +31,7 @@ function Programmes({ org }: { org: Organization }) {
 
   function add() {
     const n = name.trim();
-    if (n.length < 2) return toast.show('Type the programme name.');
+    if (n.length < 2) return toast.show('Type the department name.');
     if (s.courses.some((c) => c.name.toLowerCase() === n.toLowerCase())) return toast.show(`${n} is already there.`);
     try {
       const { synced } = saveCourse(org.id, null, { name: n.slice(0, 80), levels: [], units: [], timetable: [], active: true });
@@ -45,16 +46,16 @@ function Programmes({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/settings">← Settings</Link></p>
       <div className="page-head">
-        <h1>Programmes</h1>
-        {editable && !adding && <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>+ New programme</button>}
+        <h1>Departments</h1>
+        {editable && !adding && <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>+ New department</button>}
       </div>
       {adding && (
         <section className="card stack">
-          <label className="field"><span>Programme name</span><input autoFocus value={name} maxLength={80} placeholder="e.g. Plumbing" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} /></label>
-          <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add programme</button><button type="button" className="btn btn-quiet" onClick={() => { setAdding(false); setName(''); }}>Cancel</button></div>
+          <label className="field"><span>Department name</span><input autoFocus value={name} maxLength={80} placeholder="e.g. Plumbing" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') add(); }} /></label>
+          <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add department</button><button type="button" className="btn btn-quiet" onClick={() => { setAdding(false); setName(''); }}>Cancel</button></div>
         </section>
       )}
-      {s.courses.length === 0 && !s.loading && <div className="card"><p>No programmes yet.{editable ? ' Tap New programme to add the first one.' : ''}</p></div>}
+      {s.courses.length === 0 && !s.loading && <div className="card"><p>No departments yet.{editable ? ' Tap New department to add the first one.' : ''}</p></div>}
       {s.courses.map((c) => <ProgrammeCard key={c.id} org={org} course={c} intakes={s.intakes.filter((i) => i.courseId === c.id)} students={s.students as StudentLite[]} today={s.today} editable={editable} />)}
     </div>
   );
@@ -69,7 +70,7 @@ function ProgrammeCard({ org, course, intakes, students, today, editable }: { or
   const closed = course.active === false;
 
   function save() {
-    if (f.name.trim().length < 2) return toast.show('Type the programme name.');
+    if (f.name.trim().length < 2) return toast.show('Type the department name.');
     const levels = f.levels.split(/[,\n]/).map((l) => l.trim()).filter(Boolean).slice(0, 20);
     // Units and timetable are no longer shown, but are kept as they were.
     const { synced } = saveCourse(org.id, course.id, { name: f.name.trim().slice(0, 80), levels, units: course.units, timetable: course.timetable, active: f.active });
@@ -87,7 +88,7 @@ function ProgrammeCard({ org, course, intakes, students, today, editable }: { or
       <p className="small muted">{enrolled} {enrolled === 1 ? 'student' : 'students'} studying now · {intakes.length} {intakes.length === 1 ? 'cohort' : 'cohorts'}</p>
       {editing && (
         <div className="stack">
-          <label className="field"><span>Programme name</span><input value={f.name} maxLength={80} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
+          <label className="field"><span>Department name</span><input value={f.name} maxLength={80} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
           <label className="field"><span>Levels (optional, separated by commas)</span><input value={f.levels} placeholder="Level 1, Level 2" onChange={(e) => setF({ ...f, levels: e.target.value })} /></label>
           <label className="check"><input type="checkbox" checked={f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /><span>Taking new students</span></label>
           <div className="row-actions"><button type="button" className="btn btn-primary" onClick={save}>Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>Cancel</button></div>
@@ -123,7 +124,7 @@ function CohortRow({ org, intake, students, editable }: { org: Organization; int
   return (
     <tr>
       <td><strong>{intake.name}</strong></td>
-      <td className="small">{intake.startDate}</td>
+      <td className="small">{formatDateKey(intake.startDate)}</td>
       <td className="num">{cap.taken}{intake.capacity != null ? ` of ${intake.capacity}` : ''}{cap.full && <div className="muted small">full</div>}</td>
       <td><label className="check"><input type="checkbox" checked={open} disabled={!editable} onChange={(e) => toggle(e.target.checked)} aria-label={`${intake.name} open for enrolment`} /></label></td>
     </tr>
@@ -150,7 +151,7 @@ function NewCohort({ org, courseId, today, suggested, onDone }: { org: Organizat
         <label className="field"><span>Starts</span><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
         <label className="field"><span>Places (leave blank for no limit)</span><input type="number" inputMode="numeric" min={0} value={capacity} onChange={(e) => setCapacity(e.target.value)} /></label>
       </div>
-      <p className="muted small">Use the same cohort name in every programme (for example "Cohort 5"), so Exam Records keeps them together.</p>
+      <p className="muted small">Use the same cohort name in every department (for example "Cohort 5"), so Exam Records keeps them together.</p>
       <div className="row-actions"><button type="button" className="btn btn-primary" onClick={add}>Add cohort</button><button type="button" className="btn btn-quiet" onClick={onDone}>Cancel</button></div>
     </div>
   );

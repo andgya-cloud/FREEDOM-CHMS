@@ -57,7 +57,7 @@ export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, stu
           <>
             <div className="row-actions no-print">
               <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void pdf(rows, `${cohort} transcripts`)}>{busy ? 'Preparing…' : 'Transcripts for everyone (PDF)'}</button>
-              <CsvButton name={`${cohort} results`} csv={() => toCsv(['Admission no', 'Name', 'Programme', 'Semester 1', 'Semester 2', 'Final points', 'Final grade', 'Printed list points', 'Printed list grade', 'Matches printed list'],
+              <CsvButton name={`${cohort} results`} csv={() => toCsv(['Admission no', 'Name', 'Department', 'Semester 1', 'Semester 2', 'Final points', 'Final grade', 'Printed list points', 'Printed list grade', 'Matches printed list'],
                 rows.map((r) => [r.admissionNo, r.name, r.programme, r.sems[0].points ?? '', r.sems[1].points ?? '', r.final.final ?? '', r.final.grade, r.printed?.points ?? '', r.printed?.grade ?? '',
                   r.printed ? (printedDiffers(r.printed, r.final.final, settings) ? 'No' : 'Yes') : '']))} />
             </div>

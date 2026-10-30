@@ -72,7 +72,7 @@ function Student({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/school/students">← Students</Link></p>
-      <div className="page-head"><h1>{name}</h1><div className="cleanup-head-actions"><Link to={`/people/${org.id}/${st.id}`} className="btn btn-quiet">Person record</Link><CleanupButton orgId={org.id} kind="person" id={st.id} back="/school/students" /></div></div>
+      <div className="page-head"><h1>{name}</h1><div className="cleanup-head-actions">{canEdit && <Link to={`/people/${org.id}/${st.id}/edit`} className="btn btn-quiet">Edit name and phone</Link>}<CleanupButton orgId={org.id} kind="person" id={st.id} back="/school/students" /></div></div>
       <section className="card stack">
         <p><strong>{st.admissionNo ?? 'Admission number pending'}</strong> · {course.name}{s.byId(st.id)?.phone && <> · <a href={`tel:${s.byId(st.id)?.phone}`}>{s.byId(st.id)?.phone}</a></>}</p>
         <div className="field-row">
@@ -95,8 +95,8 @@ function Student({ org }: { org: Organization }) {
             </label>
           )}
         </div>
-        <label className="field"><span>Intake</span>
-          <select value={st.intakeId} disabled={!canEdit} onChange={(e) => change({ intakeId: e.target.value }, 'Intake saved')}>
+        <label className="field"><span>Cohort</span>
+          <select value={st.intakeId} disabled={!canEdit} onChange={(e) => change({ intakeId: e.target.value }, 'Cohort saved')}>
             {s.intakes.filter((i) => i.courseId === st.courseId).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
         </label>
@@ -120,10 +120,8 @@ function Student({ org }: { org: Organization }) {
           </div>
         )}
         <p className="small">Overall: <strong>{overall.percent == null ? 'not yet assessed' : `${overall.percent}% (${overall.grade})`}</strong></p>
-        <div className="chips">
-          <button type="button" className="btn" disabled={!!busy} onClick={() => void makePdf('report_card')}>{busy === 'report_card' ? 'Making…' : 'Report card'}</button>
-          <button type="button" className="btn" disabled={!!busy} onClick={() => void makePdf('transcript')}>{busy === 'transcript' ? 'Making…' : 'Transcript'}</button>
-        </div>
+        {/* One button (Andy, 2026-10-30, 7A): the full results record. */}
+        <button type="button" className="btn align-start" disabled={!!busy} onClick={() => void makePdf('transcript')}>{busy === 'transcript' ? 'Making…' : 'Print results'}</button>
       </section>
 
       {s.feesAllowed && (
@@ -202,7 +200,7 @@ function PrivateCard({ orgId, studentId }: { orgId: string; studentId: string })
   }
   return (
     <section className="card stack">
-      <h2>Identity number (pastor only)</h2>
+      <h2>Identity number (Director only)</h2>
       <p className="small muted">For regulators that ask for it. Other staff cannot see this.</p>
       <label className="field"><span>ID or passport number</span><input value={idNumber} disabled={!ready} onChange={(e) => setIdNumber(e.target.value)} /></label>
       <label className="field"><span>Private notes</span><textarea rows={3} value={notes} disabled={!ready} onChange={(e) => setNotes(e.target.value)} /></label>

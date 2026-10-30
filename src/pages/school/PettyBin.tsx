@@ -28,8 +28,8 @@ const stamp = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function
   ? (t as Timestamp).toDate().toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short' }) : '');
 const signers = (sigs: BinSignature[]) => sigs.map((s) => `${s.name} (${s.title})`).join(' and ');
 const toastFor = (outcome: string, action: BinAction, count = BIN_SIGNATURES_NEEDED) => outcome === 'done'
-  ? `${BIN_DONE_LABELS[action]}.${count < BIN_SIGNATURES_NEEDED ? ' Recorded in the deletion register.' : ' Two stakeholders approved it.'}`
-  : `Signed. One more stakeholder must approve "${BIN_ACTION_LABELS[action]}" in the Bin.`;
+  ? `${BIN_DONE_LABELS[action]}.${count < BIN_SIGNATURES_NEEDED ? ' Recorded in the deletion register.' : ' Two signers approved it.'}`
+  : `Signed. One more signer must approve "${BIN_ACTION_LABELS[action]}" in the Bin.`;
 
 /** Explains a refusal from the server in the person's words. */
 function binError(err: unknown) {
@@ -77,7 +77,7 @@ export function AskDeleteDialog({ org, kind, targetId, title, body, open, onClos
     <dialog ref={ref} className="dialog" onCancel={(e) => { e.preventDefault(); onClose(); }}>
       <h2>{title}</h2>
       <p>{body}</p>
-      <p className="small muted">{isPastor ? 'It moves to the Bin straight away and is recorded in the deletion register. You can put it back from the Bin.' : 'You sign first. It moves to the Bin once one more stakeholder approves, and can be put back from there.'}</p>
+      <p className="small muted">{isPastor ? 'It moves to the Bin straight away and is recorded in the deletion register. You can put it back from the Bin.' : 'You sign first. It moves to the Bin once one more signer approves, and can be put back from there.'}</p>
       <label className="field"><span>{isPastor ? 'Reason (optional)' : 'Reason for deleting'}</span>
         <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Entered twice by mistake" disabled={busy} />
       </label>
@@ -145,10 +145,10 @@ function BinView({ org }: { org: Organization }) {
         {p.seesRegister && <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>}
       </div>
       <PettyNav org={org} /><ReportsNav org={org} />
-      <p className="muted small no-print">{p.isPastor ? 'You can delete, delete forever and put back on your own. Only you can put entries back, even ones deleted forever, from the register below. Other stakeholders need any two of them to delete.' : 'Deleting and deleting forever each need any two stakeholders. Whoever asks signs first. Only the Director can put an entry back.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
+      <p className="muted small no-print">{p.isPastor ? 'You can delete, delete forever and put back on your own. Only you can put entries back, even ones deleted forever, from the register below. Other signers need any two of them to delete.' : 'Deleting and deleting forever each need any two signers. Whoever asks signs first. Only the Director can put an entry back.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
 
       <section className="card stack no-print">
-        <h2>Waiting for a second stakeholder</h2>
+        <h2>Waiting for a second signer</h2>
         {loading ? <p className="muted small">Loading…</p> : waiting.length === 0 ? <p className="muted small">Nothing is waiting.</p> : (
           <ul className="petty-bin-list">
             {waiting.map((r) => {
@@ -162,7 +162,7 @@ function BinView({ org }: { org: Organization }) {
                     {p.canSign && !mine && <button type="button" className="btn btn-primary" onClick={() => void act(r, m.action)}>Approve as me</button>}
                     {(m.startedBy === p.uid || p.isPastor) && <button type="button" className="btn btn-quiet" onClick={() => void act(r, m.action, { withdraw: true })}>Withdraw</button>}
                   </div>
-                  <PettySignBox label="Or another stakeholder approves on this device with their name and PIN." orgId={org.id} exclude={m.signatures.map((s) => s.uid)} confirmLabel="✓ Approve"
+                  <PettySignBox label="Or another signer approves on this device with their name and PIN." orgId={org.id} exclude={m.signatures.map((s) => s.uid)} confirmLabel="✓ Approve"
                     sign={async (uid, pin) => toastFor((await binSign({ orgId: org.id, kind: r.kind, targetId: r.targetId, action: m.action, signerUid: uid, pin })).outcome, m.action)} />
                 </li>
               );
@@ -190,7 +190,7 @@ function BinView({ org }: { org: Organization }) {
                   )}
                   {asking?.row.id === r.id && (
                     <div className="petty-bin-ask">
-                      <p className="small">{asking.action === 'purge' ? 'It disappears for everyone. Only the Director can bring it back, from the deletion register.' : 'It comes back exactly as it was.'} {p.isPastor ? 'This happens straight away.' : 'You sign first; one more stakeholder must approve.'}</p>
+                      <p className="small">{asking.action === 'purge' ? 'It disappears for everyone. Only the Director can bring it back, from the deletion register.' : 'It comes back exactly as it was.'} {p.isPastor ? 'This happens straight away.' : 'You sign first; one more signer must approve.'}</p>
                       <label className="field"><span>Reason (optional)</span><input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} /></label>
                       <div className="row-actions">
                         <button type="button" className="btn btn-quiet" onClick={() => setAsking(null)}>Cancel</button>

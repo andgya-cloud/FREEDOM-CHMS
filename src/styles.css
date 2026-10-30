@@ -1326,6 +1326,20 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lav-badge { font-size: 0.7rem; font-weight: 800; padding: 4px 10px; border-radius: 999px; background: rgba(120, 124, 180, 0.1); color: var(--muted); white-space: nowrap; }
 .lav-badge.alert { background: var(--lav-grad); color: #fff; box-shadow: 0 6px 14px -6px rgba(232, 114, 138, 0.8); }
 
+/* Front page jobs (Andy 1A, 2026-10-30): big buttons for each person's work; figures fold away. */
+.lav-jobs h2 { margin: 0 0 14px; font-size: 1.15rem; }
+.lav-jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
+.look-glass .card.lav-job { padding: 22px 20px; gap: 10px; min-height: 128px; text-decoration: none; color: var(--text); transition: transform 0.2s, box-shadow 0.2s; }
+.look-glass .card.lav-job:hover, .look-glass .card.lav-job:focus-visible { transform: translateY(-3px); box-shadow: var(--lav-shadow-lg); }
+.lav-job b { font-size: 1.02rem; }
+.look-glass .lav-figs { border-radius: 18px; background: rgba(255, 255, 255, 0.75); border: 1px solid var(--lav-line); box-shadow: var(--lav-shadow); }
+.lav-figs > summary { list-style: none; display: flex; align-items: center; gap: 14px; padding: 18px 20px; cursor: pointer; }
+.lav-figs > summary::-webkit-details-marker { display: none; }
+.lav-figs > summary b { font-size: 0.92rem; }
+.lav-figs > summary .lav-sub { flex: 1; }
+.lav-figs[open] > summary .lav-caret { transform: rotate(90deg); }
+.lav-figs-body { display: flex; flex-direction: column; gap: 24px; padding: 4px 18px 22px; }
+
 @media (max-width: 1180px) {
   .lav-rings { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .lav-quick, .lav-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -1343,9 +1357,12 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   .lav-donut > div { width: 100%; }
   .lav-dbody { padding-left: 20px; }
   .look-glass .card.lav-qa { padding: 16px; }
+  .lav-jobs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .look-glass .card.lav-job { padding: 16px; min-height: 112px; }
+  .lav-figs > summary .lav-sub { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .lav-bar-col { animation: none; } .lav-ring-fill { transition: none; } }
-@media print { .lav-hero, .lav-quick { display: none !important; } }
+@media print { .lav-hero, .lav-quick, .lav-jobs { display: none !important; } }
 
 /* ---- ADIA menu: a dark navy panel with a gold outline, floating on the lavender page ---- */
 .look-glass.side-look .adia-side, .look-glass.side-look .tabbar {
@@ -1572,3 +1589,12 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .cleanup-remove { display: inline-flex; align-items: center; gap: 6px; color: var(--red); }
 .cleanup-remove svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .cleanup-head-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }
+
+/* The "?" on every ADIA page (Andy 6A, 2026-10-30): three simple steps for the page. */
+.page-help { position: relative; flex: none; }
+.page-help-btn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #1f2a5c; background: #fff; color: #1f2a5c; font-size: 1.15rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 14px -8px rgba(15, 20, 50, 0.55); }
+.page-help-btn:hover, .page-help-btn[aria-expanded="true"] { background: #1f2a5c; color: #fff; }
+.page-help-box { position: absolute; right: 0; top: calc(100% + 10px); z-index: 60; width: min(340px, calc(100vw - 32px)); background: #fff; color: #1f2a5c; border: 1px solid rgba(31, 42, 92, 0.25); border-radius: 16px; padding: 16px 18px 10px; box-shadow: 0 18px 40px -14px rgba(15, 20, 50, 0.45); display: flex; flex-direction: column; gap: 8px; }
+.page-help-box ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 0.92rem; line-height: 1.45; }
+.page-help-box .btn { align-self: flex-end; }
+@media (max-width: 560px) { .page-help-box { position: fixed; left: 16px; right: 16px; top: 72px; width: auto; } }

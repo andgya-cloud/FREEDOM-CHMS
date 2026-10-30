@@ -88,8 +88,8 @@ export async function resultsPdf(org: Organization, kind: 'report_card' | 'trans
   const s = input.student;
   header(pdf, org, kind === 'report_card' ? 'Student report card' : 'Academic transcript');
   let y = titleBlock(pdf, [
-    ['Student', s.name], ['Admission number', s.admissionNo || 'Not yet issued'], ['Programme', s.course],
-    ['Level', s.level || '–'], ['Intake', s.intake || '–'], ['Date', formatDateKey(input.today)],
+    ['Student', s.name], ['Admission number', s.admissionNo || 'Not yet issued'], ['Department', s.course],
+    ['Level', s.level || '–'], ['Cohort', s.intake || '–'], ['Date', formatDateKey(input.today)],
   ]);
   const cols: Column[] = [{ label: 'Unit', x: 14 }, { label: 'Trainer', x: 90 }, { label: 'Mark %', x: 160, align: 'right' }, { label: 'Grade', x: 166 }];
   const rows = input.results.map((r) => [r.name, r.trainer || '–', r.percent == null ? '–' : String(r.percent), r.grade ?? 'Not assessed']);
@@ -143,7 +143,7 @@ export async function feeStatementPdf(org: Organization, input: StatementInput):
   header(pdf, org, 'Fee statement');
   let y = titleBlock(pdf, [
     ['Student', input.student.name], ['Admission number', input.student.admissionNo || 'Not yet issued'],
-    ['Programme', input.student.course], ['Statement date', formatDateKey(input.today)],
+    ['Department', input.student.course], ['Statement date', formatDateKey(input.today)],
   ]);
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(11);
@@ -205,17 +205,17 @@ export async function schoolReportPdf(org: Organization, r: SchoolReportDoc): Pr
   ], h - 30);
   y += 4;
   section('By programme');
-  y = drawTable(pdf, y, [{ label: 'Programme', x: 14 }, { label: 'Students', x: 120, align: 'right' }, { label: 'Trainers', x: 145, align: 'right' }, { label: 'Students per trainer', x: w - 14, align: 'right' }],
+  y = drawTable(pdf, y, [{ label: 'Department', x: 14 }, { label: 'Students', x: 120, align: 'right' }, { label: 'Trainers', x: 145, align: 'right' }, { label: 'Students per trainer', x: w - 14, align: 'right' }],
     m.byCourse.map((c) => [c.name, String(c.enrolled), String(c.trainers), c.ratio == null ? '–' : String(c.ratio)]), h - 30);
   y += 4;
   section('Attendance alerts');
   y = r.alerts.length
-    ? drawTable(pdf, y, [{ label: 'Student', x: 14 }, { label: 'Programme', x: 90 }, { label: 'Attendance', x: w - 14, align: 'right' }], r.alerts.map((a) => [a.name, a.course, `${a.percent}% of ${a.held}`]), h - 30)
+    ? drawTable(pdf, y, [{ label: 'Student', x: 14 }, { label: 'Department', x: 90 }, { label: 'Attendance', x: w - 14, align: 'right' }], r.alerts.map((a) => [a.name, a.course, `${a.percent}% of ${a.held}`]), h - 30)
     : (pdf.setFont('helvetica', 'normal'), pdf.setFontSize(9), pdf.setTextColor(...GREY), pdf.text('Nobody is below the threshold.', 14, y), y + 6);
   y += 4;
   section('Fee arrears');
   y = r.arrears.length
-    ? drawTable(pdf, y, [{ label: 'Student', x: 14 }, { label: 'Programme', x: 90 }, { label: 'Balance', x: w - 14, align: 'right' }], r.arrears.map((a) => [`${a.name}${a.overdue ? ' (overdue)' : ''}`, a.course, formatMoney(a.balanceCents, currency)]), h - 30)
+    ? drawTable(pdf, y, [{ label: 'Student', x: 14 }, { label: 'Department', x: 90 }, { label: 'Balance', x: w - 14, align: 'right' }], r.arrears.map((a) => [`${a.name}${a.overdue ? ' (overdue)' : ''}`, a.course, formatMoney(a.balanceCents, currency)]), h - 30)
     : (pdf.setFont('helvetica', 'normal'), pdf.setFontSize(9), pdf.setTextColor(...GREY), pdf.text('No fees are owed.', 14, y), y + 6);
   if (r.outcomesDue.length) {
     y += 4;

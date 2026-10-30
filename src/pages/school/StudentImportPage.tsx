@@ -105,8 +105,8 @@ function StudentImport({ org }: { org: Organization }) {
       )}
 
       <section className="card stack">
-        <p>Choose an Excel (.xlsx) or CSV class list. Every worksheet is read, for example one sheet per programme; each needs a row of column titles at the top. Only <strong>Name</strong> is required; ADIA also reads
-          Admission no, Phone, Gender, Programme (or Course), Intake (or Cohort; a number such as 3 becomes "Cohort 3"), Level, Status, Start date and a sponsor's name, phone and relation.</p>
+        <p>Choose an Excel (.xlsx) or CSV class list. Every worksheet is read, for example one sheet per department; each needs a row of column titles at the top. Only <strong>Name</strong> is required; ADIA also reads
+          Admission no, Phone, Gender, Department (or Programme), Cohort (or Intake; a number such as 3 becomes "Cohort 3"), Level, Status, Start date and a sponsor's name, phone and relation.</p>
         <div className="row-actions">
           <label className="btn btn-primary">
             {file ? 'Choose a different file' : 'Choose the file'}
@@ -115,15 +115,15 @@ function StudentImport({ org }: { org: Organization }) {
           <button type="button" className="btn btn-quiet" onClick={downloadTemplate}>Download a template</button>
         </div>
         <details>
-          <summary className="small">My file has no Programme or Intake column</summary>
+          <summary className="small">My file has no Department or Cohort column</summary>
           <div className="field-row">
-            <label className="field"><span>Programme for everyone in the file</span>
+            <label className="field"><span>Department for everyone in the file</span>
               <select value={programme} onChange={(e) => setProgramme(e.target.value)}>
                 <option value="">Use the file's column</option>
                 {s.courses.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
             </label>
-            <label className="field"><span>Intake for everyone in the file</span>
+            <label className="field"><span>Cohort for everyone in the file</span>
               <input value={intake} onChange={(e) => setIntake(e.target.value)} placeholder="September 2026" maxLength={80} list="intake-names" />
               <datalist id="intake-names">{[...new Set(s.intakes.map((i) => i.name))].map((n) => <option key={n} value={n} />)}</datalist>
             </label>
@@ -141,12 +141,12 @@ function StudentImport({ org }: { org: Organization }) {
             <KpiCard label="Rows in the file" value={String(plan.rows.length)} note={file?.name} />
             <KpiCard label="Ready to add" value={String(plan.ready.length)} tone="ok" />
             <KpiCard label="Skipped" value={String(plan.rows.length - plan.ready.length)} note="See the reasons below" />
-            <KpiCard label="New intakes" value={String(plan.newIntakes.length)} note={plan.newCourses.length ? `and ${plan.newCourses.length} new programme${plan.newCourses.length === 1 ? '' : 's'}` : undefined} />
+            <KpiCard label="New cohorts" value={String(plan.newIntakes.length)} note={plan.newCourses.length ? `and ${plan.newCourses.length} new department${plan.newCourses.length === 1 ? '' : 's'}` : undefined} />
           </KpiRow>
           {plan.programmes.length > 0 && (
             <section className="card stack">
-              <h2>Match the programmes</h2>
-              <p className="small muted">Check where each programme in your file goes. Choose "Add as a new programme" only if ADIA doesn't have it yet.</p>
+              <h2>Match the departments</h2>
+              <p className="small muted">Check where each department in your file goes. Choose "Add as a new department" only if ADIA doesn't have it yet.</p>
               <table className="table">
                 <thead><tr><th>In your file</th><th className="num">Students</th><th>Goes to</th></tr></thead>
                 <tbody>
@@ -155,8 +155,8 @@ function StudentImport({ org }: { org: Organization }) {
                       <td>{p.name}</td>
                       <td className="num">{p.rows}</td>
                       <td>
-                        <select value={p.courseId ?? ''} aria-label={`Programme for ${p.name}`} onChange={(e) => setCourseMap((m) => ({ ...m, [p.key]: e.target.value }))}>
-                          <option value="">Add as a new programme</option>
+                        <select value={p.courseId ?? ''} aria-label={`Department for ${p.name}`} onChange={(e) => setCourseMap((m) => ({ ...m, [p.key]: e.target.value }))}>
+                          <option value="">Add as a new department</option>
                           {s.courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                       </td>
@@ -168,16 +168,16 @@ function StudentImport({ org }: { org: Organization }) {
           )}
           {plan.sheetsSkipped.length > 0 && <p className="notice small">Left out because they have no name column: {plan.sheetsSkipped.join(', ')}.</p>}
           {plan.missingColumns.length > 0 && (
-            <p className="notice small">The file has no {plan.missingColumns.join(' or ')} column. Fill it in above under "My file has no Programme or Intake column".</p>
+            <p className="notice small">The file has no {plan.missingColumns.join(' or ')} column. Fill it in above under "My file has no Department or Cohort column".</p>
           )}
-          {plan.newCourses.length > 0 && <p className="notice small">These programmes will be added: {plan.newCourses.join(', ')}. Check the spelling first; a programme spelt differently from one you already have will be added as a new one.</p>}
-          {plan.newIntakes.length > 0 && <p className="notice small">These intakes will be added: {plan.newIntakes.map((i) => `${i.courseName} ${i.name}`).join(', ')}.</p>}
+          {plan.newCourses.length > 0 && <p className="notice small">These departments will be added: {plan.newCourses.join(', ')}. Check the spelling first; a department spelt differently from one you already have will be added as a new one.</p>}
+          {plan.newIntakes.length > 0 && <p className="notice small">These cohorts will be added: {plan.newIntakes.map((i) => `${i.courseName} ${i.name}`).join(', ')}.</p>}
           {!can('settings.manage') && !can('school.manage') && plan.ready.some((r) => r.admissionNo) && <p className="notice small">Only staff with the Settings permission can keep the file's admission numbers, so these students will get new numbers.</p>}
-          {needsSettings && <p className="error" role="alert">Adding programmes or intakes needs the Settings permission. Ask the pastor to add them, or to do the import.</p>}
+          {needsSettings && <p className="error" role="alert">Adding departments or cohorts needs the Settings permission. Ask the Director to add them, or to do the import.</p>}
 
           <div className="card exam-table-wrap">
             <table className="table">
-              <thead><tr><th>Sheet · row</th><th>Name</th><th>Phone</th><th>Adm no</th><th>Programme</th><th>Intake</th><th>Status</th><th>Result</th></tr></thead>
+              <thead><tr><th>Sheet · row</th><th>Name</th><th>Phone</th><th>Adm no</th><th>Department</th><th>Cohort</th><th>Status</th><th>Result</th></tr></thead>
               <tbody>
                 {shown.map((r) => (
                   <tr key={`${r.sheet}:${r.line}`}>

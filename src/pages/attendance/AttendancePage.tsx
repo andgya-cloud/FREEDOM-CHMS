@@ -211,7 +211,7 @@ export function AttendancePage() {
             <button type="submit" className="btn" disabled={!otherName.trim()}>Start</button>
           </form>
           {org.type === 'church_campus' && <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
-          {org.type !== 'church_campus' && <p className="hint">The programme list is in <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
+          {org.type === 'ministry' && <p className="hint">The programme list is in <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
           </>}
         </section>
       )}

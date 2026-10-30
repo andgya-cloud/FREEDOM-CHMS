@@ -61,7 +61,7 @@ function Graduation({ org }: { org: Organization }) {
 
   function registerCsv() {
     const rows = register.map((c) => [c.serial ?? '', s.nameOf(c.studentId), s.courseName(c.courseId), classFor(c.studentId, c.issuedOn), c.issuedOn]);
-    downloadFile(csvFile(`Certificate register ${s.today}.csv`, [['Serial number', 'Name', 'Programme', 'Class', 'Issued on'], ...rows]));
+    downloadFile(csvFile(`Certificate register ${s.today}.csv`, [['Serial number', 'Name', 'Department', 'Class', 'Issued on'], ...rows]));
   }
 
   return (
@@ -76,7 +76,7 @@ function Graduation({ org }: { org: Organization }) {
           {register.length > 8 && <StudentFinder finder={finder} names={register.map((c) => s.nameOf(c.studentId))} shown={listed.length} total={register.length} />}
           <div className="table-scroll">
             <table className="report-table">
-              <thead><tr><th>Serial</th><th>Name</th><th>Programme</th><th>Class</th><th>Issued</th><th>Certificate</th></tr></thead>
+              <thead><tr><th>Serial</th><th>Name</th><th>Department</th><th>Class</th><th>Issued</th><th>Certificate</th></tr></thead>
               <tbody>{listed.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td><Link to={`/school/students/${c.studentId}`}>{s.nameOf(c.studentId)}</Link></td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td>
                 <td><CertificateActions orgId={org.id} cert={c} canManage={canFiles} email={s.byId(c.studentId)?.email} compact /></td></tr>)}</tbody>
             </table>

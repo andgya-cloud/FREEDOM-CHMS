@@ -1,4 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { formatDate } from '../../../functions/src/shared/datetime';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { PayrollInsights } from '../../components/PayrollInsights';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -33,7 +34,7 @@ const num = (cents: number) => (cents / 100).toLocaleString('en-KE', { minimumFr
 const itemsTotal = (items: readonly PayItem[]) => items.reduce((t, i) => t + i.amountCents, 0);
 
 function NoAccess() {
-  return <div className="page narrow"><h1>Payroll</h1><p>Payroll is for the people the pastor has given access.</p></div>;
+  return <div className="page narrow"><h1>Payroll</h1><p>Payroll is for the people the Director has given access.</p></div>;
 }
 
 function PayrollNav() {
@@ -429,7 +430,7 @@ function download(name: string, text: string) {
 }
 
 const stampDate = (t: unknown) => (t && typeof (t as { toDate?: unknown }).toDate === 'function'
-  ? (t as { toDate: () => Date }).toDate().toLocaleDateString('en-KE', { dateStyle: 'medium' }) : '');
+  ? formatDate((t as { toDate: () => Date }).toDate()) : '');
 
 interface AdjDraft { earnings: ItemDraft[]; unpaid: ItemDraft[] }
 

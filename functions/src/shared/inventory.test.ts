@@ -35,7 +35,7 @@ describe('inventory', () => {
   it('prints how late a form was and who reopened it', () => {
     expect(lateDays('2026-11-02', '2026-11-02')).toBe(0);
     expect(lateNote({ deadline: '2026-11-02', reopens: [{ reason: 'Was sick', byName: 'Felix', grantedByName: 'Doreen', until: '2026-11-06', at: '2026-11-04' }] }, '2026-11-05'))
-      .toBe('Submitted late by 3 days (deadline 02/11/2026). Reopened by Doreen on 04/11/2026 until 06/11/2026. Reason given: Was sick.');
+      .toBe('Submitted late by 3 days (deadline 2 Nov 2026). Reopened by Doreen on 4 Nov 2026 until 6 Nov 2026. Reason given: Was sick.');
     expect(lateNote({ deadline: '2026-11-02' }, '2026-11-01')).toBe('');
   });
   it('compares the end of a cohort with its start', () => {
