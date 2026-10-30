@@ -33,6 +33,11 @@ import {
  */
 const AUTO_NOTICES = false;
 const PETTY_EMAIL_APP_PASSWORD = defineSecret('PETTY_EMAIL_APP_PASSWORD');
+/** Freedom Church sends from freedomchurchnairobi@gmail.com and Hope from freedomnbi@gmail.com (Andy, 2026-10-30). */
+const CHURCH_EMAIL_APP_PASSWORD = defineSecret('CHURCH_EMAIL_APP_PASSWORD');
+const HOPE_EMAIL_APP_PASSWORD = defineSecret('HOPE_EMAIL_APP_PASSWORD');
+const appPasswordFor = (orgType: string) =>
+  (orgType === 'church_campus' ? CHURCH_EMAIL_APP_PASSWORD : orgType === 'ministry' ? HOPE_EMAIL_APP_PASSWORD : PETTY_EMAIL_APP_PASSWORD).value();
 const WHATSAPP_TOKEN = defineSecret('WHATSAPP_TOKEN');
 const appUrl = () => process.env.APP_URL || 'https://freedom-chms.web.app';
 const apiBase = () => process.env.WHATSAPP_API_BASE || 'https://graph.facebook.com/v21.0';
@@ -82,12 +87,16 @@ function whenIn(org: OrgInfo, t: unknown) {
   return d.toLocaleString('en-KE', { dateStyle: 'medium', timeStyle: 'short', timeZone: org.timeZone });
 }
 
-let crest: Promise<string | null> | null = null;
-function crestImage() {
-  crest ??= readFile(new URL('../assets/adia-crest.png', import.meta.url))
-    .then((b) => `data:image/png;base64,${b.toString('base64')}`)
-    .catch(() => null);
-  return crest;
+const logos = new Map<string, Promise<string | null>>();
+/** The organization's logo from functions/assets as a data URL, for the voucher letterhead. */
+function crestImage(file: string | null) {
+  if (!file) return Promise.resolve(null);
+  if (!logos.has(file)) {
+    logos.set(file, readFile(new URL(`../assets/${file}`, import.meta.url))
+      .then((b) => `data:image/png;base64,${b.toString('base64')}`)
+      .catch(() => null));
+  }
+  return logos.get(file)!;
 }
 
 /** The signed voucher PDF for an approved request. */
@@ -95,7 +104,7 @@ export async function voucherPdf(org: OrgInfo, r: FirebaseFirestore.DocumentData
   const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
   const sigs = sortedSigs(r.signatures);
   const signOffs = sigs.map(([, s]) => ({ role: s.role, name: s.name, when: whenIn(org, s.at) }));
-  drawRequisition(pdf, org.lh, org.lh.crest ? await crestImage() : null, org.currency, {
+  drawRequisition(pdf, org.lh, await crestImage(org.lh.crest), org.currency, {
     number: r.number ?? null, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote ?? null, items: r.items ?? [],
     totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status as keyof typeof PETTY_CASH_STATUS_LABELS] ?? r.status,
     date: whenIn(org, r.createdAt), payee: r.payee ?? null, mpesaCode: r.mpesaCode ?? null,
@@ -117,7 +126,7 @@ function mailProblem(err: unknown): string {
 async function emailNotice(org: OrgInfo, kind: PettyNoticeKind, req: NoticeRequest, link: string, signers: string[], people: Person[],
   attachment: { name: string; data: Buffer } | null): Promise<{ sent: number; problem: string; names: string[] }> {
   const from = org.lh.email;
-  const pass = process.env.PETTY_MAIL_TEST_DIR ? 'test' : PETTY_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
+  const pass = process.env.PETTY_MAIL_TEST_DIR ? 'test' : appPasswordFor(org.type).replace(/\s+/g, '');
   if (!from || !pass) { logger.info(`Petty cash email skipped for ${org.id}: no sending email or app password yet.`); return { sent: 0, problem: 'No Gmail app password is saved yet.', names: [] }; }
   // In local tests the emails are written to files (PETTY_MAIL_TEST_DIR) instead of being sent.
   const transport = process.env.PETTY_MAIL_TEST_DIR
@@ -261,7 +270,7 @@ const RESEND_AFTER_MS = 2 * 60_000;
  * "Send Email" on a requisition: while it waits, asks every stakeholder who has not signed (never the
  * requester) to approve it; once approved, sends the signed voucher PDF to every stakeholder and the requester.
  */
-export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_APP_PASSWORD] }, async (request) => {
+export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_APP_PASSWORD, CHURCH_EMAIL_APP_PASSWORD, HOPE_EMAIL_APP_PASSWORD] }, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });

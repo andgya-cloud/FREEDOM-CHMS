@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { PasswordInput } from '../../components/PasswordInput';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
-import { useOrg } from '../../state/OrgContext';
 import { friendlyError } from '../../lib/errors';
 import { listPettySigners, passwordProof, type PettySigner } from '../../lib/pettyPin';
 import { Link } from 'react-router-dom';
@@ -26,9 +25,8 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
 }) {
   const toast = useToast();
   const { user, profile } = useAuth();
-  // Only Andrew Guya and Doreen Mayaka pick another stakeholder's name (Andy, 2026-10-24); everyone else signs as themselves.
-  const { organizations } = useOrg();
-  const keeper = organizations.find((o) => o.id === orgId)?.type !== 'college' || canKeepAccounts(profile);
+  // Only Andrew Guya and Doreen Mayaka pick another stakeholder's name (Andy: ADIA 2026-10-24, Church and Hope 2026-10-30); everyone else signs as themselves.
+  const keeper = canKeepAccounts(profile);
   const [signers, setSigners] = useState<PettySigner[] | null>(null);
   const [loadError, setLoadError] = useState('');
   const [uid, setUid] = useState('');

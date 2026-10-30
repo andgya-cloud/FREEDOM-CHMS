@@ -14,32 +14,62 @@ export const GREY: [number, number, number] = [107, 114, 128];
 export const GREEN: [number, number, number] = [22, 163, 74];
 export const RED: [number, number, number] = [220, 38, 38];
 
-/** An organization's letterhead: the name, and the address lines printed under it. */
-export interface Letterhead { name: string; lines: string[]; email: string | null; crest: boolean }
+type Rgb = [number, number, number];
 
-/** ADIA's details (Andy, 2026-10-23); other organizations show their name only until they send theirs. */
+/**
+ * An organization's letterhead: the name, the address lines printed under it, the email it sends from, its
+ * logo (a file in /org in the app and in functions/assets on the server) and its colours.
+ */
+export interface Letterhead { name: string; lines: string[]; email: string | null; crest: string | null; band: Rgb; accent: Rgb }
+
+/** ADIA's details (Andy, 2026-10-23). */
 export const ADIA_LETTERHEAD: Letterhead = {
   name: 'ADIA Training Centre',
   lines: ['P.O. Box 228770-00100 Nairobi', 'Tel 010086218 · adiatrainingc@gmail.com'],
   email: 'adiatrainingc@gmail.com',
-  crest: true,
+  crest: 'adia-crest.png',
+  band: NAVY,
+  accent: GOLD,
+};
+
+/** Freedom Church's details and logo greens (Andy, 2026-10-30). */
+export const CHURCH_LETTERHEAD: Letterhead = {
+  name: 'Freedom Church',
+  lines: ['Box 22870 - 00100 Nairobi', 'freedomchurchnairobi@gmail.com'],
+  email: 'freedomchurchnairobi@gmail.com',
+  crest: 'freedom-church-mark.png',
+  band: [47, 110, 74],
+  accent: [162, 201, 134],
+};
+
+/** Freedom Hope Center's details and OneChild green (Andy, 2026-10-30). */
+export const HOPE_LETTERHEAD: Letterhead = {
+  name: 'Freedom Hope Center',
+  lines: ['Box 22870 - 00100 Nairobi', 'freedomnbi@gmail.com'],
+  email: 'freedomnbi@gmail.com',
+  crest: 'hope-centre-mark.png',
+  band: [3, 130, 65],
+  accent: [120, 196, 146],
 };
 
 export function letterheadFor(org: { type?: string; name: string }): Letterhead {
-  return org.type === 'college' ? ADIA_LETTERHEAD : { name: org.name, lines: [], email: null, crest: false };
+  if (org.type === 'college') return ADIA_LETTERHEAD;
+  if (org.type === 'church_campus') return { ...CHURCH_LETTERHEAD, name: org.name || CHURCH_LETTERHEAD.name };
+  if (org.type === 'ministry') return { ...HOPE_LETTERHEAD, name: org.name || HOPE_LETTERHEAD.name };
+  return { name: org.name, lines: [], email: null, crest: null, band: NAVY, accent: GOLD };
 }
 
 /** Draws the letterhead; `crest` is a PNG data URL (or null). Returns where the page body starts. */
 export function drawLetterhead(pdf: JsPdf, lh: Letterhead, crest: string | null, title: string, sub: string): number {
   const w = pdf.internal.pageSize.getWidth();
-  pdf.setFillColor(...NAVY);
+  pdf.setFillColor(...lh.band);
   pdf.rect(0, 0, w, 34, 'F');
-  pdf.setFillColor(...GOLD);
+  pdf.setFillColor(...lh.accent);
   pdf.rect(0, 34, w, 1.6, 'F');
   let x = 14;
   if (lh.crest) {
     pdf.setFillColor(255, 255, 255);
-    pdf.setDrawColor(...GOLD);
+    pdf.setDrawColor(...lh.accent);
     pdf.setLineWidth(0.9);
     pdf.circle(25, 17, 11, 'FD');
     if (crest) pdf.addImage(crest, 'PNG', 17.5, 9.5, 15, 15);
@@ -49,7 +79,7 @@ export function drawLetterhead(pdf: JsPdf, lh: Letterhead, crest: string | null,
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(15);
   pdf.text(lh.name, x, 14);
-  pdf.setTextColor(...GOLD);
+  pdf.setTextColor(...lh.accent);
   pdf.setFontSize(8.5);
   pdf.setCharSpace(1.4);
   pdf.text(title.toUpperCase(), x, 20.5);
@@ -122,7 +152,7 @@ export function drawRequisition(pdf: JsPdf, lh: Letterhead, crest: string | null
 
   // Items table.
   const cols = [14, 24, w - 92, w - 66, w - 14];
-  pdf.setFillColor(...NAVY);
+  pdf.setFillColor(...lh.band);
   pdf.rect(14, y, w - 28, 9, 'F');
   pdf.setTextColor(255, 255, 255);
   pdf.setFontSize(8.5);
@@ -147,7 +177,7 @@ export function drawRequisition(pdf: JsPdf, lh: Letterhead, crest: string | null
     pdf.text(m(it.amountCents), cols[4]! - 3, y + 5.5, { align: 'right' });
     y += h;
   });
-  pdf.setDrawColor(...GOLD);
+  pdf.setDrawColor(...lh.accent);
   pdf.setLineWidth(0.6);
   pdf.line(14, y + 1, w - 14, y + 1);
   pdf.setFont('helvetica', 'bold');
@@ -159,7 +189,7 @@ export function drawRequisition(pdf: JsPdf, lh: Letterhead, crest: string | null
   // Signatures.
   if (y > 220) { pdf.addPage(); y = 20; }
   pdf.setFontSize(10);
-  pdf.setTextColor(...NAVY);
+  pdf.setTextColor(...lh.band);
   pdf.text('Authorization', 14, y);
   y += 4;
   const boxW = (w - 28 - (signOffs.length - 1) * 4) / signOffs.length;

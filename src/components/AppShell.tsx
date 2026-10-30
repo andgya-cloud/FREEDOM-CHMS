@@ -160,8 +160,8 @@ export function AppShell({ children }: { children: ReactNode }) {
             {adia && <PageHelp />}
             <SyncBadge />
             {look === 'glass' ? <img className="org-mark" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
-              : look === 'cockpit' ? <img className="org-mark org-mark-church" src="/org/church-logo.png" alt="Freedom Church" width={90} height={126} />
-              : <img className="org-mark org-mark-hope" src="/org/hope-logo.png" alt="Freedom Hope Center, OneChild" width={98} height={120} />}
+              : look === 'cockpit' ? <img className="org-mark org-mark-church" src="/org/freedom-church-logo.png" alt="Freedom Church" width={64} height={90} />
+              : <img className="org-mark org-mark-hope" src="/org/hope-centre-logo.png" alt="Freedom Hope Center, OneChild" width={73} height={90} />}
           </header>
           {notices}
           <main className="main">{children}</main>

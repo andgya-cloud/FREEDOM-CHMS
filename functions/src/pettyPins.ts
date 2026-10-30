@@ -3,7 +3,7 @@ import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, canKeepAccounts, isPettyTitle } from './shared/permissions.js';
-import { canTopUpAlone, checkPin, fundStatusAfter, fundSummary, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, DIRECTOR_LIMIT_CENTS, directorSigned, overDirectorLimit, waitingForDirector, type PettyCashSignature } from './shared/pettyCash.js';
+import { PETTY_CASH_ORG_TYPES, canTopUpAlone, checkPin, fundStatusAfter, fundSummary, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, DIRECTOR_LIMIT_CENTS, directorSigned, overDirectorLimit, waitingForDirector, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
 import { requireMonthOpen } from './pettyMonths.js';
@@ -111,9 +111,9 @@ const TOKEN_PREFIX = 'idtoken:';
 export async function requireSelfOrKeeper(caller: { uid: string; profile: UserProfile }, signerUid: string, orgId: string): Promise<{ enteredBy?: string }> {
   if (signerUid === caller.uid) return {};
   const enteredBy = { enteredBy: caller.profile.displayName || caller.profile.email };
-  // ADIA only (Andy, 2026-10-24); Hope and the church keep the shared-device name list.
+  // ADIA (Andy, 2026-10-24), and Freedom Church and Hope since 2026-10-30.
   const orgType = (await db.doc(`organizations/${orgId}`).get()).get('type') as string | undefined;
-  if (orgType !== 'college') return enteredBy;
+  if (!(PETTY_CASH_ORG_TYPES as readonly string[]).includes(orgType ?? '')) return enteredBy;
   if (!canKeepAccounts(caller.profile)) {
     throw new HttpsError('permission-denied', 'You can only sign as yourself. Only Andrew Guya and Doreen Mayaka can sign in for someone else.');
   }

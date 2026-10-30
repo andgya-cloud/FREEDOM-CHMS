@@ -7,6 +7,25 @@ import {
 import type { Organization } from '../state/OrgContext';
 import { newPdf } from './givingPdf';
 import { crestImage } from './payrollPdf';
+
+const logos = new Map<string, Promise<string | null>>();
+/** The organization's logo from /org as a data URL, for the PDF letterhead; ADIA's crest is shared with payroll. */
+function logoImage(file: string | null): Promise<string | null> {
+  if (!file) return Promise.resolve(null);
+  if (file === 'adia-crest.png') return crestImage();
+  if (!logos.has(file)) {
+    logos.set(file, fetch(`/org/${file}`)
+      .then((r) => (r.ok ? r.blob() : Promise.reject(new Error('no logo'))))
+      .then((b) => new Promise<string>((resolve, reject) => {
+        const fr = new FileReader();
+        fr.onload = () => resolve(String(fr.result));
+        fr.onerror = reject;
+        fr.readAsDataURL(b);
+      }))
+      .catch(() => { logos.delete(file); return null; }));
+  }
+  return logos.get(file)!;
+}
 import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 export type { PdfSignOff };
@@ -16,7 +35,7 @@ const madeAt = () => new Date().toLocaleString('en-KE', { dateStyle: 'medium', t
 export async function requisitionPdf(org: Organization, r: VoucherRequisition, signOffs: PdfSignOff[], receiptCount: number): Promise<File> {
   const pdf = await newPdf('a4');
   const lh = letterheadFor(org);
-  drawRequisition(pdf, lh, lh.crest ? await crestImage() : null, org.currency || 'KES', r, signOffs, receiptCount, madeAt());
+  drawRequisition(pdf, lh, await logoImage(lh.crest), org.currency || 'KES', r, signOffs, receiptCount, madeAt());
   stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `${r.number ?? 'Requisition'}${r.status === 'approved' ? '-approved' : ''}.pdf`, { type: 'application/pdf' });
 }
@@ -27,7 +46,7 @@ export async function balanceSheetPdf(org: Organization, lines: LedgerLine[], wh
   const w = pdf.internal.pageSize.getWidth();
   const m = (c: number) => formatMoney(c, org.currency || 'KES');
   const lh = letterheadFor(org);
-  let y = drawLetterhead(pdf, lh, lh.crest ? await crestImage() : null, 'Petty cash balance sheet', `${lines.length} entries`);
+  let y = drawLetterhead(pdf, lh, await logoImage(lh.crest), 'Petty cash balance sheet', `${lines.length} entries`);
 
   const boxes: [string, string][] = [['Money in', m(totals.in)], ['Money out', m(totals.out)], ['Balance now', m(totals.balance)]];
   const bw = (w - 28 - 8) / 3;
@@ -98,7 +117,7 @@ export async function monthReportPdf(org: Organization, rep: MonthReport): Promi
   const w = pdf.internal.pageSize.getWidth();
   const m = (c: number) => formatMoney(c, org.currency || 'KES');
   const lh = letterheadFor(org);
-  let y = drawLetterhead(pdf, lh, lh.crest ? await crestImage() : null, 'Petty cash month-end report', `${rep.monthName} · ${rep.status}`);
+  let y = drawLetterhead(pdf, lh, await logoImage(lh.crest), 'Petty cash month-end report', `${rep.monthName} · ${rep.status}`);
   const boxes: [string, string][] = [['Opening balance', m(rep.openingCents)], ['Money in', m(rep.inCents)], ['Money out', m(rep.outCents)], ['Closing balance', m(rep.closingCents)]];
   const bw = (w - 28 - 12) / 4;
   boxes.forEach(([k, v], i) => {

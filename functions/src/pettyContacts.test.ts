@@ -17,9 +17,14 @@ describe('withContacts', () => {
     const out = withContacts('college', [{ uid: 'd', name: 'daniel ojwang', email: '', phone: '' }]);
     expect(out.find((p) => p.uid === 'd')?.email).toBe('danalfre9@gmail.com');
   });
-  it('leaves Hope and the church as they are', () => {
+  it('gives Hope and the church the five stakeholders, without Elizabeth, and never asks Diana to sign', () => {
     const people = [{ uid: 'u', name: 'Doreen Mayaka', email: 'x@example.com', phone: '' }];
-    expect(withContacts('ministry', people)).toEqual(people);
+    for (const type of ['ministry', 'church_campus']) {
+      const out = withContacts(type, people);
+      expect(out.map((p) => p.name).sort()).toEqual(['Andrew Guya', "Daniel Ojwang'", 'Doreen Mayaka', 'Elias Omondi', 'Ronald Awili']);
+      expect(out[0]!.email).toBe('dorreen.guya@gmail.com');
+    }
+    expect(withContacts('standard', people)).toEqual(people);
   });
 });
 

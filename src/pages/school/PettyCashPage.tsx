@@ -12,6 +12,8 @@ import { requisitionPdf } from '../../lib/pettyPdf';
 import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
+
+const isPettyOrg = (type: string | undefined) => (PETTY_CASH_ORG_TYPES as readonly string[]).includes(type ?? '');
 import { AskDeleteDialog, BinButton, BinNotice } from './PettyBin';
 import { downloadFile } from '../../lib/givingPdf';
 import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
@@ -214,7 +216,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   // Imprest top-up (Andy, 2026-10-24): offer exactly what was spent since the last top-up.
   const lastTopUp = Math.max(0, ...p.funds.filter((f) => f.kind === 'topup' && f.status === 'done').map((f) => millis(f.doneAt) ?? millis(f.createdAt) ?? 0));
   const spentSince = p.requisitions.filter((r) => r.status === 'approved' && (millis(r.approved?.at) ?? millis(r.createdAt) ?? 0) > lastTopUp).reduce((n, r) => n + r.totalCents, 0);
-  const topUpWho = org.type === 'college' ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
+  const topUpWho = isPettyOrg(org.type) ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
 
   return (
     <section className={`petty-auth petty-auth-${kind}`} aria-label={text.title}>
@@ -329,7 +331,7 @@ function Home({ org }: { org: Organization }) {
   const approved = p.requisitions.filter((r) => r.status === 'approved');
   const { profile } = useAuth();
   // At ADIA the top-up box shows only to the four who may top up (and Andrew Guya and Doreen) (Andy, 2026-10-24).
-  const canTopUpHere = org.type !== 'college' || p.isKeeper || (p.canAuthorize && canTopUpAlone('college', profile?.displayName ?? '', p.isPastor));
+  const canTopUpHere = p.isKeeper || (p.canAuthorize && canTopUpAlone(org.type, profile?.displayName ?? '', p.isPastor));
   const { receipts } = useReceipts(org);
   const noReceipt = approved.filter((r) => !receipts.some((rc) => rc.reqId === r.id));
   const [topUpOpen, setTopUpOpen] = useState(false);
@@ -413,8 +415,8 @@ function NewRequisition({ org }: { org: Organization }) {
   const total = itemsTotalCents(parsed.map((i) => ({ amountCents: i.amountCents ?? 0 })));
   const previous = useMemo(() => p.requisitions.filter((r) => r.requesterId === p.uid || p.seesAll).slice(0, 30), [p.requisitions, p.uid, p.seesAll]);
   const cats = useMemo(() => categoryBudgets(pettyCashCategoriesFor(org.type), p.allocations, p.requisitions, p.periodStart, millis), [org.type, p.allocations, p.requisitions, p.periodStart]);
-  // ADIA (Andy, 2026-10-23): the requester is picked from the stakeholders; anyone but the person signed in types their PIN.
-  const isAdia = org.type === 'college';
+  // The requester is picked from the stakeholders (Andy: ADIA 2026-10-23, Church and Hope 2026-10-30); anyone but the person signed in types their PIN.
+  const isAdia = isPettyOrg(org.type);
   const [signers, setSigners] = useState<PettySigner[] | null>(null);
   const [requester, setRequester] = useState('');
   const [pin, setPin] = useState('');

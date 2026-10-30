@@ -2,7 +2,7 @@ import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
 import { canSign, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
 import { canAccessOrg } from './shared/permissions.js';
-import { itemsTotalCents, lineAmountCents, MAX_PETTY_CASH_ITEMS, pettyCashCategoriesFor, type PettyCashItem } from './shared/pettyCash.js';
+import { PETTY_CASH_ORG_TYPES, itemsTotalCents, lineAmountCents, MAX_PETTY_CASH_ITEMS, pettyCashCategoriesFor, type PettyCashItem } from './shared/pettyCash.js';
 import { requireMonthOpen } from './pettyMonths.js';
 import { cleanMpesaCode, MPESA_CODE } from './shared/pettyCash.js';
 
@@ -35,7 +35,7 @@ export const raisePettyRequest = onCall(CALLABLE, async (request) => {
   const requesterUid = requireString(data.requesterUid, 'the requester', { max: 128 });
   requireMember(caller.profile, orgId);
   const org = (await db.doc(`organizations/${orgId}`).get()).data();
-  if (org?.type !== 'college') throw new HttpsError('failed-precondition', 'Raising a request for another stakeholder is only for ADIA.');
+  if (!org || !(PETTY_CASH_ORG_TYPES as readonly string[]).includes(org.type ?? '')) throw new HttpsError('failed-precondition', 'This organization does not keep petty cash.');
 
   const requester = (await db.doc(`users/${requesterUid}`).get()).data() as UserProfile | undefined;
   const mayRequest = !!requester?.active && canAccessOrg(requester, orgId)

@@ -3,6 +3,8 @@ import { BIN_SIGNATURES_NEEDED, categoryLabel, REQUEST_SIGNATURES_NEEDED, type P
 import type { Letterhead } from './pettyVoucher.js';
 import { POWERED_BY, poweredByHtml } from './poweredBy.js';
 
+const hex = (c: [number, number, number]) => `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+
 /*
  * The petty cash notices (Andy, 2026-10-23): "please approve" when a request is submitted, a reminder
  * after 24 hours, and "approved" with the signed voucher. Sent by email and WhatsApp to the stakeholders.
@@ -66,12 +68,14 @@ export function noticeHtml(n: NoticeInput): string {
   if (n.kind === 'approved') rows.push(['Approved by', n.signers.join('<br>')]);
   const badge = n.kind === 'approved' ? ['APPROVED', '#16a34a'] : n.kind === 'reminder' ? ['REMINDER', '#d97706'] : ['APPROVAL NEEDED', '#b08934'];
   const button = n.kind === 'approved' ? 'View in Insight-IQ' : 'Review and approve';
+  const band = hex(n.lh.band);
+  const accent = hex(n.lh.accent);
   return `<!doctype html><html><body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif;color:#1f2937">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f3f4f6;padding:24px 12px"><tr><td align="center">
 <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
-<tr><td style="background:#0b112c;padding:22px 28px;border-bottom:4px solid #d2a74b">
+<tr><td style="background:${band};padding:22px 28px;border-bottom:4px solid ${accent}">
 <div style="color:#ffffff;font-size:20px;font-weight:bold">${esc(n.lh.name)}</div>
-<div style="color:#d2a74b;font-size:11px;letter-spacing:2px;margin-top:4px">PETTY CASH</div>
+<div style="color:${accent};font-size:11px;letter-spacing:2px;margin-top:4px">PETTY CASH</div>
 ${n.lh.lines.map((l) => `<div style="color:#cbd5e1;font-size:12px;margin-top:2px">${esc(l)}</div>`).join('')}
 </td></tr>
 <tr><td style="padding:26px 28px 8px">
@@ -81,10 +85,10 @@ ${n.lh.lines.map((l) => `<div style="color:#cbd5e1;font-size:12px;margin-top:2px
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:collapse;font-size:14px">
 ${rows.map(([k, v], i) => `<tr style="background:${i % 2 ? '#ffffff' : '#faf6ec'}"><td style="padding:9px 12px;color:#6b7280;width:140px;vertical-align:top">${esc(k)}</td><td style="padding:9px 12px;font-weight:bold">${k === 'Approved by' ? v.split('<br>').map(esc).join('<br>') : esc(v)}</td></tr>`).join('\n')}
 </table>
-<p style="margin:24px 0 8px"><a href="${esc(n.link)}" style="display:inline-block;background:#0b112c;color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold">${button}</a></p>
+<p style="margin:24px 0 8px"><a href="${esc(n.link)}" style="display:inline-block;background:${band};color:#ffffff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:bold">${button}</a></p>
 <p style="font-size:12px;color:#6b7280;margin:8px 0 0">${n.kind === 'approved' ? 'Each signature on the voucher was made from the signer’s own account or personal PIN.' : `Sign from your own Insight-IQ account, or with your name and PIN on the device where the request is open. Deleting a request needs any ${BIN_SIGNATURES_NEEDED} stakeholders too.`}</p>
 </td></tr>
-<tr><td style="padding:18px 28px 24px;color:#6b7280;font-size:12px;border-top:1px solid #f1f1f1">Kind regards,<br><strong style="color:#0b112c">${esc(n.lh.name)} · Petty Cash</strong><br>This message was sent from Insight-IQ.${poweredByHtml()}</td></tr>
+<tr><td style="padding:18px 28px 24px;color:#6b7280;font-size:12px;border-top:1px solid #f1f1f1">Kind regards,<br><strong style="color:${band}">${esc(n.lh.name)} · Petty Cash</strong><br>This message was sent from Insight-IQ.${poweredByHtml()}</td></tr>
 </table></td></tr></table></body></html>`;
 }
 

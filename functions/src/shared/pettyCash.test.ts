@@ -65,13 +65,16 @@ describe('petty cash', () => {
     expect(fundStatusAfter(1, 'reset')).toBe('collecting');
   });
 
-  it('lets only the four named ADIA stakeholders top up alone', () => {
+  it('lets only the four named stakeholders top up alone, at ADIA, the church and Hope', () => {
     expect(canTopUpAlone('college', "Daniel Ojwang'", false)).toBe(true);
     expect(canTopUpAlone('college', 'daniel ojwang', false)).toBe(true);
     expect(canTopUpAlone('college', 'Doreen Mayaka', false)).toBe(true);
     expect(canTopUpAlone('college', 'Elizabeth Mutuku', false)).toBe(false);
     expect(canTopUpAlone('college', 'Andy', true)).toBe(true);
-    expect(canTopUpAlone('ministry', 'Anyone', false)).toBe(true);
+    expect(canTopUpAlone('ministry', 'Anyone', false)).toBe(false);
+    expect(canTopUpAlone('church_campus', 'Elias Omondi', false)).toBe(true);
+    expect(canTopUpAlone('church_campus', 'Ronald Awili', false)).toBe(false);
+    expect(canTopUpAlone('ministry', 'Diana Kiunga', false)).toBe(false);
   });
 
   it('works out a line from quantity and unit price', () => {
