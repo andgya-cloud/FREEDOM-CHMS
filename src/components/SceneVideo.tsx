@@ -1,11 +1,11 @@
 import { useEffect, useRef } from 'react';
 
-/** Wait between the end of one play and the start of the next: 10 minutes (Andy, 2026-10-30). */
-const PAUSE_MS = 10 * 60_000;
+/** Wait between the end of one play and the start of the next: 10 seconds (Andy, 2026-10-30, after trying 10 minutes). */
+const PAUSE_MS = 10_000;
 
 /**
  * ADIA's crest video behind Getting started (Andy's animated logo, 2026-10-30): plays once, rests on its last
- * frame for ten minutes, then plays again, for as long as the page is open.
+ * frame for ten seconds, then plays again, for as long as the page is open.
  * Muted, and only the still picture for people who turn motion off.
  */
 export function SceneVideo() {
