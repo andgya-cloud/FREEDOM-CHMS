@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { Greeting } from '../../components/Greeting';
+import { SIGNATORY_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { createPortal } from 'react-dom';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -336,6 +338,7 @@ function Home({ org }: { org: Organization }) {
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
+      {profile?.roleId === SIGNATORY_ROLE_ID && <Greeting />}
       <div className="page-head">
         <h1>Petty cash</h1>
         {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}

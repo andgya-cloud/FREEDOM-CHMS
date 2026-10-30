@@ -1619,3 +1619,8 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(4) { bottom: calc(264px + env(safe-area-inset-bottom)); }
 }
 @media (max-width: 899px) { .look-glass.side-look .tabbar.has-more .tab { font-size: 0.68rem; padding-left: 2px; padding-right: 2px; } .look-glass.side-look .tabbar.has-more.more-open .tab-extra { font-size: 0.95rem; } }
+
+/* Greeting by first name (Andy, 2026-10-30): the school's name sits smaller under it on Today. */
+.lav-hero .lav-org { margin: -4px 0 12px; font-size: clamp(1.05rem, 1.8vw, 1.35rem); font-weight: 800; letter-spacing: -0.02em; }
+.lav-hero .lav-org em { font-style: normal; background: var(--lav-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.greet-line { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }

@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { Greeting } from '../../components/Greeting';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
@@ -349,6 +350,7 @@ function MyClasses({ org, studentsOf, allStudents, courseName }: { org: Organiza
   const cohorts = [...new Set(sheets.map((s) => s.cohort))];
   return (
     <div className="page narrow exams">
+      {departments && <Greeting />}
       <div className="page-head"><h1>My classes</h1></div>
       <MyCommonCourses orgId={org.id} />
       {departments && departments.length === 0 && <div className="notice">Your department hasn't been set yet. Ask the office to set it on your account; your students and classes then show here.</div>}

@@ -12,6 +12,7 @@ import { attendanceAlerts, arrearsList, capacityOf, collectionRate, schoolMetric
 import { ADIA_PROGRAMMES } from '../../../functions/src/shared/schoolSetup';
 import { LineChart, Sparkline } from '../../components/charts';
 import { SceneVideo } from '../../components/SceneVideo';
+import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
 import { usePettyCashAccess } from '../../state/usePettyCash';
@@ -98,8 +99,9 @@ export function AdiaToday({ org }: { org: Organization }) {
   const placeCell = (cohort: string, courseId: string) => intakes.filter(({ i }) => i.name === cohort && i.courseId === courseId);
   const placesIn = (list: typeof intakes) => list.reduce((n, { c }) => n + c.taken, 0);
 
-  const hour = Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: org.timeZone || 'Africa/Nairobi' }).format(new Date()));
-  const greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  // "Good evening, Andrew", with the school's name under it (Andy, 2026-10-30).
+  const first = firstNameOf(profile?.displayName);
+  const greet = `${timeGreeting(org.timeZone || 'Africa/Nairobi')}${first ? `, ${first}` : ''}`;
   const summary = `${metrics.enrolled} ${metrics.enrolled === 1 ? 'student is' : 'students are'} enrolled across ${depts.length} ${depts.length === 1 ? 'department' : 'departments'}.`
     + (thisWeek == null ? ' Mark today’s register to start tracking the weekly attendance trend.' : ` Attendance this week is ${thisWeek}%.`);
   const canRegister = can('attendance.write') || can('people.read');
@@ -132,7 +134,8 @@ export function AdiaToday({ org }: { org: Organization }) {
       <section className="card lav-hero">
         <div className="lav-hero-text">
           <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: org.timeZone || 'Africa/Nairobi' }).format(new Date())}</span>
-          <h1>{greet},<br /><em>{org.name}</em></h1>
+          <h1>{greet}</h1>
+          <p className="lav-org"><em>{org.name}</em></p>
           <p>{summary}</p>
         </div>
         <div className="lav-scene">

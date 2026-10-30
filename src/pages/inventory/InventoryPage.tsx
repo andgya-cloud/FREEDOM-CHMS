@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { Greeting } from '../../components/Greeting';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useOrg } from '../../state/OrgContext';
@@ -38,6 +39,7 @@ export function InventoryPage() {
     const mine = [...counts].sort((x, y) => Number(x.status !== 'open') - Number(y.status !== 'open') || y.deadline.localeCompare(x.deadline));
     return (
       <div className="page narrow">
+        <Greeting />
         <h1>Inventory</h1>
         {loading && !mine.length ? <p className="muted">Loading…</p> : !mine.length ? (
           <p className="muted">No inventory form yet. Admin opens one at the start and at the end of each cohort, with its deadline.</p>
