@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
@@ -104,6 +105,7 @@ export function GiftPage() {
           {gift.status === 'unassigned' && <span className="badge badge-warn">Unassigned</span>}
           <span className="muted small"> {GIFT_METHOD_LABELS[gift.method]} · {org.name}</span>
         </div>
+        <CleanupButton orgId={orgId} kind="gift" id={giftId} back="/giving" />
       </div>
 
       {gift.status === 'unassigned' && (

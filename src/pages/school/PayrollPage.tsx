@@ -1,4 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { PayrollInsights } from '../../components/PayrollInsights';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -340,7 +341,7 @@ function PersonView({ org }: { org: Organization }) {
   const p9 = p9For(s.id, y, p.runs);
   return (
     <div className="page narrow payroll-person">
-      <div className="page-head no-print"><h1>{s.name}</h1></div>
+      <div className="page-head no-print"><h1>{s.name}</h1><CleanupButton orgId={org.id} kind="payrollStaff" id={s.id} back={`${BASE}/staff`} /></div>
       <PayrollNav />
       {editing ? <StaffForm org={org} row={s} runs={p.runs} onDone={() => setEditing(false)} /> : (
         <section className="card stack no-print">
@@ -472,6 +473,7 @@ function RunView({ org }: { org: Organization }) {
     <div className={`page narrow payroll-run${printMode ? ` print-${printMode}` : ''}`}>
       <div className="page-head no-print">
         <h1>Pay run · {monthName(month)}</h1>
+        {run && <CleanupButton orgId={org.id} kind="payrollRun" id={month} back={BASE} />}
       </div>
       <PayrollNav />
       <section className="card stack no-print">

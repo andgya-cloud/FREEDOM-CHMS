@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
@@ -70,7 +71,10 @@ function GroupView({ org, group }: { org: Organization; group: Group }) {
             {group.leaderName ? ` · led by ${group.leaderName}` : ''}{!group.active ? ' · closed' : ''}
           </p>
         </div>
-        {canWrite && <Link className="btn" to={`/groups/${org.id}/${group.id}/edit`}>Edit</Link>}
+        <div className="cleanup-head-actions">
+          {canWrite && <Link className="btn" to={`/groups/${org.id}/${group.id}/edit`}>Edit</Link>}
+          <CleanupButton orgId={org.id} kind="group" id={group.id} back="/programs" />
+        </div>
       </div>
 
       {group.active && missed.inARow >= MISSED_MEETINGS_FLAG && (

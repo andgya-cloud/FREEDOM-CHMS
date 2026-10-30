@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -71,7 +72,7 @@ function Student({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/school/students">← Students</Link></p>
-      <div className="page-head"><h1>{name}</h1><Link to={`/people/${org.id}/${st.id}`} className="btn btn-quiet">Person record</Link></div>
+      <div className="page-head"><h1>{name}</h1><div className="cleanup-head-actions"><Link to={`/people/${org.id}/${st.id}`} className="btn btn-quiet">Person record</Link><CleanupButton orgId={org.id} kind="person" id={st.id} back="/school/students" /></div></div>
       <section className="card stack">
         <p><strong>{st.admissionNo ?? 'Admission number pending'}</strong> · {course.name}{s.byId(st.id)?.phone && <> · <a href={`tel:${s.byId(st.id)?.phone}`}>{s.byId(st.id)?.phone}</a></>}</p>
         <div className="field-row">

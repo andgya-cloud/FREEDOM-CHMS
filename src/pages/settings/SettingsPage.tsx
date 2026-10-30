@@ -13,6 +13,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { to: '/settings/whatsapp', label: 'WhatsApp automation', detail: 'Let welcomes and check-ins send themselves, with your approval first', permission: 'settings.manage' },
   { to: '/settings/reports', label: 'Reports', detail: 'Regular attenders, who gets reports by email, giving budget', permission: 'settings.manage' },
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', keepersOnly: true },
+  { to: '/settings/cleanup', label: 'Clean-up', detail: 'Remove test data and clutter; Recycle Bin and Forever', keepersOnly: true },
   { to: '/settings/data', label: 'Data and backups', detail: 'Weekly backup, download everything, one person’s data, practice mode', permission: 'data.export' },
   { to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },
   { to: '/settings/signing-pin', label: 'Signing PIN', detail: 'Set or change the PIN used to sign petty cash', petty: true },

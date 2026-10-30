@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
@@ -1421,7 +1422,7 @@ function SheetEditor({ org }: { org: Organization }) {
       <p className="no-print"><Link to={back}>← {a.canManage ? 'Exam Records' : 'My classes'}</Link></p>
       <div className="page-head">
         <h1>{sheet.courseName || 'Untitled course'}</h1>
-        <span className="row-actions"><StatusPill status={sheet.status} /><button type="button" className="btn btn-quiet btn-small no-print" disabled={printing || !roster.length} onClick={() => void print()}>{printing ? 'Preparing…' : 'Print marks sheet'}</button></span>
+        <span className="row-actions"><StatusPill status={sheet.status} /><button type="button" className="btn btn-quiet btn-small no-print" disabled={printing || !roster.length} onClick={() => void print()}>{printing ? 'Preparing…' : 'Print marks sheet'}</button><CleanupButton orgId={org.id} kind="examSheet" id={sheet.id} back={BASE} /></span>
       </div>
       <p className="lead">{programmeOf(sheet.courseId, s.courseName)} · {sheet.cohort} · {semesterText(sheet.semester)} · {sheet.teacherName}</p>
       {notice && <div className={`notice small${sheet.status === 'draft' && !closed ? ' up-bad' : ''}`}>{notice}</div>}

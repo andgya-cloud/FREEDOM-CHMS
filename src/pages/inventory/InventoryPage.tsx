@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useOrg } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
@@ -302,6 +303,7 @@ export function InventoryCountPage() {
       <div className="page-head inv-head">
         <h1>{c.courseName}<span className="inv-sub">{phaseTitle(c.phase, c.cohort)}</span></h1>
         {!(open && c.status === 'open') && <span className={`inv-chip inv-${status.tone}`}>{status.text}</span>}
+        <CleanupButton orgId={orgId} kind="inventoryCount" id={c.id} back="/inventory" />
       </div>
 
       {c.status === 'open' && open && (

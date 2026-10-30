@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
@@ -97,6 +98,7 @@ export function EventPage() {
         {canRecord && !isClass && (
           <Link className="btn btn-gold" to={`/door/${orgId}/${eventId}`}>Door mode</Link>
         )}
+        <CleanupButton orgId={orgId} kind="event" id={eventId} back={linked.back.to} />
       </div>
 
       {linked.program && <ProgramSessionPanel key={event.id} orgId={orgId} event={event} program={linked.program} canEdit={canRecord} />}

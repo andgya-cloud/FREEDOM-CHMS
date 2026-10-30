@@ -79,3 +79,14 @@ describe('inventory counts', () => {
     await assertFails(getDoc(doc(as('claire'), 'organizations/adia/inventoryPhotos/p1')));
   });
 });
+
+describe('clean-up bin', () => {
+  it('is reached only through the Clean-up functions, even by the pastor', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'organizations/adia/cleanupBin/b1'), { orgId: 'adia', label: 'Test student', state: 'bin' });
+    });
+    await assertFails(getDoc(doc(as('pastor'), 'organizations/adia/cleanupBin/b1')));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/adia/cleanupBin/b2'), { orgId: 'adia' }));
+    await assertFails(getDoc(doc(as('felix'), 'organizations/adia/cleanupBin/b1')));
+  });
+});

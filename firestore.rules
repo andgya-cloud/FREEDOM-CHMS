@@ -1728,6 +1728,12 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Clean-up Recycle Bin and Forever (Andy, 2026-10-30): read and written only by the Clean-up functions,
+      // which check that the caller is Andrew Guya or Doreen.
+      match /cleanupBin/{entryId} {
+        allow read, write: if false;
+      }
+
       match /dataRequests/{requestId} {
         allow read: if canAccessOrg(orgId) && has('data.export');
         allow create: if canAccessOrg(orgId) && has('data.export')

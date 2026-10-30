@@ -83,7 +83,7 @@ export function useSchool(orgId: string) {
     invoices: live(invoices.rows),
     balances: balances.rows,
     structures: live(structures.rows),
-    certificates: certificates.rows,
+    certificates: live(certificates.rows),
     outcomes: live(outcomes.rows),
     events: trainer ? (classEvents.events as unknown as ClassEvent[]) : live(events.rows),
     records: live(records.rows),

@@ -61,6 +61,7 @@ const PettyCashPage = lazy(() => import('./pages/school/PettyCashPage').then((m)
 const NewRequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.NewRequisitionPage })));
 const RequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.RequisitionPage })));
 const PettyReceiptsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReceiptsPage })));
+const CleanupPage = lazy(() => import('./pages/settings/CleanupPage').then((m) => ({ default: m.CleanupPage })));
 const SigningPinPage = lazy(() => import('./pages/settings/SigningPinPage').then((m) => ({ default: m.SigningPinPage })));
 const PettyReportsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReportsPage })));
 const PettyMonthEndPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyMonthEndPage })));
@@ -222,6 +223,7 @@ function AppRoutes() {
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
         <Route path="/settings/organizations/:orgId" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
+        <Route path="/settings/cleanup" element={<RequireAccountKeeper><CleanupPage /></RequireAccountKeeper>} />
         <Route path="/settings/users" element={<RequireAccountKeeper><UsersPage /></RequireAccountKeeper>} />
         <Route path="/settings/users/new" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
         <Route path="/settings/users/:uid" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />

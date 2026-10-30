@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { doc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -101,7 +102,10 @@ export function PersonPage() {
           <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>
           {org && organizations.length > 1 && <span className="muted small"> · {org.name}</span>}
         </div>
-        {canWrite && <Link className="btn" to={`/people/${orgId}/${personId}/edit`}>Edit</Link>}
+        <div className="cleanup-head-actions">
+          {canWrite && <Link className="btn" to={`/people/${orgId}/${personId}/edit`}>Edit</Link>}
+          <CleanupButton orgId={orgId} kind="person" id={personId} back="/people" />
+        </div>
       </div>
 
       {duplicates.length > 0 && (

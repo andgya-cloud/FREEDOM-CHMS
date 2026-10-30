@@ -1554,3 +1554,21 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .my-common-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
 .my-common-list li { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .my-common-list li:last-child { border-bottom: 0; }
+
+/* Clean-up (Andy, 2026-10-30) */
+.cleanup-page .segmented { margin: 4px 0 12px; }
+.cleanup-filters .cleanup-more summary { cursor: pointer; font-weight: 600; min-height: 40px; display: flex; align-items: center; }
+.cleanup-filters .cleanup-more[open] { display: flex; flex-direction: column; gap: 10px; }
+.cleanup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.cleanup-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.cleanup-row { display: flex; align-items: flex-start; gap: 12px; padding: 12px 16px; cursor: pointer; }
+.cleanup-row input[type="checkbox"] { width: 20px; height: 20px; margin-top: 2px; flex: none; }
+.cleanup-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cleanup-text .row-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-weight: 600; }
+.cleanup-bar { position: sticky; bottom: calc(12px + env(safe-area-inset-bottom)); z-index: 20; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-top: 12px; padding: 10px 12px 10px 16px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
+.cleanup-linked ul { margin: 4px 0 0; padding-left: 18px; }
+.cleanup-official { color: #8a1c0f; font-weight: 600; }
+.cleanup-remove { display: inline-flex; align-items: center; gap: 6px; color: var(--red); }
+.cleanup-remove svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.cleanup-head-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: flex-end; }

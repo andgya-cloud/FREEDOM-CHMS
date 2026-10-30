@@ -1,4 +1,5 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
@@ -111,7 +112,10 @@ function ProgramView({ org, program }: { org: Organization; program: Program }) 
           {program.description && <p className="muted">{program.description}</p>}
           {program.schedule && <p className="muted small">Classes: {program.schedule}</p>}
         </div>
-        {can('settings.manage') && <Link className="btn" to={`/programs/${org.id}/${program.id}/edit`}>Edit</Link>}
+        <div className="cleanup-head-actions">
+          {can('settings.manage') && <Link className="btn" to={`/programs/${org.id}/${program.id}/edit`}>Edit</Link>}
+          <CleanupButton orgId={org.id} kind="programme" id={program.id} back="/programs" />
+        </div>
       </div>
 
       {total === 0 && (

@@ -40,7 +40,7 @@ export function usePayroll(org: Organization) {
   const runsQ = useLiveQuery<PayRun>(() => (on ? collection(db, 'organizations', org.id, 'payrollRuns') : null), [org.id, on]);
   const ratesDoc = useLiveDoc<PayrollRates & { id: string }>(() => (on ? doc(db, 'organizations', org.id, 'payrollSettings', 'rates') : null), [org.id, on]);
   const staff = useMemo(() => staffQ.rows.filter((s) => !s.deletedAt).sort((a, b) => a.name.localeCompare(b.name)), [staffQ.rows]);
-  const runs = useMemo(() => [...runsQ.rows].sort((a, b) => b.month.localeCompare(a.month)), [runsQ.rows]);
+  const runs = useMemo(() => runsQ.rows.filter((r) => !(r as { deletedAt?: unknown }).deletedAt).sort((a, b) => b.month.localeCompare(a.month)), [runsQ.rows]);
   const rates: PayrollRates = ratesDoc.data ? { ...DEFAULT_PAYROLL_RATES, ...ratesDoc.data } : DEFAULT_PAYROLL_RATES;
   return { ...access, staff, runs, rates, ratesSaved: !!ratesDoc.data, loading: staffQ.loading || runsQ.loading };
 }

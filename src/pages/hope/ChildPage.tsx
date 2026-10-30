@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -90,6 +91,7 @@ function ChildScreen({ org }: { org: Organization }) {
             {child.status === 'exited' && <span className="badge badge-muted">Left{child.exitedOn ? ` ${formatDateKey(child.exitedOn)}` : ''}</span>}
           </p>
         </div>
+        <CleanupButton orgId={org.id} kind="person" id={child.id} back="/hope/children" />
       </div>
       <HopeNav />
 
