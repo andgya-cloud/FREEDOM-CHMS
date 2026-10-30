@@ -64,12 +64,7 @@ function PayrollHome({ org }: { org: Organization }) {
         <h1>Payroll</h1>
       </div>
       <PayrollNav />
-      <div className="petty-stats">
-        <div className="petty-stat petty-stat-budget"><span>Staff on payroll</span><strong>{active.length}</strong></div>
-        <div className="petty-stat petty-stat-spent"><span>Monthly gross</span><strong>{money(org, preview.grossCents)}</strong></div>
-        <div className="petty-stat petty-stat-left"><span>Monthly net pay</span><strong>{money(org, preview.netCents)}</strong></div>
-        <div className="petty-stat payroll-stat-cost"><span>Cost to ADIA</span><strong>{money(org, preview.employerCostCents)}</strong></div>
-      </div>
+      {/* Simplicity (Andy 2A, 2026-10-30): prepare a pay run and the last 3 runs; everything else under "See more". */}
       {p.canManage && (
         <section className="card stack">
           <h2>Prepare a pay run</h2>
@@ -81,26 +76,47 @@ function PayrollHome({ org }: { org: Organization }) {
           )}
         </section>
       )}
-      {!p.loading && <PayrollInsights org={org} runs={p.runs} staff={p.staff} />}
       <section className="card stack">
         <h2>Pay runs</h2>
-        {p.runs.length === 0 ? <p className="muted small">No pay run yet.</p> : (
-          <ul className="link-list">
-            {p.runs.map((r) => (
-              <li key={r.id}>
-                <Link to={`${BASE}/${r.month}`}>
-                  <span className="link-title">{monthName(r.month)} · {r.status === 'approved' ? 'Approved' : 'Waiting for approval'}</span>
-                  <span className="link-detail">{r.totals.staff} staff · net {money(org, r.totals.netCents)} · prepared by {r.preparedByName}{r.approved ? ` · approved by ${r.approved.name}` : ''}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        )}
+        {p.runs.length === 0 ? <p className="muted small">No pay run yet.</p> : <RunList org={org} runs={p.runs.slice(0, 3)} />}
         {latest && latest.status === 'draft' && p.canApprove && latest.preparedBy !== p.uid && <p className="small">{monthName(latest.month)} is waiting for your approval.</p>}
       </section>
-      <RatesCard org={org} rates={p.rates} saved={p.ratesSaved} canEdit={p.canApprove} />
+      <details className="card fold-card">
+        <summary>See more: figures, charts, older pay runs and tax rates</summary>
+        <div className="stack">
+          <div className="petty-stats">
+            <div className="petty-stat petty-stat-budget"><span>Staff on payroll</span><strong>{active.length}</strong></div>
+            <div className="petty-stat petty-stat-spent"><span>Monthly gross</span><strong>{money(org, preview.grossCents)}</strong></div>
+            <div className="petty-stat petty-stat-left"><span>Monthly net pay</span><strong>{money(org, preview.netCents)}</strong></div>
+            <div className="petty-stat payroll-stat-cost"><span>Cost to ADIA</span><strong>{money(org, preview.employerCostCents)}</strong></div>
+          </div>
+          {!p.loading && <PayrollInsights org={org} runs={p.runs} staff={p.staff} />}
+          {p.runs.length > 3 && (
+            <section className="card stack">
+              <h2>Older pay runs</h2>
+              <RunList org={org} runs={p.runs.slice(3)} />
+            </section>
+          )}
+          <RatesCard org={org} rates={p.rates} saved={p.ratesSaved} canEdit={p.canApprove} />
+        </div>
+      </details>
       {p.loading && <p className="muted small">Loading…</p>}
     </div>
+  );
+}
+
+function RunList({ org, runs }: { org: Organization; runs: ReturnType<typeof usePayroll>['runs'] }) {
+  return (
+    <ul className="link-list">
+      {runs.map((r) => (
+        <li key={r.id}>
+          <Link to={`${BASE}/${r.month}`}>
+            <span className="link-title">{monthName(r.month)} · {r.status === 'approved' ? 'Approved' : 'Waiting for approval'}</span>
+            <span className="link-detail">{r.totals.staff} staff · net {money(org, r.totals.netCents)} · prepared by {r.preparedByName}{r.approved ? ` · approved by ${r.approved.name}` : ''}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
   );
 }
 

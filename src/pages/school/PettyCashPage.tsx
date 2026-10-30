@@ -293,7 +293,7 @@ export function RequisitionList({ org, rows, empty }: { org: Organization; rows:
   const p = usePettyCashAccess();
   const { receipts } = useReceipts(org);
   const counts = useMemo(() => receipts.reduce<Record<string, number>>((m, rc) => ({ ...m, [rc.reqId]: (m[rc.reqId] ?? 0) + 1 }), {}), [receipts]);
-  const [deleting, setDeleting] = useState<RequisitionRow | null>(null);
+  // No bin icon in the lists (Andy 5A, 2026-10-30): deleting is on each requisition's own page.
   if (rows.length === 0) return <p className="muted small">{empty}</p>;
   return (
     <>
@@ -307,12 +307,9 @@ export function RequisitionList({ org, rows, empty }: { org: Organization; rows:
                 ? <span className="badge">📎 {counts[r.id]} receipt{counts[r.id] === 1 ? '' : 's'}</span>
                 : needsReceipt(r, 0) && <span className="badge badge-warn">No receipt yet</span>)}
             </Link>
-            {(p.canSign || r.requesterId === p.uid) && (r.status !== 'approved' || p.isKeeper) && <BinButton label={`Delete ${label(r)}`} onClick={() => setDeleting(r)} />}
           </li>
         ))}
       </ul>
-      <AskDeleteDialog org={org} kind="request" targetId={deleting?.id ?? ''} open={!!deleting} onClose={() => setDeleting(null)}
-        title={deleting ? `Delete ${label(deleting)}?` : ''} body={deleting ? `${money(org, deleting.totalCents)} · ${categoryLabel(deleting)} · ${deleting.requesterName}.` : ''} />
     </>
   );
 }
@@ -493,9 +490,10 @@ function NewRequisition({ org }: { org: Organization }) {
       <div className="page-head"><h1>New requisition</h1></div>
       <PettyNav org={org} />
       {p.seesAll && <BudgetHealth org={org} rows={cats} />}
+      {/* A small link, so the form comes first (Andy 6A, 2026-10-30). */}
       {previous.length > 0 && (
-        <section className="card stack">
-          <h2>Start from an old requisition</h2>
+        <details className="petty-copy">
+          <summary>Copy an old one</summary>
           <div className="field-row">
             <label className="field"><span>Old requisition</span>
               <select value={copyFrom} onChange={(e) => setCopyFrom(e.target.value)}>
@@ -505,7 +503,7 @@ function NewRequisition({ org }: { org: Organization }) {
             </label>
             <button type="button" className="btn btn-quiet align-start" disabled={!copyFrom} onClick={copy}>Copy it</button>
           </div>
-        </section>
+        </details>
       )}
       <section className="card stack">
         <div className="card-head"><h2>Request</h2><span className="petty-number">Number given when saved</span></div>

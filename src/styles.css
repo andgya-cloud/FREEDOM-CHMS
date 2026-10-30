@@ -1598,3 +1598,24 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .page-help-box ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 0.92rem; line-height: 1.45; }
 .page-help-box .btn { align-self: flex-end; }
 @media (max-width: 560px) { .page-help-box { position: fixed; left: 16px; right: 16px; top: 72px; width: auto; } }
+
+/* "Copy an old one" on New requisition: a small link that opens the old-requisition picker (Andy 6A). */
+.petty-copy { align-self: flex-end; }
+.petty-copy > summary { cursor: pointer; list-style: none; color: #4c55d9; font-weight: 650; font-size: 0.9rem; text-decoration: underline; text-align: right; }
+.petty-copy > summary::-webkit-details-marker { display: none; }
+.petty-copy[open] { align-self: stretch; }
+.petty-copy[open] > summary { margin-bottom: 8px; }
+
+/* ADIA phones: 4 menu buttons and "More" (Andy 8A, 2026-10-30). The rest open in a panel above the bar. */
+.tabbar .tab-more { display: none; background: none; border: 1px solid transparent; font: inherit; cursor: pointer; }
+.tab-more svg { fill: currentColor; stroke: none; }
+@media (max-width: 899px) {
+  .look-glass.side-look .tabbar.has-more .tab-more { display: flex; }
+  .look-glass.side-look .tabbar.has-more .tab-extra { display: none; }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra { display: flex; position: fixed; right: 16px; width: 200px; max-width: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px; font-size: 0.95rem; background: linear-gradient(165deg, #151d42, #0b1130); border: 1px solid rgb(var(--menu-gold) / 0.75); border-radius: 14px; box-shadow: 0 12px 30px -10px rgba(10, 16, 41, 0.7); z-index: 70; }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(1) { bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(2) { bottom: calc(152px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(3) { bottom: calc(208px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(4) { bottom: calc(264px + env(safe-area-inset-bottom)); }
+}
+@media (max-width: 899px) { .look-glass.side-look .tabbar.has-more .tab { font-size: 0.68rem; padding-left: 2px; padding-right: 2px; } .look-glass.side-look .tabbar.has-more.more-open .tab-extra { font-size: 0.95rem; } }

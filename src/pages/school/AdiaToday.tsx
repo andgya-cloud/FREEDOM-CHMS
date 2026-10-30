@@ -2,6 +2,7 @@ import { useId, useMemo, useState, type ReactNode } from 'react';
 import { MyCommonCourses } from '../attendance/CommonCourses';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
+import { isDirectorProfile } from '../../../functions/src/shared/permissions';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { setupSchool } from '../../lib/schoolWrites';
@@ -45,7 +46,7 @@ function lastWeeks(today: string): { from: string; to: string; label: string }[]
  */
 export function AdiaToday({ org }: { org: Organization }) {
   const s = useSchoolPage(org);
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const petty = usePettyCashAccess();
   const payroll = usePayrollAccess();
   const inventory = useInventoryAccess();
@@ -136,7 +137,8 @@ export function AdiaToday({ org }: { org: Organization }) {
         </div>
         <div className="lav-scene">
           <SceneVideo />
-          <FirstRunChecklist variant="scene" />
+          {/* "Getting started" shows to the Director only (Andy 9A, 2026-10-30). */}
+          {isDirectorProfile(profile) && <FirstRunChecklist variant="scene" />}
         </div>
       </section>
 

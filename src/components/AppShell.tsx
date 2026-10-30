@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
@@ -14,7 +14,7 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
@@ -42,13 +42,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     document.documentElement.dataset.look = look;
     return () => { delete document.documentElement.dataset.look; };
   }, [look]);
+  // ADIA phones show 4 menu buttons and a "More" button for the rest (Andy 8A, 2026-10-30).
+  const [moreOpen, setMoreOpen] = useState(false);
+  useEffect(() => { setMoreOpen(false); }, [location.pathname]);
+  const phoneMore = adia && full;
+  // In ADIA the install reminder shows to the Director only (Andy 9A, 2026-10-30).
+  const showInstall = !adia || isDirectorProfile(profile);
+  const extra = phoneMore ? ' tab-extra' : '';
   // A trainer's only pages are their marks sheets and their own settings.
   // A trainer with register classes also marks those classes' registers (Andy, 2026-10-26).
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
   if (trainer && !new RegExp(`^/(school/exams|settings${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   const tabs = (
-    <nav className="tabbar" aria-label="Main">
+    <nav className={`tabbar${phoneMore ? ' has-more' : ''}${moreOpen ? ' more-open' : ''}`} aria-label="Main">
       {full && (<>
       <NavLink to="/" end className="tab">
         {adia ? <AdiaIcon name="today" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>}
@@ -94,25 +101,31 @@ export function AppShell({ children }: { children: ReactNode }) {
           Petty Cash
         </NavLink>
       )}
+      {phoneMore && (
+        <button type="button" className={`tab tab-more${moreOpen ? ' active' : ''}`} aria-expanded={moreOpen} onClick={() => setMoreOpen((o) => !o)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+          More
+        </button>
+      )}
       {full && current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
-        <NavLink to="/school/payroll" className="tab">
+        <NavLink to="/school/payroll" className={`tab${extra}`}>
           {adia ? <AdiaIcon name="payroll" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6zM15 3v4h4M9 12h7M9 15.5h7M9 8.5h3" /></svg>}
           Payroll
         </NavLink>
       )}
       {(full || trainer) && current?.type === 'college' && (can('exams.mark') || can('exams.manage') || can('users.manage')) && (
-        <NavLink to="/school/exams" className="tab">
+        <NavLink to="/school/exams" className={`tab${extra}`}>
           {adia ? <AdiaIcon name="exams" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>}
           {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}
         </NavLink>
       )}
       {inventoryTab && (
-        <NavLink to="/inventory" className="tab">
+        <NavLink to="/inventory" className={`tab${extra}`}>
           {adia ? <AdiaIcon name="inventory" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" /></svg>}
           Inventory
         </NavLink>
       )}
-      <NavLink to="/settings" className="tab">
+      <NavLink to="/settings" className={`tab${extra}`}>
         {adia ? <AdiaIcon name="settings" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm8.9 5.2-1.9-.4a7 7 0 0 1-.7 1.7l1.1 1.6-1.6 1.6-1.6-1.1a7 7 0 0 1-1.7.7l-.4 1.9h-2.2l-.4-1.9a7 7 0 0 1-1.7-.7l-1.6 1.1-1.6-1.6 1.1-1.6a7 7 0 0 1-.7-1.7l-1.9-.4v-2.2l1.9-.4a7 7 0 0 1 .7-1.7L5.6 6.5l1.6-1.6 1.6 1.1a7 7 0 0 1 1.7-.7l.4-1.9h2.2l.4 1.9a7 7 0 0 1 1.7.7l1.6-1.1 1.6 1.6-1.1 1.6a7 7 0 0 1 .7 1.7l1.9.4z" /></svg>}
         Settings
       </NavLink>
@@ -122,7 +135,7 @@ export function AppShell({ children }: { children: ReactNode }) {
     <>
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}
       {current?.training && <div className="dev-ribbon" role="status">Practice mode. Everything here is made up and is never mixed with real records.</div>}
-      <InstallBanner />
+      {showInstall && <InstallBanner />}
       {current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile))) && <InventoryDueBanner />}
     </>
   );
@@ -138,7 +151,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </NavLink>
           <OrgSwitcher />
           {tabs}
-          {adia && <InstallBanner variant="side" />}
+          {adia && showInstall && <InstallBanner variant="side" />}
         </aside>
         <div className={`adia-body${/^\/((school|hope)\/)?petty-cash|^\/school\/payroll/.test(location.pathname) ? ' petty-light' : ''}`}>
           <header className="adia-head">
