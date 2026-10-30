@@ -38,7 +38,8 @@ describe('clean-up', () => {
   it('describes entries in plain words', () => {
     expect(describeEntry('gift', 'g1', { giverName: 'John', amountCents: 150000, date: '2026-10-12', method: 'mpesa' }).label).toBe('John · KES 1,500');
     expect(describeEntry('payrollRun', '2026-09', { month: '2026-09', status: 'approved' })).toEqual({ label: 'Payroll 2026-09', detail: 'Approved' });
-    expect(linkedSummary({ 'attendance marks': 3, notes: 0, 'student record': 1 })).toBe('3 attendance marks, 1 student record');
+    expect(linkedSummary({ 'attendance marks': 3, notes: 0, 'student record': 1 })).toBe('3 attendance marks, 1 student record')
+    expect(linkedSummary({ 'attendance marks': 1, 'gifts and payments': 1 })).toBe('1 attendance mark, 1 gift or payment');
   });
 
   it('counts the days left in the Recycle Bin', () => {

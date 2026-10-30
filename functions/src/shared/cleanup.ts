@@ -160,8 +160,10 @@ export function daysLeft(deletedAtMs: number, nowMs = Date.now()): number {
 }
 
 /** "3 attendance marks, 1 student record" */
+const ONE: Record<string, string> = { 'gifts and payments': 'gift or payment', 'student private details': 'student private details', 'child private details': 'child private details' };
+const one = (label: string) => ONE[label] ?? label.replace(/s$/, '');
 export function linkedSummary(counts: Record<string, number>): string {
-  return Object.entries(counts).filter(([, n]) => n > 0).map(([l, n]) => `${n} ${l}`).join(', ');
+  return Object.entries(counts).filter(([, n]) => n > 0).map(([l, n]) => `${n} ${n === 1 ? one(l) : l}`).join(', ');
 }
 
 export type BinState = 'bin' | 'forever' | 'restored';

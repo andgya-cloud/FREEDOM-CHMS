@@ -33,7 +33,7 @@ async function namesOf(uids: Iterable<string>): Promise<Map<string, string>> {
   const out = new Map<string, string>([['system', 'System']]);
   for (let i = 0; i < ids.length; i += 100) {
     const snaps = await db.getAll(...ids.slice(i, i + 100).map((u) => db.doc(`users/${u}`)));
-    snaps.forEach((s) => out.set(s.id, String(s.get('displayName') || s.get('email') || 'Unknown')));
+    snaps.forEach((s) => { if (s.exists) out.set(s.id, String(s.get('displayName') || s.get('email') || '')); });
   }
   return out;
 }
