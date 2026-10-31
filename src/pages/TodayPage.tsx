@@ -28,7 +28,7 @@ import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/
 const ACTIONS = [
   { label: 'Check in', to: '/attendance', icon: 'M9 12l2 2 4-4M4 12a8 8 0 1 0 16 0 8 8 0 0 0-16 0' },
   { label: 'Add visitor', to: '/visitors/new', icon: 'M15 19a6 6 0 0 0-12 0M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M19 8v6M22 11h-6' },
-  { label: 'Record gift', to: '/giving/new', icon: 'M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6' },
+  { label: 'Record Giving', to: '/giving/new', icon: 'M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6' },
   { label: 'Follow-ups', to: '/follow-ups', icon: 'M21 12a8 8 0 0 1-11.8 7L3 21l2-6A8 8 0 1 1 21 12Z' },
 ] as const;
 
@@ -41,13 +41,13 @@ const GLASS_ACTIONS = [
 ] as const;
 
 /** Freedom Church's four tiles. An empty icon shows "Ksh." instead. */
-const CHURCH_ACTIONS = [ACTIONS[0], ACTIONS[1], { label: 'Record gift', to: '/giving/new', icon: '' }, ACTIONS[3]] as const;
+const CHURCH_ACTIONS = [ACTIONS[0], ACTIONS[1], { label: 'Record Giving', to: '/giving/new', icon: '' }, ACTIONS[3]] as const;
 
 /** Freedom Hope Center's four tiles. */
 const HOPE_ACTIONS = [
   { label: 'Check in', to: '/attendance', icon: ACTIONS[0].icon },
   { label: 'Register child', to: '/hope/children/new', icon: ACTIONS[1].icon },
-  { label: 'Record gift', to: '/giving/new', icon: '' },
+  { label: 'Record Giving', to: '/giving/new', icon: '' },
   { label: 'Follow-ups', to: '/follow-ups', icon: ACTIONS[3].icon },
 ] as const;
 

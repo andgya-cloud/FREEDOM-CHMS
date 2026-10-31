@@ -47,7 +47,7 @@ function Giving({ org }: { org: Organization }) {
         <div className="big-actions">
           <Link to="/giving/new" className="big-action">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6" /></svg>
-            <span className="big-action-label">Record gift</span>
+            <span className="big-action-label">Record Giving</span>
           </Link>
           <Link to="/giving/import" className="big-action">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>

@@ -30,7 +30,7 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
     hope
       ? { to: '/hope/children/new', icon: 'addStudent', label: 'Register child', sub: 'A new child in the programme', show: can('people.write') }
       : { to: '/visitors/new', icon: 'addStudent', label: 'Add visitor', sub: 'A first-time guest', show: can('people.write') },
-    { to: '/giving/new', icon: 'gift', label: 'Record gift', sub: 'M-Pesa, cash or bank', show: can('gifts.write') },
+    { to: '/giving/new', icon: 'gift', label: 'Record Giving', sub: 'M-Pesa, cash or bank', show: can('gifts.write') },
     { to: '/follow-ups', icon: 'chat', label: 'Follow-ups', sub: counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`, show: can('followups.manage') },
   ];
 

@@ -16,7 +16,7 @@ import { normalizePhone } from '../../../functions/src/shared/phone';
 
 /** Records one gift: cash, bank, cheque, or an M-Pesa payment typed in from the SMS. */
 export function RecordGiftPage() {
-  return <OrgGate title="Record gift">{(org) => <RecordGift org={org} />}</OrgGate>;
+  return <OrgGate title="Record Giving">{(org) => <RecordGift org={org} />}</OrgGate>;
 }
 
 function RecordGift({ org }: { org: Organization }) {
@@ -97,7 +97,7 @@ function RecordGift({ org }: { org: Organization }) {
   if (!loading && funds.length === 0) {
     return (
       <div className="page narrow">
-        <h1>Record gift</h1>
+        <h1>Record Giving</h1>
         <p>No funds are set up yet. <Link to="/giving">Back to Giving</Link></p>
       </div>
     );
@@ -106,7 +106,7 @@ function RecordGift({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/giving">← Giving</Link></p>
-      <h1>Record gift</h1>
+      <h1>Record Giving</h1>
       <form className="form" onSubmit={submit} noValidate>
         <fieldset className="field">
           <legend>How was it given?</legend>

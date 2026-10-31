@@ -1719,3 +1719,11 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .powered-by b { color: var(--text); font-weight: 700; }
 @media (max-width: 899px) { .powered-by { margin-bottom: 96px; } }
 @media print { .powered-by { display: none; } }
+
+/* Freedom Church: every card and list has a fine gold outline, the gold of its logo (Andy, 2026-10-31). */
+.look-cockpit.lite-look.side-look .card, .look-cockpit.lite-look.side-look .lav-figs, .look-cockpit.lite-look.side-look .link-list, .look-cockpit.lite-look.side-look .row-list,
+.look-cockpit.lite-look.side-look .glass-tile, .look-cockpit.lite-look.side-look .panel, .look-cockpit.lite-look.side-look .notice {
+  border: 1px solid rgb(201 162 78 / 0.85);
+}
+.look-cockpit.lite-look.side-look .link-list li + li, .look-cockpit.lite-look.side-look .row-list li + li { border-top-color: rgb(201 162 78 / 0.35); }
+.look-cockpit.lite-look.side-look .card.lav-job:hover, .look-cockpit.lite-look.side-look .card.lav-job:focus-visible { border-color: rgb(201 162 78); }

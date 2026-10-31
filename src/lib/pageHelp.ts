@@ -223,7 +223,7 @@ const CHURCH_HOPE: [RegExp, PageHelp][] = [
     'Press Save. A receipt is made.',
   ] }],
   [/^\/giving/, { title: 'Giving', steps: [
-    'Press Record gift for a new gift.',
+    'Press Record Giving for a new gift.',
     'Import the M-Pesa statement to add many gifts at once.',
     'Open Reports for totals and statements.',
   ] }],
