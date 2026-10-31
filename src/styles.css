@@ -1250,7 +1250,7 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lav-btn.ghost { background: #fff; color: var(--text); border: 1px solid var(--lav-line); }
 .lav-btn.small { padding: 9px 14px; font-size: 0.76rem; margin-top: 4px; }
 
-.look-glass .card.lav-hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; padding: 34px; position: relative; overflow: hidden; border-radius: 22px; }
+.lite-look .card.lav-hero { display: grid; grid-template-columns: 1.15fr 1fr; gap: 24px; padding: 34px; position: relative; overflow: hidden; border-radius: 22px; }
 .lav-eyebrow { display: inline-flex; align-items: center; gap: 8px; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #4c55d9; background: rgba(76, 85, 217, 0.08); padding: 6px 12px; border-radius: 999px; }
 .lav-eyebrow i { width: 8px; height: 8px; border-radius: 50%; background: #4c55d9; }
 .lav-hero h1 { font-size: clamp(1.6rem, 3.2vw, 2.45rem); line-height: 1.08; letter-spacing: -0.035em; font-weight: 800; margin: 16px 0 12px; }
@@ -1273,21 +1273,21 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lav-chk.off { background: #fff; border: 1.5px dashed var(--lav-ink-3); }
 
 .lav-quick { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-.look-glass .card.lav-qa { padding: 20px; gap: 14px; text-decoration: none; color: var(--text); transition: transform 0.2s, box-shadow 0.2s; }
-.look-glass .card.lav-qa:hover { transform: translateY(-3px); box-shadow: var(--lav-shadow-lg); }
+.lite-look .card.lav-qa { padding: 20px; gap: 14px; text-decoration: none; color: var(--text); transition: transform 0.2s, box-shadow 0.2s; }
+.lite-look .card.lav-qa:hover { transform: translateY(-3px); box-shadow: var(--lav-shadow-lg); }
 .lav-qa b { font-size: 0.9rem; }
 .lav-go { margin-top: auto; font-size: 0.72rem; font-weight: 700; color: #4c55d9; }
 
 .lav-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
-.look-glass .card.lav-kpi { padding: 20px 22px; gap: 0; position: relative; overflow: hidden; text-decoration: none; color: var(--text); }
-.look-glass a.card.lav-kpi:hover { box-shadow: var(--lav-shadow-lg); }
+.lite-look .card.lav-kpi { padding: 20px 22px; gap: 0; position: relative; overflow: hidden; text-decoration: none; color: var(--text); }
+.lite-look a.card.lav-kpi:hover { box-shadow: var(--lav-shadow-lg); }
 .lav-lbl { font-size: 0.74rem; font-weight: 600; color: var(--muted); display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .lav-val { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; margin: 10px 0 4px; line-height: 1.1; font-variant-numeric: tabular-nums; position: relative; }
 .lav-kpi .lav-sub { position: relative; }
 .lav-spark { position: absolute; right: 0; bottom: 0; width: 58%; opacity: 0.9; pointer-events: none; }
 .lav-spark .spark { height: 46px; margin: 0; }
 
-.look-glass .card.lav-panel { padding: 24px; gap: 0; }
+.lite-look .card.lav-panel { padding: 24px; gap: 0; }
 .lav-rings { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 12px; }
 .lav-ring { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 16px 8px; border-radius: 18px; background: rgba(255, 255, 255, 0.6); border: 1px solid var(--lav-line); text-align: center; }
 .lav-ring svg { width: 92px; height: 92px; }
@@ -1312,7 +1312,7 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lav-bar-l { font-size: 0.72rem; font-weight: 600; color: var(--muted); height: 20px; white-space: nowrap; }
 @keyframes lav-grow { from { transform: scaleY(0); } }
 
-.look-glass .card.lav-donut { display: grid; grid-template-columns: auto 1fr; gap: 34px; align-items: center; padding: 28px; }
+.lite-look .card.lav-donut { display: grid; grid-template-columns: auto 1fr; gap: 34px; align-items: center; padding: 28px; }
 .lav-donut svg { width: 190px; height: 190px; }
 .lav-donut-track { fill: none; stroke: #e7e8f5; stroke-width: 22; }
 .lav-donut-hole { fill: #fff; }
@@ -1328,7 +1328,7 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lav-lg-pc { font-size: 0.7rem; color: var(--lav-ink-3); font-weight: 700; width: 40px; text-align: right; }
 
 .lav-watch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
-.look-glass .card.lav-watch-item { padding: 0; gap: 0; overflow: hidden; }
+.lite-look .card.lav-watch-item { padding: 0; gap: 0; overflow: hidden; }
 .lav-watch-item > summary { list-style: none; display: flex; align-items: center; gap: 14px; padding: 18px 20px; cursor: pointer; }
 .lav-watch-item > summary::-webkit-details-marker { display: none; }
 .lav-watch-item > summary b { flex: 1; font-size: 0.85rem; }
@@ -1341,10 +1341,10 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 /* Front page jobs (Andy 1A, 2026-10-30): big buttons for each person's work; figures fold away. */
 .lav-jobs h2 { margin: 0 0 14px; font-size: 1.15rem; }
 .lav-jobs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 16px; }
-.look-glass .card.lav-job { padding: 22px 20px; gap: 10px; min-height: 128px; text-decoration: none; color: var(--text); transition: transform 0.2s, box-shadow 0.2s; }
-.look-glass .card.lav-job:hover, .look-glass .card.lav-job:focus-visible { transform: translateY(-3px); box-shadow: var(--lav-shadow-lg); }
+.lite-look .card.lav-job { padding: 22px 20px; gap: 10px; min-height: 128px; text-decoration: none; color: var(--text); transition: transform 0.2s, box-shadow 0.2s; }
+.lite-look .card.lav-job:hover, .lite-look .card.lav-job:focus-visible { transform: translateY(-3px); box-shadow: var(--lav-shadow-lg); }
 .lav-job b { font-size: 1.02rem; }
-.look-glass .lav-figs { border-radius: 18px; background: rgba(255, 255, 255, 0.75); border: 1px solid var(--lav-line); box-shadow: var(--lav-shadow); }
+.lite-look .lav-figs { border-radius: 18px; background: rgba(255, 255, 255, 0.75); border: 1px solid var(--lav-line); box-shadow: var(--lav-shadow); }
 .lav-figs > summary { list-style: none; display: flex; align-items: center; gap: 14px; padding: 18px 20px; cursor: pointer; }
 .lav-figs > summary::-webkit-details-marker { display: none; }
 .lav-figs > summary b { font-size: 0.92rem; }
@@ -1357,7 +1357,7 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   .lav-quick, .lav-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 980px) {
-  .look-glass .card.lav-hero { grid-template-columns: 1fr; padding: 24px; }
+  .lite-look .card.lav-hero { grid-template-columns: 1fr; padding: 24px; }
   .lav-grid2, .lav-watch { grid-template-columns: 1fr; }
 }
 @media (max-width: 560px) {
@@ -1365,12 +1365,12 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   .lav-kpis, .lav-quick { gap: 12px; }
   .lav-val { font-size: 1.6rem; }
   .lav-rings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .look-glass .card.lav-donut { grid-template-columns: 1fr; justify-items: center; padding: 22px; }
+  .lite-look .card.lav-donut { grid-template-columns: 1fr; justify-items: center; padding: 22px; }
   .lav-donut > div { width: 100%; }
   .lav-dbody { padding-left: 20px; }
-  .look-glass .card.lav-qa { padding: 16px; }
+  .lite-look .card.lav-qa { padding: 16px; }
   .lav-jobs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-  .look-glass .card.lav-job { padding: 16px; min-height: 112px; }
+  .lite-look .card.lav-job { padding: 16px; min-height: 112px; }
   .lav-figs > summary .lav-sub { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .lav-bar-col { animation: none; } .lav-ring-fill { transition: none; } }
@@ -1681,3 +1681,39 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lite-look.side-look .glass-tile .tile-sub { color: var(--muted); background: var(--surface-2); border-color: var(--lav-line); }
 .lite-look.side-look .glass-tile svg, .lite-look.side-look .tile-dollar { stroke: var(--navy); color: var(--navy); background-color: rgb(var(--navy-rgb) / 0.08); border-color: rgb(var(--navy-rgb) / 0.25); filter: none; }
 .lite-look.side-look .live-clock-time { color: var(--navy); font-weight: 400; }
+
+/* Freedom Church's and Hope's Today in ADIA's layout (Andy, 2026-10-31): their own greens on the hero, scene and cards. */
+.look-cockpit .lav-eyebrow, .look-aurora .lav-eyebrow, .look-cockpit .lav-chip, .look-aurora .lav-chip { background: rgb(var(--navy-rgb) / 0.08); color: var(--navy); }
+.look-cockpit .lav-eyebrow i { background: #a2c986; }
+.look-aurora .lav-eyebrow i { background: #4fd18f; }
+.look-cockpit .lav-steps a, .look-aurora .lav-steps a, .look-cockpit .lav-go, .look-aurora .lav-go { color: var(--navy); }
+.look-cockpit .lav-ico.i1 { background: linear-gradient(135deg, #1f4b33, #2f6e4a); }
+.look-cockpit .lav-ico.i2 { background: linear-gradient(135deg, #2f6e4a, #6dae85); }
+.look-cockpit .lav-ico.i3 { background: linear-gradient(135deg, #6dae85, #a2c986); }
+.look-cockpit .lav-ico.i4, .look-cockpit .lav-ico.i5 { background: linear-gradient(135deg, #10301f, #2f6e4a); }
+.look-aurora .lav-ico.i1 { background: linear-gradient(135deg, #02341b, #038241); }
+.look-aurora .lav-ico.i2 { background: linear-gradient(135deg, #038241, #16a058); }
+.look-aurora .lav-ico.i3 { background: linear-gradient(135deg, #16a058, #4fd18f); }
+.look-aurora .lav-ico.i4, .look-aurora .lav-ico.i5 { background: linear-gradient(135deg, #02341b, #05542d); }
+.look-cockpit .lav-hero .lav-org em { background: linear-gradient(120deg, #1f4b33 0%, #2f6e4a 40%, #6dae85 75%, #a2c986 100%); -webkit-background-clip: text; background-clip: text; }
+.look-aurora .lav-hero .lav-org em { background: linear-gradient(120deg, #02341b 0%, #038241 50%, #16a058 80%, #4fd18f 100%); -webkit-background-clip: text; background-clip: text; }
+.look-cockpit .lav-scene { background: url('/church-scene.jpg') center / cover no-repeat, #0b0f0c; }
+.look-cockpit .lav-scene .lav-scene-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.look-cockpit .lav-scene::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(5, 15, 9, 0) 40%, rgba(5, 15, 9, 0.45) 100%); }
+.look-aurora .lav-scene-logo { display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, rgba(79, 209, 143, 0.35), transparent 55%), linear-gradient(150deg, #05542d 0%, #038241 55%, #16a058 100%); }
+.look-aurora .lav-scene-logo { align-items: start; justify-items: end; padding: 18px; }
+.look-aurora .lav-scene-logo:has(.lav-steps) .lav-scene-mark { width: 92px; border-radius: 18px; padding: 6px; }
+.lav-scene-logo .lav-scene-mark { width: min(40%, 170px); aspect-ratio: 1; object-fit: contain; background: #fff; border-radius: 22px; padding: 8px; box-shadow: 0 24px 50px -18px rgba(0, 0, 0, 0.55); position: relative; z-index: 0; }
+.lav-scene-logo:not(:has(.lav-steps)) { align-items: center; justify-items: center; padding: 0; }
+.lav-scene-logo:not(:has(.lav-steps)) .lav-scene-mark { width: min(52%, 230px); }
+.look-cockpit .lav-scene .lav-tag, .look-cockpit .lav-scene .lav-steps, .look-aurora .lav-scene .lav-tag, .look-aurora .lav-scene .lav-steps { z-index: 1; }
+.look-cockpit .lav-steps, .look-aurora .lav-steps { box-shadow: 0 14px 30px -12px rgb(var(--navy-rgb) / 0.35); }
+.look-cockpit .lav-hide, .look-aurora .lav-hide { color: var(--navy); }
+
+/* "Powered by Insight-IQ" at the foot of each Today (Andy 5A, 2026-10-31). */
+.powered-by { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 28px auto 8px; padding: 8px 16px; width: fit-content;
+  font-size: 0.78rem; font-weight: 500; letter-spacing: 0.01em; color: var(--muted); border-radius: 999px; background: rgba(255, 255, 255, 0.55); border: 1px solid var(--lav-line, rgba(0, 0, 0, 0.08)); }
+.powered-by img { width: 22px; height: 22px; border-radius: 6px; }
+.powered-by b { color: var(--text); font-weight: 700; }
+@media (max-width: 899px) { .powered-by { margin-bottom: 96px; } }
+@media print { .powered-by { display: none; } }

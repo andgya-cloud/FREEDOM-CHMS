@@ -17,6 +17,7 @@ import type { Organization } from '../state/OrgContext';
 import { lookFor } from '../lib/look';
 import { AdiaIcon } from '../components/icons';
 import { AdiaToday } from './school/AdiaToday';
+import { MinistryToday } from './MinistryToday';
 import { SIGNATORY_ROLE_ID } from '../../functions/src/shared/permissions';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 
@@ -79,6 +80,18 @@ export function TodayPage() {
 
   // ADIA's own Today, from Andy's design (2026-10-26).
   if (glass && current?.type === 'college' && can('people.read')) return <AdiaToday org={current} />;
+
+  // Freedom Church's and Hope's Today, laid out like ADIA's (Andy, 2026-10-31).
+  const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
+  if ((cockpit || aurora) && current && !isCombined) {
+    const figures = can('people.read') || givingAllowed ? (
+      <>
+        {can('people.read') && <HomeScorecard org={current} />}
+        {givingAllowed && <GivingLink />}
+      </>
+    ) : null;
+    return <MinistryToday org={current} hope={aurora} figures={figures} />;
+  }
 
   return (
     <div className={`page${sided ? ' glass-today' : ''}`}>
@@ -144,16 +157,7 @@ export function TodayPage() {
       {current?.type === 'college' && can('people.read') ? <AdiaToday org={current} />
         : current && can('people.read') && <HomeScorecard org={current} />}
 
-      {current?.type !== 'college' && organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
-        <ul className="link-list">
-          <li>
-            <Link to="/giving">
-              <span className="link-title">Giving</span>
-              <span className="link-detail">Import the M-Pesa statement, Unassigned payments, receipts and reports</span>
-            </Link>
-          </li>
-        </ul>
-      )}
+      {current?.type !== 'college' && organizations.length > 0 && givingAllowed && <GivingLink />}
 
       {!loading && organizations.length === 0 && (
         <div className="notice">
@@ -164,6 +168,19 @@ export function TodayPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function GivingLink() {
+  return (
+    <ul className="link-list">
+      <li>
+        <Link to="/giving">
+          <span className="link-title">Giving</span>
+          <span className="link-detail">Import the M-Pesa statement, Unassigned payments, receipts and reports</span>
+        </Link>
+      </li>
+    </ul>
   );
 }
 

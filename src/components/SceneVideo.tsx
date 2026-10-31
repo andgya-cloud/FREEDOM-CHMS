@@ -4,11 +4,11 @@ import { useEffect, useRef } from 'react';
 const PAUSE_MS = 10_000;
 
 /**
- * ADIA's crest video behind Getting started (Andy's animated logo, 2026-10-30): plays once, rests on its last
- * frame for ten seconds, then plays again, for as long as the page is open.
- * Muted, and only the still picture for people who turn motion off.
+ * The animated logo behind Getting started: ADIA's crest (Andy, 2026-10-30) or Freedom Church's logo (2026-10-31).
+ * It plays once, rests on its last frame for ten seconds, then plays again, for as long as the page is open.
+ * Muted, and only the still picture for people who turn motion off. `name` is the file name in /public, without its ending.
  */
-export function SceneVideo() {
+export function SceneVideo({ name = 'adia-crest-scene' }: { name?: string } = {}) {
   const ref = useRef<HTMLVideoElement>(null);
   const still = typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
   useEffect(() => {
@@ -20,8 +20,8 @@ export function SceneVideo() {
     void video.play().catch(() => {});
     return () => { video.removeEventListener('ended', again); clearTimeout(timer); };
   }, [still]);
-  if (still) return <img className="lav-scene-media" src="/adia-crest-scene.jpg" alt="" />;
+  if (still) return <img className="lav-scene-media" src={`/${name}.jpg`} alt="" />;
   // H.264 for Safari and most browsers; WebM where H.264 is missing.
-  const src = document.createElement('video').canPlayType('video/mp4; codecs="avc1.4D401F"') ? '/adia-crest-scene.mp4' : '/adia-crest-scene.webm';
-  return <video ref={ref} className="lav-scene-media" src={src} poster="/adia-crest-scene.jpg" muted playsInline preload="auto" aria-hidden="true" />;
+  const src = document.createElement('video').canPlayType('video/mp4; codecs="avc1.4D401F"') ? `/${name}.mp4` : `/${name}.webm`;
+  return <video ref={ref} className="lav-scene-media" src={src} poster={`/${name}.jpg`} muted playsInline preload="auto" aria-hidden="true" />;
 }

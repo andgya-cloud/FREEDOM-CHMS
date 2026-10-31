@@ -12,6 +12,7 @@ import { attendanceAlerts, arrearsList, capacityOf, collectionRate, schoolMetric
 import { ADIA_PROGRAMMES } from '../../../functions/src/shared/schoolSetup';
 import { LineChart, Sparkline } from '../../components/charts';
 import { SceneVideo } from '../../components/SceneVideo';
+import { PoweredBy } from '../../components/PoweredBy';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
@@ -277,6 +278,7 @@ export function AdiaToday({ org }: { org: Organization }) {
           </Watch>
         </div>
       </section>}
+      <PoweredBy />
     </div>
   );
 }
