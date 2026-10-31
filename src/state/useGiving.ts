@@ -4,7 +4,9 @@ import { db } from '../firebase';
 import { useLiveQuery } from '../lib/useQuery';
 import { ESTIMATE } from '../lib/firestoreOptions';
 import { useAuth } from './AuthContext';
-import type { GiftMethod, GiftStatus, UnassignedReason } from '../../functions/src/shared/giving';
+import { STANDARD_FUNDS, type GiftMethod, type GiftStatus, type UnassignedReason } from '../../functions/src/shared/giving';
+
+const hasWords = (name: string) => /[a-z]/i.test(name);
 
 export interface Fund {
   id: string;
@@ -87,8 +89,13 @@ const newestFirst = (a: Gift, b: Gift) => b.date.localeCompare(a.date) || (b.cre
 
 export function useFunds(orgId: string) {
   const { rows, loading } = useLiveQuery<Fund>(() => (orgId ? collection(db, 'organizations', orgId, 'funds') : null), [orgId]);
-  const funds = rows.filter(live).sort((a, b) => a.name.localeCompare(b.name));
-  return { funds, active: funds.filter((f) => f.active), loading };
+  // A number typed into a fund name (Andy saw "7000" in place of Tithes, 2026-10-31): Tithes and Offerings keep their
+  // proper names, and any other fund named only by a number is left out of the choices.
+  const funds = rows
+    .filter(live)
+    .map((f) => (hasWords(f.name) ? f : { ...f, name: STANDARD_FUNDS.find((s) => s.id === f.id)?.name ?? f.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { funds, active: funds.filter((f) => f.active && hasWords(f.name)), loading };
 }
 
 /** Payments waiting for a person or fund. Everyone who records gifts sees these. */
