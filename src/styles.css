@@ -1482,6 +1482,9 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .adia-intro-church { background: #04140b; }
 .adia-intro-church.adia-intro-out { background-color: rgba(4, 20, 11, 0); }
 .adia-intro-church .adia-intro-skip { border-color: rgba(162, 201, 134, 0.7); }
+.adia-intro-hope { background: #070b14; }
+.adia-intro-hope.adia-intro-out { background-color: rgba(7, 11, 20, 0); }
+.adia-intro-hope .adia-intro-skip { border-color: rgba(120, 210, 150, 0.7); }
 /* Getting started sits on a photo of an ADIA class (Andy, 2026-10-26). */
 /* v108: Andy's sunrise video behind Getting started, replaying every ten seconds (SceneVideo.tsx). */
 .look-glass .lav-scene { background: url('/adia-crest-scene.jpg') center / cover no-repeat, #1f2a5c; }
@@ -1702,14 +1705,9 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .look-cockpit .lav-hero .lav-org em { background: linear-gradient(120deg, #1f4b33 0%, #2f6e4a 40%, #6dae85 75%, #a2c986 100%); -webkit-background-clip: text; background-clip: text; }
 .look-aurora .lav-hero .lav-org em { background: linear-gradient(120deg, #02341b 0%, #038241 50%, #16a058 80%, #4fd18f 100%); -webkit-background-clip: text; background-clip: text; }
 .look-cockpit .lav-scene { background: url('/church-scene.jpg') center / cover no-repeat, #0b0f0c; }
-.look-cockpit .lav-scene .lav-scene-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
-.look-cockpit .lav-scene::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(5, 15, 9, 0) 40%, rgba(5, 15, 9, 0.45) 100%); }
-.look-aurora .lav-scene-logo { display: grid; place-items: center; background: radial-gradient(circle at 30% 20%, rgba(79, 209, 143, 0.35), transparent 55%), linear-gradient(150deg, #05542d 0%, #038241 55%, #16a058 100%); }
-.look-aurora .lav-scene-logo { align-items: start; justify-items: end; padding: 18px; }
-.look-aurora .lav-scene-logo:has(.lav-steps) .lav-scene-mark { width: 92px; border-radius: 18px; padding: 6px; }
-.lav-scene-logo .lav-scene-mark { width: min(40%, 170px); aspect-ratio: 1; object-fit: contain; background: #fff; border-radius: 22px; padding: 8px; box-shadow: 0 24px 50px -18px rgba(0, 0, 0, 0.55); position: relative; z-index: 0; }
-.lav-scene-logo:not(:has(.lav-steps)) { align-items: center; justify-items: center; padding: 0; }
-.lav-scene-logo:not(:has(.lav-steps)) .lav-scene-mark { width: min(52%, 230px); }
+.look-aurora .lav-scene { background: url('/hope-intro.jpg') center / cover no-repeat, #0a0f18; }
+.look-cockpit .lav-scene .lav-scene-media, .look-aurora .lav-scene .lav-scene-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
+.look-cockpit .lav-scene::after, .look-aurora .lav-scene::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(5, 15, 9, 0) 40%, rgba(5, 15, 9, 0.45) 100%); }
 .look-cockpit .lav-scene .lav-tag, .look-cockpit .lav-scene .lav-steps, .look-aurora .lav-scene .lav-tag, .look-aurora .lav-scene .lav-steps { z-index: 1; }
 .look-cockpit .lav-steps, .look-aurora .lav-steps { box-shadow: 0 14px 30px -12px rgb(var(--navy-rgb) / 0.35); }
 .look-cockpit .lav-hide, .look-aurora .lav-hide { color: var(--navy); }

@@ -15,7 +15,7 @@ import type { ReactNode } from 'react';
 /**
  * Freedom Church's and Freedom Hope Center's Today, laid out like ADIA's (Andy, 2026-10-31, 1C 2A 3A 4A 5A 6B):
  * the greeting with the place's name under it in its own gradient, a short summary, Freedom Church's animated
- * logo (Hope shows its logo on a green panel) with Getting started on it, the four jobs, and the figures folded away.
+ * logo or Hope's OneChild video (2026-10-31) with Getting started on it, the four jobs, and the figures folded away.
  */
 export function MinistryToday({ org, hope, figures }: { org: Organization; hope: boolean; figures: ReactNode }) {
   const { profile, can } = useAuth();
@@ -44,8 +44,8 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
           <p className="lav-org"><em>{org.name}</em></p>
           <p>{hope ? <HopeSummary orgId={org.id} due={due} /> : <ChurchSummary orgId={org.id} due={due} />}</p>
         </div>
-        <div className={`lav-scene${hope ? ' lav-scene-logo' : ''}`}>
-          {hope ? <img className="lav-scene-mark" src="/org/hope-centre-mark.png" alt="Freedom Hope Center, OneChild" /> : <SceneVideo name="church-scene" />}
+        <div className="lav-scene">
+          <SceneVideo name={hope ? 'hope-intro' : 'church-scene'} />
           <FirstRunChecklist variant="scene" />
         </div>
       </section>
