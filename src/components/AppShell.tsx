@@ -143,7 +143,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (look === 'glass' || look === 'cockpit' || look === 'aurora') {
     return (
       <div className={`shell look-${look} side-look lite-look`}>
-        <AdiaIntro orgId={current?.id} college={current?.type === 'college'} />
+        <AdiaIntro orgId={current?.id} orgType={current?.type} />
         <aside className="adia-side">
           <NavLink to="/" className="brand" aria-label="Insight-IQ, Today">
             <img className="brand-logo" src="/logo-mark.png" alt="" width={56} height={56} />

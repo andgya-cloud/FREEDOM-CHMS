@@ -1478,6 +1478,10 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .adia-intro-out video { transform: scale(0.16); opacity: 0; border-radius: 220px; }
 .adia-intro-out .adia-intro-skip { opacity: 0; }
 .adia-intro-skip { position: absolute; right: 20px; bottom: calc(20px + env(safe-area-inset-bottom)); font: inherit; font-size: 0.8rem; font-weight: 600; color: rgba(255, 255, 255, 0.85); background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(210, 167, 75, 0.6); border-radius: 999px; padding: 8px 18px; cursor: pointer; transition: opacity 0.4s; }
+/* Freedom Church's opening: its dark green, with a light green outline on Skip. */
+.adia-intro-church { background: #04140b; }
+.adia-intro-church.adia-intro-out { background-color: rgba(4, 20, 11, 0); }
+.adia-intro-church .adia-intro-skip { border-color: rgba(162, 201, 134, 0.7); }
 /* Getting started sits on a photo of an ADIA class (Andy, 2026-10-26). */
 /* v108: Andy's sunrise video behind Getting started, replaying every ten seconds (SceneVideo.tsx). */
 .look-glass .lav-scene { background: url('/adia-crest-scene.jpg') center / cover no-repeat, #1f2a5c; }
