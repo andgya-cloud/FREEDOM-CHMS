@@ -142,7 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // ADIA Training Centre, Freedom Church and Freedom Hope Center: the menu down a side panel on wide screens (a bottom dock on phones).
   if (look === 'glass' || look === 'cockpit' || look === 'aurora') {
     return (
-      <div className={`shell look-${look} side-look`}>
+      <div className={`shell look-${look} side-look lite-look`}>
         <AdiaIntro orgId={current?.id} college={current?.type === 'college'} />
         <aside className="adia-side">
           <NavLink to="/" className="brand" aria-label="Insight-IQ, Today">
@@ -157,7 +157,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="adia-head">
             {can('people.read') && !trainer && <QuickSearch className="adia-search" />}
             {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
-            {adia && <PageHelp />}
+            <PageHelp college={adia} />
             <SyncBadge />
             {look === 'glass' ? <img className="org-mark" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
               : look === 'cockpit' ? <img className="org-mark org-mark-church" src="/org/freedom-church-logo.png" alt="Freedom Church" width={64} height={90} />

@@ -1136,14 +1136,14 @@ details.fold-card > summary > span:first-child { flex: 1; }
 details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 @supports (field-sizing: content) { .page-head .title-select select { field-sizing: content; } }
 /* Plain number tiles (Fees) on ADIA's light pages: the label was white on white. */
-.look-glass .tiles .tile-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-shadow: none; }
+.lite-look .tiles .tile-label { font-size: 0.85rem; font-weight: 600; color: var(--muted); text-shadow: none; }
 
 /* ======================================================================================
    ADIA Training Centre, light lavender look (Andy's design, 2026-10-26). It re-skins the
    side-panel layout above for ADIA only: frosted white panels on a lavender wash, navy for
    the active menu item and main buttons, and indigo → violet → coral gradients.
    ====================================================================================== */
-:root[data-look='glass'] {
+:root[data-look='glass'], :root[data-look='cockpit'], :root[data-look='aurora'] {
   --acc: 76 85 217;
   --acc-light: 139 108 240;
   --bg: #eef0fa;
@@ -1155,7 +1155,7 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   --primary: #1f2a5c;
   --primary-ink: #ffffff;
   --gold: #7a5cf0;
-  --gold-ink: #4c55d9;
+  --gold-ink: rgb(var(--focus-rgb));
   --ok: #23845f;
   --red: #c24561;
   --warn: #c24561;
@@ -1171,56 +1171,61 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   color-scheme: light;
   font-family: 'Plus Jakarta Sans', Inter, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
-:root[data-look='glass'] body { background: #eef0fa; }
-:root[data-look='glass'] body::before {
+:root[data-look='glass'], :root[data-look='cockpit'], :root[data-look='aurora'] {
+  --page-bg: #eef0fa; --wash-1: rgba(168, 182, 255, 0.55); --wash-2: rgba(255, 196, 206, 0.45); --wash-3: rgba(196, 186, 255, 0.45);
+  --navy-rgb: 31 42 92; --focus-rgb: 76 85 217;
+  --menu-1: #151d42; --menu-2: #0d1433; --menu-3: #0a1029; --menu-shadow-rgb: 20 24 70; --menu-gold: 210 167 75; --menu-hover: #f1d590;
+}
+:root[data-look='glass'] body, :root[data-look='cockpit'] body, :root[data-look='aurora'] body { background: var(--page-bg); }
+:root[data-look='glass'] body::before, :root[data-look='cockpit'] body::before, :root[data-look='aurora'] body::before {
   content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(40vw 40vw at 85% -5%, rgba(168, 182, 255, 0.55), transparent 60%),
-    radial-gradient(35vw 35vw at 100% 60%, rgba(255, 196, 206, 0.45), transparent 60%),
-    radial-gradient(45vw 45vw at -10% 100%, rgba(196, 186, 255, 0.45), transparent 60%);
+    radial-gradient(40vw 40vw at 85% -5%, var(--wash-1), transparent 60%),
+    radial-gradient(35vw 35vw at 100% 60%, var(--wash-2), transparent 60%),
+    radial-gradient(45vw 45vw at -10% 100%, var(--wash-3), transparent 60%);
 }
-.look-glass.side-look option { background: #fff; color: var(--text); }
-.look-glass input, .look-glass select, .look-glass textarea { background-color: #fff; color: var(--text); border-color: rgba(120, 124, 180, 0.3); }
-.look-glass.side-look .adia-side, .look-glass.side-look .card, .look-glass.side-look .notice, .look-glass.side-look .search, .look-glass.side-look .org-switcher select, .look-glass.side-look .org-name, .look-glass .panel, .look-glass .kpi {
+.lite-look.side-look option { background: #fff; color: var(--text); }
+.lite-look input, .lite-look select, .lite-look textarea { background-color: #fff; color: var(--text); border-color: rgba(120, 124, 180, 0.3); }
+.lite-look.side-look .adia-side, .lite-look.side-look .card, .lite-look.side-look .notice, .lite-look.side-look .search, .lite-look.side-look .org-switcher select, .lite-look.side-look .org-name, .lite-look .panel, .lite-look .kpi {
   background-color: var(--lav-glass); backdrop-filter: blur(22px); -webkit-backdrop-filter: blur(22px);
   border: 1px solid rgba(255, 255, 255, 0.85); box-shadow: var(--lav-shadow);
 }
-.look-glass.side-look .card, .look-glass.side-look .notice, .look-glass .panel { border-radius: 22px; }
-.look-glass.side-look .org-switcher select, .look-glass.side-look .org-name { background-color: #fff; border: 1px solid var(--lav-line); box-shadow: none; color: var(--text); font-weight: 600; }
-.look-glass.side-look .btn-quiet { background: #fff; border: 1px solid var(--lav-line); color: var(--text); }
-.look-glass.side-look .btn-quiet:hover { color: #4c55d9; border-color: rgba(76, 85, 217, 0.4); background: #fff; }
-.look-glass .btn-primary { background: var(--navy); color: #fff; box-shadow: 0 12px 24px -10px rgba(31, 42, 92, 0.7); }
-.look-glass.side-look .chip { background: #fff; border-color: var(--lav-line); }
-.look-glass.side-look .chip-on, .look-glass.side-look a.chip.chip-on { background: var(--navy); border-color: var(--navy); color: #fff; }
-.look-glass.side-look .brand-logo { filter: drop-shadow(0 8px 20px rgba(122, 92, 240, 0.45)); }
-.look-glass.side-look .brand-name { color: var(--text); font-weight: 800; letter-spacing: -0.02em; display: inline-flex; flex-direction: column; line-height: 1.1; }
+.lite-look.side-look .card, .lite-look.side-look .notice, .lite-look .panel { border-radius: 22px; }
+.lite-look.side-look .org-switcher select, .lite-look.side-look .org-name { background-color: #fff; border: 1px solid var(--lav-line); box-shadow: none; color: var(--text); font-weight: 600; }
+.lite-look.side-look .btn-quiet { background: #fff; border: 1px solid var(--lav-line); color: var(--text); }
+.lite-look.side-look .btn-quiet:hover { color: rgb(var(--focus-rgb)); border-color: rgb(var(--focus-rgb) / 0.4); background: #fff; }
+.lite-look .btn-primary { background: var(--navy); color: #fff; box-shadow: 0 12px 24px -10px rgb(var(--navy-rgb) / 0.7); }
+.lite-look.side-look .chip { background: #fff; border-color: var(--lav-line); }
+.lite-look.side-look .chip-on, .lite-look.side-look a.chip.chip-on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.lite-look.side-look .brand-logo { filter: drop-shadow(0 8px 20px rgba(122, 92, 240, 0.45)); }
+.lite-look.side-look .brand-name { color: var(--text); font-weight: 800; letter-spacing: -0.02em; display: inline-flex; flex-direction: column; line-height: 1.1; }
 .brand-sub { font-size: 0.6rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--lav-ink-3); }
-.look-glass.side-look .tab { color: var(--muted); font-weight: 600; }
-.look-glass.side-look .tab:hover { background: rgba(255, 255, 255, 0.8); color: var(--text); }
-.look-glass.side-look .tab.active { background: var(--navy); color: #fff; border-color: var(--navy); box-shadow: 0 10px 24px -10px rgba(31, 42, 92, 0.7); }
+.lite-look.side-look .tab { color: var(--muted); font-weight: 600; }
+.lite-look.side-look .tab:hover { background: rgba(255, 255, 255, 0.8); color: var(--text); }
+.lite-look.side-look .tab.active { background: var(--navy); color: #fff; border-color: var(--navy); box-shadow: 0 10px 24px -10px rgb(var(--navy-rgb) / 0.7); }
 /* A blur on the top bar would make the fixed dock sit inside it, so phones get a plain white bar. */
-@media (max-width: 899px) { .look-glass.side-look .adia-side { backdrop-filter: none; -webkit-backdrop-filter: none; background-color: rgba(255, 255, 255, 0.92); } .look-glass.side-look .tabbar { background: rgba(255, 255, 255, 0.88); border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: var(--lav-shadow-lg); } }
-.look-glass .adia-icon { stroke-width: 2; }
-.look-glass.side-look .search { color: var(--text); background-color: var(--lav-glass); border-radius: 16px;
+@media (max-width: 899px) { .lite-look.side-look .adia-side { backdrop-filter: none; -webkit-backdrop-filter: none; background-color: rgba(255, 255, 255, 0.92); } .lite-look.side-look .tabbar { background: rgba(255, 255, 255, 0.88); border: 1px solid rgba(255, 255, 255, 0.9); box-shadow: var(--lav-shadow-lg); } }
+.lite-look .adia-icon { stroke-width: 2; }
+.lite-look.side-look .search { color: var(--text); background-color: var(--lav-glass); border-radius: 16px;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%239497b3' stroke-width='2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.5-3.5'/%3E%3C/svg%3E"); }
-.look-glass.side-look .search::placeholder { color: var(--lav-ink-3); }
-.look-glass.side-look .search:focus { border-color: rgba(76, 85, 217, 0.5); box-shadow: 0 0 0 3px rgba(76, 85, 217, 0.15); }
-.look-glass .adia-search .row-list, .look-glass .adia-search .quick-search-none { background: #fff; border-color: var(--lav-line); box-shadow: var(--lav-shadow-lg); }
-.look-glass.side-look .sync-badge { background: #fff; border: 1px solid var(--lav-line); color: #2f8f6b; font-weight: 700; backdrop-filter: none; }
-.look-glass.side-look .sync-dot { background: #34c38f; box-shadow: 0 0 0 4px rgba(52, 195, 143, 0.18); animation: none; }
-.look-glass .org-mark { box-shadow: var(--lav-shadow); border: 1px solid var(--lav-line); border-radius: 14px; }
-.look-glass .dev-ribbon { border-radius: 12px; }
-.look-glass .kpi::before { background: var(--lav-grad); }
-.look-glass .badge-warn { background: rgba(232, 114, 138, 0.13); color: #c24561; }
+.lite-look.side-look .search::placeholder { color: var(--lav-ink-3); }
+.lite-look.side-look .search:focus { border-color: rgb(var(--focus-rgb) / 0.5); box-shadow: 0 0 0 3px rgb(var(--focus-rgb) / 0.15); }
+.lite-look .adia-search .row-list, .lite-look .adia-search .quick-search-none { background: #fff; border-color: var(--lav-line); box-shadow: var(--lav-shadow-lg); }
+.lite-look.side-look .sync-badge { background: #fff; border: 1px solid var(--lav-line); color: #2f8f6b; font-weight: 700; backdrop-filter: none; }
+.lite-look.side-look .sync-dot { background: #34c38f; box-shadow: 0 0 0 4px rgba(52, 195, 143, 0.18); animation: none; }
+.lite-look .org-mark { box-shadow: var(--lav-shadow); border: 1px solid var(--lav-line); border-radius: 14px; }
+.lite-look .dev-ribbon { border-radius: 12px; }
+.lite-look .kpi::before { background: var(--lav-grad); }
+.lite-look .badge-warn { background: rgba(232, 114, 138, 0.13); color: #c24561; }
 /* Install card in the side menu (desktop); phones keep the banner. */
 .side-promo { display: none; }
 @media (min-width: 900px) {
-  .look-glass .side-promo { display: flex; flex-direction: column; gap: 4px; margin-top: 16px; padding: 16px; border-radius: 18px; color: #fff; background: var(--lav-grad); font-size: 0.8rem; line-height: 1.4; }
-  .look-glass .side-promo b { font-size: 0.85rem; }
+  .lite-look .side-promo { display: flex; flex-direction: column; gap: 4px; margin-top: 16px; padding: 16px; border-radius: 18px; color: #fff; background: var(--lav-grad); font-size: 0.8rem; line-height: 1.4; }
+  .lite-look .side-promo b { font-size: 0.85rem; }
   .side-promo-actions { display: flex; gap: 8px; margin-top: 8px; }
   .side-promo button { font: inherit; font-size: 0.75rem; font-weight: 700; color: #fff; cursor: pointer; background: rgba(255, 255, 255, 0.22); border: 1px solid rgba(255, 255, 255, 0.4); padding: 6px 12px; border-radius: 10px; }
-  .look-glass .install-banner { display: none; }
-  .look-glass.side-look .adia-side { width: 268px; border-radius: 28px; }
+  .lite-look .install-banner { display: none; }
+  .lite-look.side-look .adia-side { width: 268px; border-radius: 28px; }
 }
 
 /* ---- ADIA Today ---- */
@@ -1372,34 +1377,33 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 @media print { .lav-hero, .lav-quick, .lav-jobs { display: none !important; } }
 
 /* ---- ADIA menu: a dark navy panel with a gold outline, floating on the lavender page ---- */
-.look-glass.side-look .adia-side, .look-glass.side-look .tabbar {
-  --menu-gold: 210 167 75;
+.lite-look.side-look .adia-side, .lite-look.side-look .tabbar {
   color: #fff;
-  background: linear-gradient(165deg, #151d42 0%, #0d1433 55%, #0a1029 100%);
+  background: linear-gradient(165deg, var(--menu-1) 0%, var(--menu-2) 55%, var(--menu-3) 100%);
   backdrop-filter: none; -webkit-backdrop-filter: none;
   border: 1px solid rgb(var(--menu-gold) / 0.75);
-  box-shadow: 0 26px 50px -18px rgba(20, 24, 70, 0.55), 0 6px 14px -6px rgba(20, 24, 70, 0.3), 0 0 22px rgb(var(--menu-gold) / 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 26px 50px -18px rgb(var(--menu-shadow-rgb) / 0.55), 0 6px 14px -6px rgb(var(--menu-shadow-rgb) / 0.3), 0 0 22px rgb(var(--menu-gold) / 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
-.look-glass.side-look .adia-side .brand-name { color: #fff; }
-.look-glass.side-look .adia-side .brand-sub { color: rgb(var(--menu-gold) / 0.85); }
-.look-glass.side-look .adia-side .brand-logo { filter: drop-shadow(0 0 10px rgb(var(--menu-gold) / 0.35)); }
-.look-glass.side-look .adia-side .org-switcher select, .look-glass.side-look .adia-side .org-name {
+.lite-look.side-look .adia-side .brand-name { color: #fff; }
+.lite-look.side-look .adia-side .brand-sub { color: rgb(var(--menu-gold) / 0.85); }
+.lite-look.side-look .adia-side .brand-logo { filter: drop-shadow(0 0 10px rgb(var(--menu-gold) / 0.35)); }
+.lite-look.side-look .adia-side .org-switcher select, .lite-look.side-look .adia-side .org-name {
   background-color: rgba(255, 255, 255, 0.05); color: #fff; border: 1px solid rgb(var(--menu-gold) / 0.45); box-shadow: inset 0 0 10px rgb(var(--menu-gold) / 0.05);
 }
-.look-glass.side-look .adia-side .org-switcher select:focus { outline: none; border-color: rgb(var(--menu-gold)); box-shadow: 0 0 0 3px rgb(var(--menu-gold) / 0.2); }
-.look-glass.side-look .tabbar .tab { color: rgba(255, 255, 255, 0.72); border: 1px solid transparent; transition: background-color 0.25s, color 0.25s, border-color 0.25s, transform 0.25s; }
-.look-glass.side-look .tabbar .tab:hover { background: rgba(255, 255, 255, 0.06); color: #f1d590; }
-.look-glass.side-look .tabbar .tab.active { color: rgb(var(--menu-gold)); font-weight: 700; background: rgb(var(--menu-gold) / 0.1); border-color: rgb(var(--menu-gold) / 0.45); box-shadow: 0 0 14px rgb(var(--menu-gold) / 0.12); }
+.lite-look.side-look .adia-side .org-switcher select:focus { outline: none; border-color: rgb(var(--menu-gold)); box-shadow: 0 0 0 3px rgb(var(--menu-gold) / 0.2); }
+.lite-look.side-look .tabbar .tab { color: rgba(255, 255, 255, 0.72); border: 1px solid transparent; transition: background-color 0.25s, color 0.25s, border-color 0.25s, transform 0.25s; }
+.lite-look.side-look .tabbar .tab:hover { background: rgba(255, 255, 255, 0.06); color: var(--menu-hover); }
+.lite-look.side-look .tabbar .tab.active { color: rgb(var(--menu-gold)); font-weight: 700; background: rgb(var(--menu-gold) / 0.1); border-color: rgb(var(--menu-gold) / 0.45); box-shadow: 0 0 14px rgb(var(--menu-gold) / 0.12); }
 @media (max-width: 899px) {
-  .look-glass.side-look .adia-side, .look-glass.side-look .tabbar { background: linear-gradient(165deg, #151d42, #0b1130); border: 1px solid rgb(var(--menu-gold) / 0.75); }
+  .lite-look.side-look .adia-side, .lite-look.side-look .tabbar { background: linear-gradient(165deg, var(--menu-1), var(--menu-3)); border: 1px solid rgb(var(--menu-gold) / 0.75); }
 }
 @media (min-width: 900px) {
-  .look-glass.side-look .tabbar { background: none; border: 0; box-shadow: none; }
-  .look-glass.side-look .tabbar .tab:hover { transform: translateX(3px); }
-  .look-glass.side-look .adia-side { animation: menu-float-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+  .lite-look.side-look .tabbar { background: none; border: 0; box-shadow: none; }
+  .lite-look.side-look .tabbar .tab:hover { transform: translateX(3px); }
+  .lite-look.side-look .adia-side { animation: menu-float-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 }
 @keyframes menu-float-in { from { opacity: 0; transform: translateX(-14px); } }
-@media (prefers-reduced-motion: reduce) { .look-glass.side-look .adia-side { animation: none; } .look-glass.side-look .tabbar .tab { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .lite-look.side-look .adia-side { animation: none; } .lite-look.side-look .tabbar .tab { transition: none; } }
 
 /* ---- ADIA in navy and gold (Andy, 2026-10-26, 5A): the light blue and purple become navy, gradients run navy to gold ---- */
 :root[data-look='glass'] {
@@ -1425,15 +1429,46 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .look-glass .lav-badge.alert { box-shadow: 0 6px 14px -6px rgba(31, 42, 92, 0.7); }
 .look-glass .side-promo { background: linear-gradient(135deg, #1f2a5c, #2f3f7e 60%, #b8862f); }
 
+/* ---- Freedom Church and Freedom Hope Center in ADIA's light layout, each in its own logo greens (Andy, 2026-10-31, 1A-6A):
+   the floating menu is a dark green panel with a light-green outline, and outlines and main buttons take each green. ---- */
+:root[data-look='cockpit'] {
+  --acc: 109 174 133; --acc-light: 162 201 134;
+  --page-bg: #eef5ea; --wash-1: rgba(162, 201, 134, 0.5); --wash-2: rgba(140, 187, 152, 0.4); --wash-3: rgba(109, 174, 133, 0.35);
+  --surface-2: #e2eedd; --text: #15261b; --muted: #536a5b; --border: rgba(47, 110, 74, 0.2);
+  --primary: #2f6e4a; --gold: #6dae85; --gold-ink: #2f6e4a; --ok: #2f8f5b;
+  --navy: #2f6e4a; --navy-rgb: 47 110 74; --focus-rgb: 47 110 74;
+  --menu-1: #1f4b33; --menu-2: #173d29; --menu-3: #10301f; --menu-shadow-rgb: 16 48 31; --menu-gold: 162 201 134; --menu-hover: #d3e8bf;
+  --lav-ink-3: #8aa394; --lav-line: rgba(47, 110, 74, 0.16);
+  --lav-grad: linear-gradient(135deg, #2f6e4a 0%, #6dae85 55%, #a2c986 100%);
+  --lav-shadow: 0 1px 2px rgba(16, 48, 31, 0.05), 0 12px 32px -10px rgba(16, 48, 31, 0.22);
+  --lav-shadow-lg: 0 24px 56px -20px rgba(16, 48, 31, 0.4);
+  --c1: #2f6e4a; --c2: #a2c986; --c3: #6dae85; --c4: #e3bd6a; --c5: #8cbb98; --c6: #93a39a;
+  --g-from: #a2c986; --g-to: #2f6e4a;
+}
+:root[data-look='aurora'] {
+  --acc: 3 130 65; --acc-light: 120 210 150;
+  --page-bg: #edf7f1; --wash-1: rgba(3, 130, 65, 0.22); --wash-2: rgba(120, 210, 150, 0.35); --wash-3: rgba(3, 130, 65, 0.18);
+  --surface-2: #dff0e6; --text: #0f2418; --muted: #4c6a58; --border: rgba(3, 130, 65, 0.2);
+  --primary: #038241; --gold: #16a058; --gold-ink: #038241; --ok: #038241;
+  --navy: #038241; --navy-rgb: 3 130 65; --focus-rgb: 3 130 65;
+  --menu-1: #05542d; --menu-2: #044424; --menu-3: #02341b; --menu-shadow-rgb: 2 52 27; --menu-gold: 120 210 150; --menu-hover: #c4f1d4;
+  --lav-ink-3: #86a593; --lav-line: rgba(3, 130, 65, 0.16);
+  --lav-grad: linear-gradient(135deg, #02341b 0%, #038241 55%, #4fd18f 100%);
+  --lav-shadow: 0 1px 2px rgba(2, 52, 27, 0.05), 0 12px 32px -10px rgba(2, 52, 27, 0.22);
+  --lav-shadow-lg: 0 24px 56px -20px rgba(2, 52, 27, 0.4);
+  --c1: #038241; --c2: #4fd18f; --c3: #16a058; --c4: #e3bd6a; --c5: #8fe0ae; --c6: #8aa596;
+  --g-from: #8fe0ae; --g-to: #038241;
+}
+
 /* White buttons and action cards: a fine navy outline with a soft dark shadow (Andy, 2026-10-26, 4A). */
-.look-glass .lav-btn.ghost, .look-glass.side-look .btn-quiet, .look-glass .btn:not(.btn-primary):not(.btn-danger):not(.btn-gold), .look-glass .card.lav-qa, .look-glass .card.lav-kpi {
-  border: 1px solid rgba(31, 42, 92, 0.85);
+.lite-look .lav-btn.ghost, .lite-look.side-look .btn-quiet, .lite-look .btn:not(.btn-primary):not(.btn-danger):not(.btn-gold), .lite-look .card.lav-qa, .lite-look .card.lav-kpi {
+  border: 1px solid rgb(var(--navy-rgb) / 0.85);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 6px 16px -6px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 0, 0, 0.08);
 }
-.look-glass .card.lav-kpi { transition: transform 0.2s, box-shadow 0.2s; }
-.look-glass .card.lav-kpi:hover { transform: translateY(-3px); }
-.look-glass .card.lav-qa:hover, .look-glass .card.lav-kpi:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 30px -12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 0, 0, 0.1); }
-.look-glass .lav-hide { border: 1px solid rgba(31, 42, 92, 0.85); border-radius: 8px; padding: 3px 10px; background: #fff; color: var(--navy); box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.35); }
+.lite-look .card.lav-kpi { transition: transform 0.2s, box-shadow 0.2s; }
+.lite-look .card.lav-kpi:hover { transform: translateY(-3px); }
+.lite-look .card.lav-qa:hover, .lite-look .card.lav-kpi:hover { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 30px -12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 0, 0, 0.1); }
+.lite-look .lav-hide { border: 1px solid rgb(var(--navy-rgb) / 0.85); border-radius: 8px; padding: 3px 10px; background: #fff; color: var(--navy); box-shadow: 0 4px 10px -4px rgba(0, 0, 0, 0.35); }
 
 /* ADIA's crest intro after sign-in: full screen, then it shrinks to the centre and fades into Today (1A). */
 .adia-intro { position: fixed; inset: 0; z-index: 1000; display: grid; place-items: center; background: #010810; transition: background-color 0.9s ease; }
@@ -1599,9 +1634,9 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 
 /* The "?" on every ADIA page (Andy 6A, 2026-10-30): three simple steps for the page. */
 .page-help { position: relative; flex: none; }
-.page-help-btn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid #1f2a5c; background: #fff; color: #1f2a5c; font-size: 1.15rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 14px -8px rgba(15, 20, 50, 0.55); }
-.page-help-btn:hover, .page-help-btn[aria-expanded="true"] { background: #1f2a5c; color: #fff; }
-.page-help-box { position: absolute; right: 0; top: calc(100% + 10px); z-index: 60; width: min(340px, calc(100vw - 32px)); background: #fff; color: #1f2a5c; border: 1px solid rgba(31, 42, 92, 0.25); border-radius: 16px; padding: 16px 18px 10px; box-shadow: 0 18px 40px -14px rgba(15, 20, 50, 0.45); display: flex; flex-direction: column; gap: 8px; }
+.page-help-btn { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--navy, #1f2a5c); background: #fff; color: var(--navy, #1f2a5c); font-size: 1.15rem; font-weight: 800; cursor: pointer; box-shadow: 0 6px 14px -8px rgba(15, 20, 50, 0.55); }
+.page-help-btn:hover, .page-help-btn[aria-expanded="true"] { background: var(--navy, #1f2a5c); color: #fff; }
+.page-help-box { position: absolute; right: 0; top: calc(100% + 10px); z-index: 60; width: min(340px, calc(100vw - 32px)); background: #fff; color: var(--navy, #1f2a5c); border: 1px solid rgb(var(--navy-rgb, 31 42 92) / 0.25); border-radius: 16px; padding: 16px 18px 10px; box-shadow: 0 18px 40px -14px rgba(15, 20, 50, 0.45); display: flex; flex-direction: column; gap: 8px; }
 .page-help-box ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; font-size: 0.92rem; line-height: 1.45; }
 .page-help-box .btn { align-self: flex-end; }
 @media (max-width: 560px) { .page-help-box { position: fixed; left: 16px; right: 16px; top: 72px; width: auto; } }
@@ -1633,3 +1668,16 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .lav-hero .lav-org { margin: 0 0 12px; max-width: none; font-size: clamp(1.6rem, 3.2vw, 2.45rem); line-height: 1.08; font-weight: 800; letter-spacing: -0.035em; }
 .lav-hero .lav-org em { font-style: normal; background: var(--lav-grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .greet-line { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+
+/* Freedom Church and Hope Today on the light page (Andy, 2026-10-31): white action cards with a green outline, like ADIA's. */
+.lite-look .glass-today .checklist li, .lite-look .glass-today .checklist li.done { color: var(--text); }
+.lite-look.side-look .glass-tile {
+  background: #fff; color: var(--text); backdrop-filter: none; -webkit-backdrop-filter: none;
+  border: 1px solid rgb(var(--navy-rgb) / 0.85);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 6px 16px -6px rgba(0, 0, 0, 0.35), 0 0 12px rgba(0, 0, 0, 0.08);
+}
+.lite-look.side-look .glass-tile:hover:not(:disabled) { background: #fff; border-color: var(--navy); box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 16px 30px -12px rgba(0, 0, 0, 0.45), 0 0 16px rgba(0, 0, 0, 0.1); }
+.lite-look.side-look .glass-tile .tile-label, .lite-look.side-look .glass-tile:hover:not(:disabled) .tile-label { color: var(--text); text-shadow: none; }
+.lite-look.side-look .glass-tile .tile-sub { color: var(--muted); background: var(--surface-2); border-color: var(--lav-line); }
+.lite-look.side-look .glass-tile svg, .lite-look.side-look .tile-dollar { stroke: var(--navy); color: var(--navy); background-color: rgb(var(--navy-rgb) / 0.08); border-color: rgb(var(--navy-rgb) / 0.25); filter: none; }
+.lite-look.side-look .live-clock-time { color: var(--navy); font-weight: 400; }

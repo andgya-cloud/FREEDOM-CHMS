@@ -2,12 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { helpFor } from '../lib/pageHelp';
 
-/** The "?" at the top of every ADIA page: three simple steps for the page you are on (Andy 6A, 2026-10-30). */
-export function PageHelp() {
+/** The "?" at the top of every ADIA, Freedom Church and Hope page: three simple steps for the page you are on (Andy 6A). */
+export function PageHelp({ college = true }: { college?: boolean }) {
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
-  const help = helpFor(pathname);
+  const help = helpFor(pathname, college);
 
   useEffect(() => { setOpen(false); }, [pathname]);
   useEffect(() => {

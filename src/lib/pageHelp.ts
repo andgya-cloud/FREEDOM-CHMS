@@ -1,5 +1,6 @@
 /**
- * The "?" on every ADIA page (Andy 6A, 2026-10-30): three simple steps for the page you are on.
+ * The "?" on every page of ADIA (Andy 6A, 2026-10-30), Freedom Church and Freedom Hope Center (2026-10-31):
+ * three simple steps for the page you are on.
  * The first pattern that matches the address wins, so the more exact addresses come first.
  */
 export interface PageHelp { title: string; steps: [string, string, string] }
@@ -179,12 +180,97 @@ const HELP: [RegExp, PageHelp][] = [
   ] }],
 ];
 
+/** Freedom Church and Freedom Hope Center pages that differ from ADIA's; the rest (petty cash, settings) are shared. */
+const CHURCH_HOPE: [RegExp, PageHelp][] = [
+  [/^\/$/, { title: 'Today', steps: [
+    'Press the big button for the job you want to do.',
+    'Do the job on the page that opens, then press Save.',
+    'Press Today in the menu to come back here.',
+  ] }],
+  [/^\/attendance\/[^/]+\/[^/]+/, { title: 'Attendance list', steps: [
+    'Tick each person who is here.',
+    'Use the search box to find a name quickly.',
+    'Your ticks save as you go. Press Done when everyone is in.',
+  ] }],
+  [/^\/attendance/, { title: 'Attendance', steps: [
+    'Choose the service or activity.',
+    'Open it to take attendance.',
+    'Tick who is here.',
+  ] }],
+  [/^\/visitors\/new/, { title: 'Add a visitor', steps: [
+    'Type the visitor’s name and phone number.',
+    'Add anything they asked for, such as prayer.',
+    'Press Save. A follow-up is set up for them.',
+  ] }],
+  [/^\/people\/[^/]+\/[^/]+$/, { title: 'A person', steps: [
+    'Read the person’s details, attendance and follow-ups here.',
+    'Press Edit to correct their details.',
+    'Use the WhatsApp or call buttons to reach them.',
+  ] }],
+  [/^\/people/, { title: 'People', steps: [
+    'Type a name or phone number in the search box.',
+    'Press a name to open that person’s page.',
+    'Press Add to add someone new.',
+  ] }],
+  [/^\/programs|^\/groups|^\/teams/, { title: 'Programmes', steps: [
+    'Press a programme or group to see who is in it.',
+    'Add or remove people from its page.',
+    'Take attendance for it from Attendance.',
+  ] }],
+  [/^\/giving\/new/, { title: 'Record a gift', steps: [
+    'Choose the person, or leave it as anonymous.',
+    'Type the amount and the M-Pesa code.',
+    'Press Save. A receipt is made.',
+  ] }],
+  [/^\/giving/, { title: 'Giving', steps: [
+    'Press Record gift for a new gift.',
+    'Import the M-Pesa statement to add many gifts at once.',
+    'Open Reports for totals and statements.',
+  ] }],
+  [/^\/follow-ups/, { title: 'Follow-ups', steps: [
+    'Start with the people due today.',
+    'Call or WhatsApp them from the buttons.',
+    'Press Done and write a short note.',
+  ] }],
+  [/^\/(reports|dashboard)/, { title: 'Reports', steps: [
+    'Choose the report you need.',
+    'Read the figures on the page.',
+    'Press Print or Download to keep a copy.',
+  ] }],
+  [/^\/hope\/children\/new/, { title: 'Register a child', steps: [
+    'Type the child’s name, age and guardian’s phone.',
+    'Choose the activities the child joins.',
+    'Press Save.',
+  ] }],
+  [/^\/hope\/children\/[^/]+/, { title: 'A child', steps: [
+    'Read the child’s details and attendance here.',
+    'Press Edit to correct the details.',
+    'Call the guardian from the phone number shown.',
+  ] }],
+  [/^\/hope\/children/, { title: 'Children', steps: [
+    'Type a name in the search box to find a child.',
+    'Press a name to open that child’s page.',
+    'Press Register child for a new child.',
+  ] }],
+  [/^\/hope\/reports/, { title: 'Hope reports', steps: [
+    'Choose the report and the dates.',
+    'Read the figures on the page.',
+    'Press Print or Download to keep a copy.',
+  ] }],
+  [/^\/hope$/, { title: 'Hope', steps: [
+    'See the children and activities at a glance.',
+    'Press Children to find or register a child.',
+    'Press Reports for the figures.',
+  ] }],
+];
+
 const FALLBACK: PageHelp = { title: 'This page', steps: [
   'Read the page from the top.',
   'Fill in what is asked and press Save.',
   'Press Today in the menu to go back to the start.',
 ] };
 
-export function helpFor(path: string): PageHelp {
-  return HELP.find(([re]) => re.test(path))?.[1] ?? FALLBACK;
+export function helpFor(path: string, college = true): PageHelp {
+  const own = college ? undefined : CHURCH_HOPE.find(([re]) => re.test(path))?.[1];
+  return own ?? HELP.find(([re]) => re.test(path))?.[1] ?? FALLBACK;
 }
