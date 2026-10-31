@@ -116,7 +116,7 @@ function RecordGift({ org }: { org: Organization }) {
     let useFundId = fundId;
     if (fundId === OTHER) {
       const name = tidyFundName(otherName);
-      if (name.length < 2) return setError('Type the kind of giving, for example Building Fund or Missions.');
+      if (name.length < 2 || !/[a-z]/i.test(name)) return setError('Type the kind of giving in words, for example Building Fund or Missions. The amount goes in Amount.');
       const known = fundNamed(name, funds);
       if (known) useFundId = known.id;
       else { newFund = { id: otherFundIdFor(name), name }; useFundId = newFund.id; }

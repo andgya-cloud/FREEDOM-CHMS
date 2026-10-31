@@ -71,6 +71,7 @@ function FundForm({ org, fund, taken, onDone }: { org: Organization; fund: Fund 
     e.preventDefault();
     const id = fund?.id ?? fundIdFor(name);
     if (name.trim().length < 2) return setError('Enter a name of at least 2 letters.');
+    if (!/[a-z]/i.test(name)) return setError('A fund name needs words, for example Tithes. Put amounts in Record Giving.');
     if (!fund && (id.length < 2 || taken.includes(id))) return setError('There is already a fund with this name.');
     saveFund(org.id, id, { name, aliases: aliases.split(','), active }, !!fund).catch((err) => toast.show(friendlyError(err)));
     toast.show(saved(fund ? 'Fund saved' : `${name.trim()} added`));
