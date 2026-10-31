@@ -1659,15 +1659,15 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .tabbar .tab-more { display: none; background: none; border: 1px solid transparent; font: inherit; cursor: pointer; }
 .tab-more svg { fill: currentColor; stroke: none; }
 @media (max-width: 899px) {
-  .look-glass.side-look .tabbar.has-more .tab-more { display: flex; }
-  .look-glass.side-look .tabbar.has-more .tab-extra { display: none; }
-  .look-glass.side-look .tabbar.has-more.more-open .tab-extra { display: flex; position: fixed; right: 16px; width: 200px; max-width: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px; font-size: 0.95rem; background: linear-gradient(165deg, #151d42, #0b1130); border: 1px solid rgb(var(--menu-gold) / 0.75); border-radius: 14px; box-shadow: 0 12px 30px -10px rgba(10, 16, 41, 0.7); z-index: 70; }
-  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(1) { bottom: calc(96px + env(safe-area-inset-bottom)); }
-  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(2) { bottom: calc(152px + env(safe-area-inset-bottom)); }
-  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(3) { bottom: calc(208px + env(safe-area-inset-bottom)); }
-  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(4) { bottom: calc(264px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more .tab-more, .look-cockpit.side-look .tabbar.has-more .tab-more { display: flex; }
+  .look-glass.side-look .tabbar.has-more .tab-extra, .look-cockpit.side-look .tabbar.has-more .tab-extra { display: none; }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra, .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra { display: flex; position: fixed; right: 16px; width: 200px; max-width: none; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 12px 14px; font-size: 0.95rem; background: linear-gradient(165deg, #151d42, #0b1130); border: 1px solid rgb(var(--menu-gold) / 0.75); border-radius: 14px; box-shadow: 0 12px 30px -10px rgba(10, 16, 41, 0.7); z-index: 70; }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(1), .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(1) { bottom: calc(96px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(2), .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(2) { bottom: calc(152px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(3), .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(3) { bottom: calc(208px + env(safe-area-inset-bottom)); }
+  .look-glass.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(4), .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra:nth-last-child(4) { bottom: calc(264px + env(safe-area-inset-bottom)); }
 }
-@media (max-width: 899px) { .look-glass.side-look .tabbar.has-more .tab { font-size: 0.68rem; padding-left: 2px; padding-right: 2px; } .look-glass.side-look .tabbar.has-more.more-open .tab-extra { font-size: 0.95rem; } }
+@media (max-width: 899px) { .look-glass.side-look .tabbar.has-more .tab, .look-cockpit.side-look .tabbar.has-more .tab { font-size: 0.68rem; padding-left: 2px; padding-right: 2px; } .look-glass.side-look .tabbar.has-more.more-open .tab-extra, .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra { font-size: 0.95rem; } }
 
 /* Greeting by first name (Andy, 2026-10-30): the school's name sits smaller under it on Today. */
 /* Andy (2026-10-30): the greeting is the smaller line, ADIA Training Centre the big one under it. */
@@ -1727,3 +1727,14 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 }
 .look-cockpit.lite-look.side-look .link-list li + li, .look-cockpit.lite-look.side-look .row-list li + li { border-top-color: rgb(201 162 78 / 0.35); }
 .look-cockpit.lite-look.side-look .card.lav-job:hover, .look-cockpit.lite-look.side-look .card.lav-job:focus-visible { border-color: rgb(201 162 78); }
+
+/* One dropdown in place of a row of filter buttons (Andy, 2026-10-31, 3A 8A). */
+.filter-select { display: inline-flex; align-self: flex-start; }
+.filter-select select { min-width: 200px; padding: 10px 36px 10px 14px; border-radius: 12px; font: inherit; font-weight: 600; }
+.link-button-inline { background: none; border: 0; padding: 0; font: inherit; color: var(--navy, var(--primary)); text-decoration: underline; cursor: pointer; }
+
+/* Freedom Church's phone "More" list uses its dark green menu and gold outline (Andy, 2026-10-31, 5A). */
+@media (max-width: 899px) {
+  .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra { background: linear-gradient(165deg, var(--menu-1), var(--menu-3)); border-color: rgb(201 162 78 / 0.8); }
+}
+.narrow-block { max-width: 640px; width: 100%; }

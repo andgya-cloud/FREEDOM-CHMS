@@ -196,7 +196,6 @@ function HomeScorecard({ org }: { org: Organization }) {
       <div className="page-head">
         <h2>{report ? report.label : 'Scorecard'}</h2>
         <span className="row-actions">
-          {report && <Link to="/dashboard" className="btn btn-primary">Dashboard</Link>}
           <Link to="/reports" className="btn btn-quiet">All reports</Link>
         </span>
       </div>

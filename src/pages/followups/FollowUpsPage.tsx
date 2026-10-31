@@ -52,16 +52,16 @@ function Queue({ org }: { org: Organization }) {
         <h1>Follow-ups</h1>
         <Link to="/follow-ups/reminders" className="btn btn-quiet">Programme reminders</Link>
       </div>
-      <p className="lead">{org.name}</p>
       <p className="muted small">New visitors, salvations and regulars missing for 3 weeks appear here by themselves. A follow-up still open 3 days after it was due goes to the pastor.</p>
 
-      <div className="chips" role="tablist" aria-label="Show">
-        {VIEWS.filter((v) => v.id !== 'escalated' || can('users.manage') || lists.escalated.length > 0).map((v) => (
-          <button key={v.id} type="button" role="tab" aria-selected={view === v.id} className={`chip${view === v.id ? ' chip-on' : ''}`} onClick={() => setView(v.id)}>
-            {v.label} ({lists[v.id].length})
-          </button>
-        ))}
-      </div>
+      <label className="filter-select">
+        <span className="visually-hidden">Show</span>
+        <select value={view} onChange={(e) => setView(e.target.value as View)} aria-label="Show">
+          {VIEWS.filter((v) => v.id !== 'escalated' || can('users.manage') || lists.escalated.length > 0).map((v) => (
+            <option key={v.id} value={v.id}>{v.label} ({lists[v.id].length})</option>
+          ))}
+        </select>
+      </label>
 
       {error ? <p className="error">The follow-ups could not be loaded ({error}).</p>
         : loading ? <p className="muted">Loading…</p>

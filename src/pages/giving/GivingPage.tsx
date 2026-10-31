@@ -69,17 +69,17 @@ function Giving({ org }: { org: Organization }) {
         )}
         {can('finance.reports') && (
           <li>
-            <Link to="/giving/dashboard">
-              <span className="link-title">Giving dashboard</span>
-              <span className="link-detail">Trends, funds, methods and the year against last year</span>
+            <Link to="/reports?tab=giving">
+              <span className="link-title">Giving figures</span>
+              <span className="link-detail">Trends, funds, methods and the monthly summary, in Reports</span>
             </Link>
           </li>
         )}
-        {can('finance.reports') && (
+        {can('settings.manage') && (
           <li>
-            <Link to="/giving/summary">
-              <span className="link-title">Monthly summary</span>
-              <span className="link-detail">Fund ledger, and the check against the Paybill statement</span>
+            <Link to="/settings/funds">
+              <span className="link-title">Funds</span>
+              <span className="link-detail">Tithes, Offerings and other funds (moved here from Settings)</span>
             </Link>
           </li>
         )}

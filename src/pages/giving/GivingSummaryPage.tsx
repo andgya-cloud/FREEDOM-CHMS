@@ -72,7 +72,6 @@ function Summary({ org }: { org: Organization }) {
         <h1>{monthLabel(month)}</h1>
         <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
       </div>
-      <p className="lead">{org.name}</p>
       <label className="field no-print">
         <span>Month</span>
         <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />

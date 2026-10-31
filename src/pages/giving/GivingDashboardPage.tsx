@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Organization } from '../../state/OrgContext';
 import { useFunds, useLedgerMonths, type LedgerMonth } from '../../state/useGiving';
-import { OrgGate } from '../../components/OrgGate';
 import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, LineChart, Panel } from '../../components/charts';
 import { addMonths, compact, monthsEnding, pctChange, shortMonth, toCsv } from '../../lib/analytics';
 import { formatMoney, GIFT_METHOD_LABELS, GIFT_METHODS } from '../../../functions/src/shared/giving';
@@ -14,13 +13,14 @@ import { localDateKey } from '../../../functions/src/shared/datetime';
  * how it came in by method, and the year so far against all of last year.
  * Built from the monthly ledger only, so it shows totals and never a giver.
  */
-export function GivingDashboardPage() {
-  return <OrgGate title="Giving dashboard">{(org) => <Dashboard org={org} />}</OrgGate>;
+/** The same dashboard inside the Giving tab of Reports (Andy, 2026-10-31, 4A: one Reports page). */
+export function GivingFigures({ org }: { org: Organization }) {
+  return <Dashboard org={org} embedded />;
 }
 
 type Scope = 'month' | 'year';
 
-function Dashboard({ org }: { org: Organization }) {
+function Dashboard({ org, embedded = false }: { org: Organization; embedded?: boolean }) {
   const [month, setMonth] = useState(localDateKey(new Date(), org.timeZone).slice(0, 7));
   const [scope, setScope] = useState<Scope>('month');
   const from = addMonths(month, -23);
@@ -85,16 +85,16 @@ function Dashboard({ org }: { org: Organization }) {
   const spark = last12.map(total);
 
   return (
-    <div className="page dash">
-      <p className="no-print"><Link to="/giving">← Giving</Link></p>
+    <div className={embedded ? 'dash' : 'page dash'}>
+      {!embedded && <p className="no-print"><Link to="/giving">← Giving</Link></p>}
       <div className="page-head">
-        <h1>Giving dashboard</h1>
+        {embedded ? <h2>Giving</h2> : <h1>Giving dashboard</h1>}
         <span className="row-actions">
           <CsvButton name={`Giving-${month}.csv`} csv={csv} />
           <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
         </span>
       </div>
-      <p className="lead">{org.name} · {shortMonth(month, true)}</p>
+      <p className="lead">{shortMonth(month, true)}</p>
       <div className="dash-controls no-print">
         <label className="field">
           <span>Month</span>

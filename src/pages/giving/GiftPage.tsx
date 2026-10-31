@@ -103,7 +103,7 @@ export function GiftPage() {
           <h1>{formatMoney(gift.amountCents, org.currency || 'KES')}</h1>
           {gift.status === 'void' && <span className="badge badge-muted">Void</span>}
           {gift.status === 'unassigned' && <span className="badge badge-warn">Unassigned</span>}
-          <span className="muted small"> {GIFT_METHOD_LABELS[gift.method]} · {org.name}</span>
+          <span className="muted small"> {GIFT_METHOD_LABELS[gift.method]}</span>
         </div>
         <CleanupButton orgId={orgId} kind="gift" id={giftId} back="/giving" />
       </div>

@@ -35,7 +35,7 @@ export function WhatsAppSettingsPage() {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/settings/group/whatsapp">← WhatsApp</Link></p>
       <h1>WhatsApp automation</h1>
       <p className="lead">
         Send welcomes, check-ins and care messages through WhatsApp by themselves. Only people who agreed to WhatsApp are messaged, and a child's

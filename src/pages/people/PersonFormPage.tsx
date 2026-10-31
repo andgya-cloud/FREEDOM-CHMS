@@ -11,7 +11,7 @@ import { useSavedMessage } from '../../lib/useSavedMessage';
 import { PersonPicker } from '../../components/PersonPicker';
 import { DuplicateNotice } from '../../components/DuplicateNotice';
 import { OrgPicker } from '../../components/OrgPicker';
-import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUSES, PERSON_STATUS_LABELS, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
+import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUS_LABELS, statusesFor, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
 import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 
@@ -60,8 +60,11 @@ const EMPTY: FormState = {
   howHeard: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
 };
 
-/** Add or edit a person with every field. The quick visitor form is VisitorFormPage. */
-export function PersonFormPage() {
+/**
+ * Add or edit a person. "Add visitor" on Today opens this same form with Visitor already chosen and the first visit
+ * set to today (Andy, 2026-10-31, 2A: one form instead of two); a visitor also gets a prayer need and "Add another".
+ */
+export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) {
   const { orgId: routeOrgId, personId } = useParams();
   const isNew = !personId;
   const { profile } = useAuth();
@@ -76,7 +79,10 @@ export function PersonFormPage() {
   const [chosenOrgId, setOrgId] = useState('');
   const orgId = routeOrgId ?? (isCombined ? chosenOrgId : current?.id ?? '');
   const org = organizations.find((o) => o.id === orgId);
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const blank = (): FormState => (visitor ? { ...EMPTY, status: 'visitor', firstVisitDate: localDateKey(new Date(), current?.timeZone) } : EMPTY);
+  const [form, setForm] = useState<FormState>(blank);
+  const [prayer, setPrayer] = useState('');
+  const [added, setAdded] = useState<{ orgId: string; personId: string; name: string } | null>(null);
   const [loaded, setLoaded] = useState(isNew);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -151,19 +157,40 @@ export function PersonFormPage() {
         });
         navigate(`/people/${orgId}/${existing.id}`);
       } else {
-        const { ref, synced } = addPerson(orgId, data, { recordVisitorStage: data.status === 'visitor' && org?.type === 'church_campus' });
+        const isVisitor = data.status === 'visitor';
+        const { ref, synced } = addPerson(orgId, data, { recordVisitorStage: isVisitor && org?.type === 'church_campus', prayerNeed: isVisitor ? prayer : undefined });
         synced.catch((err) => toast.show(friendlyError(err)));
         toast.show(saved(`${data.fullName} added`));
-        navigate(`/people/${orgId}/${ref.id}`, { replace: true });
+        if (isVisitor) setAdded({ orgId, personId: ref.id, name: data.fullName });
+        else navigate(`/people/${orgId}/${ref.id}`, { replace: true });
       }
     } catch (err) {
       setErrors([friendlyError(err)]);
     }
   }
 
+  function addAnother() {
+    setForm(blank()); setPrayer(''); setErrors([]); setAdded(null);
+  }
+
+  if (added) {
+    return (
+      <div className="page narrow">
+        <div className="success-panel" role="status">
+          <span className="success-tick" aria-hidden="true">✓</span>
+          <h1>{added.name} added</h1>
+          <p>A welcome follow-up has been created for today.</p>
+        </div>
+        <button type="button" className="btn btn-primary btn-block btn-lg" onClick={addAnother}>Add another visitor</button>
+        <button type="button" className="btn btn-block" onClick={() => navigate(`/people/${added.orgId}/${added.personId}`)}>Open {added.name.split(' ')[0]}’s record</button>
+        <Link to="/" className="btn btn-quiet btn-block">Back to Today</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="page narrow">
-      <p><Link to={existing ? `/people/${orgId}/${existing.id}` : '/people'}>← {existing ? existing.fullName : 'People'}</Link></p>
+      <p><Link to={existing ? `/people/${orgId}/${existing.id}` : visitor ? '/' : '/people'}>← {existing ? existing.fullName : visitor ? 'Today' : 'People'}</Link></p>
       <h1>{existing ? 'Edit details' : 'Add person'}</h1>
       <form className="form" onSubmit={submit} noValidate>
         {isNew && isCombined && <OrgPicker value={orgId} onChange={setOrgId} />}
@@ -193,7 +220,7 @@ export function PersonFormPage() {
         <fieldset className="field">
           <legend>Status</legend>
           <div className="chips">
-            {PERSON_STATUSES.map((s) => (
+            {statusesFor(org?.type).concat(existing && !statusesFor(org?.type).includes(existing.status) ? [existing.status] : []).map((s) => (
               <button key={s} type="button" className={`chip ${form.status === s ? 'chip-on' : ''}`} aria-pressed={form.status === s} onClick={() => set('status', s)}>{PERSON_STATUS_LABELS[s]}</button>
             ))}
           </div>
@@ -239,6 +266,13 @@ export function PersonFormPage() {
                   <option value="">Not recorded</option>
                   {org!.serviceTimes!.map((s) => <option key={s}>{s}</option>)}
                 </select>
+              </label>
+            )}
+            {isNew && form.status === 'visitor' && (
+              <label className="field">
+                <span>Prayer need</span>
+                <textarea rows={3} value={prayer} onChange={(e) => setPrayer(e.target.value)} />
+                <small className="hint">Only staff with pastoral access can read this.</small>
               </label>
             )}
             {customFields.map((f) => (

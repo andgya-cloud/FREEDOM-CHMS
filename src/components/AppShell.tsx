@@ -45,7 +45,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // ADIA phones show 4 menu buttons and a "More" button for the rest (Andy 8A, 2026-10-30).
   const [moreOpen, setMoreOpen] = useState(false);
   useEffect(() => { setMoreOpen(false); }, [location.pathname]);
-  const phoneMore = adia && full;
+  // Freedom Church's menu has Giving and Follow-ups too (Andy, 2026-10-31, 5A), so its phones get "More" as well.
+  const church = current?.type === 'church_campus';
+  const phoneMore = (adia || church) && full;
   // In ADIA the install reminder shows to the Director only (Andy 9A, 2026-10-30).
   const showInstall = !adia || isDirectorProfile(profile);
   const extra = phoneMore ? ' tab-extra' : '';
@@ -69,6 +71,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         {adia ? <AdiaIcon name="attendance" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>}
         {adia ? <TabLabel full="Attendance" short="Register" /> : 'Attendance'}
       </NavLink>
+      {church && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
+        <NavLink to="/giving" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v4H3zM5 13v8h14v-8M12 9v12M12 9c-1.5-3-6-3.5-6-1s4 1 6 1Zm0 0c1.5-3 6-3.5 6-1s-4 1-6 1Z" /></svg>
+          Giving
+        </NavLink>
+      )}
       </>)}
       {trainerRegister && current?.type === 'college' && (
         <NavLink to="/attendance" className="tab">
@@ -88,14 +96,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6.6 5.3 5.3 0 0 1 21.3 12C19 16.600 12 21 12 21Z" /></svg>
           Hope
         </NavLink>
-      ) : (
+      ) : church ? null : (
         <NavLink to="/programs" className={({ isActive }) => `tab${isActive || /^\/(teams|groups)\//.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v13H6a2 2 0 0 0-2 2.5Zm0 0A2 2 0 0 0 6 22h12v-5M8 8h6M8 11h4" /></svg>
           Programmes
         </NavLink>
       )}
       </>)}
-      {current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type) && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
+      {!church && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type) && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
         <NavLink to={pettyCashBase(current.type)} className="tab">
           {adia ? <AdiaIcon name="pettyCash" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>}
           Petty Cash
@@ -106,6 +114,24 @@ export function AppShell({ children }: { children: ReactNode }) {
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
           More
         </button>
+      )}
+      {church && can('followups.manage') && (
+        <NavLink to="/follow-ups" className={`tab${extra}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z" /></svg>
+          Follow-ups
+        </NavLink>
+      )}
+      {church && full && (
+        <NavLink to="/programs" className={({ isActive }) => `tab${extra}${isActive || /^\/(teams|groups)\//.test(location.pathname) ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19.5V6a2 2 0 0 1 2-2h12v13H6a2 2 0 0 0-2 2.5Zm0 0A2 2 0 0 0 6 22h12v-5M8 8h6M8 11h4" /></svg>
+          Programmes
+        </NavLink>
+      )}
+      {church && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
+        <NavLink to={pettyCashBase('church_campus')} className={`tab${extra}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
+          Petty Cash
+        </NavLink>
       )}
       {full && current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
         <NavLink to="/school/payroll" className={`tab${extra}`}>

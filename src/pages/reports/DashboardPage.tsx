@@ -2,7 +2,6 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Organization } from '../../state/OrgContext';
 import { useReports } from '../../state/useReports';
-import { OrgGate } from '../../components/OrgGate';
 import { ColumnChart, CsvButton, Donut, Funnel, Gauge, KpiCard, KpiRow, LineChart, Panel } from '../../components/charts';
 import type { Headlines } from '../../../functions/src/shared/reports';
 import { toCsv } from '../../lib/analytics';
@@ -13,22 +12,24 @@ import { toCsv } from '../../lib/analytics';
  * who came, how many stay connected, and where people stop on the journey.
  * It holds no money; giving has its own dashboard.
  */
-export function DashboardPage() {
-  return <OrgGate title="Dashboard">{(org) => <Dashboard org={org} />}</OrgGate>;
+/** The same dashboard inside the Weekly tab of Reports (Andy, 2026-10-31, 4A: one Reports page). */
+export function WeeklyDashboard({ org }: { org: Organization }) {
+  return <Dashboard org={org} embedded />;
 }
 
 const SPANS = [12, 26, 52] as const;
 const day = (k: string) => new Date(`${k}T12:00:00Z`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 const pct = (v: number | null) => (v == null ? '–' : `${Math.round(v)}%`);
 
-function Dashboard({ org }: { org: Organization }) {
+function Dashboard({ org, embedded = false }: { org: Organization; embedded?: boolean }) {
   const { reports, loading } = useReports(org.id);
   const [span, setSpan] = useState<(typeof SPANS)[number]>(12);
   const weeks = useMemo(() => reports.filter((r) => r.type === 'weekly').sort((a, b) => a.from.localeCompare(b.from)), [reports]);
   const shown = weeks.slice(-span);
   const latest = shown[shown.length - 1];
 
-  if (loading) return <div className="page dash"><p className="muted">Loading…</p></div>;
+  if (loading) return <div className={embedded ? 'dash' : 'page dash'}><p className="muted">Loading…</p></div>;
+  if (!latest && embedded) return null;
   if (!latest) {
     return (
       <div className="page dash">
@@ -50,9 +51,9 @@ function Dashboard({ org }: { org: Organization }) {
   const base = `/reports/${org.id}/${latest.id}`;
 
   return (
-    <div className="page dash">
+    <div className={embedded ? 'dash' : 'page dash'}>
       <div className="page-head">
-        <h1>Dashboard</h1>
+        {embedded ? <h2>Week by week</h2> : <h1>Dashboard</h1>}
         <span className="row-actions">
           <CsvButton name={`Dashboard-${latest.from}.csv`} csv={() => toCsv(
             ['Week of', 'Attendance', 'First-time visitors', 'Salvations', 'Baptisms', 'Regular attenders', 'In a group %', 'Serving %', 'Visitors back %', 'Followed up in 48h %', 'Net growth'],
@@ -61,7 +62,7 @@ function Dashboard({ org }: { org: Organization }) {
           <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
         </span>
       </div>
-      <p className="lead">{org.name} · {latest.label}</p>
+      <p className="lead">{latest.label}</p>
       <div className="dash-controls no-print">
         <div className="segmented" role="group" aria-label="How many weeks">
           {SPANS.map((w) => <button key={w} type="button" className={span === w ? 'on' : ''} onClick={() => setSpan(w)}>{w} weeks</button>)}

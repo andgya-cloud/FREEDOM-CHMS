@@ -3,6 +3,11 @@ import { normalizePhone, phoneDigits } from './phone.js';
 export const PERSON_STATUSES = ['visitor', 'regular', 'member', 'student', 'child', 'inactive'] as const;
 export type PersonStatus = (typeof PERSON_STATUSES)[number];
 
+/** The statuses offered at a place: Freedom Church has no students or children (Andy, 2026-10-31, 3A). */
+export function statusesFor(orgType?: string): readonly PersonStatus[] {
+  return orgType === 'church_campus' ? PERSON_STATUSES.filter((s) => s !== 'student' && s !== 'child') : PERSON_STATUSES;
+}
+
 export const PERSON_STATUS_LABELS: Record<PersonStatus, string> = {
   visitor: 'Visitor',
   regular: 'Regular',

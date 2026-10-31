@@ -10,6 +10,7 @@ import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { TodayPage } from './pages/TodayPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const SettingsGroupPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsGroupPage })));
 const OrganizationsPage = lazy(() => import('./pages/settings/OrganizationsPage').then((m) => ({ default: m.OrganizationsPage })));
 const OrganizationFormPage = lazy(() => import('./pages/settings/OrganizationFormPage').then((m) => ({ default: m.OrganizationFormPage })));
 const UsersPage = lazy(() => import('./pages/settings/UsersPage').then((m) => ({ default: m.UsersPage })));
@@ -21,7 +22,6 @@ const CustomFieldsPage = lazy(() => import('./pages/settings/CustomFieldsPage').
 const PeoplePage = lazy(() => import('./pages/people/PeoplePage').then((m) => ({ default: m.PeoplePage })));
 const PersonPage = lazy(() => import('./pages/people/PersonPage').then((m) => ({ default: m.PersonPage })));
 const PersonFormPage = lazy(() => import('./pages/people/PersonFormPage').then((m) => ({ default: m.PersonFormPage })));
-const VisitorFormPage = lazy(() => import('./pages/people/VisitorFormPage').then((m) => ({ default: m.VisitorFormPage })));
 const AttendancePage = lazy(() => import('./pages/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage })));
 const EventPage = lazy(() => import('./pages/attendance/EventPage').then((m) => ({ default: m.EventPage })));
 const DoorModePage = lazy(() => import('./pages/attendance/DoorModePage').then((m) => ({ default: m.DoorModePage })));
@@ -37,7 +37,6 @@ const GiftPage = lazy(() => import('./pages/giving/GiftPage').then((m) => ({ def
 const UnassignedPage = lazy(() => import('./pages/giving/UnassignedPage').then((m) => ({ default: m.UnassignedPage })));
 const ImportPage = lazy(() => import('./pages/giving/ImportPage').then((m) => ({ default: m.ImportPage })));
 const GivingSummaryPage = lazy(() => import('./pages/giving/GivingSummaryPage').then((m) => ({ default: m.GivingSummaryPage })));
-const GivingDashboardPage = lazy(() => import('./pages/giving/GivingDashboardPage').then((m) => ({ default: m.GivingDashboardPage })));
 const StatementsPage = lazy(() => import('./pages/giving/StatementsPage').then((m) => ({ default: m.StatementsPage })));
 const FundsPage = lazy(() => import('./pages/settings/FundsPage').then((m) => ({ default: m.FundsPage })));
 const WhatsAppSettingsPage = lazy(() => import('./pages/settings/WhatsAppSettingsPage').then((m) => ({ default: m.WhatsAppSettingsPage })));
@@ -45,7 +44,6 @@ const TemplatesPage = lazy(() => import('./pages/settings/TemplatesPage').then((
 const FollowUpsPage = lazy(() => import('./pages/followups/FollowUpsPage').then((m) => ({ default: m.FollowUpsPage })));
 const RemindersPage = lazy(() => import('./pages/followups/RemindersPage').then((m) => ({ default: m.RemindersPage })));
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
-const DashboardPage = lazy(() => import('./pages/reports/DashboardPage').then((m) => ({ default: m.DashboardPage })));
 const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => ({ default: m.ReportPage })));
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
@@ -145,15 +143,15 @@ function AppRoutes() {
         <Route path="/giving/unassigned" element={<RequirePermission permission="gifts.write"><UnassignedPage /></RequirePermission>} />
         <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
         <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
-        <Route path="/giving/dashboard" element={<RequirePermission permission="finance.reports"><GivingDashboardPage /></RequirePermission>} />
+        <Route path="/giving/dashboard" element={<Navigate to="/reports?tab=giving" replace />} />
         <Route path="/giving/statements" element={<RequirePermission permission="giving.person.read"><StatementsPage /></RequirePermission>} />
         <Route path="/giving/:orgId/:giftId" element={<RequirePermission anyOf={['gifts.write', 'giving.person.read']}><GiftPage /></RequirePermission>} />
         <Route path="/follow-ups" element={<RequirePermission permission="followups.manage"><FollowUpsPage /></RequirePermission>} />
         <Route path="/follow-ups/reminders" element={<RequirePermission permission="followups.manage"><RemindersPage /></RequirePermission>} />
-        <Route path="/dashboard" element={<RequirePermission permission="people.read"><DashboardPage /></RequirePermission>} />
+        <Route path="/dashboard" element={<Navigate to="/reports" replace />} />
         <Route path="/reports" element={<RequirePermission permission="people.read"><ReportsPage /></RequirePermission>} />
         <Route path="/reports/:orgId/:reportId" element={<RequirePermission permission="people.read"><ReportPage /></RequirePermission>} />
-        <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
+        <Route path="/visitors/new" element={<RequirePermission permission="people.write"><PersonFormPage visitor /></RequirePermission>} />
         <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId" element={<RequirePermission permission="people.read"><PersonPage /></RequirePermission>} />
@@ -220,6 +218,7 @@ function AppRoutes() {
         <Route path="/settings/whatsapp" element={<RequirePermission permission="settings.manage"><WhatsAppSettingsPage /></RequirePermission>} />
         <Route path="/settings/templates" element={<RequirePermission permission="settings.manage"><TemplatesPage /></RequirePermission>} />
         <Route path="/settings/device" element={<DevicePage />} />
+        <Route path="/settings/group/:group" element={<SettingsGroupPage />} />
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
         <Route path="/settings/organizations/:orgId" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />

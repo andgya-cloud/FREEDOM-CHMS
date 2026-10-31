@@ -93,7 +93,7 @@ export function EventPage() {
       <div className="person-head">
         <div>
           <h1>{event.name}</h1>
-          <p className="muted">{formatDateKey(event.date)} · {EVENT_TYPE_LABELS[event.type]} · {org.name}</p>
+          <p className="muted">{formatDateKey(event.date)} · {EVENT_TYPE_LABELS[event.type]}</p>
         </div>
         {canRecord && !isClass && (
           <Link className="btn btn-gold" to={`/door/${orgId}/${eventId}`}>Door mode</Link>
