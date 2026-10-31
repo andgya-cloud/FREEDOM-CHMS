@@ -12,6 +12,8 @@ export interface Fund {
   name: string;
   aliases: string[];
   active: boolean;
+  /** 'other': a kind of other giving named while recording a gift. */
+  kind?: 'other';
   deletedAt: Timestamp | null;
 }
 

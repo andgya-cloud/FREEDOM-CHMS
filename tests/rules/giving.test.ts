@@ -48,6 +48,23 @@ describe('funds', () => {
     await assertFails(setDoc(doc(as('settingsAdmin'), `${ORG}/funds/Bad-Id`), fund));
   });
 
+  it('lets staff who record gifts name a kind of other giving with the gift, but not change funds', async () => {
+    const db = as('admin');
+    const batch = writeBatch(db);
+    batch.set(doc(db, `${ORG}/funds/other_building_fund`), { orgId: 'fcn', name: 'Building Fund', aliases: [], active: true, kind: 'other', ...created('admin') });
+    batch.set(doc(db, `${ORG}/gifts/giftOTHERAAA01`), gift('admin', { fundId: 'other_building_fund', method: 'cash', mpesaCode: null }));
+    await assertSucceeds(batch.commit());
+    // Not an ordinary fund, not without the 'other' mark, and no edits afterwards.
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/funds/other_missions`), { orgId: 'fcn', name: 'Missions', aliases: [], active: true, ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/funds/missions`), { orgId: 'fcn', name: 'Missions', aliases: [], active: true, kind: 'other', ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/funds/other_building_fund`), { orgId: 'fcn', name: 'Renamed', aliases: [], active: true, kind: 'other', ...created('admin') }));
+  });
+
+  it('lets staff who record gifts start Tithes and Offerings', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await deleteDoc(doc(ctx.firestore(), `${ORG}/funds/tithes`)); });
+    await assertSucceeds(setDoc(doc(as('admin'), `${ORG}/funds/tithes`), { orgId: 'fcn', name: 'Tithes', aliases: [], active: true, ...created('admin') }));
+  });
+
   it('lets staff who record gifts read the funds', async () => {
     await assertSucceeds(getDoc(doc(as('admin'), `${ORG}/funds/tithes`)));
   });

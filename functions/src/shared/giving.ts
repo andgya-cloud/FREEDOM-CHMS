@@ -34,6 +34,8 @@ export interface FundLike {
   name: string;
   aliases?: string[];
   active?: boolean;
+  /** 'other': a kind of other giving, named when it was first recorded (Andy, 2026-10-31, 2A). */
+  kind?: 'other';
 }
 
 // ---- Money ------------------------------------------------------------------
@@ -69,6 +71,34 @@ const stem = (s: string) => {
 /** "Building Fund" -> "building_fund" */
 export function fundIdFor(name: string): string {
   return name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 40);
+}
+
+/** "  building   fund " -> "Building Fund": how a typed kind of other giving is named. */
+export function tidyFundName(name: string): string {
+  return name.trim().replace(/\s+/g, ' ').slice(0, 40).replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+}
+
+/** The id of a kind of other giving: "Building Fund" -> "other_building_fund", so the same name is always the same fund. */
+export function otherFundIdFor(name: string): string {
+  return `other_${fundIdFor(name)}`.slice(0, 40).replace(/_$/, '');
+}
+
+/** The fund with this name, by name, id or alias, ignoring case, spaces and plurals ("Missions" finds "Mission"). */
+export function fundNamed(name: string, funds: readonly FundLike[]): FundLike | null {
+  const want = stem(name);
+  if (!want) return null;
+  return funds.find((f) => f.active !== false && [f.name, f.id, ...(f.aliases ?? [])].some((n) => stem(n) === want)) ?? null;
+}
+
+/**
+ * The kind of other giving an account reference names, when it names no existing fund:
+ * "FCC#Building" or "BUILDING" -> "Building". Null for references that look like a phone, a code or a sentence.
+ */
+export function otherGivingFromReference(reference: string | null | undefined): string | null {
+  const text = fundTextFromReference(reference);
+  if (!text || text.length < 3 || text.length > 30) return null;
+  if (!/^[A-Za-z][A-Za-z &'-]*$/.test(text)) return null;
+  return tidyFundName(text.toLowerCase());
 }
 
 /** The text after the last # in an account reference: "FCC#Tithes" -> "Tithes". */
@@ -406,4 +436,49 @@ export function suggestedMatch(candidates: readonly MatchCandidate[]): MatchCand
 /** "JANE WANJIKU" -> "Jane Wanjiku", for names from a statement. */
 export function titleCaseName(name: string): string {
   return name.toLowerCase().replace(/(^|[\s'-])([a-z])/g, (_, sep: string, c: string) => sep + c.toUpperCase()).trim();
+}
+
+// ---- An M-Pesa message pasted in -------------------------------------------------
+
+export interface MpesaMessage {
+  code: string | null;
+  amountCents: number | null;
+  /** YYYY-MM-DD */
+  date: string | null;
+  /** The giver's name, when the message names them (the Paybill's own notification does). */
+  name: string;
+  /** As written in the message, for example 254712345678 or 0712345678. */
+  phone: string;
+  /** The account the giver typed, for example FCC#Tithes. */
+  accountRef: string;
+}
+
+/**
+ * Reads an M-Pesa confirmation SMS pasted in (Andy, 2026-10-31): the Paybill's notification
+ * ("QJK3ABCD12 Confirmed. Ksh1,000.00 received from JOHN DOE 254712345678 on 31/10/26 at 10:15 AM. Account Number TITHE")
+ * or the giver's own ("... Ksh1,000.00 sent to FREEDOM CHURCH for account FCC#Tithes on 31/10/26 at 10:15 AM ...").
+ * Whatever can't be read is left empty for typing in.
+ */
+export function parseMpesaMessage(text: string): MpesaMessage {
+  const t = text.replace(/\s+/g, ' ').trim();
+  const code = t.match(/\b([A-Z0-9]{10})\b\s*(?:Confirmed|confirmed)/)?.[1] ?? t.match(/^\s*([A-Z0-9]{10})\b/)?.[1] ?? null;
+  const amount = t.match(/(?:Ksh|KES|Kshs)\.?\s?([\d,]+(?:\.\d{1,2})?)/i)?.[1];
+  const d = t.match(/\bon (\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+  let date: string | null = null;
+  if (d) {
+    const year = d[3].length === 2 ? `20${d[3]}` : d[3];
+    const month = Number(d[2]); const day = Number(d[1]);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+  let name = '';
+  let phone = '';
+  const from = t.match(/received from (.+?) on \d/i)?.[1];
+  if (from) {
+    const p = from.match(/(\+?254\d{9}|07\d{8}|01\d{8}|254\d{2}\*+\d{3,4}|07\d\*+\d{3,4})/);
+    phone = p?.[1]?.replace(/^\+/, '') ?? '';
+    name = from.replace(p?.[0] ?? '', '').replace(/\s+/g, ' ').trim();
+  }
+  const accountRef = (t.match(/Account (?:Number|No\.?)[:\s]+([^.\s][^.]*?)(?:\.|\s+New |\s+on \d|$)/i)?.[1]
+    ?? t.match(/for account (.+?)(?: on \d|\.\s|$)/i)?.[1] ?? '').trim();
+  return { code, amountCents: parseAmount(amount ?? null), date, name, phone, accountRef };
 }

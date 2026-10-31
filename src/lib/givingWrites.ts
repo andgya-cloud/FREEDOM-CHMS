@@ -36,12 +36,29 @@ function me(): string {
 
 // ---- Funds --------------------------------------------------------------------
 
+type Batch = ReturnType<typeof writeBatch>;
+
 export function addStandardFunds(orgId: string, existingIds: readonly string[]) {
   const batch = writeBatch(db);
   for (const f of STANDARD_FUNDS) {
     if (existingIds.includes(f.id)) continue;
     batch.set(ref(orgId, 'funds', f.id), { orgId, name: f.name, aliases: [], active: true, ...createStamps() });
   }
+  return trackWrite(batch.commit());
+}
+
+/** A new kind of other giving, named as it is first recorded (Andy, 2026-10-31, 2A). Saved with the gift that names it. */
+export interface NewFund { id: string; name: string }
+
+function addFundToBatch(batch: Batch, orgId: string, fund: NewFund) {
+  batch.set(ref(orgId, 'funds', fund.id), { orgId, name: fund.name, aliases: [], active: true, kind: 'other', ...createStamps() });
+}
+
+/** Saves new kinds of other giving before an import uses them. Needs internet, like the import. */
+export function addOtherFunds(orgId: string, funds: readonly NewFund[]) {
+  if (!funds.length) return Promise.resolve();
+  const batch = writeBatch(db);
+  funds.forEach((f) => addFundToBatch(batch, orgId, f));
   return trackWrite(batch.commit());
 }
 
@@ -104,8 +121,6 @@ function giftData(orgId: string, input: GiftInput, receivedByName: string, perso
   };
 }
 
-type Batch = ReturnType<typeof writeBatch>;
-
 function addGiftToBatch(batch: Batch, orgId: string, giftId: string, data: ReturnType<typeof giftData>) {
   batch.set(ref(orgId, 'gifts', giftId), data);
   // The code's entry is saved with the gift; the server refuses a second gift with the same code.
@@ -118,10 +133,11 @@ function addGiftToBatch(batch: Batch, orgId: string, giftId: string, data: Retur
  * M-Pesa code was recorded on another device, it is kept for review instead
  * of being lost: see `reviewOutbox`.
  */
-export function recordGift(orgId: string, input: GiftInput, receivedByName: string) {
+export function recordGift(orgId: string, input: GiftInput, receivedByName: string, newFund?: NewFund) {
   const giftId = doc(collection(db, 'organizations', orgId, 'gifts')).id;
   const data = giftData(orgId, input, receivedByName, false);
   const batch = writeBatch(db);
+  if (newFund) addFundToBatch(batch, orgId, newFund);
   addGiftToBatch(batch, orgId, giftId, data);
   remember({ orgId, giftId, savedAt: new Date().toISOString(), gift: { ...input, status: data.status } });
   const synced = trackWrite(batch.commit());

@@ -1738,3 +1738,5 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
   .look-cockpit.side-look .tabbar.has-more.more-open .tab-extra { background: linear-gradient(165deg, var(--menu-1), var(--menu-3)); border-color: rgb(201 162 78 / 0.8); }
 }
 .narrow-block { max-width: 640px; width: 100%; }
+.table td.indent { padding-left: 28px; }
+.mpesa-paste { margin-bottom: 14px; }

@@ -503,14 +503,24 @@ service cloud.firestore {
       // Funds are configuration, like programmes.
       match /funds/{fundId} {
         allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports') || has('giving.person.read'));
-        allow create, update: if orgWrite(orgId, 'settings.manage')
-          && fundId.matches('^[a-z0-9_]{2,40}$')
-          && request.resource.data.keys().hasOnly(['orgId', 'name', 'aliases', 'active',
+        allow create, update: if orgWrite(orgId, 'settings.manage') && fundValid(fundId);
+        // Whoever records giving may start Tithes and Offerings, and name a new kind of other giving
+        // as they record it (Andy, 2026-10-31, 2A 4A). Only the pastor's side changes funds after that.
+        allow create: if orgWrite(orgId, 'gifts.write') && fundValid(fundId)
+          && request.resource.data.active == true && request.resource.data.aliases.size() == 0
+          && (fundId in ['tithes', 'offerings']
+              || (fundId.matches('^other_[a-z0-9_]{1,34}$') && request.resource.data.get('kind', null) == 'other'));
+        allow delete: if false;
+      }
+
+      function fundValid(fundId) {
+        return fundId.matches('^[a-z0-9_]{2,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'aliases', 'active', 'kind',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 40
           && request.resource.data.aliases is list && request.resource.data.aliases.size() <= 10
-          && request.resource.data.active is bool;
-        allow delete: if false;
+          && request.resource.data.active is bool
+          && request.resource.data.get('kind', null) in [null, 'other'];
       }
 
       function giftFieldsValid() {
