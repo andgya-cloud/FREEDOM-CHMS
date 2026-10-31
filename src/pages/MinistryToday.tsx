@@ -9,6 +9,7 @@ import { FirstRunChecklist } from '../components/FirstRunChecklist';
 import { HopeAlerts } from '../components/HopeAlerts';
 import { AdiaIcon, type AdiaIconName } from '../components/icons';
 import { PoweredBy } from '../components/PoweredBy';
+import { BirthdaysCard, SundayCard, sundayFor } from './ChurchSunday';
 import type { Organization } from '../state/OrgContext';
 import type { ReactNode } from 'react';
 
@@ -25,6 +26,8 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
   const greet = `${timeGreeting(tz)}${first ? `, ${first}` : ''}`;
   const due = counts.due === 0 ? 'Nobody is due a follow-up today.' : `${counts.due} ${counts.due === 1 ? 'follow-up is' : 'follow-ups are'} due today.`;
 
+  // On Sunday the service card above carries Check in, so the tile is not repeated (4A).
+  const sundayNow = !hope && sundayFor(tz).isSunday;
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
     { to: '/attendance', icon: 'checkIn', label: 'Check in', sub: hope ? 'Who came to the activity' : 'Who came to the service', show: can('attendance.write') || can('people.read') },
     hope
@@ -50,10 +53,12 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
         </div>
       </section>
 
+      {!hope && <SundayCard org={org} />}
+
       <section className="lav-jobs" aria-label="What do you want to do?">
         <h2>What do you want to do?</h2>
         <div className="lav-jobs-grid">
-          {jobs.filter((j) => j.show).map((j, i) => (
+          {jobs.filter((j) => j.show && !(sundayNow && j.to === '/attendance')).map((j, i) => (
             <Link key={j.to} to={j.to} className="card lav-job">
               <span className={`lav-ico i${(i % 4) + 1}`}><AdiaIcon name={j.icon} /></span>
               <b>{j.label}</b>
@@ -62,6 +67,8 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
           ))}
         </div>
       </section>
+
+      {!hope && <BirthdaysCard org={org} />}
 
       {figures && (
         <details className="lav-figs">

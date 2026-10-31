@@ -269,3 +269,23 @@ describe('gifts the server refused', () => {
     await assertFails(getDoc(doc(as('admin'), `${ORG}/gifts/giftLOST000001`)));
   });
 });
+
+describe('pledges', () => {
+  const pledge = (uid: string, overrides: Record<string, unknown> = {}) => ({
+    orgId: 'fcn', personId: 'p1', name: 'Grace Wanjiku', fundId: 'tithes', amountCents: 5000000,
+    startDate: '2026-10-31', endDate: null, notes: '', ...created(uid), ...overrides,
+  });
+
+  it('lets those who see individual giving add and read pledges, and nobody else', async () => {
+    await assertSucceeds(setDoc(doc(as('pastor'), `${ORG}/pledges/pl1`), pledge('pastor')));
+    await assertSucceeds(getDoc(doc(as('pastor'), `${ORG}/pledges/pl1`)));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/pledges/pl2`), pledge('admin')));
+    await assertFails(getDoc(doc(as('admin'), `${ORG}/pledges/pl1`)));
+  });
+
+  it('refuses a pledge with no amount or a bad date', async () => {
+    await assertFails(setDoc(doc(as('pastor'), `${ORG}/pledges/pl3`), pledge('pastor', { amountCents: 0 })));
+    await assertFails(setDoc(doc(as('pastor'), `${ORG}/pledges/pl4`), pledge('pastor', { endDate: '31/12/2026' })));
+    await assertFails(setDoc(doc(as('pastor'), `${ORG}/pledges/pl5`), pledge('pastor', { extra: true })));
+  });
+});

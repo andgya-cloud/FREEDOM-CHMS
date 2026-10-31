@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findDuplicatesByPhone, firstName, matchesSearch, stageIdFromName, tidyName } from './people';
+import { birthdayLabel, findDuplicatesByPhone, firstName, matchesSearch, stageIdFromName, tidyName, upcomingBirthdays } from './people';
 
 const grace = { fullName: 'Grace Wanjiku Mwangi', phone: '+254712345678' };
 
@@ -40,5 +40,20 @@ describe('names', () => {
     expect(tidyName('McDonald otieno')).toBe('McDonald Otieno');
     expect(firstName('Grace Wanjiku')).toBe('Grace');
     expect(stageIdFromName('Freedom 252')).toBe('freedom_252');
+  });
+});
+
+describe('birthdays', () => {
+  it('labels day and month', () => {
+    expect(birthdayLabel('05-14')).toBe('14 May');
+    expect(birthdayLabel('12-01')).toBe('1 December');
+  });
+  it('finds the next 7 days across the year end, soonest first', () => {
+    const people = [{ id: 'a', birthday: '01-02' }, { id: 'b', birthday: '12-30' }, { id: 'c', birthday: '01-10' }, { id: 'd', birthday: null }];
+    const found = upcomingBirthdays(people, '2026-12-29');
+    expect(found.map((f) => [f.person.id, f.daysAway])).toEqual([['b', 1], ['a', 4]]);
+  });
+  it('celebrates 29 February on 28 February in other years', () => {
+    expect(upcomingBirthdays([{ birthday: '02-29' }], '2027-02-28')).toHaveLength(1);
   });
 });

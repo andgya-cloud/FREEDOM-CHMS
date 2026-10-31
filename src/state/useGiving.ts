@@ -243,3 +243,27 @@ export function useOpenReviews(orgId: string) {
   );
   return rows;
 }
+
+export interface Pledge {
+  id: string;
+  orgId: string;
+  personId: string | null;
+  name: string;
+  fundId: string;
+  amountCents: number;
+  startDate: string;
+  endDate: string | null;
+  notes: string;
+  deletedAt: Timestamp | null;
+}
+
+/** Pledges for people who may see individual giving. */
+export function usePledges(orgId: string) {
+  const { can } = useAuth();
+  const allowed = can('giving.person.read');
+  const { rows, loading } = useLiveQuery<Pledge>(
+    () => (orgId && allowed ? collection(db, 'organizations', orgId, 'pledges') : null),
+    [orgId, allowed],
+  );
+  return { pledges: rows.filter(live).sort((a, b) => a.name.localeCompare(b.name)), loading: allowed && loading };
+}

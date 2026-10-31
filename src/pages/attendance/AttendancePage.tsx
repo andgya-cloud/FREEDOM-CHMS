@@ -210,7 +210,7 @@ export function AttendancePage() {
             <input placeholder={`Another ${noun}, for example ${org.type === 'church_campus' ? 'Youth night' : org.type === 'college' ? 'ICT make-up class' : 'Holiday club'}`} value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label={`Name of another ${noun}`} />
             <button type="submit" className="btn" disabled={!otherName.trim()}>Start</button>
           </form>
-          {org.type === 'church_campus' && <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
+          {org.type === 'church_campus' && <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>. New visitors can fill in their own card: <Link to="/visitors/qr">QR poster for the door</Link>.</p>}
           {org.type === 'ministry' && <p className="hint">The programme list is in <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
           </>}
         </section>

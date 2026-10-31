@@ -18,13 +18,14 @@ import { FollowUpsForPerson } from '../../components/FollowUpsForPerson';
 import { AttendanceForPerson } from '../../components/AttendanceForPerson';
 import { InvolvementForPerson } from '../../components/InvolvementForPerson';
 import { GivingForPerson } from '../../components/GivingForPerson';
-import { PERSON_STATUS_LABELS } from '../../../functions/src/shared/people';
+import { PERSON_STATUS_LABELS, birthdayLabel } from '../../../functions/src/shared/people';
 import { formatPhone } from '../../../functions/src/shared/phone';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 
 export function PersonPage() {
   const { orgId = '', personId = '' } = useParams();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { organizations } = useOrg();
   const { byId, people, loading } = usePeople();
   const customFields = useCustomFields();
@@ -51,6 +52,12 @@ export function PersonPage() {
   const duplicates = (person.possibleDuplicateIds ?? []).map((id) => byId(id)).filter((p) => p && !p.deletedAt);
   const consent = person.whatsappConsent;
   const canWrite = can('people.write');
+  // Call and WhatsApp straight from the page (Andy, 2026-10-31, 1A). A child is reached through the parent.
+  const reach = person.status === 'child' && guardian ? guardian : person;
+  const callPhone = reach.phone || reach.whatsapp || null;
+  const waPhone = reach.whatsappConsent?.stoppedAt ? null : reach.whatsapp || null;
+  // One delete button (7A): Andrew Guya and Doreen have Remove at the top, everyone else Delete at the bottom.
+  const keeper = canKeepAccounts(profile);
 
   function remove() {
     setConfirmDelete(false);
@@ -86,6 +93,7 @@ export function PersonPage() {
     details.push(['Invited by', inviter ? <Link to={`/people/${inviter.orgId}/${inviter.id}`}>{inviter.fullName}</Link> : person.invitedBy]);
   }
   if (person.gender) details.push(['Gender', person.gender]);
+  if (person.birthday) details.push(['Birthday', birthdayLabel(person.birthday)]);
   if (guardian) details.push(['Parent or guardian', <Link to={`/people/${guardian.orgId}/${guardian.id}`}>{guardian.fullName}</Link>]);
   for (const f of customFields.filter((c) => c.active)) {
     const v = person.customFields?.[f.id];
@@ -101,6 +109,12 @@ export function PersonPage() {
           <h1>{person.fullName}</h1>
           <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>
           {org && organizations.length > 1 && <span className="muted small"> · {org.name}</span>}
+          {(callPhone || waPhone) && (
+            <div className="contact-buttons no-print">
+              {callPhone && <a className="btn btn-primary" href={`tel:${callPhone}`}>Call</a>}
+              {waPhone && <a className="btn" href={`https://wa.me/${waPhone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>}
+            </div>
+          )}
         </div>
         <div className="cleanup-head-actions">
           {canWrite && <Link className="btn" to={`/people/${orgId}/${personId}/edit`}>Edit</Link>}
@@ -151,7 +165,7 @@ export function PersonPage() {
       {org && can('giving.person.read') && <GivingForPerson org={org} personId={personId} personName={person.fullName} />}
       {can('pastoral.read') && <PastoralSection orgId={orgId} personId={personId} />}
 
-      {canWrite && (
+      {canWrite && !keeper && (
         <button type="button" className="btn btn-quiet danger-text align-start" onClick={() => setConfirmDelete(true)}>Delete {person.firstName || person.fullName}</button>
       )}
 

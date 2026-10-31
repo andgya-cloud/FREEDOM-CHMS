@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './state/AuthContext';
 import { useAppSettings } from './state/useAppSettings';
 import { isSharedDevice, MONEY_IDLE_MINUTES, useIdleSignOut } from './lib/useIdleSignOut';
@@ -31,6 +31,9 @@ const ProgramFormPage = lazy(() => import('./pages/programs/ProgramFormPage').th
 const TeamPage = lazy(() => import('./pages/programs/TeamPage').then((m) => ({ default: m.TeamPage })));
 const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({ default: m.GroupPage })));
 const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
+const WelcomeCardPage = lazy(() => import('./pages/people/WelcomeCardPage').then((m) => ({ default: m.WelcomeCardPage })));
+const WelcomePosterPage = lazy(() => import('./pages/people/WelcomePosterPage').then((m) => ({ default: m.WelcomePosterPage })));
+const PledgesPage = lazy(() => import('./pages/giving/PledgesPage').then((m) => ({ default: m.PledgesPage })));
 const GivingPage = lazy(() => import('./pages/giving/GivingPage').then((m) => ({ default: m.GivingPage })));
 const RecordGiftPage = lazy(() => import('./pages/giving/RecordGiftPage').then((m) => ({ default: m.RecordGiftPage })));
 const GiftPage = lazy(() => import('./pages/giving/GiftPage').then((m) => ({ default: m.GiftPage })));
@@ -87,6 +90,7 @@ const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
   const settings = useAppSettings();
+  const welcome = useLocation().pathname.startsWith('/welcome/');
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -94,6 +98,14 @@ export function App() {
   const idleMinutes = handlesMoney ? Math.min(MONEY_IDLE_MINUTES, shared ? settings.inactivityMinutes : MONEY_IDLE_MINUTES) : settings.inactivityMinutes;
   useIdleSignOut(idleMinutes, !!user && (shared || handlesMoney), onIdle);
 
+  // The visitor's own card behind the QR poster: open to anyone, no sign-in (Andy, 2026-10-31, 3A).
+  if (welcome) {
+    return (
+      <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
+        <Routes><Route path="/welcome/:orgId" element={<WelcomeCardPage />} /></Routes>
+      </Suspense>
+    );
+  }
   if (loading) {
     return <div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>;
   }
@@ -144,6 +156,8 @@ function AppRoutes() {
         <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
         <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
         <Route path="/giving/dashboard" element={<Navigate to="/reports?tab=giving" replace />} />
+        <Route path="/visitors/qr" element={<RequirePermission permission="people.write"><WelcomePosterPage /></RequirePermission>} />
+        <Route path="/giving/pledges" element={<RequirePermission permission="giving.person.read"><PledgesPage /></RequirePermission>} />
         <Route path="/giving/statements" element={<RequirePermission permission="giving.person.read"><StatementsPage /></RequirePermission>} />
         <Route path="/giving/:orgId/:giftId" element={<RequirePermission anyOf={['gifts.write', 'giving.person.read']}><GiftPage /></RequirePermission>} />
         <Route path="/follow-ups" element={<RequirePermission permission="followups.manage"><FollowUpsPage /></RequirePermission>} />

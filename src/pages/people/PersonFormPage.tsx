@@ -25,6 +25,7 @@ interface FormState {
   status: PersonStatus;
   firstVisitDate: string;
   gender: string;
+  birthday: string;
   household: { id: string | null; name: string };
   guardian: { id: string | null; name: string };
   howHeard: string;
@@ -45,6 +46,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
     status: p.status,
     firstVisitDate: p.firstVisitDate ?? '',
     gender: p.gender ?? '',
+    birthday: p.birthday ?? '',
     household: { id: householdPeer?.id ?? null, name: householdPeer?.fullName ?? '' },
     guardian: { id: p.guardianId ?? null, name: p.guardianId ? byId(p.guardianId)?.fullName ?? '' : '' },
     howHeard: p.howHeard ?? '',
@@ -56,7 +58,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
 
 const EMPTY: FormState = {
   fullName: '', phone: '', sameWhatsApp: true, whatsapp: '', consent: false, email: '', status: 'regular',
-  firstVisitDate: '', gender: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
+  firstVisitDate: '', gender: '', birthday: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
   howHeard: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
 };
 
@@ -138,6 +140,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
       status: form.status,
       firstVisitDate: form.firstVisitDate || null,
       gender: form.gender || null,
+      birthday: form.birthday || null,
       householdId,
       guardianId: form.guardian.id,
       howHeard: form.howHeard || null,
@@ -192,6 +195,9 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
     <div className="page narrow">
       <p><Link to={existing ? `/people/${orgId}/${existing.id}` : visitor ? '/' : '/people'}>← {existing ? existing.fullName : visitor ? 'Today' : 'People'}</Link></p>
       <h1>{existing ? 'Edit details' : 'Add person'}</h1>
+      {isNew && visitor && org?.type === 'church_campus' && (
+        <p className="notice">Visitors can fill in their own card on their phone. <Link to="/visitors/qr">Show the QR poster</Link></p>
+      )}
       <form className="form" onSubmit={submit} noValidate>
         {isNew && isCombined && <OrgPicker value={orgId} onChange={setOrgId} />}
         <label className="field">
@@ -250,6 +256,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
                 </select>
               </label>
             </div>
+            <BirthdayField value={form.birthday} onChange={(v) => set('birthday', v)} />
             <PersonPicker label="Same household as" value={form.household} onChange={(v) => set('household', v)} excludeId={personId} hint="Pick a family member already in the system." />
             <label className="field">
               <span>How they heard about us</span>
@@ -322,4 +329,33 @@ function CustomFieldInput({ field, value, onChange }: { field: CustomField; valu
         </label>
       );
   }
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** Day and month only: many people would rather not give the year (Andy, 2026-10-31, 2A). Saved as "MM-DD". */
+function BirthdayField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [m, d] = value ? value.split('-') : ['', ''];
+  const [month, setMonth] = useState(m);
+  const [day, setDay] = useState(d);
+  useEffect(() => { if (value) { setMonth(value.slice(0, 2)); setDay(value.slice(3)); } }, [value]);
+  const pick = (nm: string, nd: string) => {
+    setMonth(nm); setDay(nd);
+    onChange(nm && nd ? `${nm}-${nd}` : '');
+  };
+  return (
+    <fieldset className="field">
+      <legend>Birthday</legend>
+      <div className="field-row">
+        <select aria-label="Birthday day" value={day} onChange={(e) => pick(month, e.target.value)}>
+          <option value="">Day</option>
+          {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((x) => <option key={x} value={x}>{Number(x)}</option>)}
+        </select>
+        <select aria-label="Birthday month" value={month} onChange={(e) => pick(e.target.value, day)}>
+          <option value="">Month</option>
+          {MONTHS.map((name, i) => <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>)}
+        </select>
+      </div>
+    </fieldset>
+  );
 }

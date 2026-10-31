@@ -126,3 +126,12 @@ export function usePersonAttendance(orgId: string, personId: string) {
   );
   return { marks: rows.filter((r) => !r.deletedAt).sort((a, b) => b.date.localeCompare(a.date)), loading };
 }
+
+/** Everyone checked in anywhere on one day (YYYY-MM-DD): the live Sunday count on Today. */
+export function useDayAttendance(orgId: string, date: string, enabled = true) {
+  const { rows, loading } = useLiveQuery<AttendanceMark>(
+    () => (orgId && date && enabled ? query(collection(db, 'organizations', orgId, 'attendance'), where('date', '==', date)) : null),
+    [orgId, date, enabled],
+  );
+  return { marks: rows.filter((r) => !r.deletedAt), loading };
+}

@@ -26,3 +26,4 @@ export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeRepo
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';
 export { inventoryEmail, inventoryReminders } from './inventory.js';
 export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
+export { welcomeCard } from './welcome.js';

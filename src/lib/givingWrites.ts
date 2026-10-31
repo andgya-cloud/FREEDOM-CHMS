@@ -12,7 +12,7 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { createStamps, updateRecord } from './records';
+import { createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { readPref, writePref } from './storage';
 import { STANDARD_FUNDS, type GiftMethod, type UnassignedReason } from '../../functions/src/shared/giving';
@@ -397,4 +397,32 @@ export async function reviewOutbox(): Promise<void> {
 
 export function resolveReview(orgId: string, giftId: string, note: string) {
   return updateRecord(ref(orgId, 'giftReviews', giftId), { status: 'resolved', resolvedNote: note.trim() });
+}
+
+// ---- Pledges (Andy, 2026-10-31, 8A) ---------------------------------------------
+
+export interface PledgeInput {
+  personId: string | null;
+  name: string;
+  fundId: string;
+  amountCents: number;
+  startDate: string;
+  endDate: string | null;
+  notes: string;
+}
+
+export function addPledge(orgId: string, input: PledgeInput, newFund?: NewFund) {
+  const batch = writeBatch(db);
+  if (newFund) addFundToBatch(batch, orgId, newFund);
+  const pledgeRef = doc(collection(db, 'organizations', orgId, 'pledges'));
+  batch.set(pledgeRef, { orgId, ...input, name: input.name.trim(), notes: input.notes.trim(), ...createStamps() });
+  return trackWrite(batch.commit());
+}
+
+export function updatePledge(orgId: string, pledgeId: string, changes: Partial<PledgeInput>) {
+  return updateRecord(doc(db, 'organizations', orgId, 'pledges', pledgeId), changes);
+}
+
+export function removePledge(orgId: string, pledgeId: string) {
+  return softDelete(doc(db, 'organizations', orgId, 'pledges', pledgeId));
 }

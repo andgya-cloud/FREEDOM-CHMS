@@ -1740,3 +1740,49 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .narrow-block { max-width: 640px; width: 100%; }
 .table td.indent { padding-left: 28px; }
 .mpesa-paste { margin-bottom: 14px; }
+
+/* ---- Freedom Church improvements (Andy, 2026-10-31, 1A-8A) ---- */
+fieldset.field { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.field > legend { padding: 0; margin-bottom: 6px; }
+.contact-buttons { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.contact-buttons .btn { min-width: 110px; }
+
+.sunday-card { display: flex; flex-direction: column; gap: 12px; }
+.sunday-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.sunday-head h2 { margin: 0; }
+.sunday-dot { display: inline-flex; align-items: center; gap: 6px; font-size: 0.8rem; font-weight: 700; color: #1f7a45; text-transform: uppercase; letter-spacing: 0.06em; }
+.sunday-dot::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #2fbf71; box-shadow: 0 0 0 4px rgb(47 191 113 / 0.2); animation: sunday-pulse 1.6s ease-in-out infinite; }
+@keyframes sunday-pulse { 50% { box-shadow: 0 0 0 7px rgb(47 191 113 / 0.05); } }
+@media (prefers-reduced-motion: reduce) { .sunday-dot::before { animation: none; } }
+.sunday-figs { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 10px; margin: 0; }
+.sunday-figs > div { display: flex; flex-direction: column-reverse; padding: 10px 12px; border-radius: 12px; background: rgb(var(--navy-rgb, 31 42 92) / 0.05); }
+.sunday-figs dd { margin: 0; font-size: 1.6rem; font-weight: 800; line-height: 1.1; }
+.sunday-figs dt { font-size: 0.85rem; opacity: 0.75; }
+.sunday-live .sunday-figs > div:first-child dd { font-size: 2rem; }
+.sunday-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.birthdays-card h2 { margin-top: 0; }
+.birthday-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+.just-saved { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.pledge-total .pledge-line { font-size: 1.05rem; }
+.pledge-list > li { display: flex; flex-direction: column; gap: 6px; align-items: stretch; }
+.pledge-row-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pledge-bar { height: 8px; border-radius: 99px; background: rgb(0 0 0 / 0.08); overflow: hidden; }
+.pledge-bar > span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--g-from, #6dae85), var(--g-to, #c9a24e)); }
+.pledge-list .link-button-inline { align-self: flex-start; }
+
+.welcome-card { background: #fff; border-radius: 18px; box-shadow: 0 10px 30px rgb(0 0 0 / 0.08); margin-top: 4vh; padding: 24px 18px; }
+.welcome-card h1 { margin: 4px 0; }
+.welcome-trap { position: absolute; left: -10000px; width: 1px; height: 1px; overflow: hidden; }
+.welcome-poster { text-align: center; align-items: center; display: flex; flex-direction: column; gap: 10px; }
+.welcome-poster-lead { font-size: 1.15rem; max-width: 30ch; }
+.welcome-qr { width: min(320px, 80vw); }
+.welcome-qr svg { width: 100%; height: auto; display: block; }
+.welcome-url { word-break: break-all; }
+@media print {
+  .welcome-poster { box-shadow: none; border: 0; }
+  .welcome-poster h1 { font-size: 2.2rem; }
+  .welcome-qr { width: 12cm; }
+}

@@ -23,6 +23,13 @@ describe('people', () => {
     await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { status: 'regular', updatedAt: serverTimestamp(), updatedBy: 'admin' }));
   });
 
+  it('accepts a birthday as day and month only (Andy, 2026-10-31)', async () => {
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/b1'), { ...person('fcn', { birthday: '05-14' }), ...created('admin') }));
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/b2'), { ...person('fcn', { birthday: null }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/b3'), { ...person('fcn', { birthday: '1990-05-14' }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/b4'), { ...person('fcn', { birthday: '13-01' }), ...created('admin') }));
+  });
+
   it('keeps each organization’s people apart', async () => {
     await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/people')));
     await assertFails(getDocs(collection(as('admin'), 'organizations/adia/people')));

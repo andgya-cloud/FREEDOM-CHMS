@@ -147,7 +147,7 @@ function RecordGift({ org }: { org: Organization }) {
       }, profile?.displayName ?? '', newFund);
       synced.catch((err) => toast.show(friendlyError(err)));
       toast.show(saved('Gift recorded'));
-      navigate(`/giving/${org.id}/${id}`, { replace: true });
+      navigate(`/giving/${org.id}/${id}`, { replace: true, state: { justSaved: true } });
     } catch (err) {
       setError(friendlyError(err));
     } finally {

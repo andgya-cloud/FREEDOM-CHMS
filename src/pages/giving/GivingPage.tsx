@@ -96,6 +96,14 @@ function Giving({ org }: { org: Organization }) {
         )}
         {can('giving.person.read') && (
           <li>
+            <Link to="/giving/pledges">
+              <span className="link-title">Pledges</span>
+              <span className="link-detail">Promised and given so far, for the building or any fund</span>
+            </Link>
+          </li>
+        )}
+        {can('giving.person.read') && (
+          <li>
             <Link to="/giving/statements">
               <span className="link-title">Giving statements{january && <span className="badge badge-warn">Year-end</span>}</span>
               <span className="link-detail">{january ? `Statements for ${zonedParts(new Date(), org.timeZone).year - 1} are ready to send` : 'For any member and any dates'}</span>

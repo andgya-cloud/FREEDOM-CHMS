@@ -104,3 +104,38 @@ export function findDuplicatesByPhone<T extends { id: string; phone: string | nu
   if (!normalized) return [];
   return people.filter((p) => p.id !== excludeId && !p.deletedAt && p.phone === normalized);
 }
+
+// ---- Birthdays (Andy, 2026-10-31, 2A) -------------------------------------------
+// Day and month only, saved as "MM-DD".
+
+const BIRTHDAY_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** "05-14" → "14 May". */
+export function birthdayLabel(mmdd: string): string {
+  const m = Number(mmdd.slice(0, 2));
+  const d = Number(mmdd.slice(3, 5));
+  if (!m || !d || m > 12) return mmdd;
+  return `${d} ${BIRTHDAY_MONTHS[m - 1]}`;
+}
+
+/**
+ * Birthdays from today's date key ("YYYY-MM-DD") through the next 6 days, soonest first.
+ * `daysAway` is 0 for today. 29 February falls on 28 February in other years.
+ */
+export function upcomingBirthdays<T extends { birthday?: string | null }>(people: readonly T[], todayKey: string, days = 7): { person: T; daysAway: number }[] {
+  const [y, m, d] = todayKey.split('-').map(Number);
+  const start = Date.UTC(y, m - 1, d);
+  const keys = new Map<string, number>();
+  for (let i = 0; i < days; i++) {
+    const t = new Date(start + i * 86_400_000);
+    const yy = t.getUTCFullYear();
+    const key = `${String(t.getUTCMonth() + 1).padStart(2, '0')}-${String(t.getUTCDate()).padStart(2, '0')}`;
+    if (!keys.has(key)) keys.set(key, i);
+    const leap = (yy % 4 === 0 && yy % 100 !== 0) || yy % 400 === 0;
+    if (key === '02-28' && !leap && !keys.has('02-29')) keys.set('02-29', i);
+  }
+  return people
+    .filter((p) => p.birthday && keys.has(p.birthday))
+    .map((p) => ({ person: p, daysAway: keys.get(p.birthday!)! }))
+    .sort((a, b) => a.daysAway - b.daysAway);
+}

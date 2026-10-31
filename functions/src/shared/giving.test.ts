@@ -21,6 +21,7 @@ import {
   STANDARD_FUNDS,
   suggestedMatch,
   type GiftForLedger,
+  pledgeGivenCents,
 } from './giving';
 
 describe('money', () => {
@@ -220,5 +221,23 @@ describe('other giving', () => {
     expect(fundNamed('missions', [{ id: 'other_mission', name: 'Mission' }])?.id).toBe('other_mission');
     expect(otherGivingFromReference('FCC#BUILDING')).toBe('Building');
     expect(otherGivingFromReference('0712345678')).toBeNull();
+  });
+});
+
+describe('pledgeGivenCents', () => {
+  const pledge = { personId: 'p1', fundId: 'building', startDate: '2026-01-01', endDate: '2026-12-31' };
+  it('adds confirmed gifts by the same person to the same fund within the dates', () => {
+    const gifts = [
+      { personId: 'p1', fundId: 'building', date: '2026-02-01', status: 'confirmed', amountCents: 500000 },
+      { personId: 'p1', fundId: 'building', date: '2025-12-31', status: 'confirmed', amountCents: 100 },
+      { personId: 'p1', fundId: 'tithes', date: '2026-02-01', status: 'confirmed', amountCents: 100 },
+      { personId: 'p2', fundId: 'building', date: '2026-02-01', status: 'confirmed', amountCents: 100 },
+      { personId: 'p1', fundId: 'building', date: '2026-03-01', status: 'void', amountCents: 100 },
+      { personId: 'p1', fundId: 'building', date: '2026-04-01', status: 'confirmed', amountCents: 250000 },
+    ];
+    expect(pledgeGivenCents(pledge, gifts)).toBe(750000);
+  });
+  it('counts nothing without a linked person', () => {
+    expect(pledgeGivenCents({ ...pledge, personId: null }, [])).toBe(0);
   });
 });

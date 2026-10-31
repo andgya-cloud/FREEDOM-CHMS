@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react';
 import { CleanupButton } from '../../components/CleanupDialog';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
@@ -34,6 +34,7 @@ export function GiftPage() {
   const [link, setLink] = useState<{ id: string | null; name: string } | null>(null);
   const [whatsapp, setWhatsapp] = useState(false);
   const { byId } = usePeople();
+  const justSaved = !!(useLocation().state as { justSaved?: boolean } | null)?.justSaved;
 
   if (!org || !gift) {
     return (
@@ -107,6 +108,14 @@ export function GiftPage() {
         </div>
         <CleanupButton orgId={orgId} kind="gift" id={giftId} back="/giving" />
       </div>
+
+      {justSaved && gift.status !== 'void' && (
+        <div className="notice notice-ok just-saved no-print">
+          <b>Saved.</b>
+          {giver && canReceipt && gift.status === 'confirmed' && <button type="button" className="btn btn-primary" onClick={() => setWhatsapp(true)}>Say thank you to {giver.firstName} on WhatsApp</button>}
+          <Link className="btn" to="/giving/new">Record another</Link>
+        </div>
+      )}
 
       {gift.status === 'unassigned' && (
         <div className="notice">This payment needs {gift.unassignedReason === 'fund' ? 'a fund' : gift.unassignedReason === 'person' ? 'a person' : 'a person and a fund'}. <Link to="/giving/unassigned">Open the Unassigned list</Link></div>

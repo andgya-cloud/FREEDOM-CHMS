@@ -482,3 +482,20 @@ export function parseMpesaMessage(text: string): MpesaMessage {
     ?? t.match(/for account (.+?)(?: on \d|\.\s|$)/i)?.[1] ?? '').trim();
   return { code, amountCents: parseAmount(amount ?? null), date, name, phone, accountRef };
 }
+
+// ---- Pledges (Andy, 2026-10-31, 8A) ---------------------------------------------
+
+/**
+ * How much of a pledge has been given: confirmed gifts by the same person to the same fund, dated from the
+ * pledge's start to its end date (or today). A pledge with no person linked counts nothing automatically.
+ */
+export function pledgeGivenCents(
+  pledge: { personId: string | null; fundId: string; startDate: string; endDate: string | null },
+  gifts: readonly { personId?: string | null; fundId?: string | null; date: string; status: string; amountCents: number }[],
+): number {
+  if (!pledge.personId) return 0;
+  return gifts
+    .filter((g) => g.status === 'confirmed' && g.personId === pledge.personId && g.fundId === pledge.fundId
+      && g.date >= pledge.startDate && (!pledge.endDate || g.date <= pledge.endDate))
+    .reduce((sum, g) => sum + g.amountCents, 0);
+}
