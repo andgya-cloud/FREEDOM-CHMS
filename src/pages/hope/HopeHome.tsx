@@ -6,7 +6,8 @@ import { friendlyError } from '../../lib/errors';
 import { createEvent } from '../../lib/attendanceWrites';
 import { requestAbsenceCheck } from '../../lib/hopeWrites';
 import { eventTypeFor } from '../../../functions/src/shared/attendance';
-import { MEALS_PROGRAMME } from '../../../functions/src/shared/hope';
+import { MEALS_PROGRAMME, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
+import { ColumnChart, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
 import { HopeGate, HopeNav, pct, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -40,12 +41,13 @@ function Home({ org }: { org: Organization }) {
     window.setTimeout(() => setChecking(false), 4000);
   }
 
-  const tiles: [string, string][] = [
-    ['Registered', String(m.registered)], ['Active', String(m.active)], ['Came in the last 8 weeks', String(m.attendingLast8Weeks)],
-    ['New this month', String(m.newlyRegistered)], ['Meals this month', String(m.meals.total)], ['Attending regularly', pct(m.consistencyRate)],
-    ['Still here after 6 months', pct(m.retentionRate)], ['Join two or more programmes', String(m.reachTwoPlus)],
-    ['In school', pct(m.schoolEnrolmentRate)], ['Guardians reached', pct(m.guardianContactRate)],
+  const active = h.children.filter((c) => c.status === 'active');
+  const ageOf = (dob: string | null | undefined) => (dob ? Math.floor((Date.parse(h.today) - Date.parse(dob)) / (365.25 * 864e5)) : null);
+  const AGES: [string, (a: number | null) => boolean][] = [
+    ['Under 6', (a) => a != null && a < 6], ['6 to 9', (a) => a != null && a >= 6 && a <= 9], ['10 to 13', (a) => a != null && a >= 10 && a <= 13],
+    ['14 to 17', (a) => a != null && a >= 14 && a <= 17], ['18 and over', (a) => a != null && a >= 18], ['Age not known', (a) => a == null],
   ];
+  const rate = (label: string, v: number | null) => <Gauge key={label} value={v ?? 0} max={100} label={label} display={pct(v)} bands={[0.5, 0.75]} />;
 
   return (
     <div className="page narrow">
@@ -69,9 +71,31 @@ function Home({ org }: { org: Organization }) {
         </section>
       )}
 
-      <ul className="tiles" aria-label="Hope Center numbers">
-        {tiles.map(([label, value]) => <li key={label}><div className="tile"><span className="tile-label">{label}</span><span className="tile-value">{value}</span></div></li>)}
-      </ul>
+      <KpiRow label="Hope Center numbers">
+        <KpiCard label="Registered" value={String(m.registered)} tone="gold" note={`${m.active} active`} to="/hope/children" />
+        <KpiCard label="Came in the last 8 weeks" value={String(m.attendingLast8Weeks)} note={`${m.reachTwoPlus} join two or more programmes`} />
+        <KpiCard label="New this month" value={String(m.newlyRegistered)} tone="ok" />
+        <KpiCard label="Meals this month" value={String(m.meals.total)} note={`${m.meals.sessions} ${m.meals.sessions === 1 ? 'Saturday' : 'Saturdays'} · ${m.meals.newChildren} new`} />
+      </KpiRow>
+      <div className="dash-grid">
+        <Panel title="How the children are doing" wide>
+          <div className="gauges">
+            {rate('Attending regularly', m.consistencyRate)}
+            {rate('Still here after 6 months', m.retentionRate)}
+            {rate('In school', m.schoolEnrolmentRate)}
+            {rate('Guardians reached', m.guardianContactRate)}
+          </div>
+        </Panel>
+        <Panel title="Children in each programme this month">
+          <ColumnChart label="Children in each programme this month" rows={[{ label: 'Meals', value: m.meals.newChildren + m.meals.returningChildren }, ...m.byProgramme.map((p) => ({ label: p.name.replace(/ Academy$/, ''), value: p.children }))]} highlight={0} height={170} />
+        </Panel>
+        <Panel title="Ages">
+          <Donut label="Active children by age" rows={AGES.map(([label, f]) => ({ label, value: active.filter((c) => f(ageOf(c.dateOfBirth))).length }))} center={String(active.length)} centerNote="active" />
+        </Panel>
+        <Panel title="School">
+          <Donut label="Active children by school" rows={SCHOOL_STATUSES.map((k) => ({ label: SCHOOL_STATUS_LABELS[k], value: active.filter((c) => c.schoolStatus === k).length }))} center={pct(m.schoolEnrolmentRate)} centerNote="in school" />
+        </Panel>
+      </div>
 
       {can('attendance.write') && (
         <section className="card stack">

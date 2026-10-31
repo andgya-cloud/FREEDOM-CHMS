@@ -48,6 +48,23 @@ describe('funds', () => {
     await assertFails(setDoc(doc(as('settingsAdmin'), `${ORG}/funds/Bad-Id`), fund));
   });
 
+  it('lets staff who record gifts name a kind of other giving with the gift, but not change funds', async () => {
+    const db = as('admin');
+    const batch = writeBatch(db);
+    batch.set(doc(db, `${ORG}/funds/other_building_fund`), { orgId: 'fcn', name: 'Building Fund', aliases: [], active: true, kind: 'other', ...created('admin') });
+    batch.set(doc(db, `${ORG}/gifts/giftOTHERAAA01`), gift('admin', { fundId: 'other_building_fund', method: 'cash', mpesaCode: null }));
+    await assertSucceeds(batch.commit());
+    // Not an ordinary fund, not without the 'other' mark, and no edits afterwards.
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/funds/other_missions`), { orgId: 'fcn', name: 'Missions', aliases: [], active: true, ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/funds/missions`), { orgId: 'fcn', name: 'Missions', aliases: [], active: true, kind: 'other', ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/funds/other_building_fund`), { orgId: 'fcn', name: 'Renamed', aliases: [], active: true, kind: 'other', ...created('admin') }));
+  });
+
+  it('lets staff who record gifts start Tithes and Offerings', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await deleteDoc(doc(ctx.firestore(), `${ORG}/funds/tithes`)); });
+    await assertSucceeds(setDoc(doc(as('admin'), `${ORG}/funds/tithes`), { orgId: 'fcn', name: 'Tithes', aliases: [], active: true, ...created('admin') }));
+  });
+
   it('lets staff who record gifts read the funds', async () => {
     await assertSucceeds(getDoc(doc(as('admin'), `${ORG}/funds/tithes`)));
   });
@@ -250,5 +267,25 @@ describe('gifts the server refused', () => {
   it('shows a staff member that their own missing gift was refused', async () => {
     await record('pastor', 'giftOTHER00001');
     await assertFails(getDoc(doc(as('admin'), `${ORG}/gifts/giftLOST000001`)));
+  });
+});
+
+describe('pledges', () => {
+  const pledge = (uid: string, overrides: Record<string, unknown> = {}) => ({
+    orgId: 'fcn', personId: 'p1', name: 'Grace Wanjiku', fundId: 'tithes', amountCents: 5000000,
+    startDate: '2026-10-31', endDate: null, notes: '', ...created(uid), ...overrides,
+  });
+
+  it('lets those who see individual giving add and read pledges, and nobody else', async () => {
+    await assertSucceeds(setDoc(doc(as('pastor'), `${ORG}/pledges/pl1`), pledge('pastor')));
+    await assertSucceeds(getDoc(doc(as('pastor'), `${ORG}/pledges/pl1`)));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/pledges/pl2`), pledge('admin')));
+    await assertFails(getDoc(doc(as('admin'), `${ORG}/pledges/pl1`)));
+  });
+
+  it('refuses a pledge with no amount or a bad date', async () => {
+    await assertFails(setDoc(doc(as('pastor'), `${ORG}/pledges/pl3`), pledge('pastor', { amountCents: 0 })));
+    await assertFails(setDoc(doc(as('pastor'), `${ORG}/pledges/pl4`), pledge('pastor', { endDate: '31/12/2026' })));
+    await assertFails(setDoc(doc(as('pastor'), `${ORG}/pledges/pl5`), pledge('pastor', { extra: true })));
   });
 });

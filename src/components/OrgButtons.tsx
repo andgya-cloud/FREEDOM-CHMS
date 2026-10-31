@@ -21,7 +21,7 @@ export function OrgButtons() {
         )}
         {organizations.map((o) => (
           <button key={o.id} type="button" className={`chip${currentId === o.id ? ' chip-on' : ''}`} aria-pressed={currentId === o.id}
-            onClick={() => { select(o.id); if (o.type === 'college') navigate('/school'); if (o.type === 'ministry') navigate('/hope'); }}>
+            onClick={() => { select(o.id); if (o.type === 'college') navigate('/'); if (o.type === 'ministry') navigate('/hope'); }}>
             {o.name}{o.type === 'college' ? ' → School' : o.type === 'ministry' ? ' → Children' : ''}
           </button>
         ))}

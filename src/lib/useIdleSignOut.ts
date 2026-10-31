@@ -4,6 +4,8 @@ import { readPref, writePref } from './storage';
 const EVENTS = ['pointerdown', 'keydown', 'scroll', 'touchstart'] as const;
 const LAST_ACTIVE = 'lastActive';
 const WRITE_EVERY_MS = 5_000;
+/** People who can see or move money sign out after this long without use, on any device. */
+export const MONEY_IDLE_MINUTES = 10;
 
 /** Only devices marked as shared sign out by themselves; a personal phone stays signed in. */
 export function isSharedDevice(): boolean {

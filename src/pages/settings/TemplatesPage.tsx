@@ -38,7 +38,7 @@ export function TemplatesPage() {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/settings/group/whatsapp">← WhatsApp</Link></p>
       <h1>WhatsApp messages</h1>
       <p className="lead">The words each follow-up starts with. Staff can still change them before sending.</p>
 

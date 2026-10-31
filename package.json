@@ -13,19 +13,24 @@
     "test:all": "npm test && npm run test:rules",
     "emulators": "firebase emulators:start --project demo-freedom-chms --import=.emulator-data --export-on-exit",
     "bootstrap": "node scripts/bootstrap.mjs",
+    "set-password": "node scripts/set-password.mjs",
     "icons": "python3 scripts/make-icons.py"
   },
   "dependencies": {
     "firebase": "^12.19.0",
     "jspdf": "^3.0.4",
+    "pdf-lib": "^1.17.1",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.0",
-    "read-excel-file": "^5.8.8"
+    "read-excel-file": "^5.8.8",
+    "write-excel-file": "^2.3.10"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^5.0.2",
     "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",

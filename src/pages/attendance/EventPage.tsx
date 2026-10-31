@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
@@ -13,6 +14,7 @@ import { CheckInPanel } from '../../components/CheckInPanel';
 import { ClassRegister, type RosterSpec } from '../../components/ClassRegister';
 import { ProgramSessionPanel } from '../../components/ProgramSessionPanel';
 import { useSchool } from '../../state/useSchool';
+import { useAllExamSheets, useExamCohorts } from '../../state/useExams';
 import { useChildren } from '../../state/useHope';
 import { updateChild } from '../../lib/hopeWrites';
 import { MEALS_PROGRAMME, normalizeCode, programmeOf } from '../../../functions/src/shared/hope';
@@ -21,13 +23,15 @@ import { useEnrollments, useGroupMembers, useGroups, usePrograms } from '../../s
 import { enrol } from '../../lib/programWrites';
 import { EVENT_TYPE_LABELS } from '../../../functions/src/shared/attendance';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
+import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { cohortOfCommonClass } from '../../../functions/src/shared/commonCourses';
 import type { Person } from '../../state/PeopleContext';
 import type { Program } from '../../state/usePrograms';
 
 /** One service, class or session: the headcount, who came, and the door tablet. */
 export function EventPage() {
   const { orgId = '', eventId = '' } = useParams();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { organizations, currentId, select } = useOrg();
   const toast = useToast();
   const navigate = useNavigate();
@@ -36,7 +40,10 @@ export function EventPage() {
   const [notes, setNotes] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
   const org = organizations.find((o) => o.id === orgId);
-  const canRecord = can('attendance.write');
+  // A trainer marks the register of their own classes only, and changes nothing else (Andy, 2026-10-26).
+  const trainer = profile?.roleId === TRAINER_ROLE_ID;
+  const mine = !!event && event.type === 'class' && (profile?.registerClasses ?? []).includes(event.name);
+  const canRecord = trainer ? mine : can('attendance.write');
   const linked = useLinkedRoster(orgId, event);
 
   useEffect(() => { setNotes(event?.notes ?? ''); }, [event?.id, event?.notes]);
@@ -62,6 +69,15 @@ export function EventPage() {
     );
   }
 
+  if (trainer && !mine) {
+    return (
+      <div className="page narrow">
+        <p><Link to="/attendance">← Attendance</Link></p>
+        <p>This isn't one of your classes.</p>
+      </div>
+    );
+  }
+
   function remove() {
     setConfirmDelete(false);
     const ref = eventRef(orgId, eventId);
@@ -77,17 +93,18 @@ export function EventPage() {
       <div className="person-head">
         <div>
           <h1>{event.name}</h1>
-          <p className="muted">{formatDateKey(event.date)} · {EVENT_TYPE_LABELS[event.type]} · {org.name}</p>
+          <p className="muted">{formatDateKey(event.date)} · {EVENT_TYPE_LABELS[event.type]}</p>
         </div>
         {canRecord && !isClass && (
           <Link className="btn btn-gold" to={`/door/${orgId}/${eventId}`}>Door mode</Link>
         )}
+        <CleanupButton orgId={orgId} kind="event" id={eventId} back={linked.back.to} />
       </div>
 
       {linked.program && <ProgramSessionPanel key={event.id} orgId={orgId} event={event} program={linked.program} canEdit={canRecord} />}
-      <HeadcountEditor event={event} canEdit={canRecord} />
+      {!trainer && <HeadcountEditor event={event} canEdit={canRecord} />}
       {isClass
-        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} />
+        ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} rosterOnly={trainer} names={trainer ? linked.names : undefined} />
         : <CheckInPanel org={org} event={event} byPerson={byPerson} canRecord={canRecord} />}
 
       <section className="card">
@@ -104,7 +121,7 @@ export function EventPage() {
         </label>
       </section>
 
-      {canRecord && (
+      {canRecord && !trainer && (
         <button type="button" className="btn btn-quiet danger-text align-start" onClick={() => setConfirmDelete(true)}>Delete this {EVENT_TYPE_LABELS[event.type].toLowerCase()}</button>
       )}
       <ConfirmDialog
@@ -124,7 +141,7 @@ export function EventPage() {
  * For a programme class or a group meeting: who belongs on the register,
  * and where "back" goes. Ordinary services and ADIA classes get nothing extra.
  */
-function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: RosterSpec; program?: Program; back: { to: string; label: string } } {
+function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: RosterSpec; program?: Program; back: { to: string; label: string }; names?: Map<string, string> } {
   const { can } = useAuth();
   const { organizations } = useOrg();
   const toast = useToast();
@@ -140,6 +157,8 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
   const tz = orgInfo?.timeZone;
   const isClass = orgInfo?.type === 'college' && event?.type === 'class' && !programId && !groupId;
   const school = useSchool(isClass ? orgId : '');
+  const commonSheets = useAllExamSheets(isClass ? orgId : '');
+  const commonCohorts = useExamCohorts(isClass ? orgId : '');
   const isHope = orgInfo?.type === 'ministry' && (event?.type === 'session' || event?.type === 'meal') && !programId && !groupId;
   const hope = useChildren(isHope ? orgId : '');
 
@@ -185,11 +204,30 @@ function useLinkedRoster(orgId: string, event: ChurchEvent | null): { roster?: R
     const course = school.courses.find((c) => c.name === (event.activity ?? event.name));
     if (course) {
       return {
-        back: { to: '/school', label: 'School' },
+        back: { to: '/attendance', label: 'Attendance' },
+        names: school.rosterNames,
         roster: {
           ids: new Set(school.students.filter((st) => st.courseId === course.id && st.status === 'enrolled').map((st) => st.id)),
           title: `${course.name} register`,
           empty: 'No students are enrolled in this programme yet. Enrol them under School → Students.',
+          addLabel: 'Add guest',
+        },
+      };
+    }
+    // A common course's register, "Communication Skills · Cohort 4": every enrolled student of that cohort (Andy, 2026-10-28).
+    // A register named only by the course ("Leadership") takes the one open cohort that has that common course.
+    const named = [...new Set(commonSheets.sheets.filter((sh) => sh.courseId == null && sh.courseName.trim().toLowerCase() === event.name.trim().toLowerCase()
+      && commonCohorts.byName[sh.cohort]?.closed !== true).map((sh) => sh.cohort))];
+    const cohort = cohortOfCommonClass(event.name) || (named.length === 1 ? named[0]! : '');
+    const intakeIds = new Set(school.intakes.filter((i) => i.name === cohort).map((i) => i.id));
+    if (cohort && intakeIds.size) {
+      return {
+        back: { to: '/attendance', label: 'Attendance' },
+        names: school.rosterNames,
+        roster: {
+          ids: new Set(school.students.filter((st) => intakeIds.has(st.intakeId) && st.status === 'enrolled').map((st) => st.id)),
+          title: event.name.includes(' · ') ? `${event.name} register` : `${event.name} · ${cohort} register`,
+          empty: `No students are enrolled in ${cohort} yet.`,
           addLabel: 'Add guest',
         },
       };

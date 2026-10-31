@@ -1,10 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { markIntroPending } from '../components/AdiaIntro';
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut as fbSignOut, type User } from 'firebase/auth';
 import { doc, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { useNavigate } from 'react-router-dom';
 import { auth, db, functions } from '../firebase';
-import { can as canDo, canAccessOrg, type Permission } from '../../functions/src/shared/permissions';
+import { TRAINER_ROLE_ID, can as canDo, canAccessOrg, type Permission } from '../../functions/src/shared/permissions';
 
 export interface Profile {
   uid: string;
@@ -17,6 +18,18 @@ export interface Profile {
   allOrgs: boolean;
   active: boolean;
   mustChangePassword?: boolean;
+  /** Petty cash voucher title, such as Accountant. */
+  pettyTitle?: string;
+  phone?: string;
+  /** A trainer's classes whose register they mark (ADIA programme names). */
+  registerClasses?: string[];
+  /** A trainer's departments (ADIA programme ids). */
+  trainerCourseIds?: string[];
+  /** A common-course lecturer's registers ("Communication Skills · Cohort 4") and cohort class lists (functions/src/commonCourses.ts). */
+  commonClasses?: string[];
+  commonRosters?: string[];
+  /** The ADIA departments (programme ids) whose inventory they count (Andy, 2026-10-29). */
+  inventoryCourseIds?: string[];
   lastSignInAt?: Timestamp;
 }
 
@@ -69,10 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     profile,
     loading: !authReady || (!!user && !profileReady),
-    can: (p) => canDo(profile, p),
+    // A trainer never reads people, even on an account saved before that rule (Andy, 2026-10-28).
+    can: (p) => !(p === 'people.read' && profile?.roleId === TRAINER_ROLE_ID) && canDo(profile, p),
     canAccessOrg: (orgId) => canAccessOrg(profile, orgId),
     async signIn(email, password) {
       await signInWithEmailAndPassword(auth, email.trim(), password);
+      markIntroPending();
       // Recorded in the audit log by the server; doesn't block the sign-in.
       httpsCallable(functions, 'recordSignIn')().catch(() => undefined);
     },

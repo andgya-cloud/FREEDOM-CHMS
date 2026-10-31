@@ -30,6 +30,17 @@ service cloud.firestore {
     function has(permission) {
       return isActive() && permission in me().permissions;
     }
+    // A trainer reads only their department's class list (rosters), never people
+    // or students: their accounts carry no people.read (Andy, 2026-10-28).
+    function isTrainer() {
+      return isActive() && me().roleId == 'trainer';
+    }
+    function myClasses() {
+      return me().get('registerClasses', []);
+    }
+    function myDepartments() {
+      return me().get('trainerCourseIds', []);
+    }
     function hasAllOrgs() {
       return isActive() && me().allOrgs == true;
     }
@@ -60,8 +71,15 @@ service cloud.firestore {
 
     // ---- Users and roles --------------------------------------------------
 
+    // An organization head may read the Staff accounts of their own organizations (see canManageTeamAccount).
+    function isMyTeamAccount(d) {
+      return has('team.manage') && me().allOrgs != true
+        && d.roleId == 'staff' && d.get('allOrgs', false) != true
+        && d.orgIds.size() > 0 && d.orgIds.hasOnly(me().orgIds);
+    }
+
     match /users/{uid} {
-      allow get: if signedIn() && (request.auth.uid == uid || has('users.manage'));
+      allow get: if signedIn() && (request.auth.uid == uid || has('users.manage') || isMyTeamAccount(resource.data));
       allow list: if has('users.manage');
       allow write: if false; // Cloud Functions only
     }
@@ -145,7 +163,7 @@ service cloud.firestore {
     function validPerson() {
       let d = request.resource.data;
       return d.keys().hasOnly(['orgId', 'fullName', 'firstName', 'phone', 'whatsapp', 'whatsappConsent',
-               'email', 'status', 'firstVisitDate', 'gender', 'householdId', 'guardianId', 'howHeard',
+               'email', 'status', 'firstVisitDate', 'gender', 'birthday', 'householdId', 'guardianId', 'howHeard',
                'invitedBy', 'invitedById', 'serviceAttended', 'customFields', 'possibleDuplicateIds',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.fullName is string && d.fullName.size() >= 1 && d.fullName.size() <= 120
@@ -153,6 +171,8 @@ service cloud.firestore {
         && (d.phone == null || (d.phone is string && d.phone.matches('^[+][0-9]{8,15}$')))
         && (d.whatsapp == null || (d.whatsapp is string && d.whatsapp.matches('^[+][0-9]{8,15}$')))
         && d.whatsappConsent is map
+        && (!('birthday' in d) || d.birthday == null
+            || (d.birthday is string && d.birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
         && (!('customFields' in d) || d.customFields is map);
     }
 
@@ -265,9 +285,31 @@ service cloud.firestore {
             && existsAfter(/databases/$(database)/documents/organizations/$(orgId)/groups/$(d.groupId));
       }
 
+      // An ADIA trainer marks the register of their own classes only, named on their account
+      // (Andy, 2026-10-26): no other class, no headcounts, no deleting.
+      function dayOf(d) {
+        let p = d.split('-');
+        return timestamp.date(int(p[0]), int(p[1]), int(p[2]));
+      }
+      function registerTrainer(orgId, e) {
+        return canAccessOrg(orgId) && has('exams.mark') && e.type == 'class'
+          && e.name in myClasses()
+        // Today or yesterday only (Andy, 2026-10-28, 4B); a day's leeway for Nairobi time.
+        && dayOf(e.date) >= request.time - duration.value(2, 'd')
+        && dayOf(e.date) <= request.time + duration.value(1, 'd')
+          && request.resource.data.orgId == orgId
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+      }
+      function trainerEvent(orgId) {
+        let d = request.resource.data;
+        return registerTrainer(orgId, d) && d.get('deletedAt', null) == null
+          && d.get('programId', null) == null && d.get('groupId', null) == null
+          && (resource == null || (resource.data.name == d.name && resource.data.headcounts == d.headcounts));
+      }
       match /events/{eventId} {
-        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
-        allow create, update: if orgWrite(orgId, 'attendance.write') && validEvent(eventId);
+        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write')
+          || (isTrainer() && resource.data.type == 'class' && resource.data.name in myClasses()));
+        allow create, update: if (orgWrite(orgId, 'attendance.write') || trainerEvent(orgId)) && validEvent(eventId);
         allow delete: if false;
       }
 
@@ -282,9 +324,20 @@ service cloud.firestore {
           && d.get('groupId', null) == e.get('groupId', null);
       }
 
+      // A lecturer marks their own department's students; on a common-course register (Andy, 2026-10-28),
+      // any student of the school, since the class is the whole cohort.
+      function trainerMark(orgId) {
+        let e = getAfter(/databases/$(database)/documents/organizations/$(orgId)/events/$(request.resource.data.eventId)).data;
+        let student = /databases/$(database)/documents/organizations/$(orgId)/students/$(request.resource.data.personId);
+        return registerTrainer(orgId, e)
+          && (e.name in me().get('commonClasses', []) ? exists(student) : get(student).data.courseId in myDepartments());
+      }
+
       match /attendance/{recordId} {
-        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
-        allow create, update: if orgWrite(orgId, 'attendance.write')
+        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write')
+          || (isTrainer() && get(/databases/$(database)/documents/organizations/$(orgId)/events/$(resource.data.eventId)).data.name in myClasses()));
+        allow create, update: if (orgWrite(orgId, 'attendance.write')
+               || trainerMark(orgId))
           && request.resource.data.keys().hasOnly(['orgId', 'eventId', 'personId', 'date', 'status', 'method', 'checkedInAt',
                'programId', 'groupId', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && recordId == request.resource.data.eventId + '_' + request.resource.data.personId
@@ -452,14 +505,43 @@ service cloud.firestore {
       // Funds are configuration, like programmes.
       match /funds/{fundId} {
         allow read: if canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports') || has('giving.person.read'));
-        allow create, update: if orgWrite(orgId, 'settings.manage')
-          && fundId.matches('^[a-z0-9_]{2,40}$')
-          && request.resource.data.keys().hasOnly(['orgId', 'name', 'aliases', 'active',
+        allow create, update: if orgWrite(orgId, 'settings.manage') && fundValid(fundId);
+        // Whoever records giving may start Tithes and Offerings, and name a new kind of other giving
+        // as they record it (Andy, 2026-10-31, 2A 4A). Only the pastor's side changes funds after that.
+        allow create: if orgWrite(orgId, 'gifts.write') && fundValid(fundId)
+          && request.resource.data.active == true && request.resource.data.aliases.size() == 0
+          && (fundId in ['tithes', 'offerings']
+              || (fundId.matches('^other_[a-z0-9_]{1,34}$') && request.resource.data.get('kind', null) == 'other'));
+        allow delete: if false;
+      }
+
+      // Pledges: what someone promised to a fund, and by when (Andy, 2026-10-31, 8A). Like each person's giving,
+      // only those who may see individual giving read or change them.
+      match /pledges/{pledgeId} {
+        allow read: if canAccessOrg(orgId) && has('giving.person.read');
+        allow create, update: if orgWrite(orgId, 'giving.person.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'personId', 'name', 'fundId', 'amountCents', 'startDate',
+               'endDate', 'notes', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.name is string && request.resource.data.name.size() >= 1 && request.resource.data.name.size() <= 120
+          && (request.resource.data.personId == null || request.resource.data.personId is string)
+          && request.resource.data.fundId is string && request.resource.data.fundId.size() <= 40
+          && request.resource.data.amountCents is int && request.resource.data.amountCents > 0
+          && request.resource.data.amountCents <= 100000000000
+          && request.resource.data.startDate is string && request.resource.data.startDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && (request.resource.data.endDate == null
+              || (request.resource.data.endDate is string && request.resource.data.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && request.resource.data.notes is string && request.resource.data.notes.size() <= 500;
+        allow delete: if false;
+      }
+
+      function fundValid(fundId) {
+        return fundId.matches('^[a-z0-9_]{2,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'aliases', 'active', 'kind',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 40
           && request.resource.data.aliases is list && request.resource.data.aliases.size() <= 10
-          && request.resource.data.active is bool;
-        allow delete: if false;
+          && request.resource.data.active is bool
+          && request.resource.data.get('kind', null) in [null, 'other'];
       }
 
       function giftFieldsValid() {
@@ -784,13 +866,18 @@ service cloud.firestore {
       function feesRead() {
         return canAccessOrg(orgId) && (has('gifts.write') || has('finance.reports') || has('giving.person.read'));
       }
+      // The principal keeps admission numbers and issues certificates without the wider Settings permission (Andy, 2026-10-25).
+      function schoolManage() {
+        return has('settings.manage') || has('school.manage');
+      }
       function listOf(v, max) {
         return v is list && v.size() <= max;
       }
 
       match /courses/{courseId} {
-        allow read: if schoolRead();
-        allow create, update: if orgWrite(orgId, 'settings.manage')
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
+        // The principal (school.manage) may add a department too, but not change one (Andy, 2026-10-25).
+        allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
           && courseId.matches('^[a-z0-9_]{2,40}$')
           && request.resource.data.keys().hasOnly(['orgId', 'name', 'levels', 'units', 'timetable', 'active',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
@@ -803,8 +890,9 @@ service cloud.firestore {
       }
 
       match /intakes/{intakeId} {
-        allow read: if schoolRead();
-        allow create, update: if orgWrite(orgId, 'settings.manage')
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
+        // ...and start a new cohort, which is one new intake for each programme.
+        allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
           && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'name', 'startDate', 'capacity', 'active',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('courses', request.resource.data.courseId)
@@ -817,7 +905,7 @@ service cloud.firestore {
 
       // Grading scale, pass mark, weights and the attendance alert threshold.
       match /schoolSettings/{settingId} {
-        allow read: if schoolRead();
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
         allow create, update: if orgWrite(orgId, 'settings.manage')
           && settingId == 'main'
           && request.resource.data.keys().hasOnly(['orgId', 'gradingScale', 'passMark', 'attendanceThreshold', 'weights', 'director',
@@ -831,6 +919,13 @@ service cloud.firestore {
 
       // One record per student, with the person's id as its id. The admission
       // number is added by a Cloud Function, and "graduated" only by issuing a certificate.
+      // A department's names-only class list, for its lecturers (functions/src/rosters.ts).
+      match /rosters/{courseId} {
+        allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer()
+          && (courseId in myDepartments() || courseId in me().get('commonRosters', [])));
+        allow write: if false;
+      }
+
       match /students/{studentId} {
         allow read: if schoolRead();
         allow create, update: if orgWrite(orgId, 'people.write')
@@ -842,9 +937,13 @@ service cloud.firestore {
           && shortText(request.resource.data.level, 60)
           && request.resource.data.status in ['applicant', 'enrolled', 'deferred', 'graduated', 'withdrawn']
           && (request.resource.data.status != 'graduated' || (resource != null && resource.data.status == 'graduated'))
-          && (resource == null ? request.resource.data.get('admissionNo', null) == null
-                               : request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null))
-          && listOf(request.resource.data.sponsors, 4);
+          && (resource == null ? (request.resource.data.get('admissionNo', null) == null
+                                  || (schoolManage() && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1))
+                               : (request.resource.data.get('admissionNo', null) == resource.data.get('admissionNo', null)
+                                  // The principal corrects a wrong number, alone (Andy, 2026-10-24: Cohort 2 is 2026).
+                                  || (schoolManage() && shortText(request.resource.data.admissionNo, 40) && request.resource.data.admissionNo.size() >= 1
+                                      && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['admissionNo', 'updatedAt', 'updatedBy']))))
+          && listOf(request.resource.data.get('sponsors', []), 4);
         allow delete: if false;
       }
 
@@ -919,7 +1018,8 @@ service cloud.firestore {
 
       // What each student has been billed and has paid. Cloud Functions write it.
       match /feeBalances/{studentId} {
-        allow read: if feesRead();
+        // The principal sees each student's balance, but no invoices or payments (Andy, 2026-10-25).
+        allow read: if feesRead() || (canAccessOrg(orgId) && has('fees.balances'));
         allow write: if false;
       }
 
@@ -927,7 +1027,7 @@ service cloud.firestore {
       // are added by a Cloud Function when a certificate is issued.
       match /certificates/{certificateId} {
         allow read: if schoolRead();
-        allow create: if orgWrite(orgId, 'settings.manage')
+        allow create: if (orgWrite(orgId, 'settings.manage') || orgWrite(orgId, 'school.manage'))
           && certificateId == request.resource.data.studentId
           && request.resource.data.keys().hasOnly(['orgId', 'studentId', 'courseId', 'issuedOn',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
@@ -1124,6 +1224,547 @@ service cloud.firestore {
 
       // "Download everything", one person's export and erasing one person. A Cloud
       // Function checks the pastor again, does the erasing, logs it and marks it done.
+      // ---- ADIA petty cash ---------------------------------------------------
+      // Petty cash for ADIA Training Centre, Freedom Hope Center and Freedom Church, each organization on its own.
+      // Submitted by the requester, checked by the accountant, then final approval by a board member.
+      // Nobody acts on their own request, and the final approver is never the person who checked it.
+      // The pastor (users.manage) holds every petty cash role, as accounts made before petty cash existed
+      // do not carry the new permissions. The number (ADIA-00015) is written by a Cloud Function.
+      function pc(permission) {
+        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+      }
+      function pcAny() {
+        return pc('pettycash.request') || pc('pettycash.check') || pc('pettycash.approve');
+      }
+      function pcStamp(a) {
+        return a.keys().hasOnly(['uid', 'name', 'role', 'at'])
+          && a.uid == request.auth.uid && a.at == request.time
+          && shortText(a.name, 120) && shortText(a.role, 60);
+      }
+      // Who may sign a requisition: the accountant, the board members and the signing stakeholders.
+      // A month two stakeholders have closed: nothing in it changes (Andy, 2026-10-24).
+      function pcMonthOpen(month) {
+        return !exists(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month))
+          || get(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month)).data.status != 'closed';
+      }
+      // Who was paid and the M-Pesa code (10 letters and digits); both optional.
+      function pcPaymentFields(d) {
+        return (d.get('payee', null) == null || shortText(d.payee, 120))
+          && (d.get('mpesaCode', null) == null || (d.mpesaCode is string && d.mpesaCode.matches('^[A-Z0-9]{10}$')));
+      }
+      function pcSigner() {
+        return pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize');
+      }
+      // The title under a signature is the one on the signer's account; only the accountant signs as Accountant.
+      function pcSignature(s) {
+        return s.keys().hasOnly(['name', 'role', 'at']) && s.at == request.time && shortText(s.name, 120) && shortText(s.role, 60)
+          && (me().get('pettyTitle', '') != '' ? s.role == me().pettyTitle : s.role != 'Accountant');
+      }
+      function pcStep(fields) {
+        return request.resource.data.diff(resource.data).affectedKeys().hasOnly(fields.concat(['updatedAt', 'updatedBy']))
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+          && resource.data.requesterId != request.auth.uid
+          && resource.data.deletedAt == null;
+      }
+
+      match /pettyCash/{reqId} {
+        allow read: if pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize')
+          || (pc('pettycash.request') && resource.data.requesterId == request.auth.uid);
+        // Only the signatories (pettycash.request) and the pastor raise requests.
+        allow create: if pc('pettycash.request') && stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'number', 'requesterId', 'requesterName', 'category', 'categoryNote', 'items',
+               'totalCents', 'month', 'status', 'checked', 'approved', 'rejection', 'signatures', 'payee', 'mpesaCode',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && pcPaymentFields(request.resource.data) && pcMonthOpen(request.resource.data.month)
+          && request.resource.data.number == null
+          && request.resource.data.requesterId == request.auth.uid
+          && shortText(request.resource.data.requesterName, 120)
+          && request.resource.data.category in ['Training materials', 'Office & supplies', 'Staff Payments', 'Transport', 'Repairs & maintenance', 'Utilities', 'Other',
+               "Children's needs", 'Programmes & activities', 'Office & supplies', 'Ministry & programmes', 'Hospitality']
+          && request.resource.data.items is list && request.resource.data.items.size() >= 1 && request.resource.data.items.size() <= 30
+          && request.resource.data.totalCents is int && request.resource.data.totalCents > 0 && request.resource.data.totalCents <= 100000000000
+          && request.resource.data.month is string && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.status == 'submitted'
+          && request.resource.data.checked == null && request.resource.data.approved == null
+          && request.resource.data.rejection == null
+          && request.resource.data.get('signatures', {}).size() == 0
+          // "Other" must say what it is for; other categories carry no note.
+          && (request.resource.data.category == 'Other'
+               ? shortText(request.resource.data.get('categoryNote', ''), 120) && request.resource.data.categoryNote.size() >= 1
+               : request.resource.data.get('categoryNote', null) == null);
+        // A turn-down at a step, with a reason.
+        function pcRejection() {
+          let r = request.resource.data.rejection;
+          return request.resource.data.status == 'rejected'
+            && r.keys().hasOnly(['uid', 'name', 'reason', 'at']) && r.uid == request.auth.uid && r.at == request.time
+            && shortText(r.name, 120) && shortText(r.reason, 500) && r.reason.size() >= 1;
+        }
+        // Signing goes through signWithPin on the server, which checks the PIN, the Director's limit and
+        // that there is enough cash (Andy, 2026-10-24). Here a signer may only turn a waiting request down.
+        function pcRejectFlow() {
+          return (resource.data.status == 'submitted' || (resource.data.status == 'checked' && !('signatures' in resource.data)))
+            && pcSigner() && pcStep(['status', 'rejection']) && pcRejection();
+        }
+        // The requester or a signer adds or corrects who was paid and the M-Pesa code, until the month is closed.
+        function pcPaymentEdit() {
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payee', 'mpesaCode', 'updatedAt', 'updatedBy'])
+            && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+            && (resource.data.requesterId == request.auth.uid || pcSigner())
+            && resource.data.status != 'rejected' && pcPaymentFields(request.resource.data);
+        }
+        allow update: if resource.data.deletedAt == null && pcMonthOpen(resource.data.month)
+            && (pcPaymentEdit() || (resource.data.requesterId != request.auth.uid && pcRejectFlow()));
+        allow delete: if false;
+      }
+
+      // Receipts for a requisition: a small record (name, type, size) and, separately, the file itself, so
+      // the list of receipts loads quickly. Seen and added by whoever may see the requisition; removed
+      // only through the bin, with two stakeholders.
+      function pcSeesRequest(reqId) {
+        return pc('pettycash.check') || pc('pettycash.approve') || pc('pettycash.authorize')
+          || (pc('pettycash.request')
+              && get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.requesterId == request.auth.uid);
+      }
+      function pcReceiptTypes() {
+        return '(image/(jpeg|png|gif|webp|heic|heif|tiff|bmp)|application/(pdf|msword|rtf|vnd[.]ms-excel|vnd[.]openxmlformats-officedocument[.](wordprocessingml[.]document|spreadsheetml[.]sheet)|vnd[.]oasis[.]opendocument[.](text|spreadsheet))|text/(csv|plain))';
+      }
+      function pcRequestOpen(reqId) {
+        return exists(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId))
+          && get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.status != 'rejected'
+          && pcMonthOpen(get(/databases/$(database)/documents/organizations/$(orgId)/pettyCash/$(reqId)).data.month);
+      }
+      match /pettyReceipts/{receiptId} {
+        allow read: if pcSeesRequest(resource.data.reqId);
+        allow create: if stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'reqId', 'name', 'type', 'size', 'uploadedByName', 'itemIndex',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
+          && pcSeesRequest(request.resource.data.reqId)
+          && shortText(request.resource.data.name, 200) && shortText(request.resource.data.type, 100)
+          && request.resource.data.size is int && request.resource.data.size > 0 && request.resource.data.size <= 10000000
+          && request.resource.data.type.matches(pcReceiptTypes())
+          && shortText(request.resource.data.uploadedByName, 120)
+          && (!('itemIndex' in request.resource.data) || (request.resource.data.itemIndex is int
+               && request.resource.data.itemIndex >= 0 && request.resource.data.itemIndex < 50));
+        // Deleting goes through the bin (pettyBinSign), which needs two stakeholders.
+        allow update, delete: if false;
+      }
+      // The file itself: older receipts hold it in `data`; newer ones are split into `parts` saved as
+      // pettyReceiptParts/{receiptId}_{n}, so files of up to 10 MB fit.
+      match /pettyReceiptFiles/{receiptId} {
+        allow read: if pcSeesRequest(resource.data.reqId);
+        allow create: if stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'reqId', 'parts', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
+          && pcSeesRequest(request.resource.data.reqId)
+          && request.resource.data.parts is int && request.resource.data.parts >= 1 && request.resource.data.parts <= 16;
+        allow update, delete: if false;
+      }
+      match /pettyReceiptParts/{partId} {
+        allow read: if pcSeesRequest(resource.data.reqId);
+        allow create: if request.resource.data.keys().hasOnly(['orgId', 'reqId', 'receiptId', 'index', 'data', 'createdAt', 'createdBy'])
+          && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+          && request.resource.data.orgId == orgId
+          && request.resource.data.reqId is string && pcRequestOpen(request.resource.data.reqId)
+          && pcSeesRequest(request.resource.data.reqId)
+          && request.resource.data.receiptId is string && request.resource.data.index is int
+          && request.resource.data.index >= 0 && request.resource.data.index < 16
+          && partId == request.resource.data.receiptId + '_' + string(request.resource.data.index)
+          && request.resource.data.data is string && request.resource.data.data.size() <= 900000
+          && (request.resource.data.index != 0 || request.resource.data.data.matches('^data:' + pcReceiptTypes() + ';base64,.*'));
+        allow update, delete: if false;
+      }
+
+      // The bin: a record per deleted (or once deleted) entry, with who asked, who signed and why.
+      // Written only by pettyBinSign; read by everyone with petty cash access here.
+      match /pettyBin/{entryId} {
+        allow read: if pcAny() || pc('pettycash.authorize');
+        allow write: if false;
+      }
+
+      // Month-end close records, written by closePettyMonth / reopenPettyMonth only.
+      match /pettyMonths/{month} {
+        allow read: if pcAny() || pc('pettycash.authorize');
+        allow write: if false;
+      }
+
+      // How much of the budget each category may use. Set by the signing stakeholders.
+      match /pettySettings/{docId} {
+        allow read: if pcAny() || pc('pettycash.authorize');
+        allow write: if docId == 'budget' && pc('pettycash.authorize')
+          && request.resource.data.keys().hasOnly(['orgId', 'allocations', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.allocations is map && request.resource.data.allocations.size() <= 12
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+      }
+
+      // Money added to petty cash (a top-up) or the budget started again from zero (a reset). Any three
+      // stakeholders holding pettycash.authorize must sign, each from their own account; the third
+      // signature completes it.
+      function fundSignature(s) {
+        return s.keys().hasOnly(['name', 'at']) && s.at == request.time && shortText(s.name, 120);
+      }
+      match /pettyFunds/{fundId} {
+        allow read: if pcAny() || pc('pettycash.authorize');
+        allow create: if pc('pettycash.authorize') && stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'kind', 'amountCents', 'signatures', 'status', 'doneAt',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.kind == 'topup'
+          && request.resource.data.amountCents is int
+          && (request.resource.data.kind == 'topup'
+               ? request.resource.data.amountCents > 0 && request.resource.data.amountCents <= 100000000000
+               : request.resource.data.amountCents == 0)
+          && request.resource.data.signatures.keys().hasOnly([request.auth.uid])
+          && request.resource.data.signatures.size() == 1
+          && fundSignature(request.resource.data.signatures[request.auth.uid])
+          && request.resource.data.status == 'collecting' && request.resource.data.doneAt == null;
+        // Deleting goes through the bin (pettyBinSign), which needs two stakeholders.
+        allow update: if (pc('pettycash.authorize') && stampedUpdate()
+          && resource.data.status == 'collecting' && resource.data.deletedAt == null
+          && (
+            // A stakeholder who has not signed yet adds their signature.
+            (resource.data.kind == 'topup'
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['signatures', 'status', 'doneAt', 'updatedAt', 'updatedBy'])
+              && !(request.auth.uid in resource.data.signatures)
+              && request.resource.data.signatures.diff(resource.data.signatures).affectedKeys().hasOnly([request.auth.uid])
+              && request.auth.uid in request.resource.data.signatures
+              && fundSignature(request.resource.data.signatures[request.auth.uid])
+              && (request.resource.data.signatures.size() >= 2
+                   ? request.resource.data.status == 'done' && request.resource.data.doneAt == request.time
+                   : request.resource.data.status == 'collecting' && request.resource.data.doneAt == null))
+            // Whoever started it may cancel it before it is complete.
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'updatedAt', 'updatedBy'])
+              && request.resource.data.status == 'cancelled' && resource.data.createdBy == request.auth.uid)
+          ));
+        allow delete: if false;
+      }
+
+      // ADIA payroll. Staff pay details and pay runs are seen only by those who keep or approve the payroll
+      // (and the pastor). A pay run is approved by someone other than whoever last prepared it, and is then locked.
+      function pay(permission) {
+        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+      }
+      function payAny() {
+        return pay('payroll.manage') || pay('payroll.approve');
+      }
+      function payItems(v) {
+        return v is list && v.size() <= 20;
+      }
+      match /payrollStaff/{staffId} {
+        allow read: if payAny();
+        allow create, update: if pay('payroll.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'staffNo', 'jobTitle', 'kraPin', 'nssfNo', 'shifNo',
+               'paymentDetails', 'basicCents', 'allowances', 'deductions', 'active', 'idNo', 'phone', 'email', 'loans',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 1
+          && shortText(request.resource.data.staffNo, 40) && shortText(request.resource.data.jobTitle, 80)
+          && shortText(request.resource.data.kraPin, 20) && shortText(request.resource.data.nssfNo, 30)
+          && shortText(request.resource.data.shifNo, 30) && shortText(request.resource.data.paymentDetails, 200)
+          && request.resource.data.basicCents is int && request.resource.data.basicCents >= 0 && request.resource.data.basicCents <= 100000000000
+          && payItems(request.resource.data.allowances) && payItems(request.resource.data.deductions)
+          && shortText(request.resource.data.get('idNo', ''), 20) && shortText(request.resource.data.get('phone', ''), 20)
+          && shortText(request.resource.data.get('email', ''), 120) && payItems(request.resource.data.get('loans', []))
+          && request.resource.data.active is bool
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /payrollRuns/{month} {
+        allow read: if payAny();
+        allow create: if pay('payroll.manage') && month.matches('^[0-9]{4}-[0-9]{2}$') && stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'approved', 'adjustments', 'reviewed',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.month == month
+          && request.resource.data.status == 'draft' && request.resource.data.approved == null
+          && request.resource.data.get('reviewed', null) == null && request.resource.data.get('adjustments', {}) is map
+          && request.resource.data.preparedBy == request.auth.uid && shortText(request.resource.data.preparedByName, 120)
+          && request.resource.data.lines is list && request.resource.data.lines.size() <= 300
+          && request.resource.data.totals is map && request.resource.data.rates is map;
+        allow update: if resource.data.status == 'draft' && stampedUpdate() && (
+          // Prepared again from the current staff details, while still a draft.
+          (pay('payroll.manage')
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lines', 'totals', 'rates', 'preparedBy', 'preparedByName', 'adjustments', 'reviewed', 'updatedAt', 'updatedBy'])
+            && request.resource.data.get('reviewed', null) == null && request.resource.data.get('adjustments', {}) is map
+            && request.resource.data.preparedBy == request.auth.uid && shortText(request.resource.data.preparedByName, 120)
+            && request.resource.data.lines is list && request.resource.data.lines.size() <= 300)
+          // Checked and signed as reviewed by someone who did not prepare it (preparing again clears it).
+          || (payAny() && resource.data.preparedBy != request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['reviewed', 'updatedAt', 'updatedBy'])
+            && request.resource.data.reviewed.keys().hasOnly(['uid', 'name', 'at'])
+            && request.resource.data.reviewed.uid == request.auth.uid && request.resource.data.reviewed.at == request.time
+            && shortText(request.resource.data.reviewed.name, 120))
+          // Approved by someone who did not prepare it; it is then locked.
+          || (pay('payroll.approve') && resource.data.preparedBy != request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'approved', 'updatedAt', 'updatedBy'])
+            && request.resource.data.status == 'approved'
+            && request.resource.data.approved.keys().hasOnly(['uid', 'name', 'at'])
+            && request.resource.data.approved.uid == request.auth.uid && request.resource.data.approved.at == request.time
+            && shortText(request.resource.data.approved.name, 120)));
+        allow delete: if false;
+      }
+      match /payrollSettings/{settingId} {
+        allow read: if payAny();
+        allow create, update: if pay('payroll.approve') && settingId == 'rates'
+          && request.resource.data.keys().hasOnly(['orgId', 'nssfRate', 'nssfUpperLimitCents', 'shifRate', 'shifMinimumCents', 'housingRate',
+               'personalReliefCents', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.nssfRate is number && request.resource.data.nssfRate >= 0 && request.resource.data.nssfRate <= 0.5
+          && request.resource.data.shifRate is number && request.resource.data.shifRate >= 0 && request.resource.data.shifRate <= 0.5
+          && request.resource.data.housingRate is number && request.resource.data.housingRate >= 0 && request.resource.data.housingRate <= 0.5
+          && request.resource.data.nssfUpperLimitCents is int && request.resource.data.nssfUpperLimitCents >= 0
+          && request.resource.data.shifMinimumCents is int && request.resource.data.shifMinimumCents >= 0
+          && request.resource.data.personalReliefCents is int && request.resource.data.personalReliefCents >= 0
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+
+      // ADIA inventory (Andy, 2026-10-29). The person in charge of a department's inventory (their account lists
+      // the department in inventoryCourseIds) fills in its count until the deadline's day ends in Nairobi, or until
+      // the day Admin reopened it to, and submits it. Admin and the Principal (and the pastor and Doreen) open
+      // counts, set deadlines, reopen late forms and verify them.
+      function invManager() {
+        return canAccessOrg(orgId) && (has('users.manage') || me().roleId in ['admin', 'principal']);
+      }
+      function invMine(courseId) {
+        return canAccessOrg(orgId) && courseId in me().get('inventoryCourseIds', []);
+      }
+      function invDay(v) {
+        return v is string && v.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$');
+      }
+      // The end of a "YYYY-MM-DD" day in Nairobi (UTC+3): 21:00 UTC that day.
+      function invDayEnds(key) {
+        return timestamp.date(int(key[0:4]), int(key[5:7]), int(key[8:10])) + duration.value(21, 'h');
+      }
+      function invFields(d) {
+        return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'courseName', 'phase', 'deadline', 'status', 'items', 'preparedByName', 'signedName',
+               'submittedAt', 'reopenRequest', 'reopenUntil', 'reopens', 'verifiedByName', 'verifiedAt', 'verifyNote', 'returnNote', 'remindedOn', 'emailedAt',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.orgId == orgId && shortText(d.cohort, 80) && shortText(d.courseId, 80) && shortText(d.courseName, 120)
+          && d.phase in ['start', 'end'] && invDay(d.deadline) && d.status in ['open', 'submitted', 'verified']
+          && d.items is list && d.items.size() <= 400
+          && (!('reopenUntil' in d) || d.reopenUntil == null || invDay(d.reopenUntil))
+          && (!('reopenRequest' in d) || d.reopenRequest == null
+              || (d.reopenRequest is map && d.reopenRequest.keys().hasOnly(['reason', 'byName']) && shortText(d.reopenRequest.reason, 300) && shortText(d.reopenRequest.byName, 120)))
+          && (!('reopens' in d) || (d.reopens is list && d.reopens.size() <= 20))
+          && (!('preparedByName' in d) || d.preparedByName == null || shortText(d.preparedByName, 120))
+          && (!('signedName' in d) || d.signedName == null || shortText(d.signedName, 120));
+      }
+      function invOpenNow(d) {
+        return request.time < invDayEnds(d.deadline) || (d.get('reopenUntil', null) != null && request.time < invDayEnds(d.reopenUntil));
+      }
+      function invInChargeUpdate(b, a) {
+        let changed = a.diff(b).affectedKeys();
+        return b.status == 'open' && a.courseId == b.courseId
+          && (changed.hasOnly(['reopenRequest', 'updatedAt', 'updatedBy'])
+              || (invOpenNow(b)
+                  && changed.hasOnly(['items', 'preparedByName', 'signedName', 'status', 'submittedAt', 'reopenRequest', 'returnNote', 'updatedAt', 'updatedBy'])
+                  && (a.status == 'open' || (a.status == 'submitted' && a.submittedAt == request.time))));
+      }
+      match /inventoryCounts/{countId} {
+        allow read: if invManager() || invMine(resource.data.courseId);
+        allow create: if invManager() && invFields(request.resource.data) && stampedCreate() && freshRecord() && request.resource.data.status == 'open';
+        allow update: if invFields(request.resource.data) && stampedUpdate() && validSoftDelete()
+          && (invManager() || (invMine(resource.data.courseId) && invInChargeUpdate(resource.data, request.resource.data)));
+        allow delete: if false;
+      }
+      // An item's photo, small enough to keep in the database and to work offline; kept from count to count.
+      match /inventoryPhotos/{photoId} {
+        allow read: if invManager() || invMine(resource.data.courseId);
+        allow create: if (invManager() || invMine(request.resource.data.courseId))
+          && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'data', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.courseId, 80)
+          && shortText(request.resource.data.data, 400000) && request.resource.data.data[0:23] == 'data:image/jpeg;base64,'
+          && stampedCreate() && freshRecord();
+        allow update, delete: if false;
+      }
+
+      // ADIA exam records. A trainer (exams.mark) sees and keys in only their own marks sheets, and only while
+      // they are drafts; submitting locks a sheet. The principal (exams.manage, and the pastor) sees every sheet,
+      // may change marks on a locked sheet, unlocks it, and keeps the remarks, attendance and grading. Every change
+      // the principal makes is written to the exam log by the app.
+      function ex(permission) {
+        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+      }
+      function examWeights(w) {
+        return w is map && w.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final']) && w.keys().hasAll(['cat1', 'cat2', 'cat3', 'final']);
+      }
+      function weightValues(w) {
+        return paperWeight(w.cat1) && paperWeight(w.cat2) && paperWeight(w.cat3) && paperWeight(w.final);
+      }
+      function paperWeight(p) {
+        return p is map && p.max is number && p.max > 0 && p.max <= 1000 && p.wt is number && p.wt >= 0 && p.wt <= 100;
+      }
+      function markMap(d, field) {
+        return !(field in d) || (d[field] is map && d[field].size() <= 400);
+      }
+      // A paper the trainer sent is locked: only the principal unlocks it (Andy, 2026-10-25). The trainer keys in
+      // each paper, sets the percentages until the first paper is sent, sends papers (they lock), and sends the
+      // Final to submit. After that they can only ask to change something.
+      function trainerSheetUpdate(b, a) {
+        let changed = a.diff(b).affectedKeys();
+        let lb = b.get('locked', {});
+        let la = a.get('locked', {});
+        return b.status == 'draft'
+          ? changed.hasOnly(['cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'weights', 'changeRequest', 'status', 'submittedAt', 'updatedAt', 'updatedBy'])
+            && (lb.get('cat1', false) != true || (la.get('cat1', false) == true && !changed.hasAny(['cat1Marks'])))
+            && (lb.get('cat2', false) != true || (la.get('cat2', false) == true && !changed.hasAny(['cat2Marks'])))
+            && (lb.get('cat3', false) != true || (la.get('cat3', false) == true && !changed.hasAny(['cat3Marks'])))
+            && (lb.get('final', false) != true || (la.get('final', false) == true && !changed.hasAny(['finalMarks', 'resitMarks'])))
+            && (!changed.hasAny(['weights']) || (!lb.values().hasAny([true]) && weightValues(a.weights)))
+            && (a.status == 'draft' || (a.status == 'submitted' && a.submittedAt == request.time && la.get('final', false) == true))
+          : b.status == 'submitted' && changed.hasOnly(['changeRequest', 'updatedAt', 'updatedBy']);
+      }
+      function examSheetFields(d) {
+        return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'ownerUid', 'ownerName', 'courseName', 'teacherName', 'weights', 'status',
+               'submittedAt', 'marks', 'semester', 'approvedAt', 'approvedByName', 'returnNote',
+               'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest', 'notified',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && markMap(d, 'cat1Marks') && markMap(d, 'cat2Marks') && markMap(d, 'cat3Marks') && markMap(d, 'finalMarks') && markMap(d, 'resitMarks')
+          && (!('locked' in d) || (d.locked is map && d.locked.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final'])))
+          && (!('changeRequest' in d) || d.changeRequest == null
+              || (d.changeRequest is map && d.changeRequest.keys().hasOnly(['component', 'reason', 'byName'])
+                  && d.changeRequest.component in ['cat1', 'cat2', 'cat3', 'final'] && shortText(d.changeRequest.reason, 300) && shortText(d.changeRequest.byName, 120)))
+          && d.orgId == orgId && shortText(d.cohort, 80) && d.cohort.size() >= 1 && d.ownerUid is string
+          && (d.courseId == null || shortText(d.courseId, 80))
+          && shortText(d.courseName, 120) && shortText(d.teacherName, 120) && shortText(d.ownerName, 120)
+          && examWeights(d.weights) && d.marks is map && d.marks.size() <= 400
+          && d.status in ['draft', 'submitted', 'approved']
+          && (!('semester' in d) || d.semester == null || d.semester in [1, 2])
+          && (!('returnNote' in d) || d.returnNote == null || shortText(d.returnNote, 300))
+          && (!('approvedByName' in d) || d.approvedByName == null || shortText(d.approvedByName, 120));
+      }
+      // The principal sets up every course and gives it to a trainer (Andy, 2026-10-24). The trainer only keys
+      // in marks while marking, then submits; the principal approves (final) or sends it back.
+      match /examSheets/{sheetId} {
+        allow read: if ex('exams.manage') || (ex('exams.mark') && resource.data.ownerUid == request.auth.uid);
+        allow create: if examSheetFields(request.resource.data) && stampedCreate() && freshRecord()
+          && request.resource.data.status == 'draft' && request.resource.data.submittedAt == null
+          && weightValues(request.resource.data.weights) && ex('exams.manage') && !cohortClosed(request.resource.data.cohort);
+        allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete() && !cohortClosed(resource.data.cohort)
+          && (ex('exams.manage')
+              ? request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'ownerUid', 'ownerName', 'weights', 'marks', 'semester', 'status',
+                   'submittedAt', 'approvedAt', 'approvedByName', 'returnNote', 'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest',
+                   'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
+                && (request.resource.data.status == resource.data.status
+                    || (request.resource.data.status == 'submitted' && request.resource.data.submittedAt == request.time)
+                    || (request.resource.data.status == 'approved' && request.resource.data.approvedAt == request.time)
+                    || request.resource.data.status == 'draft')
+              : ex('exams.mark') && resource.data.ownerUid == request.auth.uid && trainerSheetUpdate(resource.data, request.resource.data));
+        allow delete: if false;
+      }
+      // Semester results from Excel (Andy, 2026-10-24): one student's past results for one cohort, kept by
+      // the principal only; every save and change is written to the exam log by the app.
+      function examScore(v) {
+        return v is map && v.keys().hasOnly(['points', 'grade']) && v.points is number && v.points >= 0 && v.points <= 100
+          && (v.grade == null || shortText(v.grade, 40));
+      }
+      // A lecturer types in past results for their own department's students (Andy, 2026-10-28). They can
+      // change only what they typed: results the principal uploaded stay as they are.
+      function trainerResult() {
+        let d = request.resource.data;
+        return isTrainer() && canAccessOrg(orgId) && d.courseId in myDepartments()
+          && get(/databases/$(database)/documents/organizations/$(orgId)/students/$(d.studentId)).data.courseId == d.courseId
+          && d.printed == null
+          && (resource == null || (resource.data.createdBy == request.auth.uid && resource.data.courseId == d.courseId));
+      }
+      match /examResults/{resultId} {
+        allow read: if ex('exams.manage') || (isTrainer() && canAccessOrg(orgId) && resource.data.courseId in myDepartments());
+        allow create, update: if (ex('exams.manage') || trainerResult())
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'studentId', 'admissionNo', 'studentName', 'courseId', 'semesters', 'printed', 'notes',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && shortText(request.resource.data.studentId, 128) && resultId.matches('^' + request.resource.data.studentId + '_.+')
+          && shortText(request.resource.data.admissionNo, 80) && shortText(request.resource.data.studentName, 160)
+          && (request.resource.data.courseId == null || shortText(request.resource.data.courseId, 80))
+          && request.resource.data.semesters is map && request.resource.data.semesters.keys().hasOnly(['1', '2'])
+          && (!('1' in request.resource.data.semesters) || examScore(request.resource.data.semesters['1']))
+          && (!('2' in request.resource.data.semesters) || examScore(request.resource.data.semesters['2']))
+          && (request.resource.data.printed == null || examScore(request.resource.data.printed))
+          && request.resource.data.notes is list && request.resource.data.notes.size() <= 20
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      // Each cohort's graduation date, and whether it has graduated and closed (Andy, 2026-10-25): a closed
+      // cohort's marks are read only. Only the principal, an admin, Andy or Doreen reopen it, and only with
+      // their password typed again in the last five minutes.
+      function cohortKey(name) {
+        return name.replace('[^A-Za-z0-9]+', '-').replace('^-|-$', '');
+      }
+      function cohortClosed(name) {
+        let p = /databases/$(database)/documents/organizations/$(orgId)/examCohorts/$(cohortKey(name));
+        return exists(p) && get(p).data.closed == true;
+      }
+      function recentSignIn() {
+        return request.auth.token.auth_time is int && request.time.toMillis() - request.auth.token.auth_time * 1000 < 300000;
+      }
+      // When each paper's marks are due (Andy, 2026-10-25).
+      function examDeadlines(d) {
+        return d is map && d.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final'])
+          && (!('cat1' in d) || isDate(d.cat1)) && (!('cat2' in d) || isDate(d.cat2))
+          && (!('cat3' in d) || isDate(d.cat3)) && (!('final' in d) || isDate(d.final));
+      }
+      match /examCohorts/{key} {
+        allow read: if ex('exams.mark') || schoolRead();
+        allow create, update: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'graduationDate', 'closed', 'closedAt', 'closedByName', 'reopenedAt', 'reopenedByName', 'deadlines',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('deadlines' in request.resource.data) || examDeadlines(request.resource.data.deadlines))
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && key == cohortKey(request.resource.data.cohort)
+          && (request.resource.data.graduationDate == null || isDate(request.resource.data.graduationDate))
+          && request.resource.data.closed is bool
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete() && request.resource.data.cohort == resource.data.cohort)
+          && (resource == null || resource.data.closed != true || recentSignIn());
+        allow delete: if false;
+      }
+      match /examMeta/{cohortKey} {
+        allow read: if ex('exams.manage');
+        allow create, update: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'remarks', 'attendance', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80)
+          && request.resource.data.remarks is map && request.resource.data.attendance is map
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /examSettings/{settingId} {
+        allow read: if ex('exams.manage') || ex('exams.mark');
+        allow create, update: if ex('exams.manage') && settingId == 'main'
+          && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList', 'minAttendance', 'commonCourses',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('commonCourses' in request.resource.data) || (request.resource.data.commonCourses is list && request.resource.data.commonCourses.size() <= 40))
+          && (!('minAttendance' in request.resource.data) || request.resource.data.minAttendance == null
+              || (request.resource.data.minAttendance is number && request.resource.data.minAttendance >= 0 && request.resource.data.minAttendance <= 100))
+          && (!('courseList' in request.resource.data) || listOf(request.resource.data.courseList, 400))
+          && (!('weights' in request.resource.data) || examWeights(request.resource.data.weights))
+          && request.resource.data.orgId == orgId
+          && request.resource.data.passMark is number && request.resource.data.passMark >= 0 && request.resource.data.passMark <= 100
+          && request.resource.data.bands is list && request.resource.data.bands.size() >= 1 && request.resource.data.bands.size() <= 10
+          && shortText(request.resource.data.principalName, 120) && shortText(request.resource.data.principalTitle, 60)
+          && shortText(request.resource.data.directorName, 120) && shortText(request.resource.data.directorTitle, 60)
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /examLog/{entryId} {
+        allow read: if ex('exams.manage');
+        allow create: if ex('exams.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'action', 'cohort', 'sheetId', 'detail', 'byUid', 'byName', 'at'])
+          && request.resource.data.orgId == orgId && request.resource.data.byUid == request.auth.uid && request.resource.data.at == request.time
+          && shortText(request.resource.data.action, 40) && shortText(request.resource.data.cohort, 80)
+          && shortText(request.resource.data.detail, 500) && shortText(request.resource.data.byName, 120)
+          && (request.resource.data.sheetId == null || shortText(request.resource.data.sheetId, 80));
+        allow update, delete: if false;
+      }
+
+      // Clean-up Recycle Bin and Forever (Andy, 2026-10-30): read and written only by the Clean-up functions,
+      // which check that the caller is Andrew Guya or Doreen.
+      match /cleanupBin/{entryId} {
+        allow read, write: if false;
+      }
+
       match /dataRequests/{requestId} {
         allow read: if canAccessOrg(orgId) && has('data.export');
         allow create: if canAccessOrg(orgId) && has('data.export')

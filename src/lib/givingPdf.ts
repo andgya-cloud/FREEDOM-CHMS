@@ -3,6 +3,7 @@ import { formatMoney, GIFT_METHOD_LABELS, PAYBILL_NUMBER, provisionalReceiptNumb
 import { formatDateKey } from '../../functions/src/shared/datetime';
 import type { Organization } from '../state/OrgContext';
 import type { Gift } from '../state/useGiving';
+import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 
 /**
  * Receipts and giving statements as PDF files, made on the device so they
@@ -94,6 +95,7 @@ export async function receiptPdf(org: Organization, gift: Gift, fundName: string
   notes.push('Thank you for your giving.');
   pdf.text(pdf.splitTextToSize(notes.join('  '), w - 28) as string[], 14, y + 8);
 
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], `${number}.pdf`, { type: 'application/pdf' });
 }
 
@@ -192,6 +194,7 @@ export async function statementPdf(
     pdf.text('Thank you for your faithful giving.', 14, h - 14);
   });
 
+  stampPoweredBy(pdf);
   return new File([pdf.output('blob')], fileName, { type: 'application/pdf' });
 }
 

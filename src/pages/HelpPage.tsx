@@ -39,8 +39,8 @@ const TOPICS: Topic[] = [
     id: 'school', title: 'ADIA: enrol a student and take class attendance',
     permission: 'people.write',
     body: ['Choose ADIA at the top, then open School. Students → Enrol a student: pick the programme, intake and level, and add a sponsor or guardian with a phone number. The admission number is made for you once you are online.',
-      'For a class, open Attendance, tap the programme name, and mark each student present, late, absent or excused. This works offline on a tablet. The student page shows the attendance percentage, and the overview lists anyone below the alert level.'],
-    link: { to: '/school', label: 'Open School' },
+      'For a class, open Attendance, tap the programme name, and mark each student present, late, absent or excused. This works offline on a tablet. The student page shows the attendance percentage, and Today lists anyone below the alert level.'],
+    link: { to: '/school/students', label: 'Open School' },
   },
   {
     id: 'hope-register', title: 'Hope Center: register a child and take attendance',

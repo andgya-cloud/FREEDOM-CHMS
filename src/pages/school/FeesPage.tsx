@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -9,7 +10,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { parseAmount } from '../../../functions/src/shared/giving';
 import { arrearsList, collectionRate, invoiceTotal, type FeeItem } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
+import { SchoolGate, SchoolTitle, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function FeesPage() {
@@ -19,9 +20,12 @@ export function FeesPage() {
 function Fees({ org }: { org: Organization }) {
   const s = useSchoolPage(org);
   const { can } = useAuth();
-  if (!s.feesAllowed) return <div className="page narrow"><h1>Fees</h1><p>Fees are for the pastor and the people the pastor has given access.</p></div>;
+  const finder = useStudentFinder();
+  if (!s.feesAllowed) return <div className="page narrow"><h1>Fees</h1><p>Fees are for the Director and the people the Director has given access.</p></div>;
 
   const arrears = arrearsList(s.balances, s.today);
+  const admOf = (id: string) => s.students.find((x) => x.id === id)?.admissionNo ?? '';
+  const listed = arrears.filter((a) => finder.match(s.nameOf(a.studentId), admOf(a.studentId)));
   const billed = s.balances.reduce((a, b) => a + b.billedCents, 0);
   const paid = s.balances.reduce((a, b) => a + b.paidCents, 0);
 
@@ -30,16 +34,12 @@ function Fees({ org }: { org: Organization }) {
       const st = s.students.find((x) => x.id === a.studentId);
       return [st?.admissionNo ?? '', s.nameOf(a.studentId), st ? s.courseName(st.courseId) : '', (a.balanceCents / 100).toFixed(2), a.overdue ? 'Overdue' : ''];
     });
-    downloadFile(csvFile(`Fee arrears ${s.today}.csv`, [['Admission number', 'Name', 'Programme', 'Balance', 'Overdue'], ...rows]));
+    downloadFile(csvFile(`Fee arrears ${s.today}.csv`, [['Admission number', 'Name', 'Department', 'Balance', 'Overdue'], ...rows]));
   }
 
   return (
     <div className="page narrow">
-      <div className="page-head">
-        <h1>Fees</h1>
-        {can('gifts.write') && <Link to="/giving/import" className="btn btn-quiet">Import Paybill statement</Link>}
-      </div>
-      <SchoolNav feesAllowed />
+      <SchoolTitle feesAllowed />
       <ul className="tiles">
         <li><div className="tile"><span className="tile-label">Billed</span><span className="tile-value">{money(org, billed)}</span></div></li>
         <li><div className="tile"><span className="tile-label">Paid</span><span className="tile-value">{money(org, paid)}</span></div></li>
@@ -49,10 +49,10 @@ function Fees({ org }: { org: Organization }) {
 
       <section className="card stack">
         <div className="card-head"><h2>Arrears</h2>{arrears.length > 0 && <button type="button" className="btn btn-quiet" onClick={download}>Download</button>}</div>
-        <p className="small muted">Students who owe money, largest first. Payments recorded as School fees for the student are counted automatically.</p>
+        {arrears.length > 8 && <StudentFinder finder={finder} names={arrears.map((a) => s.nameOf(a.studentId))} shown={listed.length} total={arrears.length} />}
         {arrears.length === 0 ? <p className="muted">Nobody owes fees.</p> : (
           <ul className="link-list">
-            {arrears.map((a) => (
+            {listed.map((a) => (
               <li key={a.studentId}><Link to={`/school/students/${a.studentId}`}><span className="link-title">{s.nameOf(a.studentId)}</span><span className="link-detail">{money(org, a.balanceCents)}{a.overdue ? ' · overdue' : ''}</span></Link></li>
             ))}
           </ul>
@@ -97,19 +97,21 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
     const ids = s.students.filter((st) => st.intakeId === intakeId && st.status === 'enrolled').map((st) => st.id);
     const { count, synced } = billStudents(org.id, ids, parsed, label.trim().slice(0, 60), due || null, intakeId, existing);
     synced.catch((err) => toast.show(friendlyError(err)));
-    toast.show(count ? `${count} bill${count === 1 ? '' : 's'} made` : 'Everyone in this intake already has this bill.');
+    toast.show(count ? `${count} bill${count === 1 ? '' : 's'} made` : 'Everyone in this cohort already has this bill.');
   }
 
   return (
-    <section className="card stack">
-      <h2>Fee structure and billing</h2>
+    <details className="card fold-card">
+      <summary><span>Bill students</span></summary>
+      <div className="stack">
+      <Link to="/giving/import" className="btn btn-quiet align-start">Import Paybill statement</Link>
       <div className="field-row">
-        <label className="field"><span>Programme</span>
+        <label className="field"><span>Department</span>
           <select value={courseId} onChange={(e) => { setCourseId(e.target.value); setIntakeId(''); setLoadedFor(''); }}>
             <option value="">Choose…</option>{s.courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </label>
-        <label className="field"><span>Intake</span>
+        <label className="field"><span>Cohort</span>
           <select value={intakeId} onChange={(e) => { setIntakeId(e.target.value); setLoadedFor(''); }}>
             <option value="">Choose…</option>{s.intakes.filter((i) => i.courseId === courseId).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
@@ -117,7 +119,7 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
       </div>
       {courseId && intakeId && (
         <>
-          <h3>Fees for this intake</h3>
+          <h3>Fees for this cohort</h3>
           {items.map((it, i) => (
             <div key={i} className="field-row">
               <label className="field"><span>Fee</span><input value={it.name} onChange={(e) => setItems((l) => l.map((x, n) => (n === i ? { ...x, name: e.target.value } : x)))} placeholder="Tuition, Exam fee, Materials" /></label>
@@ -128,16 +130,17 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
           <button type="button" className="btn btn-quiet align-start" onClick={() => setItems((l) => [...l, { name: '', amount: '' }])}>Add a fee</button>
           <p className="small">Total per student: <strong>{money(org, invoiceTotal(parsed))}</strong></p>
           <button type="button" className="btn align-start" onClick={saveStructure}>Save fee structure</button>
-          <h3>Bill the intake</h3>
+          <h3>Bill the cohort</h3>
           <div className="field-row">
             <label className="field"><span>Bill name</span><input value={label} onChange={(e) => setLabel(e.target.value)} /></label>
             <label className="field"><span>Due date</span><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
           </div>
           <button type="button" className="btn btn-primary align-start" onClick={bill}>Bill all enrolled students</button>
-          <p className="small muted">Students who already have this bill are skipped, so it is safe to press again after new students join.</p>
+          <p className="small muted">Anyone who already has this bill is skipped.</p>
         </>
       )}
-    </section>
+      </div>
+    </details>
   );
 }
 
@@ -147,8 +150,9 @@ function Invoices({ org, s, canVoid }: { org: Organization; s: Page; canVoid: bo
   const [reason, setReason] = useState('');
   const recent = [...s.invoices].sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)).filter((i) => i.status !== 'void').slice(0, 30);
   return (
-    <section className="card stack">
-      <h2>Recent bills</h2>
+    <details className="card fold-card">
+      <summary><span>Recent bills</span>{recent.length > 0 && <span className="muted small">{recent.length}</span>}</summary>
+      <div className="stack">
       {recent.length === 0 ? <p className="muted small">No bills yet.</p> : (
         <ul className="link-list">
           {recent.map((i) => (
@@ -166,6 +170,7 @@ function Invoices({ org, s, canVoid }: { org: Organization; s: Page; canVoid: bo
           ))}
         </ul>
       )}
-    </section>
+      </div>
+    </details>
   );
 }

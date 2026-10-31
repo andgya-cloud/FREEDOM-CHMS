@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import type { Organization } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
 import { useFunds, useGiftImports, useOpenReviews, useRecentGifts, useUnassignedGifts, type GiftReview } from '../../state/useGiving';
-import { resolveReview, reviewOutbox } from '../../lib/givingWrites';
+import { addStandardFunds, resolveReview, reviewOutbox } from '../../lib/givingWrites';
 import { friendlyError } from '../../lib/errors';
 import { OrgGate } from '../../components/OrgGate';
 import { GiftRow } from '../../components/GiftRow';
-import { formatMoney, GIFT_METHOD_LABELS } from '../../../functions/src/shared/giving';
+import { formatMoney, fundNamed, GIFT_METHOD_LABELS } from '../../../functions/src/shared/giving';
 import { formatDateKey, localDateKey, zonedParts } from '../../../functions/src/shared/datetime';
 
 /** The Giving home: record a gift, import the Paybill statement, the Unassigned queue and recent gifts. */
@@ -32,22 +32,33 @@ function Giving({ org }: { org: Organization }) {
 
   useEffect(() => { void reviewOutbox(); }, []);
 
+  // Freedom Church starts with Tithes and Offerings ready, with no set-up step (Andy, 2026-10-31, 4A).
+  const church = org.type === 'church_campus';
+  const toast = useToast();
+  const started = useRef(false);
+  useEffect(() => {
+    if (!church || !canRecord || fundsLoading || started.current) return;
+    if (fundNamed('Tithes', funds) && fundNamed('Offerings', funds)) return;
+    started.current = true;
+    addStandardFunds(org.id, funds.map((f) => f.id)).catch((err) => toast.show(friendlyError(err)));
+  }, [church, canRecord, fundsLoading, funds, org.id, toast]);
+
   return (
     <div className="page narrow">
       <h1>Giving</h1>
 
-      {canRecord && !fundsLoading && funds.length === 0 && (
+      {canRecord && !church && !fundsLoading && funds.length === 0 && (
         <div className="notice">
           <p>Set up the funds first (Tithes, Offerings and any others) so gifts can be recorded against them.</p>
           {can('settings.manage') ? <Link className="btn btn-primary" to="/settings/funds">Set up funds</Link> : <p className="muted">Ask the pastor to set up the funds.</p>}
         </div>
       )}
 
-      {canRecord && funds.length > 0 && (
+      {canRecord && (church || funds.length > 0) && (
         <div className="big-actions">
           <Link to="/giving/new" className="big-action">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M17 7H9.5a2.5 2.5 0 0 0 0 5h5a2.5 2.5 0 0 1 0 5H6" /></svg>
-            <span className="big-action-label">Record gift</span>
+            <span className="big-action-label">Record Giving</span>
           </Link>
           <Link to="/giving/import" className="big-action">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" /></svg>
@@ -69,9 +80,25 @@ function Giving({ org }: { org: Organization }) {
         )}
         {can('finance.reports') && (
           <li>
-            <Link to="/giving/summary">
-              <span className="link-title">Monthly summary</span>
-              <span className="link-detail">Fund ledger, and the check against the Paybill statement</span>
+            <Link to="/reports?tab=giving">
+              <span className="link-title">Giving figures</span>
+              <span className="link-detail">Trends, funds, methods and the monthly summary, in Reports</span>
+            </Link>
+          </li>
+        )}
+        {can('settings.manage') && (
+          <li>
+            <Link to="/settings/funds">
+              <span className="link-title">Funds</span>
+              <span className="link-detail">Tithes, Offerings and other funds (moved here from Settings)</span>
+            </Link>
+          </li>
+        )}
+        {can('giving.person.read') && (
+          <li>
+            <Link to="/giving/pledges">
+              <span className="link-title">Pledges</span>
+              <span className="link-detail">Promised and given so far, for the building or any fund</span>
             </Link>
           </li>
         )}

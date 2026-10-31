@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useParams } from 'react-router-dom';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../state/AuthContext';
+import { CertificateActions } from '../../components/CertificateActions';
 import { useToast } from '../../state/ToastContext';
 import { usePersonGifts } from '../../state/useGiving';
 import { FeeReminderSheet } from '../../components/FeeReminderSheet';
@@ -16,7 +18,7 @@ import { formatPhone } from '../../../functions/src/shared/phone';
 import {
   OUTCOME_LABELS, overallResult, STUDENT_STATUS_LABELS, studentAttendance, studentResults, type StudentStatus,
 } from '../../../functions/src/shared/school';
-import { SchoolGate, SchoolNav, money, pct, useSchoolPage } from './common';
+import { SchoolGate, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function StudentPage() {
@@ -70,10 +72,9 @@ function Student({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/school/students">← Students</Link></p>
-      <div className="page-head"><h1>{name}</h1><Link to={`/people/${org.id}/${st.id}`} className="btn btn-quiet">Person record</Link></div>
-      <SchoolNav feesAllowed={s.feesAllowed} />
+      <div className="page-head"><h1>{name}</h1><div className="cleanup-head-actions">{canEdit && <Link to={`/people/${org.id}/${st.id}/edit`} className="btn btn-quiet">Edit name and phone</Link>}<CleanupButton orgId={org.id} kind="person" id={st.id} back="/school/students" /></div></div>
       <section className="card stack">
-        <p><strong>{st.admissionNo ?? 'Admission number pending'}</strong> · {course.name}</p>
+        <p><strong>{st.admissionNo ?? 'Admission number pending'}</strong> · {course.name}{s.byId(st.id)?.phone && <> · <a href={`tel:${s.byId(st.id)?.phone}`}>{s.byId(st.id)?.phone}</a></>}</p>
         <div className="field-row">
           <label className="field"><span>Status</span>
             <select value={st.status} disabled={!canEdit || st.status === 'graduated'}
@@ -94,8 +95,8 @@ function Student({ org }: { org: Organization }) {
             </label>
           )}
         </div>
-        <label className="field"><span>Intake</span>
-          <select value={st.intakeId} disabled={!canEdit} onChange={(e) => change({ intakeId: e.target.value }, 'Intake saved')}>
+        <label className="field"><span>Cohort</span>
+          <select value={st.intakeId} disabled={!canEdit} onChange={(e) => change({ intakeId: e.target.value }, 'Cohort saved')}>
             {s.intakes.filter((i) => i.courseId === st.courseId).map((i) => <option key={i.id} value={i.id}>{i.name}</option>)}
           </select>
         </label>
@@ -119,10 +120,8 @@ function Student({ org }: { org: Organization }) {
           </div>
         )}
         <p className="small">Overall: <strong>{overall.percent == null ? 'not yet assessed' : `${overall.percent}% (${overall.grade})`}</strong></p>
-        <div className="chips">
-          <button type="button" className="btn" disabled={!!busy} onClick={() => void makePdf('report_card')}>{busy === 'report_card' ? 'Making…' : 'Report card'}</button>
-          <button type="button" className="btn" disabled={!!busy} onClick={() => void makePdf('transcript')}>{busy === 'transcript' ? 'Making…' : 'Transcript'}</button>
-        </div>
+        {/* One button (Andy, 2026-10-30, 7A): the full results record. */}
+        <button type="button" className="btn align-start" disabled={!!busy} onClick={() => void makePdf('transcript')}>{busy === 'transcript' ? 'Making…' : 'Print results'}</button>
       </section>
 
       {s.feesAllowed && (
@@ -146,6 +145,13 @@ function Student({ org }: { org: Organization }) {
         </section>
       )}
 
+      {!s.feesAllowed && s.balancesAllowed && (
+        <section className="card stack">
+          <h2>Fee balance</h2>
+          <p><span className="big-number">{money(org, Math.abs(bal?.balanceCents ?? 0))}</span> <span className="muted small">{(bal?.balanceCents ?? 0) > 0 ? 'to pay' : (bal?.balanceCents ?? 0) < 0 ? 'paid ahead' : 'nothing owed'}</span></p>
+        </section>
+      )}
+
       <section className="card stack">
         <h2>Sponsor or guardian</h2>
         {(st.sponsors ?? []).length === 0 ? <p className="muted small">None saved.</p> : (
@@ -161,6 +167,7 @@ function Student({ org }: { org: Organization }) {
         <section className="card stack">
           <h2>Graduation</h2>
           {cert && <p>Certificate <strong>{cert.serial ?? 'number pending'}</strong> issued {formatDateKey(cert.issuedOn)}.</p>}
+          {cert && <CertificateActions orgId={org.id} cert={cert} canManage={can('school.manage') || can('settings.manage')} email={s.byId(st.id)?.email} />}
           <ul className="link-list">
             {outcomes.map((o) => <li key={o.id}><div><span className="link-title">{o.months}-month check</span><span className="link-detail">{o.status ? `${OUTCOME_LABELS[o.status]}${o.note ? ` · ${o.note}` : ''}` : `due ${formatDateKey(o.due)}`}</span></div></li>)}
           </ul>
@@ -193,7 +200,7 @@ function PrivateCard({ orgId, studentId }: { orgId: string; studentId: string })
   }
   return (
     <section className="card stack">
-      <h2>Identity number (pastor only)</h2>
+      <h2>Identity number (Director only)</h2>
       <p className="small muted">For regulators that ask for it. Other staff cannot see this.</p>
       <label className="field"><span>ID or passport number</span><input value={idNumber} disabled={!ready} onChange={(e) => setIdNumber(e.target.value)} /></label>
       <label className="field"><span>Private notes</span><textarea rows={3} value={notes} disabled={!ready} onChange={(e) => setNotes(e.target.value)} /></label>

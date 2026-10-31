@@ -11,7 +11,7 @@ import { useSavedMessage } from '../../lib/useSavedMessage';
 import { PersonPicker } from '../../components/PersonPicker';
 import { DuplicateNotice } from '../../components/DuplicateNotice';
 import { OrgPicker } from '../../components/OrgPicker';
-import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUSES, PERSON_STATUS_LABELS, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
+import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUS_LABELS, statusesFor, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
 import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 
@@ -25,6 +25,7 @@ interface FormState {
   status: PersonStatus;
   firstVisitDate: string;
   gender: string;
+  birthday: string;
   household: { id: string | null; name: string };
   guardian: { id: string | null; name: string };
   howHeard: string;
@@ -45,6 +46,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
     status: p.status,
     firstVisitDate: p.firstVisitDate ?? '',
     gender: p.gender ?? '',
+    birthday: p.birthday ?? '',
     household: { id: householdPeer?.id ?? null, name: householdPeer?.fullName ?? '' },
     guardian: { id: p.guardianId ?? null, name: p.guardianId ? byId(p.guardianId)?.fullName ?? '' : '' },
     howHeard: p.howHeard ?? '',
@@ -56,12 +58,15 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
 
 const EMPTY: FormState = {
   fullName: '', phone: '', sameWhatsApp: true, whatsapp: '', consent: false, email: '', status: 'regular',
-  firstVisitDate: '', gender: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
+  firstVisitDate: '', gender: '', birthday: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
   howHeard: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
 };
 
-/** Add or edit a person with every field. The quick visitor form is VisitorFormPage. */
-export function PersonFormPage() {
+/**
+ * Add or edit a person. "Add visitor" on Today opens this same form with Visitor already chosen and the first visit
+ * set to today (Andy, 2026-10-31, 2A: one form instead of two); a visitor also gets a prayer need and "Add another".
+ */
+export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) {
   const { orgId: routeOrgId, personId } = useParams();
   const isNew = !personId;
   const { profile } = useAuth();
@@ -76,7 +81,10 @@ export function PersonFormPage() {
   const [chosenOrgId, setOrgId] = useState('');
   const orgId = routeOrgId ?? (isCombined ? chosenOrgId : current?.id ?? '');
   const org = organizations.find((o) => o.id === orgId);
-  const [form, setForm] = useState<FormState>(EMPTY);
+  const blank = (): FormState => (visitor ? { ...EMPTY, status: 'visitor', firstVisitDate: localDateKey(new Date(), current?.timeZone) } : EMPTY);
+  const [form, setForm] = useState<FormState>(blank);
+  const [prayer, setPrayer] = useState('');
+  const [added, setAdded] = useState<{ orgId: string; personId: string; name: string } | null>(null);
   const [loaded, setLoaded] = useState(isNew);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -132,6 +140,7 @@ export function PersonFormPage() {
       status: form.status,
       firstVisitDate: form.firstVisitDate || null,
       gender: form.gender || null,
+      birthday: form.birthday || null,
       householdId,
       guardianId: form.guardian.id,
       howHeard: form.howHeard || null,
@@ -151,20 +160,44 @@ export function PersonFormPage() {
         });
         navigate(`/people/${orgId}/${existing.id}`);
       } else {
-        const { ref, synced } = addPerson(orgId, data, { recordVisitorStage: data.status === 'visitor' && org?.type === 'church_campus' });
+        const isVisitor = data.status === 'visitor';
+        const { ref, synced } = addPerson(orgId, data, { recordVisitorStage: isVisitor && org?.type === 'church_campus', prayerNeed: isVisitor ? prayer : undefined });
         synced.catch((err) => toast.show(friendlyError(err)));
         toast.show(saved(`${data.fullName} added`));
-        navigate(`/people/${orgId}/${ref.id}`, { replace: true });
+        if (isVisitor) setAdded({ orgId, personId: ref.id, name: data.fullName });
+        else navigate(`/people/${orgId}/${ref.id}`, { replace: true });
       }
     } catch (err) {
       setErrors([friendlyError(err)]);
     }
   }
 
+  function addAnother() {
+    setForm(blank()); setPrayer(''); setErrors([]); setAdded(null);
+  }
+
+  if (added) {
+    return (
+      <div className="page narrow">
+        <div className="success-panel" role="status">
+          <span className="success-tick" aria-hidden="true">✓</span>
+          <h1>{added.name} added</h1>
+          <p>A welcome follow-up has been created for today.</p>
+        </div>
+        <button type="button" className="btn btn-primary btn-block btn-lg" onClick={addAnother}>Add another visitor</button>
+        <button type="button" className="btn btn-block" onClick={() => navigate(`/people/${added.orgId}/${added.personId}`)}>Open {added.name.split(' ')[0]}’s record</button>
+        <Link to="/" className="btn btn-quiet btn-block">Back to Today</Link>
+      </div>
+    );
+  }
+
   return (
     <div className="page narrow">
-      <p><Link to={existing ? `/people/${orgId}/${existing.id}` : '/people'}>← {existing ? existing.fullName : 'People'}</Link></p>
+      <p><Link to={existing ? `/people/${orgId}/${existing.id}` : visitor ? '/' : '/people'}>← {existing ? existing.fullName : visitor ? 'Today' : 'People'}</Link></p>
       <h1>{existing ? 'Edit details' : 'Add person'}</h1>
+      {isNew && visitor && org?.type === 'church_campus' && (
+        <p className="notice">Visitors can fill in their own card on their phone. <Link to="/visitors/qr">Show the QR poster</Link></p>
+      )}
       <form className="form" onSubmit={submit} noValidate>
         {isNew && isCombined && <OrgPicker value={orgId} onChange={setOrgId} />}
         <label className="field">
@@ -193,7 +226,7 @@ export function PersonFormPage() {
         <fieldset className="field">
           <legend>Status</legend>
           <div className="chips">
-            {PERSON_STATUSES.map((s) => (
+            {statusesFor(org?.type).concat(existing && !statusesFor(org?.type).includes(existing.status) ? [existing.status] : []).map((s) => (
               <button key={s} type="button" className={`chip ${form.status === s ? 'chip-on' : ''}`} aria-pressed={form.status === s} onClick={() => set('status', s)}>{PERSON_STATUS_LABELS[s]}</button>
             ))}
           </div>
@@ -223,6 +256,7 @@ export function PersonFormPage() {
                 </select>
               </label>
             </div>
+            <BirthdayField value={form.birthday} onChange={(v) => set('birthday', v)} />
             <PersonPicker label="Same household as" value={form.household} onChange={(v) => set('household', v)} excludeId={personId} hint="Pick a family member already in the system." />
             <label className="field">
               <span>How they heard about us</span>
@@ -239,6 +273,13 @@ export function PersonFormPage() {
                   <option value="">Not recorded</option>
                   {org!.serviceTimes!.map((s) => <option key={s}>{s}</option>)}
                 </select>
+              </label>
+            )}
+            {isNew && form.status === 'visitor' && (
+              <label className="field">
+                <span>Prayer need</span>
+                <textarea rows={3} value={prayer} onChange={(e) => setPrayer(e.target.value)} />
+                <small className="hint">Only staff with pastoral access can read this.</small>
               </label>
             )}
             {customFields.map((f) => (
@@ -288,4 +329,33 @@ function CustomFieldInput({ field, value, onChange }: { field: CustomField; valu
         </label>
       );
   }
+}
+
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/** Day and month only: many people would rather not give the year (Andy, 2026-10-31, 2A). Saved as "MM-DD". */
+function BirthdayField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [m, d] = value ? value.split('-') : ['', ''];
+  const [month, setMonth] = useState(m);
+  const [day, setDay] = useState(d);
+  useEffect(() => { if (value) { setMonth(value.slice(0, 2)); setDay(value.slice(3)); } }, [value]);
+  const pick = (nm: string, nd: string) => {
+    setMonth(nm); setDay(nd);
+    onChange(nm && nd ? `${nm}-${nd}` : '');
+  };
+  return (
+    <fieldset className="field">
+      <legend>Birthday</legend>
+      <div className="field-row">
+        <select aria-label="Birthday day" value={day} onChange={(e) => pick(month, e.target.value)}>
+          <option value="">Day</option>
+          {Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, '0')).map((x) => <option key={x} value={x}>{Number(x)}</option>)}
+        </select>
+        <select aria-label="Birthday month" value={month} onChange={(e) => pick(e.target.value, day)}>
+          <option value="">Month</option>
+          {MONTHS.map((name, i) => <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>)}
+        </select>
+      </div>
+    </fieldset>
+  );
 }

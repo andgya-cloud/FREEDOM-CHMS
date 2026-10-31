@@ -5,11 +5,14 @@ import type { Organization } from '../../state/OrgContext';
 import { usePeople, type Person } from '../../state/PeopleContext';
 import { useFunds, type Fund } from '../../state/useGiving';
 import { useSyncState } from '../../lib/sync';
-import { importStatement, recordedCodes, type ImportResult, type RecordedCode } from '../../lib/givingWrites';
+import { addOtherFunds, importStatement, recordedCodes, type ImportResult, type NewFund, type RecordedCode } from '../../lib/givingWrites';
 import { readStatementFile } from '../../lib/statementFile';
 import { friendlyError } from '../../lib/errors';
 import { OrgGate } from '../../components/OrgGate';
 import {
+  fundNamed,
+  otherFundIdFor,
+  otherGivingFromReference,
   formatMoney,
   fundFromReference,
   matchPayment,
@@ -46,6 +49,8 @@ interface Review {
   statement: ParsedStatement;
   recorded: Map<string, RecordedCode>;
   rows: Row[];
+  /** Kinds of other giving the account references name that aren't funds yet (Andy, 2026-10-31, 5A). */
+  newFunds: NewFund[];
 }
 
 function Import({ org }: { org: Organization }) {
@@ -75,13 +80,26 @@ function Import({ org }: { org: Organization }) {
       setBusy('Checking which payments are already recorded…');
       const recorded = await recordedCodes(org.id, statement.payments.map((p) => p.code));
       const orgPeople = people.filter((p) => p.orgId === org.id);
+      // At Freedom Church an account word that isn't Tithes or Offerings, such as BUILDING, is recorded as that kind of other giving.
+      const newFunds = new Map<string, NewFund>();
+      const fundFor = (ref: string) => {
+        const known = fundFromReference(ref, funds);
+        if (known || org.type !== 'church_campus') return known?.id ?? '';
+        const other = otherGivingFromReference(ref);
+        if (!other) return '';
+        const named = fundNamed(other, funds);
+        if (named) return named.id;
+        const id = otherFundIdFor(other);
+        if (!newFunds.has(id)) newFunds.set(id, { id, name: other });
+        return id;
+      };
       const rows = statement.payments.filter((p) => !recorded.has(p.code)).map((payment) => ({
         payment,
         candidates: matchPayment(payment, orgPeople).slice(0, 3),
         personId: null,
-        fundId: fundFromReference(payment.accountRef, funds)?.id ?? '',
+        fundId: fundFor(payment.accountRef),
       }));
-      setReview({ fileName: file.name, statement, recorded, rows });
+      setReview({ fileName: file.name, statement, recorded, rows, newFunds: [...newFunds.values()] });
     } catch (err) {
       setError(friendlyError(err));
     } finally {
@@ -122,7 +140,7 @@ function Import({ org }: { org: Organization }) {
         <ReviewStep
           org={org}
           review={review}
-          funds={funds}
+          funds={[...funds, ...review.newFunds.map((f) => ({ ...f, orgId: org.id, aliases: [], active: true, kind: 'other' as const, deletedAt: null }))]}
           byId={byId}
           onChange={(rows) => setReview({ ...review, rows })}
           onCancel={() => setReview(null)}
@@ -130,7 +148,8 @@ function Import({ org }: { org: Organization }) {
             setBusy('Saving the payments…');
             setError('');
             try {
-              const { statement, recorded, rows, fileName } = review;
+              const { statement, recorded, rows, fileName, newFunds } = review;
+              await addOtherFunds(org.id, newFunds.filter((f) => rows.some((r) => r.fundId === f.id)));
               const already = statement.payments.filter((p) => recorded.has(p.code));
               const res = await importStatement(org.id, rows.map((r) => {
                 const person = r.personId ? byId(r.personId) : undefined;

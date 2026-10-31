@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { WeeklyDashboard } from './DashboardPage';
+import { GivingFigures } from '../giving/GivingDashboardPage';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
@@ -9,51 +11,76 @@ import { requestReport, useLatestReport, useReportRequest, useReports, useReport
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { lastCompletePeriod, periodFor, periodLabel, type ReportType } from '../../../functions/src/shared/metrics';
 
-/** The Reports archive: every weekly and monthly report, and "Make a report" for any period. */
+/**
+ * Reports, one page with three tabs (Andy, 2026-10-31, 4A): Weekly (the week-by-week dashboard, making a report,
+ * the weekly archive), Monthly (the monthly reports) and Giving (the giving dashboard and the monthly summary).
+ */
 export function ReportsPage() {
   return <OrgGate title="Reports">{(org) => <Archive org={org} />}</OrgGate>;
 }
 
+type Tab = 'weekly' | 'monthly' | 'giving';
+
 function Archive({ org }: { org: Organization }) {
+  const { can } = useAuth();
   const { reports, loading, error } = useReports(org.id);
-  const [show, setShow] = useState<ReportType | 'all'>('all');
-  const shown = reports.filter((r) => show === 'all' || r.type === show);
+  const [params, setParams] = useSearchParams();
+  const givingTab = can('finance.reports');
+  const asked = params.get('tab');
+  const tab: Tab = asked === 'monthly' || (asked === 'giving' && givingTab) ? asked : 'weekly';
+  const pick = (t: Tab) => setParams(t === 'weekly' ? {} : { tab: t }, { replace: true });
+  const shown = tab === 'giving' ? [] : reports.filter((r) => r.type === tab);
+  const tabs: { id: Tab; label: string }[] = [{ id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, ...(givingTab ? [{ id: 'giving' as const, label: 'Giving' }] : [])];
 
   return (
-    <div className="page narrow">
+    <div className="page">
       <div className="page-head">
         <h1>Reports</h1>
-        <Link to="/settings/reports" className="btn btn-quiet">Report settings</Link>
+        {can('settings.manage') && <Link to="/settings/reports" className="btn btn-quiet">Report settings</Link>}
       </div>
-      <p className="lead">{org.name}</p>
-      <p className="muted small">A weekly report is made every Monday at 07:00 for the week before (Monday to Sunday), and a monthly report on the 1st at 07:00 for the month before.</p>
-
-      <MakeReport org={org} />
-      <CampusComparison />
-
-      <h2>Archive</h2>
-      <div className="chips" role="tablist" aria-label="Show">
-        {(['all', 'weekly', 'monthly'] as const).map((t) => (
-          <button key={t} type="button" role="tab" aria-selected={show === t} className={`chip${show === t ? ' chip-on' : ''}`} onClick={() => setShow(t)}>
-            {t === 'all' ? 'All' : t === 'weekly' ? 'Weekly' : 'Monthly'}
-          </button>
+      <div className="segmented" role="tablist" aria-label="Reports">
+        {tabs.map((t) => (
+          <button key={t.id} type="button" role="tab" aria-selected={tab === t.id} className={`chip${tab === t.id ? ' chip-on' : ''}`} onClick={() => pick(t.id)}>{t.label}</button>
         ))}
       </div>
-      {error ? <p className="error">The reports could not be loaded ({error}).</p>
-        : loading ? <p className="muted">Loading…</p>
-        : shown.length === 0 ? <div className="card"><p>No reports yet. Make one above, or wait for Monday morning.</p></div>
-        : (
-          <ul className="link-list">
-            {shown.map((r) => (
-              <li key={r.id}>
-                <Link to={`/reports/${org.id}/${r.id}`}>
-                  <span className="link-title">{r.label}</span>
-                  <span className="link-detail">{summary(r)}</span>
-                </Link>
-              </li>
-            ))}
+
+      {tab === 'giving' ? (
+        <>
+          <GivingFigures org={org} />
+          <ul className="link-list narrow-block">
+            <li>
+              <Link to="/giving/summary">
+                <span className="link-title">Monthly summary</span>
+                <span className="link-detail">Fund ledger, and the check against the Paybill statement</span>
+              </Link>
+            </li>
           </ul>
-        )}
+        </>
+      ) : (
+        <>
+          {tab === 'weekly' && <WeeklyDashboard org={org} />}
+          {tab === 'weekly' && <CampusComparison />}
+          <div className="narrow-block stack">
+            <MakeReport key={tab} org={org} type={tab} />
+            <h2>{tab === 'weekly' ? 'Weekly reports' : 'Monthly reports'}</h2>
+            {error ? <p className="error">The reports could not be loaded ({error}).</p>
+              : loading ? <p className="muted">Loading…</p>
+              : shown.length === 0 ? <div className="card"><p>{tab === 'weekly' ? 'No weekly reports yet. Make one above, or wait for Monday morning at 07:00.' : 'No monthly reports yet. Make one above, or wait for the 1st of the month at 07:00.'}</p></div>
+              : (
+                <ul className="link-list">
+                  {shown.map((r) => (
+                    <li key={r.id}>
+                      <Link to={`/reports/${org.id}/${r.id}`}>
+                        <span className="link-title">{r.label}</span>
+                        <span className="link-detail">{summary(r)}</span>
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -63,13 +90,12 @@ function summary(r: StoredReport) {
   return `${r.type === 'weekly' ? 'Weekly' : 'Monthly'} · attendance ${h.attendance ?? '–'} · ${h.visitors} visitors · ${h.salvations} salvations`;
 }
 
-function MakeReport({ org }: { org: Organization }) {
+function MakeReport({ org, type }: { org: Organization; type: ReportType }) {
   const { user, can } = useAuth();
   const { settings } = useReportSettings();
   const toast = useToast();
   const navigate = useNavigate();
   const today = localDateKey(new Date(), org.timeZone);
-  const [type, setType] = useState<ReportType>('weekly');
   const [day, setDay] = useState(() => lastCompletePeriod('weekly', today).from);
   const [month, setMonth] = useState(() => lastCompletePeriod('monthly', today).from.slice(0, 7));
   const [email, setEmail] = useState(false);
@@ -93,12 +119,7 @@ function MakeReport({ org }: { org: Organization }) {
   return (
     <section className="card stack">
       <h2>Make a report</h2>
-      <p className="small muted">For any past week or month. Making one again brings it up to date with records added since.</p>
-      <div className="segmented" role="radiogroup" aria-label="Report">
-        {(['weekly', 'monthly'] as const).map((t) => (
-          <button key={t} type="button" role="radio" aria-checked={type === t} className={`chip${type === t ? ' chip-on' : ''}`} onClick={() => setType(t)}>{t === 'weekly' ? 'Week' : 'Month'}</button>
-        ))}
-      </div>
+      <p className="small muted">{type === 'weekly' ? 'For any past week' : 'For any past month'}. Making one again brings it up to date with records added since.</p>
       {type === 'weekly' ? (
         <label className="field"><span>Any day in the week</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>
       ) : (

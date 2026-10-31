@@ -124,11 +124,12 @@ export function markMany(
   people: { personId: string; existing: ExistingMark | undefined }[],
   status: AttendanceStatus,
 ): Promise<unknown> {
-  // Firestore batches hold up to 500 writes; a class is far smaller, but stay safe.
+  // Small batches: the rules look up each person (and, for a trainer, each student),
+  // and one request may make only 20 such lookups.
   const writes: Promise<unknown>[] = [];
-  for (let i = 0; i < people.length; i += 400) {
+  for (let i = 0; i < people.length; i += 5) {
     const batch = writeBatch(db);
-    for (const { personId, existing } of people.slice(i, i + 400)) {
+    for (const { personId, existing } of people.slice(i, i + 5)) {
       const ref = attendanceRef(orgId, event.id, personId);
       if (existing) {
         batch.update(ref, { status, method: 'register', deletedAt: null, deletedBy: null, ...updateStamps() });

@@ -1,15 +1,16 @@
 import { Suspense, lazy, useCallback } from 'react';
-import { Navigate, Route, Routes } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './state/AuthContext';
 import { useAppSettings } from './state/useAppSettings';
-import { isSharedDevice, useIdleSignOut } from './lib/useIdleSignOut';
+import { isSharedDevice, MONEY_IDLE_MINUTES, useIdleSignOut } from './lib/useIdleSignOut';
 import { AppShell } from './components/AppShell';
-import { RequirePermission } from './components/RequirePermission';
+import { RequireAccountKeeper, RequirePermission } from './components/RequirePermission';
 import { SignInPage } from './pages/SignInPage';
 import { ChangePasswordPage } from './pages/ChangePasswordPage';
 import { TodayPage } from './pages/TodayPage';
 import { NotFoundPage } from './pages/NotFoundPage';
 const SettingsPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })));
+const SettingsGroupPage = lazy(() => import('./pages/settings/SettingsPage').then((m) => ({ default: m.SettingsGroupPage })));
 const OrganizationsPage = lazy(() => import('./pages/settings/OrganizationsPage').then((m) => ({ default: m.OrganizationsPage })));
 const OrganizationFormPage = lazy(() => import('./pages/settings/OrganizationFormPage').then((m) => ({ default: m.OrganizationFormPage })));
 const UsersPage = lazy(() => import('./pages/settings/UsersPage').then((m) => ({ default: m.UsersPage })));
@@ -21,7 +22,6 @@ const CustomFieldsPage = lazy(() => import('./pages/settings/CustomFieldsPage').
 const PeoplePage = lazy(() => import('./pages/people/PeoplePage').then((m) => ({ default: m.PeoplePage })));
 const PersonPage = lazy(() => import('./pages/people/PersonPage').then((m) => ({ default: m.PersonPage })));
 const PersonFormPage = lazy(() => import('./pages/people/PersonFormPage').then((m) => ({ default: m.PersonFormPage })));
-const VisitorFormPage = lazy(() => import('./pages/people/VisitorFormPage').then((m) => ({ default: m.VisitorFormPage })));
 const AttendancePage = lazy(() => import('./pages/attendance/AttendancePage').then((m) => ({ default: m.AttendancePage })));
 const EventPage = lazy(() => import('./pages/attendance/EventPage').then((m) => ({ default: m.EventPage })));
 const DoorModePage = lazy(() => import('./pages/attendance/DoorModePage').then((m) => ({ default: m.DoorModePage })));
@@ -31,6 +31,9 @@ const ProgramFormPage = lazy(() => import('./pages/programs/ProgramFormPage').th
 const TeamPage = lazy(() => import('./pages/programs/TeamPage').then((m) => ({ default: m.TeamPage })));
 const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({ default: m.GroupPage })));
 const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
+const WelcomeCardPage = lazy(() => import('./pages/people/WelcomeCardPage').then((m) => ({ default: m.WelcomeCardPage })));
+const WelcomePosterPage = lazy(() => import('./pages/people/WelcomePosterPage').then((m) => ({ default: m.WelcomePosterPage })));
+const PledgesPage = lazy(() => import('./pages/giving/PledgesPage').then((m) => ({ default: m.PledgesPage })));
 const GivingPage = lazy(() => import('./pages/giving/GivingPage').then((m) => ({ default: m.GivingPage })));
 const RecordGiftPage = lazy(() => import('./pages/giving/RecordGiftPage').then((m) => ({ default: m.RecordGiftPage })));
 const GiftPage = lazy(() => import('./pages/giving/GiftPage').then((m) => ({ default: m.GiftPage })));
@@ -48,15 +51,34 @@ const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => (
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
 const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
-const SchoolHome = lazy(() => import('./pages/school/SchoolHome').then((m) => ({ default: m.SchoolHome })));
 const StudentsPage = lazy(() => import('./pages/school/StudentsPage').then((m) => ({ default: m.StudentsPage })));
 const EnrolPage = lazy(() => import('./pages/school/EnrolPage').then((m) => ({ default: m.EnrolPage })));
 const StudentPage = lazy(() => import('./pages/school/StudentPage').then((m) => ({ default: m.StudentPage })));
 const CoursesPage = lazy(() => import('./pages/school/CoursesPage').then((m) => ({ default: m.CoursesPage })));
-const ResultsPage = lazy(() => import('./pages/school/ResultsPage').then((m) => ({ default: m.ResultsPage })));
 const FeesPage = lazy(() => import('./pages/school/FeesPage').then((m) => ({ default: m.FeesPage })));
 const GraduationPage = lazy(() => import('./pages/school/GraduationPage').then((m) => ({ default: m.GraduationPage })));
 const SchoolReportsPage = lazy(() => import('./pages/school/SchoolReportsPage').then((m) => ({ default: m.SchoolReportsPage })));
+const PettyCashPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.PettyCashPage })));
+const NewRequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.NewRequisitionPage })));
+const RequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.RequisitionPage })));
+const PettyReceiptsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReceiptsPage })));
+const CleanupPage = lazy(() => import('./pages/settings/CleanupPage').then((m) => ({ default: m.CleanupPage })));
+const SigningPinPage = lazy(() => import('./pages/settings/SigningPinPage').then((m) => ({ default: m.SigningPinPage })));
+const PettyReportsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReportsPage })));
+const PettyMonthEndPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyMonthEndPage })));
+const PettyBalanceSheetPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyBalanceSheetPage })));
+const PettyBudgetPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyBudgetPage })));
+const PettyBinPage = lazy(() => import('./pages/school/PettyBin').then((m) => ({ default: m.PettyBinPage })));
+const PayrollPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPage })));
+const PayrollStaffPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollStaffPage })));
+const PayrollPersonPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPersonPage })));
+const StudentImportPage = lazy(() => import('./pages/school/StudentImportPage').then((m) => ({ default: m.StudentImportPage })));
+const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
+const InventoryCountPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryCountPage })));
+const ExamsPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.ExamsPage })));
+const CommonFinalsPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.CommonFinalsPage })));
+const ExamSheetPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.ExamSheetPage })));
+const PayrollRunPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollRunPage })));
 const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage').then((m) => ({ default: m.SchoolSettingsPage })));
 const HopeHome = lazy(() => import('./pages/hope/HopeHome').then((m) => ({ default: m.HopeHome })));
 const ChildrenPage = lazy(() => import('./pages/hope/ChildrenPage').then((m) => ({ default: m.ChildrenPage })));
@@ -68,9 +90,22 @@ const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
   const settings = useAppSettings();
+  const welcome = useLocation().pathname.startsWith('/welcome/');
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
-  useIdleSignOut(settings.inactivityMinutes, !!user && isSharedDevice(), onIdle);
+  // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
+  const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
+  const shared = isSharedDevice() && settings.inactivityMinutes > 0;
+  const idleMinutes = handlesMoney ? Math.min(MONEY_IDLE_MINUTES, shared ? settings.inactivityMinutes : MONEY_IDLE_MINUTES) : settings.inactivityMinutes;
+  useIdleSignOut(idleMinutes, !!user && (shared || handlesMoney), onIdle);
 
+  // The visitor's own card behind the QR poster: open to anyone, no sign-in (Andy, 2026-10-31, 3A).
+  if (welcome) {
+    return (
+      <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
+        <Routes><Route path="/welcome/:orgId" element={<WelcomeCardPage />} /></Routes>
+      </Suspense>
+    );
+  }
   if (loading) {
     return <div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>;
   }
@@ -104,6 +139,8 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<TodayPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/inventory" element={<InventoryPage />} />
+        <Route path="/inventory/:countId" element={<InventoryCountPage />} />
         <Route path="/attendance/:orgId/:eventId" element={<EventPage />} />
         <Route path="/programs" element={<RequirePermission permission="people.read"><ProgramsPage /></RequirePermission>} />
         <Route path="/programs/:orgId/new" element={<RequirePermission permission="settings.manage"><ProgramFormPage /></RequirePermission>} />
@@ -118,34 +155,76 @@ function AppRoutes() {
         <Route path="/giving/unassigned" element={<RequirePermission permission="gifts.write"><UnassignedPage /></RequirePermission>} />
         <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
         <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
+        <Route path="/giving/dashboard" element={<Navigate to="/reports?tab=giving" replace />} />
+        <Route path="/visitors/qr" element={<RequirePermission permission="people.write"><WelcomePosterPage /></RequirePermission>} />
+        <Route path="/giving/pledges" element={<RequirePermission permission="giving.person.read"><PledgesPage /></RequirePermission>} />
         <Route path="/giving/statements" element={<RequirePermission permission="giving.person.read"><StatementsPage /></RequirePermission>} />
         <Route path="/giving/:orgId/:giftId" element={<RequirePermission anyOf={['gifts.write', 'giving.person.read']}><GiftPage /></RequirePermission>} />
         <Route path="/follow-ups" element={<RequirePermission permission="followups.manage"><FollowUpsPage /></RequirePermission>} />
         <Route path="/follow-ups/reminders" element={<RequirePermission permission="followups.manage"><RemindersPage /></RequirePermission>} />
+        <Route path="/dashboard" element={<Navigate to="/reports" replace />} />
         <Route path="/reports" element={<RequirePermission permission="people.read"><ReportsPage /></RequirePermission>} />
         <Route path="/reports/:orgId/:reportId" element={<RequirePermission permission="people.read"><ReportPage /></RequirePermission>} />
-        <Route path="/visitors/new" element={<RequirePermission permission="people.write"><VisitorFormPage /></RequirePermission>} />
+        <Route path="/visitors/new" element={<RequirePermission permission="people.write"><PersonFormPage visitor /></RequirePermission>} />
         <Route path="/people" element={<RequirePermission permission="people.read"><PeoplePage /></RequirePermission>} />
         <Route path="/people/new" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId" element={<RequirePermission permission="people.read"><PersonPage /></RequirePermission>} />
         <Route path="/people/:orgId/:personId/edit" element={<RequirePermission permission="people.write"><PersonFormPage /></RequirePermission>} />
-        <Route path="/school" element={<RequirePermission permission="people.read"><SchoolHome /></RequirePermission>} />
+        <Route path="/school" element={<Navigate to="/school/students" replace />} />
         <Route path="/school/students" element={<RequirePermission permission="people.read"><StudentsPage /></RequirePermission>} />
         <Route path="/school/students/new" element={<RequirePermission permission="people.write"><EnrolPage /></RequirePermission>} />
+        <Route path="/school/students/import" element={<RequirePermission permission="people.write"><StudentImportPage /></RequirePermission>} />
         <Route path="/school/students/:studentId" element={<RequirePermission permission="people.read"><StudentPage /></RequirePermission>} />
         <Route path="/school/courses" element={<RequirePermission permission="people.read"><CoursesPage /></RequirePermission>} />
-        <Route path="/school/results" element={<RequirePermission permission="people.read"><ResultsPage /></RequirePermission>} />
+        {/* The old School Results tab is now part of Exam Records (Andy, 2026-10-24). */}
+        <Route path="/school/results" element={<Navigate to="/school/exams?tab=results" replace />} />
         <Route path="/school/fees" element={<RequirePermission anyOf={['gifts.write', 'finance.reports', 'giving.person.read']}><FeesPage /></RequirePermission>} />
         <Route path="/school/graduation" element={<RequirePermission permission="people.read"><GraduationPage /></RequirePermission>} />
         <Route path="/school/reports" element={<RequirePermission anyOf={['finance.reports', 'settings.manage']}><SchoolReportsPage /></RequirePermission>} />
+        <Route path="/school/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/month-end" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyMonthEndPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/reports" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReportsPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/balance-sheet" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBalanceSheetPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
+        <Route path="/school/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
+        <Route path="/school/exams" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><ExamsPage /></RequirePermission>} />
+        <Route path="/school/exams/finals/:one/:two" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><CommonFinalsPage /></RequirePermission>} />
+        <Route path="/school/exams/sheet/:sheetId" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><ExamSheetPage /></RequirePermission>} />
+        <Route path="/school/payroll" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPage /></RequirePermission>} />
+        <Route path="/school/payroll/staff" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollStaffPage /></RequirePermission>} />
+        <Route path="/school/payroll/staff/:staffId" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPersonPage /></RequirePermission>} />
+        <Route path="/school/payroll/:month" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollRunPage /></RequirePermission>} />
         <Route path="/school/settings" element={<RequirePermission permission="settings.manage"><SchoolSettingsPage /></RequirePermission>} />
         <Route path="/hope" element={<RequirePermission permission="people.read"><HopeHome /></RequirePermission>} />
         <Route path="/hope/children" element={<RequirePermission permission="people.read"><ChildrenPage /></RequirePermission>} />
         <Route path="/hope/children/new" element={<RequirePermission permission="people.write"><RegisterChildPage /></RequirePermission>} />
         <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/month-end" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyMonthEndPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/reports" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReportsPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/balance-sheet" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBalanceSheetPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
+        <Route path="/hope/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
+        <Route path="/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
+        <Route path="/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
+        <Route path="/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />
+        <Route path="/petty-cash/month-end" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyMonthEndPage /></RequirePermission>} />
+        <Route path="/petty-cash/reports" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReportsPage /></RequirePermission>} />
+        <Route path="/petty-cash/balance-sheet" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBalanceSheetPage /></RequirePermission>} />
+        <Route path="/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
+        <Route path="/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
+        <Route path="/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
         <Route path="/hope/exports" element={<RequirePermission permission="people.read"><HopeExportsPage /></RequirePermission>} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/settings/my-password" element={<RequireAccountKeeper><ChangePasswordPage voluntary /></RequireAccountKeeper>} />
+        <Route path="/settings/signing-pin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><SigningPinPage /></RequirePermission>} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
         <Route path="/settings/funds" element={<RequirePermission permission="settings.manage"><FundsPage /></RequirePermission>} />
@@ -153,12 +232,14 @@ function AppRoutes() {
         <Route path="/settings/whatsapp" element={<RequirePermission permission="settings.manage"><WhatsAppSettingsPage /></RequirePermission>} />
         <Route path="/settings/templates" element={<RequirePermission permission="settings.manage"><TemplatesPage /></RequirePermission>} />
         <Route path="/settings/device" element={<DevicePage />} />
+        <Route path="/settings/group/:group" element={<SettingsGroupPage />} />
         <Route path="/settings/organizations" element={<RequirePermission permission="settings.manage"><OrganizationsPage /></RequirePermission>} />
         <Route path="/settings/organizations/new" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
         <Route path="/settings/organizations/:orgId" element={<RequirePermission permission="settings.manage"><OrganizationFormPage /></RequirePermission>} />
-        <Route path="/settings/users" element={<RequirePermission permission="users.manage"><UsersPage /></RequirePermission>} />
-        <Route path="/settings/users/new" element={<RequirePermission permission="users.manage"><UserFormPage /></RequirePermission>} />
-        <Route path="/settings/users/:uid" element={<RequirePermission permission="users.manage"><UserFormPage /></RequirePermission>} />
+        <Route path="/settings/cleanup" element={<RequireAccountKeeper><CleanupPage /></RequireAccountKeeper>} />
+        <Route path="/settings/users" element={<RequireAccountKeeper><UsersPage /></RequireAccountKeeper>} />
+        <Route path="/settings/users/new" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
+        <Route path="/settings/users/:uid" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/settings/audit" element={<RequirePermission permission="audit.read"><AuditLogPage /></RequirePermission>} />

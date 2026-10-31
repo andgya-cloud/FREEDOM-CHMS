@@ -37,7 +37,6 @@ function Reminders({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/follow-ups">← Follow-ups</Link></p>
       <h1>Programme reminders</h1>
-      <p className="lead">{org.name}</p>
 
       {active.length === 0 ? <p className="muted">No programmes are running. Add them under Programmes.</p> : (
         <>

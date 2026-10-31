@@ -27,6 +27,8 @@ export interface Person {
   status: PersonStatus;
   firstVisitDate?: string | null;
   gender?: string | null;
+  /** "MM-DD", no year. */
+  birthday?: string | null;
   householdId?: string | null;
   guardianId?: string | null;
   howHeard?: string | null;
