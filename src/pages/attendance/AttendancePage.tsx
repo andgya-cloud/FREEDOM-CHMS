@@ -2,6 +2,7 @@ import { useSchool } from '../../state/useSchool';
 import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type ExamSheetRow } from '../../state/useExams';
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
+import { cohortStart } from '../../../functions/src/shared/pastRecords';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -116,7 +117,12 @@ export function AttendancePage() {
   const todays = loaded.filter((e) => e.date === date);
   const adia = org.type === 'college';
   const canBackdate = !trainer && (!adia || BACKDATE_ROLES.includes(profile?.roleId ?? ''));
-  const firstDay = adia ? ADIA_FIRST_DAY : undefined;
+  // Registers go back to the day the earliest cohort started (Andy, 2026-11-01, 3A).
+  const earliestStart = school.intakes.map((i) => i.startDate).filter(Boolean).sort()[0];
+  const firstDay = adia ? [earliestStart ?? ADIA_FIRST_DAY, ADIA_FIRST_DAY].sort()[0] : undefined;
+  // Past registers and results card (1A 5A): cohorts newest first, closed ones included.
+  const pastCohorts = adia ? [...new Set(school.intakes.map((i) => i.name.trim()).filter(Boolean))]
+    .sort((x, y) => (cohortStart(school.intakes, y) ?? '').localeCompare(cohortStart(school.intakes, x) ?? '')) : [];
   const yesterday = localDateKey(new Date(Date.now() - 86_400_000), tz);
   const noun = org.type === 'church_campus' ? 'service' : org.type === 'college' ? 'class' : 'session';
 
@@ -216,6 +222,8 @@ export function AttendancePage() {
         </section>
       )}
 
+      {adia && canBackdate && pastCohorts.length > 0 && <PastCard cohorts={pastCohorts} closed={(c) => examCohorts.byName[c]?.closed === true} results={examAccess.canManage} />}
+
       <section>
         {adia && !trainer ? (
           <div className="card-head">
@@ -224,7 +232,7 @@ export function AttendancePage() {
               <span className="visually-hidden">Show registers for</span>
               <select value={month} onChange={(e) => setMonth(e.target.value)}>
                 <option value="">Last 8 weeks</option>
-                {monthsSince(ADIA_FIRST_DAY, today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+                {monthsSince(firstDay ?? ADIA_FIRST_DAY, today).map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
               </select>
             </label>
           </div>
@@ -250,5 +258,25 @@ export function AttendancePage() {
         )}
       </section>
     </div>
+  );
+}
+
+/** Past registers and exams for any cohort, graduated ones included (Andy, 2026-11-01, 1A 5A). */
+function PastCard({ cohorts, closed, results }: { cohorts: string[]; closed: (c: string) => boolean; results: boolean }) {
+  const [cohort, setCohort] = useState(cohorts[0] ?? '');
+  const q = `?cohort=${encodeURIComponent(cohort)}`;
+  return (
+    <section className="card past-card">
+      <h2>Past registers and results</h2>
+      <label className="field"><span>Cohort</span>
+        <select className="filter-select" value={cohort} onChange={(e) => setCohort(e.target.value)}>
+          {cohorts.map((c) => <option key={c} value={c}>{c}{closed(c) ? ' (closed)' : ''}</option>)}
+        </select>
+      </label>
+      <div className="past-card-actions">
+        <Link className="btn btn-primary" to={`/attendance/past${q}`}>Fill in a register</Link>
+        {results && <Link className="btn" to={`/school/exams/past${q}`}>Key in past results</Link>}
+      </div>
+    </section>
   );
 }

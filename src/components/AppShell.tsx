@@ -1,3 +1,4 @@
+import { useCloseLeftOpen } from '../lib/pastOpen';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
@@ -35,6 +36,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const inventoryTab = current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile)));
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
   useTemplates();
+  useCloseLeftOpen(location.pathname, profile?.displayName ?? '');
   const look = lookFor(current);
   const adia = look === 'glass';
   // The look changes the colours of every page, so it is set on the page root.

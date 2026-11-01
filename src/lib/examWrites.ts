@@ -8,6 +8,7 @@ import { trackWrite } from './sync';
 import { MARK_FIELDS, type ExamComponent, type ExamSettings, type ExamWeights, type MarkValue, type StudentMarks } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
 import { cohortKey, type CourseListItem, type ExamCohort } from '../../functions/src/shared/examCohorts';
+import { TOTAL_ONLY_WEIGHTS } from '../../functions/src/shared/pastRecords';
 
 const sheetRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'examSheets', id);
 
@@ -91,7 +92,7 @@ export function saveExamSettings(orgId: string, exists: boolean, settings: ExamS
 export { metaId as examMetaId };
 
 /** One cohort's graduation date and whether it is closed (Andy, 2026-10-25). */
-export function saveExamCohort(orgId: string, cohort: string, exists: boolean, changes: Partial<Omit<ExamCohort, 'cohort'>> & { closedAt?: unknown; reopenedAt?: unknown }) {
+export function saveExamCohort(orgId: string, cohort: string, exists: boolean, changes: Partial<Omit<ExamCohort, 'cohort'>> & { closedAt?: unknown; reopenedAt?: unknown; autoCloseAt?: unknown }) {
   const ref = doc(db, 'organizations', orgId, 'examCohorts', cohortKey(cohort));
   if (exists) return updateRecord(ref, changes);
   return trackWrite(setDoc(ref, { orgId, cohort, graduationDate: null, closed: false, ...changes, ...createStamps() }));
@@ -169,4 +170,18 @@ export async function saveGraduationGrades(orgId: string, items: { studentId: st
     }
     await trackWrite(batch.commit());
   }
+}
+
+/**
+ * Past results typed in as one total per student (Andy, 2026-11-01, 6A): the whole mark sits in the Final, the
+ * course is approved at once (old paper records need no second check), and the change is logged.
+ */
+export function savePastTotals(orgId: string, sheetId: string, finalMarks: Record<string, MarkValue>, byName: string, setWeights: boolean) {
+  return updateRecord(sheetRef(orgId, sheetId), {
+    finalMarks,
+    ...(setWeights ? { weights: TOTAL_ONLY_WEIGHTS } : {}),
+    status: 'approved',
+    approvedAt: serverTimestamp(),
+    approvedByName: byName,
+  });
 }

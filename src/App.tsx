@@ -33,6 +33,8 @@ const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({
 const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
 const WelcomeCardPage = lazy(() => import('./pages/people/WelcomeCardPage').then((m) => ({ default: m.WelcomeCardPage })));
 const WelcomePosterPage = lazy(() => import('./pages/people/WelcomePosterPage').then((m) => ({ default: m.WelcomePosterPage })));
+const PastRegisterPage = lazy(() => import('./pages/attendance/PastRegisterPage').then((m) => ({ default: m.PastRegisterPage })));
+const PastResultsPage = lazy(() => import('./pages/school/PastResultsPage').then((m) => ({ default: m.PastResultsPage })));
 const PledgesPage = lazy(() => import('./pages/giving/PledgesPage').then((m) => ({ default: m.PledgesPage })));
 const GivingPage = lazy(() => import('./pages/giving/GivingPage').then((m) => ({ default: m.GivingPage })));
 const RecordGiftPage = lazy(() => import('./pages/giving/RecordGiftPage').then((m) => ({ default: m.RecordGiftPage })));
@@ -139,6 +141,7 @@ function AppRoutes() {
       <Routes>
         <Route path="/" element={<TodayPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
+        <Route path="/attendance/past" element={<RequirePermission permission="attendance.write"><PastRegisterPage /></RequirePermission>} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/inventory/:countId" element={<InventoryCountPage />} />
         <Route path="/attendance/:orgId/:eventId" element={<EventPage />} />
@@ -192,6 +195,7 @@ function AppRoutes() {
         <Route path="/school/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
         <Route path="/school/exams" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><ExamsPage /></RequirePermission>} />
         <Route path="/school/exams/finals/:one/:two" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><CommonFinalsPage /></RequirePermission>} />
+        <Route path="/school/exams/past" element={<RequirePermission anyOf={['exams.manage', 'users.manage']}><PastResultsPage /></RequirePermission>} />
         <Route path="/school/exams/sheet/:sheetId" element={<RequirePermission anyOf={['exams.mark', 'exams.manage', 'users.manage']}><ExamSheetPage /></RequirePermission>} />
         <Route path="/school/payroll" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPage /></RequirePermission>} />
         <Route path="/school/payroll/staff" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollStaffPage /></RequirePermission>} />

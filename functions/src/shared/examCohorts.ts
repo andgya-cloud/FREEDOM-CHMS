@@ -22,6 +22,8 @@ export interface ExamCohort {
   reopenedByName?: string | null;
   /** When each paper's marks are due (Andy, 2026-10-25, 6A): YYYY-MM-DD for CAT 1 to 3 and the Final. */
   deadlines?: ExamDeadlines;
+  /** Opened only to key in past results (Andy, 2026-11-01, 5A): closed again on leaving, or once this time passes. */
+  autoCloseAt?: { toMillis(): number } | null;
 }
 export type ExamDeadlines = Partial<Record<ExamComponent, string>>;
 

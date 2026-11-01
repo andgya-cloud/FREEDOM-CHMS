@@ -1786,3 +1786,28 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
   .welcome-poster h1 { font-size: 2.2rem; }
   .welcome-qr { width: 12cm; }
 }
+
+/* ---- Past registers and results (Andy, 2026-11-01) ---- */
+.past-card { display: flex; flex-direction: column; gap: 10px; }
+.past-card h2 { margin: 0; }
+.past-card-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.filter-row.two { grid-template-columns: 1fr 2fr; }
+.grid-scroll { overflow-x: auto; padding: 0; }
+.past-grid { border-collapse: separate; border-spacing: 0; font-size: 0.9rem; min-width: 100%; }
+.past-grid th, .past-grid td { padding: 4px; text-align: center; border-bottom: 1px solid rgb(0 0 0 / 0.06); }
+.past-grid .past-name { position: sticky; left: 0; z-index: 1; background: var(--card-bg, #fff); text-align: left; min-width: 190px; padding: 6px 10px; font-weight: 600; }
+.past-grid .past-name .badge { margin-left: 6px; }
+.past-day { min-width: 40px; vertical-align: bottom; }
+.past-day span { display: block; font-size: 0.7rem; opacity: 0.6; font-weight: 500; }
+.past-day b { display: block; }
+.past-day.has-register b { color: var(--navy, #1f2a5c); text-decoration: underline; text-decoration-color: var(--menu-gold, #c99a3c); text-underline-offset: 3px; }
+.past-all { margin-top: 4px; font-size: 0.65rem; padding: 2px 4px; border-radius: 6px; border: 1px solid rgb(0 0 0 / 0.15); background: transparent; cursor: pointer; color: inherit; }
+.past-cell { width: 32px; height: 32px; border-radius: 8px; border: 1px solid rgb(0 0 0 / 0.18); background: #fff; cursor: pointer; font-weight: 800; color: #fff; }
+.past-cell.on { background: var(--navy, #1f2a5c); border-color: var(--navy, #1f2a5c); }
+.past-cell:focus-visible { outline: 2px solid var(--menu-gold, #c99a3c); outline-offset: 1px; }
+.past-results-table { width: 100%; border-collapse: collapse; }
+.past-results-table th, .past-results-table td { padding: 6px 4px; border-bottom: 1px solid rgb(0 0 0 / 0.06); text-align: left; }
+.past-results-table .mark-input { width: 90px; }
+.past-results-table .mark-input.bad { border-color: #c0392b; }
+.past-results-table .badge { margin-left: 6px; }
+@media (max-width: 600px) { .past-grid .past-name { min-width: 120px; max-width: 140px; font-size: 0.85rem; } .filter-row.two { grid-template-columns: 1fr; } }

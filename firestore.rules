@@ -1710,7 +1710,7 @@ service cloud.firestore {
       match /examCohorts/{key} {
         allow read: if ex('exams.mark') || schoolRead();
         allow create, update: if ex('exams.manage')
-          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'graduationDate', 'closed', 'closedAt', 'closedByName', 'reopenedAt', 'reopenedByName', 'deadlines',
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'graduationDate', 'closed', 'closedAt', 'closedByName', 'reopenedAt', 'reopenedByName', 'deadlines', 'autoCloseAt',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && (!('deadlines' in request.resource.data) || examDeadlines(request.resource.data.deadlines))
           && request.resource.data.orgId == orgId && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
