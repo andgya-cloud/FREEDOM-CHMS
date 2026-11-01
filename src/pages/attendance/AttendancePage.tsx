@@ -2,6 +2,8 @@ import { useSchool } from '../../state/useSchool';
 import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type ExamSheetRow } from '../../state/useExams';
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
+import { FirstTimersCard, SundayCard } from '../ChurchSunday';
+import type { ChurchEvent as AttendanceEvent } from '../../state/useAttendance';
 import { cohortStart } from '../../../functions/src/shared/pastRecords';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -153,6 +155,10 @@ export function AttendancePage() {
     setOtherName('');
   }
 
+  if (org.type === 'church_campus') {
+    return <SundayPage org={org} date={date} setDate={setDate} today={today} choices={choices} todays={todays} events={events} loading={loading} canRecord={canRecord} open={open} />;
+  }
+
   return (
     <div className="page narrow">
       <h1>Attendance</h1>
@@ -213,10 +219,9 @@ export function AttendancePage() {
           )}
           {!trainer && <>
           <form className="input-with-button" onSubmit={openOther}>
-            <input placeholder={`Another ${noun}, for example ${org.type === 'church_campus' ? 'Youth night' : org.type === 'college' ? 'ICT make-up class' : 'Holiday club'}`} value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label={`Name of another ${noun}`} />
+            <input placeholder={`Another ${noun}, for example ${org.type === 'college' ? 'ICT make-up class' : 'Holiday club'}`} value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label={`Name of another ${noun}`} />
             <button type="submit" className="btn" disabled={!otherName.trim()}>Start</button>
           </form>
-          {org.type === 'church_campus' && <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>. New visitors can fill in their own card: <Link to="/visitors/qr">QR poster for the door</Link>.</p>}
           {org.type === 'ministry' && <p className="hint">The programme list is in <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>}
           </>}
         </section>
@@ -278,5 +283,73 @@ function PastCard({ cohorts, closed, results }: { cohorts: string[]; closed: (c:
         {results && <Link className="btn" to={`/school/exams/past${q}`}>Key in past results</Link>}
       </div>
     </section>
+  );
+}
+
+/**
+ * Freedom Church's Sunday page (Andy, 2026-11-01, 3A): Check in at the top, then the Sunday figures, the
+ * first-timers with the QR poster, and the past services folded away. Another day or service is one dropdown.
+ */
+function SundayPage({ org, date, setDate, today, choices, todays, events, loading, canRecord, open }: {
+  org: Parameters<typeof SundayCard>[0]['org'];
+  date: string; setDate: (d: string) => void; today: string; choices: string[]; todays: AttendanceEvent[];
+  events: AttendanceEvent[]; loading: boolean; canRecord: boolean; open: (name: string) => void;
+}) {
+  const [otherName, setOtherName] = useState('');
+  const other = date !== today;
+  return (
+    <div className="page narrow sunday-page">
+      <h1>Sunday</h1>
+      {canRecord && (
+        <section className="card">
+          <h2>{other ? `Check in for ${formatDateKey(date)}` : 'Check in'}</h2>
+          <div className="start-grid">
+            {choices.map((name) => {
+              const already = todays.some((e) => e.id === eventIdFor(date, name));
+              return (
+                <button key={name} type="button" className="start-tile" onClick={() => open(name)}>
+                  <span className="start-name">{name}</span>
+                  <span className="start-hint">{already ? 'Open, carry on' : 'Start'}</span>
+                </button>
+              );
+            })}
+          </div>
+          <details className="fold" open={other || undefined}>
+            <summary>Different day or service</summary>
+            <div className="stack fold-body">
+              <label className="field"><span>Day</span>
+                <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
+              </label>
+              <form className="input-with-button" onSubmit={(e) => { e.preventDefault(); open(otherName); setOtherName(''); }}>
+                <input placeholder="Another service, for example Youth night" value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label="Name of another service" />
+                <button type="submit" className="btn" disabled={!otherName.trim()}>Start</button>
+              </form>
+              {other && <button type="button" className="btn btn-quiet align-start" onClick={() => setDate(today)}>Back to today</button>}
+              <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>
+            </div>
+          </details>
+        </section>
+      )}
+      <SundayCard org={org} onSundayPage />
+      <FirstTimersCard org={org} />
+      <details className="card fold">
+        <summary>Past services</summary>
+        {loading && events.length === 0 ? <p className="muted">Loading…</p> : events.length === 0 ? <p className="muted">Nothing recorded yet.</p> : (
+          <ul className="link-list">
+            {events.map((e) => {
+              const counted = headcountTotal(e.headcounts, e.type);
+              return (
+                <li key={e.id}>
+                  <Link to={`/attendance/${org.id}/${e.id}`}>
+                    <span className="link-title">{e.name}</span>
+                    <span className="link-detail">{formatDateKey(e.date)}{counted ? ` · ${counted} counted` : ''}</span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </details>
+    </div>
   );
 }

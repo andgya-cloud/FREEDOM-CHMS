@@ -86,7 +86,7 @@ const TOPICS: Topic[] = [
   {
     id: 'shared', title: 'Using a shared phone or computer',
     body: ['Tick "This is a shared device" at sign-in. The app then signs you out by itself after a few minutes of no use.',
-      'Always sign out when you finish: Settings → Sign out.'],
+      'Always sign out when you finish: More, then Settings, then Sign out.'],
   },
   {
     id: 'undelete', title: 'I deleted something by mistake',

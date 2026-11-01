@@ -23,6 +23,10 @@ export function FirstRunChecklist({ variant }: { variant?: 'scene' } = {}) {
     getCountFromServer(collection(db, 'users')).then((c) => setStaffCount(c.data().count), () => setStaffCount(null));
   }, [isPastor, hidden]);
 
+  // Once the organizations and staff are in, it goes away for good; installing is a nice-to-have (Andy, 2026-11-01, 4A).
+  const finished = organizations.length > 0 && (staffCount ?? 0) > 1;
+  useEffect(() => { if (finished) writePref('firstRunDone', 'yes'); }, [finished]);
+
   if (!isPastor || hidden) return null;
 
   const steps = [
@@ -30,7 +34,7 @@ export function FirstRunChecklist({ variant }: { variant?: 'scene' } = {}) {
     { done: (staffCount ?? 0) > 1, label: 'Add staff accounts', to: '/settings/users' },
     { done: isInstalled(), label: 'Install the app on this device', to: '/settings/device' },
   ];
-  if (steps.every((s) => s.done)) return null;
+  if (finished || steps.every((s) => s.done)) return null;
   const hide = () => { writePref('firstRunDone', 'yes'); setHidden(true); };
 
   if (variant === 'scene') {

@@ -24,6 +24,12 @@ export function sundayFor(tz: string, now = new Date()): { today: string; sunday
   return { today, sunday: null, isSunday: false };
 }
 
+/** The most recent Sunday, today included. */
+export function lastSunday(tz: string, now = new Date()): string {
+  const today = localDateKey(now, tz);
+  return keyDaysAgo(today, zonedParts(now, tz).weekday % 7);
+}
+
 interface PipelineRow { personId: string; status: string; deletedAt?: unknown }
 
 /**
@@ -31,12 +37,14 @@ interface PipelineRow { personId: string; status: string; deletedAt?: unknown }
  * the live count and a big Check in; on Monday it shows yesterday's figures. Either day, one tap sends the summary
  * to the leaders on WhatsApp from the user's own phone (nothing is sent automatically).
  */
-export function SundayCard({ org }: { org: Organization }) {
+export function SundayCard({ org, onSundayPage = false }: { org: Organization; onSundayPage?: boolean }) {
   const { can } = useAuth();
   const { people } = usePeople();
   const tz = org.timeZone || 'Africa/Nairobi';
   const { sunday, isSunday } = sundayFor(tz);
-  const day = sunday ?? '';
+  // Mid-week the card shows last Sunday, so Today always has it (Andy, 2026-11-01, 4A).
+  const day = sunday ?? lastSunday(tz);
+  const yesterday = !!sunday && !isSunday;
   const seeNames = can('people.read') || can('attendance.write');
   const seeGiving = can('giving.person.read');
   const seePastoral = can('pastoral.read');
@@ -74,14 +82,15 @@ export function SundayCard({ org }: { org: Organization }) {
   return (
     <section className={`card sunday-card${isSunday ? ' sunday-live' : ''}`} aria-label="Sunday">
       <div className="sunday-head">
-        <h2>{isSunday ? "Today's service" : "Yesterday's service"}</h2>
+        <h2>{isSunday ? "Today's service" : yesterday ? "Yesterday's service" : `Last Sunday, ${formatDateKey(day)}`}</h2>
         {isSunday && <span className="sunday-dot">Live</span>}
       </div>
       <dl className="sunday-figs">
         {figures.map(([k, v]) => <div key={k}><dd>{v}</dd><dt>{k}</dt></div>)}
       </dl>
       <div className="sunday-actions">
-        {isSunday && (can('attendance.write') || can('people.read')) && <Link className="btn btn-primary" to="/attendance">Check in</Link>}
+        {!onSundayPage && (can('attendance.write') || can('people.read')) && <Link className={`btn${isSunday ? ' btn-primary' : ''}`} to="/attendance">{isSunday ? 'Check in' : 'Sunday page'}</Link>}
+        {!onSundayPage && can('people.write') && <Link className="btn" to="/visitors/new">Add visitor</Link>}
         <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Send to leaders on WhatsApp</a>
       </div>
     </section>
@@ -121,6 +130,36 @@ export function BirthdaysCard({ org }: { org: Organization }) {
           );
         })}
       </ul>
+    </section>
+  );
+}
+
+/** First-timers of the last 7 days, with Add visitor and the QR poster (Andy, 2026-11-01, 3A). */
+export function FirstTimersCard({ org }: { org: Organization }) {
+  const { can } = useAuth();
+  const { people } = usePeople();
+  if (!can('people.read') && !can('people.write')) return null;
+  const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
+  const from = keyDaysAgo(today, 7);
+  const found = people
+    .filter((p) => p.orgId === org.id && !p.deletedAt && p.firstVisitDate && p.firstVisitDate >= from)
+    .sort((a, b) => (b.firstVisitDate ?? '').localeCompare(a.firstVisitDate ?? '') || a.fullName.localeCompare(b.fullName));
+  return (
+    <section className="card first-timers-card" aria-label="First-timers">
+      <div className="card-head">
+        <h2>First-timers this week</h2>
+        {can('people.write') && <Link className="btn btn-primary btn-small" to="/visitors/new">Add visitor</Link>}
+      </div>
+      {found.length === 0 ? <p className="muted">No first-timers in the last 7 days yet.</p> : (
+        <ul className="plain first-timers">
+          {found.map((p) => (
+            <li key={p.id}>
+              <Link to={`/people/${p.orgId}/${p.id}`}><b>{p.fullName}</b> <span className="muted small">{formatDateKey(p.firstVisitDate!)}</span></Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {can('people.write') && <p className="muted small">Visitors can fill in their own card: <Link to="/visitors/qr">QR poster for the door</Link>.</p>}
     </section>
   );
 }

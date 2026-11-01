@@ -18,7 +18,7 @@ import { lookFor } from '../lib/look';
 import { AdiaIcon } from '../components/icons';
 import { AdiaToday } from './school/AdiaToday';
 import { MinistryToday } from './MinistryToday';
-import { SIGNATORY_ROLE_ID } from '../../functions/src/shared/permissions';
+import { FINANCE_ROLE_ID, SIGNATORY_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 
 /**
@@ -77,6 +77,10 @@ export function TodayPage() {
   if (profile?.roleId === SIGNATORY_ROLE_ID && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type)) {
     return <Navigate to={pettyCashBase(current.type)} replace />;
   }
+
+  // At Freedom Church an usher starts on Sunday and a finance person on Giving (Andy, 2026-11-01, 8A).
+  if (current?.type === 'church_campus' && profile?.roleId === USHER_ROLE_ID) return <Navigate to="/attendance" replace />;
+  if (current?.type === 'church_campus' && profile?.roleId === FINANCE_ROLE_ID) return <Navigate to="/giving" replace />;
 
   // ADIA's own Today, from Andy's design (2026-10-26).
   if (glass && current?.type === 'college' && can('people.read')) return <AdiaToday org={current} />;
@@ -185,7 +189,7 @@ function GivingLink() {
 }
 
 /** Last week's numbers from the latest weekly report, each opening the records behind it. */
-function HomeScorecard({ org }: { org: Organization }) {
+export function HomeScorecard({ org, inReports = false }: { org: Organization; inReports?: boolean }) {
   const { user, can } = useAuth();
   const { report, loading } = useLatestReport(org.id);
   const giving = useReportPart<GivingPart>(org.id, report?.id ?? '', 'giving', can('finance.reports'), report?.generatedAt?.toMillis());
@@ -195,9 +199,11 @@ function HomeScorecard({ org }: { org: Organization }) {
     <section className="stack">
       <div className="page-head">
         <h2>{report ? report.label : 'Scorecard'}</h2>
-        <span className="row-actions">
-          <Link to="/reports" className="btn btn-quiet">All reports</Link>
-        </span>
+        {!inReports && (
+          <span className="row-actions">
+            <Link to="/reports" className="btn btn-quiet">All reports</Link>
+          </span>
+        )}
       </div>
       {report ? <Scorecard report={report} giving={giving} base={`/reports/${org.id}/${report.id}`} /> : (
         <div className="card stack">

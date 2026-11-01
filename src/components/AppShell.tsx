@@ -15,7 +15,7 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { FINANCE_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
@@ -49,7 +49,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   useEffect(() => { setMoreOpen(false); }, [location.pathname]);
   // Freedom Church's menu has Giving and Follow-ups too (Andy, 2026-10-31, 5A), so its phones get "More" as well.
   const church = current?.type === 'church_campus';
-  const phoneMore = (adia || church) && full;
+  // Freedom Church has five buttons, Today, People, Sunday, Giving and More, so its phones need no pop-up (Andy, 2026-11-01, 1A).
+  const phoneMore = adia && full;
   // In ADIA the install reminder shows to the Director only (Andy 9A, 2026-10-30).
   const showInstall = !adia || isDirectorProfile(profile);
   const extra = phoneMore ? ' tab-extra' : '';
@@ -58,7 +59,50 @@ export function AppShell({ children }: { children: ReactNode }) {
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
   if (trainer && !new RegExp(`^/(school/exams|settings${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
-  const tabs = (
+  const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
+  const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
+  // Each person sees only their own work (Andy, 2026-11-01, 8A): an usher Sunday and People, finance Giving and Petty Cash.
+  const usher = profile?.roleId === USHER_ROLE_ID;
+  const finance = profile?.roleId === FINANCE_ROLE_ID;
+  const churchTabs = church && full ? (
+    <nav className="tabbar" aria-label="Main">
+      {!usher && !finance && (
+        <NavLink to="/" end className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+          Today
+        </NavLink>
+      )}
+      {!finance && can('people.read') && (
+        <NavLink to="/people" className={({ isActive }) => `tab${isActive || /^\/(programs|teams|groups)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 19a4 4 0 0 0-8 0M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6M21 19a3 3 0 0 0-4-2.8M17 11a2.5 2.5 0 1 0 0-5M3 19a3 3 0 0 1 4-2.8M7 11a2.5 2.5 0 1 1 0-5" /></svg>
+          People
+        </NavLink>
+      )}
+      {!finance && (can('attendance.write') || can('people.read')) && (
+        <NavLink to="/attendance" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
+          Sunday
+        </NavLink>
+      )}
+      {!usher && givingAllowed && (
+        <NavLink to="/giving" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v4H3zM5 13v8h14v-8M12 9v12M12 9c-1.5-3-6-3.5-6-1s4 1 6 1Zm0 0c1.5-3 6-3.5 6-1s-4 1-6 1Z" /></svg>
+          Giving
+        </NavLink>
+      )}
+      {finance && pettyAllowed && (
+        <NavLink to={pettyCashBase('church_campus')} className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
+          Petty Cash
+        </NavLink>
+      )}
+      <NavLink to="/more" className={({ isActive }) => `tab tab-dots${isActive || /^\/(reports|settings|help|follow-ups|dashboard)(\/|$)/.test(location.pathname) || (!finance && /^\/petty-cash(\/|$)/.test(location.pathname)) ? ' active' : ''}`}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+        More
+      </NavLink>
+    </nav>
+  ) : null;
+  const tabs = churchTabs ?? (
     <nav className={`tabbar${phoneMore ? ' has-more' : ''}${moreOpen ? ' more-open' : ''}`} aria-label="Main">
       {full && (<>
       <NavLink to="/" end className="tab">

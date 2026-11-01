@@ -130,7 +130,7 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
   return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'usher' | 'finance', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -154,7 +154,13 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   trainer: { name: 'Trainer', permissions: ['exams.mark'] },
   // Inventory only, for the departments ticked on their account (Andy, 2026-10-29, 2A).
   labtech: { name: 'Lab technician', permissions: [] },
+  // Freedom Church (Andy, 2026-11-01, 8A): an usher sees only Sunday and People; a finance person only Giving and Petty Cash.
+  usher: { name: 'Usher', permissions: ['people.read', 'people.write', 'attendance.write'] },
+  finance: { name: 'Finance', permissions: ['people.read', 'gifts.write', 'receipts.issue', 'giving.person.read', 'finance.reports'] },
 };
+
+export const USHER_ROLE_ID = 'usher';
+export const FINANCE_ROLE_ID = 'finance';
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {
   return Object.prototype.hasOwnProperty.call(DEFAULT_ROLES, id);

@@ -10,6 +10,7 @@ import { HopeAlerts } from '../components/HopeAlerts';
 import { AdiaIcon, type AdiaIconName } from '../components/icons';
 import { PoweredBy } from '../components/PoweredBy';
 import { BirthdaysCard, SundayCard, sundayFor } from './ChurchSunday';
+import { ReachCard } from './followups/FollowUpsPage';
 import type { Organization } from '../state/OrgContext';
 import type { ReactNode } from 'react';
 
@@ -36,6 +37,29 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
     { to: '/giving/new', icon: 'gift', label: 'Record Giving', sub: 'M-Pesa, cash or bank', show: can('gifts.write') },
     { to: '/follow-ups', icon: 'chat', label: 'Follow-ups', sub: counts.due === 0 ? 'Nobody due today' : `${counts.due} due today`, show: can('followups.manage') },
   ];
+
+  // Freedom Church's Today (Andy, 2026-11-01, 4A): a slim greeting, Getting started until it is done, then three
+  // cards: Sunday, People to reach and Birthdays. The figures moved to Reports (6A) and Follow-ups here (2A).
+  if (!hope) {
+    return (
+      <div className="page lav-today church-today">
+        <section className="card lav-hero lav-hero-slim">
+          <div className="lav-hero-text">
+            <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }).format(new Date())}</span>
+            <h1 className="lav-greet">{greet}</h1>
+            <p className="lav-org"><em>{org.name}</em></p>
+            <p><ChurchSummary orgId={org.id} due={due} /></p>
+          </div>
+          <div className="lav-scene lav-scene-slim"><SceneVideo name="church-scene" /></div>
+        </section>
+        <FirstRunChecklist />
+        <SundayCard org={org} />
+        <ReachCard org={org} />
+        <BirthdaysCard org={org} />
+        <PoweredBy />
+      </div>
+    );
+  }
 
   return (
     <div className="page lav-today">

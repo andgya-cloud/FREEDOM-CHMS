@@ -54,6 +54,13 @@ export function PeoplePage() {
       {topSearch && query && (
         <p className="muted small">Showing people matching “{query}”. <button type="button" className="link-button-inline" onClick={() => set('q', '')}>Show everyone</button></p>
       )}
+      {/* Programmes live under People at Freedom Church (Andy, 2026-11-01, 7A). */}
+      {current?.type === 'church_campus' && (
+        <Link className="card people-programs" to="/programs">
+          <b>Classes and programmes</b>
+          <span className="muted small">Growth Track, teams and small groups</span>
+        </Link>
+      )}
       {showStatus && (
         <label className="filter-select">
           <span className="visually-hidden">Show</span>

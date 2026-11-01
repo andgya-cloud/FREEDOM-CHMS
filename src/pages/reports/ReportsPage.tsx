@@ -6,6 +6,7 @@ import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
 import { OrgGate } from '../../components/OrgGate';
+import { HomeScorecard } from '../TodayPage';
 import { Bars } from '../../components/Scorecard';
 import { requestReport, useLatestReport, useReportRequest, useReports, useReportSettings, type StoredReport } from '../../state/useReports';
 import { localDateKey } from '../../../functions/src/shared/datetime';
@@ -58,6 +59,8 @@ function Archive({ org }: { org: Organization }) {
         </>
       ) : (
         <>
+          {/* The scorecard sits at the top of Reports, the one place for figures (Andy, 2026-11-01, 6A). */}
+          {tab === 'weekly' && <HomeScorecard org={org} inReports />}
           {tab === 'weekly' && <WeeklyDashboard org={org} />}
           {tab === 'weekly' && <CampusComparison />}
           <div className="narrow-block stack">

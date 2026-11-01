@@ -1811,3 +1811,34 @@ fieldset.field > legend { padding: 0; margin-bottom: 6px; }
 .past-results-table .mark-input.bad { border-color: #c0392b; }
 .past-results-table .badge { margin-left: 6px; }
 @media (max-width: 600px) { .past-grid .past-name { min-width: 120px; max-width: 140px; font-size: 0.85rem; } .filter-row.two { grid-template-columns: 1fr; } }
+
+/* Simpler Freedom Church (Andy, 2026-11-01, all A) */
+.tab-dots svg { fill: currentColor; stroke: none; }
+.lite-look .card.lav-hero.lav-hero-slim { grid-template-columns: 1fr 220px; padding: 22px 26px; align-items: center; }
+.lav-hero-slim h1 { margin: 10px 0 6px; font-size: clamp(1.4rem, 2.6vw, 1.9rem); }
+.lav-scene.lav-scene-slim { min-height: 0; height: 140px; border-radius: 16px; }
+@media (max-width: 700px) {
+  .lite-look .card.lav-hero.lav-hero-slim { grid-template-columns: 1fr; padding: 18px; }
+  .lav-scene.lav-scene-slim { display: none; }
+}
+.church-today > .card, .church-today > section { margin-bottom: 16px; }
+.reach-card .card-head, .first-timers-card .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.reach-card .card-head h2, .first-timers-card .card-head h2 { margin: 0; }
+.reach-card .follow-up { box-shadow: none; }
+details.fold > summary { cursor: pointer; font-weight: 600; padding: 4px 0; list-style: none; display: flex; align-items: center; gap: 8px; }
+details.fold > summary::-webkit-details-marker { display: none; }
+details.fold > summary::before { content: '›'; display: inline-block; transition: transform 0.2s; font-size: 1.2em; line-height: 1; }
+details.fold[open] > summary::before { transform: rotate(90deg); }
+details.fold[open] > summary { margin-bottom: 10px; }
+.sunday-page > section, .sunday-page > details { margin-bottom: 16px; }
+.fold-body { padding-top: 4px; }
+.giving-record { font-size: 1.1rem; padding: 16px; margin-bottom: 14px; }
+.giving-month { display: flex; flex-direction: column; gap: 2px; margin-bottom: 14px; }
+.giving-month b { font-size: 1.8rem; letter-spacing: -0.02em; }
+.giving-queue { display: block; margin-bottom: 14px; text-decoration: none; color: inherit; }
+.giving-more { margin-bottom: 18px; }
+.people-programs { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; margin-bottom: 12px; text-decoration: none; color: inherit; }
+.settings-signout { margin-top: 24px; display: flex; flex-direction: column; gap: 8px; }
+.reach-card .card-head select { width: auto; min-width: 170px; margin: 0; }
+.first-timers { display: flex; flex-direction: column; gap: 8px; margin: 0 0 10px; }
+.first-timers a { text-decoration: none; }
