@@ -15,7 +15,9 @@ export interface NewPersonInput {
   firstVisitDate?: string | null;
   gender?: string | null;
   birthday?: string | null;
+  birthYear?: number | null;
   householdId?: string | null;
+  familyRole?: 'parent' | 'spouse' | 'child' | null;
   guardianId?: string | null;
   howHeard?: string | null;
   invitedBy?: string | null;

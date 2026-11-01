@@ -18,6 +18,7 @@ import { FollowUpsForPerson } from '../../components/FollowUpsForPerson';
 import { AttendanceForPerson } from '../../components/AttendanceForPerson';
 import { InvolvementForPerson } from '../../components/InvolvementForPerson';
 import { GivingForPerson } from '../../components/GivingForPerson';
+import { FamilyBox } from '../../components/FamilyBox';
 import { PERSON_STATUS_LABELS, birthdayLabel } from '../../../functions/src/shared/people';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
@@ -147,7 +148,7 @@ export function PersonPage() {
         )}
       </section>
 
-      {(household.length > 0 || children.length > 0) && (
+      {org?.type === 'church_campus' ? <FamilyBox person={person} /> : (household.length > 0 || children.length > 0) && (
         <section className="card">
           <h2>Family</h2>
           <ul className="plain">

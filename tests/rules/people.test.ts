@@ -30,6 +30,16 @@ describe('people', () => {
     await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/b4'), { ...person('fcn', { birthday: '13-01' }), ...created('admin') }));
   });
 
+  it('accepts a family role, birth year and family names (Andy, 2026-11-01)', async () => {
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/f1'), { ...person('fcn', { householdId: 'f1', familyRole: 'parent', birthYear: 1985 }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/f2'), { ...person('fcn', { familyRole: 'uncle' }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/f3'), { ...person('fcn', { birthYear: '1985' }), ...created('admin') }));
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/households/f1'), { orgId: 'fcn', kind: 'family', name: 'Andrew and Doreen Guya', ...created('admin') }));
+    await assertSucceeds(getDoc(doc(as('admin'), 'organizations/fcn/households/f1')));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/households/f9'), { orgId: 'fcn', kind: 'other', name: null, ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/adia/households/f1'), { orgId: 'adia', kind: 'family', name: 'X', ...created('admin') }));
+  });
+
   it('keeps each organization’s people apart', async () => {
     await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/people')));
     await assertFails(getDocs(collection(as('admin'), 'organizations/adia/people')));

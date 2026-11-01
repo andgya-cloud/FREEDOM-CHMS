@@ -5,6 +5,9 @@ import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { lookFor } from '../../lib/look';
 import { PersonRow } from '../../components/PersonRow';
+import { FamilyCard, FamilySuggestions } from '../../components/FamilyCard';
+import { useHouseholds } from '../../state/useFamilies';
+import { familyGroups, familyName, familySuggestions, groupedList } from '../../../functions/src/shared/families';
 import { matchesSearch, PERSON_STATUS_LABELS, statusesFor, type PersonStatus } from '../../../functions/src/shared/people';
 
 const PAGE = 100;
@@ -26,6 +29,18 @@ export function PeoplePage() {
     () => people.filter((p) => (!status || p.status === status) && matchesSearch(p, query)),
     [people, query, status],
   );
+
+  // Families sit together in one card (Andy, 2026-11-01, 1A-7A); a search or filter lists the matching people.
+  const church = current?.type === 'church_campus';
+  const households = useHouseholds(church ? current?.id ?? '' : '');
+  const grouped = church && !query && !status;
+  const items = useMemo(() => (grouped ? groupedList(results) : []), [grouped, results]);
+  const families = useMemo(() => (church ? familyGroups(people) : new Map()), [church, people]);
+  const suggestions = useMemo(() => (church ? familySuggestions(people, households.dismissed) : []), [church, people, households.dismissed]);
+  const familyOf = (householdId?: string | null) => {
+    const members = householdId ? families.get(householdId) : undefined;
+    return members ? familyName(members, households.names.get(householdId!)) : null;
+  };
 
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
@@ -70,13 +85,22 @@ export function PeoplePage() {
           </select>
         </label>
       )}
-      <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}`}</p>
-      {results.length > 0 && (
+      {church && current && <FamilySuggestions orgId={current.id} suggestions={suggestions} existing={households.existing} />}
+      <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}${grouped && families.size ? ` in ${items.length} ${items.length === 1 ? 'row' : 'rows'}` : ''}`}</p>
+      {grouped && items.length > 0 && (
         <ul className="row-list">
-          {results.slice(0, limit).map((p) => <PersonRow key={`${p.orgId}/${p.id}`} person={p} />)}
+          {items.slice(0, limit).map((i) => (i.kind === 'family'
+            ? <FamilyCard key={i.id} members={i.members} name={households.names.get(i.id)} />
+            : <PersonRow key={`${i.person.orgId}/${i.person.id}`} person={i.person} />))}
         </ul>
       )}
-      {results.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show more</button>}
+      {grouped && items.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show more</button>}
+      {!grouped && results.length > 0 && (
+        <ul className="row-list">
+          {results.slice(0, limit).map((p) => <PersonRow key={`${p.orgId}/${p.id}`} person={p} family={familyOf(p.householdId)} />)}
+        </ul>
+      )}
+      {!grouped && results.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show more</button>}
       {!loading && results.length === 0 && query && (
         <div className="notice">
           <p>Nobody matches “{query}”.</p>

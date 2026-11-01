@@ -12,6 +12,7 @@ import { attended, type CheckInMethod } from '../../functions/src/shared/attenda
 import { formatTime, localDateKey } from '../../functions/src/shared/datetime';
 import { matchesSearch, PERSON_STATUS_LABELS, tidyName } from '../../functions/src/shared/people';
 import { formatPhone, normalizePhone } from '../../functions/src/shared/phone';
+import { familyGroups } from '../../functions/src/shared/families';
 
 interface Props {
   org: Organization;
@@ -42,6 +43,20 @@ export function CheckInPanel({ org, event, byPerson, canRecord }: Props) {
     toast.show(`${person.fullName} checked in.`, {
       label: 'Undo',
       onAction: () => { undoAttendance(org.id, event.id, person.id).catch((err) => toast.show(friendlyError(err))); },
+    });
+    setQuery('');
+    searchRef.current?.focus();
+  }
+
+  // "Check in the whole family" in one tap (Andy, 2026-11-01, 6A).
+  const families = useMemo(() => (org.type === 'church_campus' ? familyGroups(people.filter((p) => p.orgId === org.id)) : new Map<string, Person[]>()), [people, org.id, org.type]);
+  const isCheckedIn = (id: string) => { const m = byPerson.get(id); return !!m && !m.deletedAt && attended(m.status); };
+  function checkInFamily(members: Person[]) {
+    const todo = members.filter((m) => !isCheckedIn(m.id));
+    for (const m of todo) markAttendance(org.id, event, m.id, 'present', 'staff', byPerson.get(m.id)).catch((err) => toast.show(friendlyError(err)));
+    toast.show(`${todo.length} from the family checked in.`, {
+      label: 'Undo',
+      onAction: () => { for (const m of todo) undoAttendance(org.id, event.id, m.id).catch((err) => toast.show(friendlyError(err))); },
     });
     setQuery('');
     searchRef.current?.focus();
@@ -81,9 +96,18 @@ export function CheckInPanel({ org, event, byPerson, canRecord }: Props) {
                       <span className="row-title">{p.fullName}<span className={`badge badge-${p.status}`}>{PERSON_STATUS_LABELS[p.status]}</span></span>
                       <span className="row-detail">{formatPhone(p.phone) || 'No phone'}</span>
                     </span>
-                    {isIn
-                      ? <span className="checked-in" aria-label={`${p.fullName} is checked in`}>✓ In</span>
-                      : <button type="button" className="btn btn-primary" onClick={() => checkIn(p)}>Check in</button>}
+                    <span className="checkin-actions">
+                      {isIn
+                        ? <span className="checked-in" aria-label={`${p.fullName} is checked in`}>✓ In</span>
+                        : <button type="button" className="btn btn-primary" onClick={() => checkIn(p)}>Check in</button>}
+                      {(() => {
+                        const fam = p.householdId ? families.get(p.householdId) : undefined;
+                        const left = fam ? fam.filter((m) => !isCheckedIn(m.id)).length : 0;
+                        return fam && left > 0 && (left > 1 || isCheckedIn(p.id))
+                          ? <button type="button" className="btn" onClick={() => checkInFamily(fam)}>Whole family ({left})</button>
+                          : null;
+                      })()}
+                    </span>
                   </li>
                 );
               })}

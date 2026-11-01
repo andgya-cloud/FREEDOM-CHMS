@@ -26,6 +26,7 @@ interface FormState {
   firstVisitDate: string;
   gender: string;
   birthday: string;
+  birthYear: string;
   household: { id: string | null; name: string };
   guardian: { id: string | null; name: string };
   howHeard: string;
@@ -47,6 +48,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
     firstVisitDate: p.firstVisitDate ?? '',
     gender: p.gender ?? '',
     birthday: p.birthday ?? '',
+    birthYear: p.birthYear ? String(p.birthYear) : '',
     household: { id: householdPeer?.id ?? null, name: householdPeer?.fullName ?? '' },
     guardian: { id: p.guardianId ?? null, name: p.guardianId ? byId(p.guardianId)?.fullName ?? '' : '' },
     howHeard: p.howHeard ?? '',
@@ -58,7 +60,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
 
 const EMPTY: FormState = {
   fullName: '', phone: '', sameWhatsApp: true, whatsapp: '', consent: false, email: '', status: 'regular',
-  firstVisitDate: '', gender: '', birthday: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
+  firstVisitDate: '', gender: '', birthday: '', birthYear: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
   howHeard: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
 };
 
@@ -117,15 +119,8 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
     setErrors(problems);
     if (problems.length) return;
 
-    // Household: join the picked person's household, starting one if they have none.
-    let householdId: string | null = existing?.householdId ?? null;
-    const peer = form.household.id ? byId(form.household.id) : undefined;
-    if (peer) {
-      householdId = peer.householdId ?? peer.id;
-      if (!peer.householdId) updatePerson(peer.orgId, peer.id, { householdId }).catch((err) => toast.show(friendlyError(err)));
-    } else if (!form.household.name.trim()) {
-      householdId = existing?.householdId === existing?.id ? existing?.householdId ?? null : null;
-    }
+    // Families are set in the Family box on the person's page (Andy, 2026-11-01, 3A); editing keeps the family.
+    const householdId: string | null = existing?.householdId ?? null;
 
     const prevConsent = existing?.whatsappConsent;
     const consentChanged = !prevConsent || prevConsent.given !== form.consent;
@@ -141,6 +136,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
       firstVisitDate: form.firstVisitDate || null,
       gender: form.gender || null,
       birthday: form.birthday || null,
+      birthYear: form.birthYear ? Number(form.birthYear) : null,
       householdId,
       guardianId: form.guardian.id,
       howHeard: form.howHeard || null,
@@ -256,8 +252,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
                 </select>
               </label>
             </div>
-            <BirthdayField value={form.birthday} onChange={(v) => set('birthday', v)} />
-            <PersonPicker label="Same household as" value={form.household} onChange={(v) => set('household', v)} excludeId={personId} hint="Pick a family member already in the system." />
+            <BirthdayField value={form.birthday} onChange={(v) => set('birthday', v)} year={form.birthYear} onYear={(v) => set('birthYear', v)} />
             <label className="field">
               <span>How they heard about us</span>
               <select value={form.howHeard} onChange={(e) => set('howHeard', e.target.value)}>
@@ -334,7 +329,7 @@ function CustomFieldInput({ field, value, onChange }: { field: CustomField; valu
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** Day and month only: many people would rather not give the year (Andy, 2026-10-31, 2A). Saved as "MM-DD". */
-function BirthdayField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function BirthdayField({ value, onChange, year, onYear }: { value: string; onChange: (v: string) => void; year: string; onYear: (v: string) => void }) {
   const [m, d] = value ? value.split('-') : ['', ''];
   const [month, setMonth] = useState(m);
   const [day, setDay] = useState(d);
@@ -354,6 +349,11 @@ function BirthdayField({ value, onChange }: { value: string; onChange: (v: strin
         <select aria-label="Birthday month" value={month} onChange={(e) => pick(e.target.value, day)}>
           <option value="">Month</option>
           {MONTHS.map((name, i) => <option key={name} value={String(i + 1).padStart(2, '0')}>{name}</option>)}
+        </select>
+        {/* The year is optional; it puts a family's children oldest to youngest (Andy, 2026-11-01, 2A). */}
+        <select aria-label="Birth year" value={year} onChange={(e) => onYear(e.target.value)}>
+          <option value="">Year</option>
+          {Array.from({ length: 100 }, (_, i) => String(new Date().getFullYear() - i)).map((y) => <option key={y} value={y}>{y}</option>)}
         </select>
       </div>
     </fieldset>

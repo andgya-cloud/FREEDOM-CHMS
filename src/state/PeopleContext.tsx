@@ -29,7 +29,10 @@ export interface Person {
   gender?: string | null;
   /** "MM-DD", no year. */
   birthday?: string | null;
+  /** Optional; orders a family's children (Andy, 2026-11-01). */
+  birthYear?: number | null;
   householdId?: string | null;
+  familyRole?: 'parent' | 'spouse' | 'child' | null;
   guardianId?: string | null;
   howHeard?: string | null;
   invitedBy?: string | null;

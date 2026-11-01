@@ -163,7 +163,7 @@ service cloud.firestore {
     function validPerson() {
       let d = request.resource.data;
       return d.keys().hasOnly(['orgId', 'fullName', 'firstName', 'phone', 'whatsapp', 'whatsappConsent',
-               'email', 'status', 'firstVisitDate', 'gender', 'birthday', 'householdId', 'guardianId', 'howHeard',
+               'email', 'status', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard',
                'invitedBy', 'invitedById', 'serviceAttended', 'customFields', 'possibleDuplicateIds',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.fullName is string && d.fullName.size() >= 1 && d.fullName.size() <= 120
@@ -173,6 +173,9 @@ service cloud.firestore {
         && d.whatsappConsent is map
         && (!('birthday' in d) || d.birthday == null
             || (d.birthday is string && d.birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
+        && (!('birthYear' in d) || d.birthYear == null || (d.birthYear is int && d.birthYear >= 1900 && d.birthYear <= 2100))
+        && (!('householdId' in d) || d.householdId == null || (d.householdId is string && d.householdId.size() <= 60))
+        && (!('familyRole' in d) || d.familyRole == null || d.familyRole in ['parent', 'spouse', 'child'])
         && (!('customFields' in d) || d.customFields is map);
     }
 
@@ -517,6 +520,16 @@ service cloud.firestore {
 
       // Pledges: what someone promised to a fund, and by when (Andy, 2026-10-31, 8A). Like each person's giving,
       // only those who may see individual giving read or change them.
+      // A family's own name, and family suggestions answered "No" (Andy, 2026-11-01, 4A 5A).
+      match /households/{householdId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create, update: if orgWrite(orgId, 'people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'kind', 'name', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.kind in ['family', 'notFamily']
+          && (request.resource.data.name == null || (request.resource.data.name is string && request.resource.data.name.size() <= 100));
+        allow delete: if false;
+      }
+
       match /pledges/{pledgeId} {
         allow read: if canAccessOrg(orgId) && has('giving.person.read');
         allow create, update: if orgWrite(orgId, 'giving.person.read')
