@@ -1,4 +1,5 @@
 import { collection, query, where } from 'firebase/firestore';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { db } from '../firebase';
 import { useAuth } from '../state/AuthContext';
@@ -6,6 +7,8 @@ import { usePeople, type Person } from '../state/PeopleContext';
 import { useDayAttendance, useEvents } from '../state/useAttendance';
 import { useGiftsBetween } from '../state/useGiving';
 import { useLiveQuery } from '../lib/useQuery';
+import { markCardSent, useCardDesign, useCardFiles, useCardsSent } from '../lib/birthdayCard';
+import { cardGreeting, cardId } from '../../functions/src/shared/birthdayCard';
 import type { Organization } from '../state/OrgContext';
 import { attended, headcountTotal } from '../../functions/src/shared/attendance';
 import { formatMoney } from '../../functions/src/shared/giving';
@@ -100,39 +103,79 @@ export function SundayCard({ org, onSundayPage = false }: { org: Organization; o
   );
 }
 
-/** Birthdays this week with a greeting the user sends from their own WhatsApp (Andy, 2026-10-31, 2A). */
+/**
+ * Birthdays this week (Andy, 2026-10-31, 2A). From 2026-11-01 (1A-7A) each person gets the church's birthday card
+ * with "Dear Mary," on it: "Send card" shares it to WhatsApp from the user's own phone (a child's goes to the parent),
+ * the 7 a.m. job emails it, and "Card sent ✓" shows who sent it so nobody sends it twice.
+ */
 export function BirthdaysCard({ org }: { org: Organization }) {
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { people, byId } = usePeople();
-  if (!can('people.read')) return null;
+  const allowed = can('people.read');
   const tz = org.timeZone || 'Africa/Nairobi';
   const today = localDateKey(new Date(), tz);
-  const found = upcomingBirthdays(people.filter((p) => p.orgId === org.id && p.status !== 'inactive'), today);
+  const found = allowed ? upcomingBirthdays(people.filter((p) => p.orgId === org.id && p.status !== 'inactive' && !p.deletedAt), today) : [];
+  const { design } = useCardDesign(allowed ? org.id : '');
+  const sent = useCardsSent(org.id, allowed && found.length > 0);
+  const firstOf = (p: Person) => p.firstName || p.fullName.split(' ')[0] || p.fullName;
+  const files = useCardFiles(design, found.map(({ person: p }) => ({ id: p.id, greeting: cardGreeting(firstOf(p)), firstName: firstOf(p) })));
+  const [problem, setProblem] = useState('');
   if (!found.length) return null;
 
   const when = (n: number, p: Person) => (n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : birthdayLabel(p.birthday!));
+  const yearOf = (n: number) => Number(keyDaysAgo(today, -n).slice(0, 4));
   const phoneFor = (p: Person) => {
     const to = p.status === 'child' && p.guardianId ? byId(p.guardianId) ?? p : p;
     return to.whatsappConsent?.stoppedAt ? null : (to.whatsapp || null);
   };
-  const greeting = (p: Person) => p.status === 'child'
-    ? `Happy birthday to ${p.firstName}! The ${org.name} family is celebrating with you today. God bless!`
-    : `Happy birthday, ${p.firstName}! The ${org.name} family is celebrating you today. May God bless you richly this new year.`;
+
+  const send = async (p: Person, year: number, already: boolean) => {
+    setProblem('');
+    const file = files.get(p.id);
+    if (!file) return;
+    const wa = phoneFor(p);
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        // On a computer: save the card and open their WhatsApp chat, to attach it there.
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        if (wa) window.open(`https://wa.me/${wa.replace(/\D/g, '')}`, '_blank', 'noopener');
+      }
+      await markCardSent(org.id, p.id, year, profile?.displayName || 'Staff', already);
+    } catch (err) {
+      if ((err as { name?: string })?.name !== 'AbortError') setProblem('The card could not be shared. Please try again.');
+    }
+  };
 
   return (
     <section className="card birthdays-card" aria-label="Birthdays this week">
       <h2>Birthdays this week</h2>
       <ul className="row-list">
         {found.map(({ person: p, daysAway }) => {
-          const wa = phoneFor(p);
+          const year = yearOf(daysAway);
+          const record = sent.get(cardId(p.id, year));
+          const marks = [record?.whatsappByName && `WhatsApp by ${record.whatsappByName.split(' ')[0]}`, record?.emailAt && 'Emailed'].filter(Boolean);
           return (
             <li key={p.id} className="birthday-row">
-              <Link to={`/people/${p.orgId}/${p.id}`}><b>{p.fullName}</b> <span className="muted small">{when(daysAway, p)}</span></Link>
-              {wa && <a className="btn btn-small" href={`https://wa.me/${wa.replace(/\D/g, '')}?text=${encodeURIComponent(greeting(p))}`} target="_blank" rel="noopener noreferrer">WhatsApp greeting</a>}
+              <Link to={`/people/${p.orgId}/${p.id}`}><b>{p.fullName}</b> <span className="muted small">{when(daysAway, p)}{p.status === 'child' ? ' · to the parent' : ''}</span></Link>
+              <span className="birthday-actions">
+                {marks.length > 0 && <span className="card-sent small">Card sent ✓ <span className="muted">{marks.join(' · ')}</span></span>}
+                <button type="button" className={`btn btn-small${marks.length ? '' : ' btn-primary'}`} disabled={!files.has(p.id)} onClick={() => void send(p, year, !!record)}>
+                  {marks.length ? 'Send again' : 'Send card'}
+                </button>
+              </span>
             </li>
           );
         })}
       </ul>
+      {problem && <p className="error small">{problem}</p>}
+      <p className="muted small">Cards also go by email at 7am on the day to anyone with an email address.</p>
     </section>
   );
 }

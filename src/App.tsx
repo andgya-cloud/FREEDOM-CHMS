@@ -43,6 +43,7 @@ const UnassignedPage = lazy(() => import('./pages/giving/UnassignedPage').then((
 const ImportPage = lazy(() => import('./pages/giving/ImportPage').then((m) => ({ default: m.ImportPage })));
 const GivingSummaryPage = lazy(() => import('./pages/giving/GivingSummaryPage').then((m) => ({ default: m.GivingSummaryPage })));
 const StatementsPage = lazy(() => import('./pages/giving/StatementsPage').then((m) => ({ default: m.StatementsPage })));
+const BirthdayCardPage = lazy(() => import('./pages/settings/BirthdayCardPage').then((m) => ({ default: m.BirthdayCardPage })));
 const FundsPage = lazy(() => import('./pages/settings/FundsPage').then((m) => ({ default: m.FundsPage })));
 const WhatsAppSettingsPage = lazy(() => import('./pages/settings/WhatsAppSettingsPage').then((m) => ({ default: m.WhatsAppSettingsPage })));
 const TemplatesPage = lazy(() => import('./pages/settings/TemplatesPage').then((m) => ({ default: m.TemplatesPage })));
@@ -232,6 +233,7 @@ function AppRoutes() {
         <Route path="/settings/signing-pin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><SigningPinPage /></RequirePermission>} />
         <Route path="/settings/pipeline" element={<RequirePermission permission="settings.manage"><PipelineSettingsPage /></RequirePermission>} />
         <Route path="/settings/custom-fields" element={<RequirePermission permission="settings.manage"><CustomFieldsPage /></RequirePermission>} />
+        <Route path="/settings/birthday-card" element={<RequirePermission permission="settings.manage"><BirthdayCardPage /></RequirePermission>} />
         <Route path="/settings/funds" element={<RequirePermission permission="settings.manage"><FundsPage /></RequirePermission>} />
         <Route path="/settings/reports" element={<RequirePermission permission="settings.manage"><ReportSettingsPage /></RequirePermission>} />
         <Route path="/settings/whatsapp" element={<RequirePermission permission="settings.manage"><WhatsAppSettingsPage /></RequirePermission>} />

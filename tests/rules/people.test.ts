@@ -42,6 +42,23 @@ describe('people', () => {
     await assertFails(setDoc(doc(as('admin'), 'organizations/adia/households/f1'), { orgId: 'adia', kind: 'family', name: 'X', ...created('admin') }));
   });
 
+  it('keeps the birthday card design and who sent each card (Andy, 2026-11-01)', async () => {
+    const design = { orgId: 'fcn', image: 'data:image/jpeg;base64,AAAA', x: 0.5, y: 0.3, color: '#1d3b27' };
+    await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/fcn/cards/birthday'), { ...design, ...created('pastor') }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/cards/other'), { ...design, ...created('pastor') }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/cards/birthday'), { ...design, image: 'data:image/png;base64,AA', ...created('pastor') }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/cards/birthday'), { ...design, x: 2, ...created('pastor') }));
+    await assertSucceeds(getDoc(doc(as('admin'), 'organizations/fcn/cards/birthday')));
+    const mark = { whatsappAt: serverTimestamp(), whatsappBy: 'admin', whatsappByName: 'Admin' };
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p1_2026'), { orgId: 'fcn', personId: 'p1', year: 2026, ...mark }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p1_2027'), { orgId: 'fcn', personId: 'p1', year: 2026, ...mark }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p2_2026'), { orgId: 'fcn', personId: 'p2', year: 2026, ...mark, emailAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p3_2026'), { orgId: 'fcn', personId: 'p3', year: 2026, ...mark, whatsappBy: 'pastor' }));
+    await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/fcn/birthdayCards/p1_2026'), { ...mark, whatsappBy: 'pastor' }, { merge: true }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/birthdayCards/p1_2026'), { year: 2030 }, { merge: true }));
+    await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/birthdayCards')));
+  });
+
   it('keeps each organization’s people apart', async () => {
     await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/people')));
     await assertFails(getDocs(collection(as('admin'), 'organizations/adia/people')));

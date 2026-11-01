@@ -8,6 +8,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { churchOnly: true, to: '/settings/group/people', label: 'People', detail: 'Journey stages and your own extra fields', permission: 'settings.manage' },
   { collegeOnly: true, to: '/school/courses', label: 'Departments', detail: 'ADIA departments and their cohorts', permission: 'settings.manage', orPermission: 'school.manage' },
   { collegeOnly: true, to: '/school/settings', label: 'School settings', detail: 'ADIA grading scale, pass mark, attendance alert and director', permission: 'settings.manage' },
+  { churchOnly: true, to: '/settings/birthday-card', label: 'Birthday card', detail: 'The card sent on birthdays, and where the name goes', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/group/whatsapp', label: 'WhatsApp', detail: 'The words of each message, and which ones send themselves', permission: 'settings.manage' },
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', keepersOnly: true },
   { advanced: true, to: '/settings/cleanup', label: 'Clean-up', detail: 'Remove test data and clutter; Recycle Bin and Forever', keepersOnly: true },

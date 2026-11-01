@@ -1863,3 +1863,10 @@ details.fold[open] > summary { margin-bottom: 10px; }
 .family-role-select { width: auto; padding: 6px 10px; }
 .family-add { margin-top: 8px; }
 .checkin-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+
+/* Birthday card (Andy, 2026-11-01) */
+.birthday-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.card-sent { color: var(--success, #1f7a3d); font-weight: 600; }
+.birthday-card-edit { display: grid; gap: 12px; }
+.birthday-card-preview { width: 100%; max-width: 420px; height: auto; margin: 0 auto; display: block; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,.12); cursor: crosshair; }
+.birthday-card-edit .button-row { display: flex; gap: 8px; flex-wrap: wrap; }

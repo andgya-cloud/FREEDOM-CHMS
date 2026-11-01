@@ -532,6 +532,37 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // The birthday card picture and where the name goes (Andy, 2026-11-01, 7A). The picture is a small JPEG data URL.
+      match /cards/{kind} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create, update: if kind == 'birthday' && orgWrite(orgId, 'settings.manage')
+          && request.resource.data.keys().hasOnly(['orgId', 'image', 'x', 'y', 'color', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (request.resource.data.image == null
+              || (request.resource.data.image is string && request.resource.data.image.size() <= 900000 && request.resource.data.image.matches('^data:image/jpeg;base64,.*')))
+          && request.resource.data.x is number && request.resource.data.x >= 0 && request.resource.data.x <= 1
+          && request.resource.data.y is number && request.resource.data.y >= 0 && request.resource.data.y <= 1
+          && request.resource.data.color is string && request.resource.data.color.matches('^#[0-9a-fA-F]{6}$');
+        allow delete: if false;
+      }
+
+      // One record per person per year saying the birthday card went, so it is not sent twice (Andy, 2026-11-01, 6A).
+      // Staff mark the WhatsApp card; the 7 a.m. job marks the email (the Admin SDK ignores these rules).
+      match /birthdayCards/{cardId} {
+        allow read: if canAccessOrg(orgId) && has('people.read');
+        allow create: if canAccessOrg(orgId) && has('people.read')
+          && request.resource.data.keys().hasOnly(['orgId', 'personId', 'year', 'whatsappAt', 'whatsappBy', 'whatsappByName'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.personId is string && cardId == request.resource.data.personId + '_' + string(request.resource.data.year)
+          && request.resource.data.year is int
+          && request.resource.data.whatsappAt == request.time && request.resource.data.whatsappBy == request.auth.uid
+          && request.resource.data.whatsappByName is string && request.resource.data.whatsappByName.size() <= 120;
+        allow update: if canAccessOrg(orgId) && has('people.read')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['whatsappAt', 'whatsappBy', 'whatsappByName'])
+          && request.resource.data.whatsappAt == request.time && request.resource.data.whatsappBy == request.auth.uid
+          && request.resource.data.whatsappByName is string && request.resource.data.whatsappByName.size() <= 120;
+        allow delete: if false;
+      }
+
       match /pledges/{pledgeId} {
         allow read: if canAccessOrg(orgId) && has('giving.person.read');
         allow create, update: if orgWrite(orgId, 'giving.person.read')
