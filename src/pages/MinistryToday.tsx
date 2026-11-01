@@ -9,7 +9,7 @@ import { FirstRunChecklist } from '../components/FirstRunChecklist';
 import { HopeAlerts } from '../components/HopeAlerts';
 import { AdiaIcon, type AdiaIconName } from '../components/icons';
 import { PoweredBy } from '../components/PoweredBy';
-import { BirthdaysCard, SundayCard, sundayFor } from './ChurchSunday';
+import { AnniversariesCard, BirthdaysCard, SundayCard, sundayFor } from './ChurchSunday';
 import { ReachCard } from './followups/FollowUpsPage';
 import type { Organization } from '../state/OrgContext';
 import type { ReactNode } from 'react';
@@ -56,6 +56,7 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
         <SundayCard org={org} />
         <ReachCard org={org} />
         <BirthdaysCard org={org} />
+        <AnniversariesCard org={org} />
         <PoweredBy />
       </div>
     );

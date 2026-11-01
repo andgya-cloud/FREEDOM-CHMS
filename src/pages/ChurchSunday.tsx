@@ -10,6 +10,9 @@ import type { Organization } from '../state/OrgContext';
 import { attended, headcountTotal } from '../../functions/src/shared/attendance';
 import { formatMoney } from '../../functions/src/shared/giving';
 import { birthdayLabel, upcomingBirthdays } from '../../functions/src/shared/people';
+import { coupleNames, familyGroups, familyName, ordinal, yearsMarried } from '../../functions/src/shared/families';
+import { useHouseholds } from '../state/useFamilies';
+import { familyWhatsApp } from '../components/FamilyCard';
 import { formatDateKey, localDateKey, zonedParts } from '../../functions/src/shared/datetime';
 
 const DAY = 86_400_000;
@@ -160,6 +163,40 @@ export function FirstTimersCard({ org }: { org: Organization }) {
         </ul>
       )}
       {can('people.write') && <p className="muted small">Visitors can fill in their own card: <Link to="/visitors/qr">QR poster for the door</Link>.</p>}
+    </section>
+  );
+}
+
+/** Wedding anniversaries this week, greeted from the user's own WhatsApp (Andy, 2026-11-01, A). */
+export function AnniversariesCard({ org }: { org: Organization }) {
+  const { can } = useAuth();
+  const { people } = usePeople();
+  const households = useHouseholds(org.id);
+  if (!can('people.read') || households.weddings.size === 0) return null;
+  const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
+  const families = familyGroups(people.filter((p) => p.orgId === org.id && p.status !== 'inactive'));
+  const rows = [...households.weddings].filter(([hid]) => families.has(hid)).map(([hid, date]) => ({ hid, date, birthday: date.slice(5) }));
+  const found = upcomingBirthdays(rows, today);
+  if (!found.length) return null;
+  return (
+    <section className="card birthdays-card" aria-label="Wedding anniversaries this week">
+      <h2>Anniversaries this week</h2>
+      <ul className="row-list">
+        {found.map(({ person: r, daysAway }) => {
+          const members = families.get(r.hid)!;
+          const couple = coupleNames(members);
+          const years = yearsMarried(r.date, today);
+          const wa = familyWhatsApp(members);
+          const text = `Happy wedding anniversary, ${couple}!${years ? ` ${years} years together.` : ''} The ${org.name} family celebrates with you and thanks God for your marriage. May He keep blessing your home.`;
+          const anchor = members[0]!;
+          return (
+            <li key={r.hid} className="birthday-row">
+              <Link to={`/people/${anchor.orgId}/${anchor.id}`}><b>{couple || familyName(members, households.names.get(r.hid))}</b> <span className="muted small">{daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : birthdayLabel(r.birthday)}{years ? ` · ${ordinal(years)} anniversary` : ''}</span></Link>
+              {wa && <a className="btn btn-small" href={`https://wa.me/${wa.whatsapp!.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">WhatsApp greeting</a>}
+            </li>
+          );
+        })}
+      </ul>
     </section>
   );
 }

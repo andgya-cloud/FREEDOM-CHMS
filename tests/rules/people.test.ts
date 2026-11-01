@@ -36,6 +36,8 @@ describe('people', () => {
     await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/f3'), { ...person('fcn', { birthYear: '1985' }), ...created('admin') }));
     await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/households/f1'), { orgId: 'fcn', kind: 'family', name: 'Andrew and Doreen Guya', ...created('admin') }));
     await assertSucceeds(getDoc(doc(as('admin'), 'organizations/fcn/households/f1')));
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/households/f2'), { orgId: 'fcn', kind: 'family', name: null, weddingDate: '2001-11-03', ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/households/f3'), { orgId: 'fcn', kind: 'family', name: null, weddingDate: '03/11/2001', ...created('admin') }));
     await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/households/f9'), { orgId: 'fcn', kind: 'other', name: null, ...created('admin') }));
     await assertFails(setDoc(doc(as('admin'), 'organizations/adia/households/f1'), { orgId: 'adia', kind: 'family', name: 'X', ...created('admin') }));
   });

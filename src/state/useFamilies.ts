@@ -9,7 +9,7 @@ import { updatePerson } from '../lib/peopleWrites';
 import type { Person } from './PeopleContext';
 import { roleOf, type FamilyRole } from '../../functions/src/shared/families';
 
-interface HouseholdDoc { id: string; kind: 'family' | 'notFamily'; name: string | null; deletedAt?: unknown }
+interface HouseholdDoc { id: string; kind: 'family' | 'notFamily'; name: string | null; weddingDate?: string | null; deletedAt?: unknown }
 
 /** Family names and the suggestions answered "No" (Andy, 2026-11-01, 4A 5A). */
 export function useHouseholds(orgId: string) {
@@ -21,20 +21,27 @@ export function useHouseholds(orgId: string) {
   );
   return useMemo(() => {
     const names = new Map<string, string>();
+    const weddings = new Map<string, string>();
     const dismissed = new Set<string>();
     const existing = new Set<string>();
     for (const r of rows) {
       existing.add(r.id);
       if (r.kind === 'family' && r.name) names.set(r.id, r.name);
+      if (r.kind === 'family' && r.weddingDate) weddings.set(r.id, r.weddingDate);
       if (r.kind === 'notFamily') dismissed.add(r.id.replace(/^no_/, ''));
     }
-    return { names, dismissed, existing };
+    return { names, weddings, dismissed, existing };
   }, [rows]);
 }
 
-function saveHousehold(orgId: string, id: string, exists: boolean, data: { kind: 'family' | 'notFamily'; name: string | null }) {
+function saveHousehold(orgId: string, id: string, exists: boolean, data: { kind: 'family' | 'notFamily'; name?: string | null; weddingDate?: string | null }) {
   const ref = doc(db, 'organizations', orgId, 'households', id);
-  return exists ? updateRecord(ref, data) : trackWrite(setDoc(ref, { orgId, ...data, ...createStamps() }));
+  return exists ? updateRecord(ref, data) : trackWrite(setDoc(ref, { orgId, name: null, ...data, ...createStamps() }));
+}
+
+/** The couple's wedding date, "YYYY-MM-DD", or null to clear it (Andy, 2026-11-01, anniversaries A). */
+export function setWeddingDate(orgId: string, householdId: string, exists: boolean, date: string | null) {
+  return saveHousehold(orgId, householdId, exists, { kind: 'family', weddingDate: date || null });
 }
 
 /** Puts `member` into `anchor`'s family, starting one when the anchor has none. */

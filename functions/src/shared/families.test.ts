@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { familyGroups, familyName, familySuggestions, groupedList, pairKey, roleOf, sortFamily, surnameOf, type FamilyMember } from './families';
+import { coupleNames, ordinal, yearsMarried, familyGroups, familyName, familySuggestions, groupedList, pairKey, roleOf, sortFamily, surnameOf, type FamilyMember } from './families';
 
 const p = (id: string, fullName: string, extra: Partial<FamilyMember> = {}): FamilyMember => ({ id, fullName, status: 'regular', ...extra });
 
@@ -50,5 +50,12 @@ describe('families', () => {
     expect(s.map((x) => [x.anchor.id, x.member.id, x.role])).toEqual([['m', 'b', 'child'], ['m', 't', 'parent']]);
     expect(familySuggestions([mary, baraka], new Set([pairKey('b', 'm')]))).toEqual([]);
     expect(familySuggestions([{ ...mary, householdId: 'h1' }, { ...baraka, householdId: 'h1' }], new Set())).toEqual([]);
+  });
+
+  it('words an anniversary', () => {
+    expect(coupleNames([don, doreen, andrew])).toBe('Andrew and Doreen');
+    expect(yearsMarried('2001-11-03', '2026-11-01')).toBe(25);
+    expect(yearsMarried('2026-11-03', '2026-11-01')).toBeNull();
+    expect([1, 2, 3, 4, 11, 12, 13, 21, 22, 25].map(ordinal).join(' ')).toBe('1st 2nd 3rd 4th 11th 12th 13th 21st 22nd 25th');
   });
 });

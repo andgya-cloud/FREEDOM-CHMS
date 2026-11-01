@@ -520,12 +520,14 @@ service cloud.firestore {
 
       // Pledges: what someone promised to a fund, and by when (Andy, 2026-10-31, 8A). Like each person's giving,
       // only those who may see individual giving read or change them.
-      // A family's own name, and family suggestions answered "No" (Andy, 2026-11-01, 4A 5A).
+      // A family's own name and wedding date, and family suggestions answered "No" (Andy, 2026-11-01, 4A 5A).
       match /households/{householdId} {
         allow read: if canAccessOrg(orgId) && has('people.read');
         allow create, update: if orgWrite(orgId, 'people.write')
-          && request.resource.data.keys().hasOnly(['orgId', 'kind', 'name', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.keys().hasOnly(['orgId', 'kind', 'name', 'weddingDate', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.kind in ['family', 'notFamily']
+          && (!('weddingDate' in request.resource.data) || request.resource.data.weddingDate == null
+              || (request.resource.data.weddingDate is string && request.resource.data.weddingDate.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
           && (request.resource.data.name == null || (request.resource.data.name is string && request.resource.data.name.size() <= 100));
         allow delete: if false;
       }

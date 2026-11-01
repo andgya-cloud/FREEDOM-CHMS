@@ -139,3 +139,21 @@ export function familySuggestions<T extends FamilyMember>(people: readonly T[], 
   }
   return out.slice(0, limit);
 }
+
+/** "Andrew and Doreen": the first names of the parents and spouses. */
+export function coupleNames(members: readonly FamilyMember[]): string {
+  const names = sortFamily(members).filter((p) => roleOf(p) !== 'child').map((p) => p.fullName.trim().split(/\s+/)[0]!);
+  return names.length > 1 ? `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}` : names[0] ?? '';
+}
+
+/** Years married on this year's anniversary, or null when the wedding date has no sensible year. */
+export function yearsMarried(weddingDate: string, todayKey: string): number | null {
+  const years = Number(todayKey.slice(0, 4)) - Number(weddingDate.slice(0, 4));
+  return years > 0 && years < 90 ? years : null;
+}
+
+/** "1st", "2nd", "25th". */
+export function ordinal(n: number): string {
+  const s = n % 100 >= 11 && n % 100 <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${s}`;
+}

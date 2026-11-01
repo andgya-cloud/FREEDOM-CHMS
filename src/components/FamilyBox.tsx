@@ -3,9 +3,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { usePeople, type Person } from '../state/PeopleContext';
 import { useToast } from '../state/ToastContext';
-import { addToFamily, removeFromFamily, renameFamily, setFamilyRole, useHouseholds } from '../state/useFamilies';
+import { addToFamily, removeFromFamily, renameFamily, setFamilyRole, setWeddingDate, useHouseholds } from '../state/useFamilies';
 import { friendlyError } from '../lib/errors';
 import { PersonPicker } from './PersonPicker';
+import { formatDateKey } from '../../functions/src/shared/datetime';
 import { familyName, FAMILY_ROLE_LABELS, FAMILY_ROLES, roleOf, sortFamily, type FamilyRole } from '../../functions/src/shared/families';
 
 /**
@@ -83,6 +84,13 @@ export function FamilyBox({ person }: { person: Person }) {
           ))}
         </ul>
       ) : <p className="muted small">Not in a family yet.</p>}
+      {inFamily && hid && (canWrite ? (
+        <label className="field family-wedding">
+          <span>Wedding date</span>
+          <input type="date" value={households.weddings.get(hid) ?? ''} max={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => setWeddingDate(person.orgId, hid, households.existing.has(hid), e.target.value || null).catch(fail)} />
+        </label>
+      ) : households.weddings.get(hid) && <p className="small">Married {formatDateKey(households.weddings.get(hid)!)}</p>)}
       {canWrite && !adding && <button type="button" className="btn btn-small align-start" onClick={() => setAdding(true)}>Add a family member</button>}
       {canWrite && adding && (
         <div className="stack family-add">
