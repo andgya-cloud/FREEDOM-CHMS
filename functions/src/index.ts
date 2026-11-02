@@ -28,4 +28,4 @@ export { inventoryEmail, inventoryReminders } from './inventory.js';
 export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
 export { welcomeCard } from './welcome.js';
 export { birthdayCards, birthdayTestCard } from './birthdays.js';
-export { familySignup } from './familySignup.js';
+export { familySignup, decideSignup } from './familySignup.js';

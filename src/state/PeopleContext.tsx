@@ -1,4 +1,4 @@
-import type { SignupMark } from '../../functions/src/shared/familySignup';
+import type { PersonAbout, SignupMark } from '../../functions/src/shared/familySignup';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { collection, collectionGroup, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -43,6 +43,8 @@ export interface Person {
   invitedBy?: string | null;
   invitedById?: string | null;
   serviceAttended?: string | null;
+  /** Answers from the family sign-up form: marital status, age range, born again, baptised… (Andy, 2026-11-02). */
+  about?: Partial<PersonAbout> | null;
   customFields?: Record<string, unknown>;
   possibleDuplicateIds?: string[];
   deletedAt: Timestamp | null;

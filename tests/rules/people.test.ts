@@ -72,6 +72,16 @@ describe('people', () => {
     await assertSucceeds(change('keeper', { signup: null }));
   });
 
+  it('lets only Andrew and Doreen read family sign-ups, and nobody write them', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'organizations/fcn/signups/s1'), { orgId: 'fcn', state: 'waiting' });
+    });
+    await assertSucceeds(getDoc(doc(as('keeper'), 'organizations/fcn/signups/s1')));
+    await assertFails(getDoc(doc(as('admin'), 'organizations/fcn/signups/s1')));
+    await assertFails(setDoc(doc(as('keeper'), 'organizations/fcn/signups/s2'), { orgId: 'fcn', state: 'waiting' }));
+    await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { about: { bornAgain: true }, updatedAt: serverTimestamp(), updatedBy: 'admin' }));
+  });
+
   it('keeps each organization’s people apart', async () => {
     await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/people')));
     await assertFails(getDocs(collection(as('admin'), 'organizations/adia/people')));

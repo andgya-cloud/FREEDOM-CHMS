@@ -33,6 +33,7 @@ const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({
 const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
 const WelcomeCardPage = lazy(() => import('./pages/people/WelcomeCardPage').then((m) => ({ default: m.WelcomeCardPage })));
 const JoinFamilyPage = lazy(() => import('./pages/people/JoinFamilyPage').then((m) => ({ default: m.JoinFamilyPage })));
+const SignupsPage = lazy(() => import('./pages/people/SignupsPage').then((m) => ({ default: m.SignupsPage })));
 const JoinPosterPage = lazy(() => import('./pages/people/JoinPosterPage').then((m) => ({ default: m.JoinPosterPage })));
 const WelcomePosterPage = lazy(() => import('./pages/people/WelcomePosterPage').then((m) => ({ default: m.WelcomePosterPage })));
 const PastRegisterPage = lazy(() => import('./pages/attendance/PastRegisterPage').then((m) => ({ default: m.PastRegisterPage })));
@@ -170,6 +171,7 @@ function AppRoutes() {
         <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
         <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
         <Route path="/giving/dashboard" element={<Navigate to="/reports?tab=giving" replace />} />
+        <Route path="/people/signups" element={<SignupsPage />} />
         <Route path="/people/join-qr" element={<RequirePermission permission="people.write"><JoinPosterPage /></RequirePermission>} />
         <Route path="/visitors/qr" element={<RequirePermission permission="people.write"><WelcomePosterPage /></RequirePermission>} />
         <Route path="/giving/pledges" element={<RequirePermission permission="giving.person.read"><PledgesPage /></RequirePermission>} />

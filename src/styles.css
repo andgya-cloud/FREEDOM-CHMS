@@ -1928,3 +1928,13 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .public-bg .join-member { background: #f4f8f3; border: 1.5px solid #c9d8cd; }
 .public-bg .join-section { color: #0f3b25; border-top-color: #dfe8e1; }
 .public-bg .splash { color: #ffffff; }
+
+/* Approve sign-ups (Andy, 2026-11-02) */
+.signup-card h2 { margin-bottom: 2px; }
+.signup-person { border-top: 1px solid var(--border, #e3e8e4); padding: 10px 0; }
+.signup-person p { margin: 2px 0; }
+.signup-new { color: #1f7a4d; font-weight: 600; }
+.signup-changes { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin-top: 6px; }
+.signup-changes th, .signup-changes td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border, #e3e8e4); vertical-align: top; }
+.signup-changes th { font-weight: 600; color: var(--muted, #5c6b62); font-size: 0.8rem; }
+.join-age { margin: -4px 0 4px; }

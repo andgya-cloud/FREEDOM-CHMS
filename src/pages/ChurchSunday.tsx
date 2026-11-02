@@ -7,6 +7,8 @@ import { usePeople, type Person } from '../state/PeopleContext';
 import { useDayAttendance, useEvents } from '../state/useAttendance';
 import { useGiftsBetween } from '../state/useGiving';
 import { useLiveQuery } from '../lib/useQuery';
+import { useWaitingSignups } from './people/SignupsPage';
+import { canKeepAccounts } from '../../functions/src/shared/permissions';
 import { markCardSent, useCardDesign, useCardFiles, useCardsSent } from '../lib/birthdayCard';
 import { cardGreeting, cardId } from '../../functions/src/shared/birthdayCard';
 import type { Organization } from '../state/OrgContext';
@@ -246,15 +248,23 @@ export function AnniversariesCard({ org }: { org: Organization }) {
 
 /** "3 new sign-ups to check" from the family sign-up form (Andy, 2026-11-02, 4A). */
 export function SignupsCard({ org }: { org: Organization }) {
-  const { can } = useAuth();
+  const { profile } = useAuth();
   const { people } = usePeople();
-  if (!can('people.read')) return null;
-  const waiting = people.filter((p) => p.orgId === org.id && p.signup && !p.deletedAt);
-  if (!waiting.length) return null;
-  return (
+  const keeper = canKeepAccounts(profile);
+  const { rows } = useWaitingSignups(org.id, keeper);
+  if (!keeper) return null;
+  // Forms waiting for approval (Andy, 2026-11-02, 3A), plus anyone still flagged by the earlier form.
+  const older = people.filter((p) => p.orgId === org.id && p.signup && !p.deletedAt).length;
+  if (!rows.length && !older) return null;
+  return rows.length ? (
+    <Link className="card signups-card" to="/people/signups">
+      <b>{rows.length} family sign-up{rows.length === 1 ? '' : 's'} to approve</b>
+      <span className="muted small">Nothing reaches People until you or Doreen approve it.</span>
+    </Link>
+  ) : (
     <Link className="card signups-card" to="/people?status=signup">
-      <b>{waiting.length} new sign-up{waiting.length === 1 ? '' : 's'} to check</b>
-      <span className="muted small">From the family sign-up form. Confirm each person&apos;s status on the People page.</span>
+      <b>{older} new sign-up{older === 1 ? '' : 's'} to check</b>
+      <span className="muted small">Confirm each person&apos;s status on the People page.</span>
     </Link>
   );
 }

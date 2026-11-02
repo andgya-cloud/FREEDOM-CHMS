@@ -24,6 +24,7 @@ import { PERSON_STATUS_LABELS, birthdayLabel } from '../../../functions/src/shar
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
+import { aboutLines } from '../../../functions/src/shared/familySignup';
 
 export function PersonPage() {
   const { orgId = '', personId = '' } = useParams();
@@ -92,6 +93,7 @@ export function PersonPage() {
   if (person.firstVisitDate) details.push(['First visit', formatDateKey(person.firstVisitDate)]);
   if (person.serviceAttended) details.push(['Service attended', person.serviceAttended]);
   if (person.howHeard) details.push(['Heard about us', person.howHeard]);
+  for (const l of aboutLines(person.about)) details.push([l.label, l.value]);
   if (person.invitedBy) {
     const inviter = person.invitedById ? byId(person.invitedById) : undefined;
     details.push(['Invited by', inviter ? <Link to={`/people/${inviter.orgId}/${inviter.id}`}>{inviter.fullName}</Link> : person.invitedBy]);

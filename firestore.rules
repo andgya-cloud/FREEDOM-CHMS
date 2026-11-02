@@ -168,7 +168,7 @@ service cloud.firestore {
     function validPerson() {
       let d = request.resource.data;
       return d.keys().hasOnly(['orgId', 'fullName', 'firstName', 'phone', 'whatsapp', 'whatsappConsent',
-               'email', 'status', 'memberSince', 'signup', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard',
+               'email', 'status', 'memberSince', 'signup', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard', 'about',
                'invitedBy', 'invitedById', 'serviceAttended', 'customFields', 'possibleDuplicateIds',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.fullName is string && d.fullName.size() >= 1 && d.fullName.size() <= 120
@@ -179,6 +179,7 @@ service cloud.firestore {
         && (!('birthday' in d) || d.birthday == null
             || (d.birthday is string && d.birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
         && (!('signup' in d) || d.signup == null || d.signup is map)
+        && (!('about' in d) || d.about == null || d.about is map)
         && (!('memberSince' in d) || d.memberSince == null
             || (d.memberSince is string && d.memberSince.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
         && (!('birthYear' in d) || d.birthYear == null || (d.birthYear is int && d.birthYear >= 1900 && d.birthYear <= 2100))
@@ -204,6 +205,13 @@ service cloud.firestore {
       allow delete: if false;
 
       // Organization data. Anything not matched here is denied.
+
+      // Family sign-up forms waiting for approval (Andy, 2026-11-02): only Andrew and Doreen read them, and only the
+      // familySignup / decideSignup functions write them.
+      match /signups/{signupId} {
+        allow read: if canAccessOrg(orgId) && isAccountKeeper();
+        allow write: if false;
+      }
 
       match /people/{personId} {
         allow read: if canAccessOrg(orgId) && has('people.read');
