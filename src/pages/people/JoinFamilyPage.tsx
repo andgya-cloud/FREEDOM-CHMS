@@ -14,13 +14,13 @@ type YesNo = '' | 'yes' | 'no';
 
 interface PersonForm {
   fullName: string; phone: string; email: string; gender: '' | 'Male' | 'Female'; day: string; month: string; year: string;
-  claim: SignupClaim | ''; ageRange: AgeRange | ''; maritalStatus: string; bornAgain: YesNo; baptised: YesNo; freedomSince: string;
+  claim: SignupClaim | ''; ageRange: AgeRange | ''; maritalStatus: string; bornAgain: YesNo; baptised: YesNo; tithes: YesNo; freedomSince: string;
 }
 interface MemberForm extends PersonForm { relation: SignupRelation }
 interface MoreForm { area: string; work: string; homeGroup: YesNo; ministry: string; howHeard: string; serviceAttended: string }
 
 const BLANK: PersonForm = {
-  fullName: '', phone: '', email: '', gender: '', day: '', month: '', year: '', claim: '', ageRange: '', maritalStatus: '', bornAgain: '', baptised: '', freedomSince: '',
+  fullName: '', phone: '', email: '', gender: '', day: '', month: '', year: '', claim: '', ageRange: '', maritalStatus: '', bornAgain: '', baptised: '', tithes: '', freedomSince: '',
 };
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const THIS_YEAR = new Date().getFullYear();
@@ -43,7 +43,7 @@ const yn = (v: YesNo) => (v === 'yes' ? true : v === 'no' ? false : null);
 const toSend = (p: PersonForm) => ({
   fullName: p.fullName, phone: p.phone, email: p.email, gender: p.gender || null, birthday: birthday(p),
   birthYear: p.year ? Number(p.year) : null, claim: p.claim,
-  about: { ageRange: p.ageRange || null, maritalStatus: p.maritalStatus || null, bornAgain: yn(p.bornAgain), baptised: yn(p.baptised), freedomSince: p.freedomSince || null },
+  about: { ageRange: p.ageRange || null, maritalStatus: p.maritalStatus || null, bornAgain: yn(p.bornAgain), baptised: yn(p.baptised), tithes: yn(p.tithes), freedomSince: p.freedomSince || null },
 });
 
 /** A row of big tap buttons; tapping the chosen one again clears it when `clearable`. */
@@ -113,6 +113,7 @@ function FaithFields({ p, set, who, church }: { p: PersonForm; set: <K extends k
     <>
       <Chips label={`${are} born again?`} options={YES_NO} value={p.bornAgain} onChange={(v) => set('bornAgain', v)} />
       <Chips label={`${are} baptised in water by immersion?`} options={YES_NO} value={p.baptised} onChange={(v) => set('baptised', v)} />
+      <Chips label={who.self ? 'Do you tithe?' : `Does ${who.first || 'this person'} tithe?`} options={YES_NO} value={p.tithes} onChange={(v) => set('tithes', v)} />
       <label className="field"><span>How long {who.self ? 'have you' : `has ${who.first || 'this person'}`} been at Freedom Church?</span>
         <select value={p.freedomSince} onChange={(e) => set('freedomSince', e.target.value)}>
           <option value="">Choose…</option>

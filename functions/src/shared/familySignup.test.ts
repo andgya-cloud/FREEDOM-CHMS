@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ageOn, ageRangeFor, aboutLines, approvedStatus, changeRows, cleanSignup, confirmedStatus, updatesFor } from './familySignup';
 
 const TODAY = '2026-11-02';
-const about = { bornAgain: true, baptised: false, freedomSince: '1to2y', maritalStatus: 'married' };
+const about = { bornAgain: true, baptised: false, tithes: true, freedomSince: '1to2y', maritalStatus: 'married' };
 const me = { fullName: 'antony waweru', phone: '0720 725 483', gender: 'Male', claim: 'member', birthday: '02-14', birthYear: 1985, about };
 
 describe('family sign-up form (Andy, 2026-11-02)', () => {
@@ -27,9 +27,10 @@ describe('family sign-up form (Andy, 2026-11-02)', () => {
     expect(() => cleanSignup({ me: { ...me, gender: '' } }, TODAY)).toThrow(/Male or Female/);
     expect(() => cleanSignup({ me: { ...me, about: { ...about, bornAgain: null } } }, TODAY)).toThrow(/born again/);
     expect(() => cleanSignup({ me: { ...me, about: { ...about, maritalStatus: '' } } }, TODAY)).toThrow(/marital/);
+    expect(() => cleanSignup({ me: { ...me, about: { ...about, tithes: null } } }, TODAY)).toThrow(/tithe/);
     expect(() => cleanSignup({ me, family: [{ fullName: 'Zack', phone: '12', gender: 'Male', birthYear: 2018 }] }, TODAY)).toThrow(/phone/);
     // A teen answers the faith questions but not marital status.
-    const teen = { fullName: 'Ruth Waweru', relation: 'child', gender: 'Female', birthYear: 2011, claim: 'regular', about: { bornAgain: true, baptised: true, freedomSince: 'gt5y' } };
+    const teen = { fullName: 'Ruth Waweru', relation: 'child', gender: 'Female', birthYear: 2011, claim: 'regular', about: { bornAgain: true, baptised: true, tithes: false, freedomSince: 'gt5y' } };
     expect(cleanSignup({ me, family: [teen] }, TODAY).family[0].about).toMatchObject({ ageRange: 'teen', maritalStatus: null });
     expect(() => cleanSignup({ me, family: [{ ...teen, about: {} }] }, TODAY)).toThrow(/born again/);
   });

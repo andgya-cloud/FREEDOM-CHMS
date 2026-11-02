@@ -93,7 +93,8 @@ export function PersonPage() {
   if (person.firstVisitDate) details.push(['First visit', formatDateKey(person.firstVisitDate)]);
   if (person.serviceAttended) details.push(['Service attended', person.serviceAttended]);
   if (person.howHeard) details.push(['Heard about us', person.howHeard]);
-  for (const l of aboutLines(person.about)) details.push([l.label, l.value]);
+  // Tithing shows only to staff who may see giving.
+  for (const l of aboutLines(person.about)) if (l.label !== 'Tithes' || can('giving.person.read')) details.push([l.label, l.value]);
   if (person.invitedBy) {
     const inviter = person.invitedById ? byId(person.invitedById) : undefined;
     details.push(['Invited by', inviter ? <Link to={`/people/${inviter.orgId}/${inviter.id}`}>{inviter.fullName}</Link> : person.invitedBy]);

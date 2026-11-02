@@ -49,14 +49,16 @@ export interface PersonAbout {
   ageRange: AgeRange | null;
   bornAgain: boolean | null;
   baptised: boolean | null;
+  /** Do you tithe? (Andy, 2026-11-02). Shown only to staff who may see giving. */
+  tithes: boolean | null;
   freedomSince: FreedomSince | null;
   area: string | null;
   work: WorkStatus | null;
   homeGroup: boolean | null;
   ministry: string | null;
 }
-export const ABOUT_KEYS = ['maritalStatus', 'ageRange', 'bornAgain', 'baptised', 'freedomSince', 'area', 'work', 'homeGroup', 'ministry'] as const;
-export const EMPTY_ABOUT: PersonAbout = { maritalStatus: null, ageRange: null, bornAgain: null, baptised: null, freedomSince: null, area: null, work: null, homeGroup: null, ministry: null };
+export const ABOUT_KEYS = ['maritalStatus', 'ageRange', 'bornAgain', 'baptised', 'tithes', 'freedomSince', 'area', 'work', 'homeGroup', 'ministry'] as const;
+export const EMPTY_ABOUT: PersonAbout = { maritalStatus: null, ageRange: null, bornAgain: null, baptised: null, tithes: null, freedomSince: null, area: null, work: null, homeGroup: null, ministry: null };
 
 /** Kept on a person from the earlier form, until Andrew or Doreen confirm their status. */
 export interface SignupMark { claimed: SignupClaim; at: string }
@@ -142,6 +144,8 @@ function person(raw: Record<string, unknown>, opts: { self: boolean; relation: S
   if (bornAgain == null) throw new Error(`Please answer “born again” for ${who}.`);
   const baptised = yesNo(raw_about.baptised);
   if (baptised == null) throw new Error(`Please answer “baptised in water” for ${who}.`);
+  const tithes = yesNo(raw_about.tithes);
+  if (tithes == null) throw new Error(`Please answer “Do you tithe?” for ${who}.`);
   const freedomSince = pick(FREEDOM_SINCE, raw_about.freedomSince);
   if (!freedomSince) throw new Error(`Please choose how long ${opts.self ? 'you have' : `${first} has`} been at Freedom Church.`);
   let maritalStatus = pick(MARITAL_STATUSES, raw_about.maritalStatus);
@@ -151,7 +155,7 @@ function person(raw: Record<string, unknown>, opts: { self: boolean; relation: S
   return {
     fullName, phone, email: email || null, gender, birthday, birthYear, claim,
     about: {
-      maritalStatus, ageRange, bornAgain, baptised, freedomSince,
+      maritalStatus, ageRange, bornAgain, baptised, tithes, freedomSince,
       area: text(raw_about.area, 80) || null,
       work: pick(WORK_STATUSES, raw_about.work),
       homeGroup: yesNo(raw_about.homeGroup),
@@ -227,6 +231,7 @@ const ABOUT_LABELS: Record<(typeof ABOUT_KEYS)[number], [string, (v: unknown) =>
   ageRange: ['Age range', (v) => AGE_RANGE_LABELS[v as AgeRange] ?? ''],
   bornAgain: ['Born again', yn],
   baptised: ['Baptised in water', yn],
+  tithes: ['Tithes', yn],
   freedomSince: ['At Freedom for', (v) => FREEDOM_SINCE_LABELS[v as FreedomSince] ?? ''],
   area: ['Where they stay', (v) => String(v ?? '')],
   work: ['Work', (v) => WORK_LABELS[v as WorkStatus] ?? ''],
