@@ -15,6 +15,8 @@ export interface Organization {
   currency: string;
   receiptPrefix: string;
   serviceTimes?: string[];
+  /** Midweek, youth and special services (Andy, 2026-11-02, 2A). */
+  otherServices?: string[];
   /** Programmes run by a college or ministry (classes, sessions, meals). */
   activities?: string[];
   active: boolean;

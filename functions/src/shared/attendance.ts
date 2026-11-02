@@ -32,7 +32,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 export const CHECK_IN_METHODS = ['staff', 'door', 'register'] as const;
 export type CheckInMethod = (typeof CHECK_IN_METHODS)[number];
 
-export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total'] as const;
+export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations'] as const;
 export type HeadcountKey = (typeof HEADCOUNT_KEYS)[number];
 export type Headcounts = Partial<Record<HeadcountKey, number>>;
 
@@ -43,6 +43,8 @@ export const HEADCOUNT_LABELS: Record<HeadcountKey, string> = {
   new: 'New',
   returning: 'Returning',
   total: 'Total',
+  firstTimers: 'First-time visitors',
+  salvations: 'Salvations',
 };
 
 /** Which counts each kind of gathering asks for. */
@@ -53,6 +55,20 @@ export const HEADCOUNT_FIELDS: Record<EventType, HeadcountKey[]> = {
   class: [],
   group: [],
 };
+
+/**
+ * Extra service figures typed in, especially for past services (Andy, 2026-11-02, 3A). They are not part of the
+ * headcount total: first-timers and salvations are already counted among the adults, teens and children.
+ */
+export const SERVICE_EXTRA_KEYS = ['firstTimers', 'salvations'] as const satisfies readonly HeadcountKey[];
+
+/** 'other' marks a midweek, youth or special service, so Sunday figures stay apart (Andy, 2026-11-02, 5A). */
+export type ServiceKind = 'other' | null;
+
+/** A Sunday service: a service on a Sunday that was not recorded as another service. */
+export function isSundayService(e: { type: string; date: string; serviceKind?: ServiceKind | string | null }): boolean {
+  return e.type === 'service' && e.serviceKind !== 'other' && new Date(`${e.date}T12:00:00Z`).getUTCDay() === 0;
+}
 
 /**
  * Starting lists of programmes, from the brief. Each organization can edit

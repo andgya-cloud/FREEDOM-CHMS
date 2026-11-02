@@ -4,7 +4,7 @@
  * (reports) and in tests. Dates are calendar days (YYYY-MM-DD) in the
  * organization's time zone; weeks run Monday to Sunday.
  */
-import { attended, headcountTotal, type Headcounts } from './attendance.js';
+import { attended, headcountTotal, isSundayService, type Headcounts } from './attendance.js';
 import { missedMeetings, MISSED_MEETINGS_FLAG, type Weekday } from './programs.js';
 import { SENSITIVE_REASONS, type FollowUpReason } from './followups.js';
 
@@ -77,7 +77,7 @@ const inRange = (key: string | null | undefined, r: DayRange) => !!key && key >=
 
 // ---- Records ---------------------------------------------------------------------
 
-export interface MEvent { id: string; date: string; type: string; headcounts?: Headcounts | null; programId?: string | null; groupId?: string | null }
+export interface MEvent { id: string; date: string; type: string; headcounts?: Headcounts | null; programId?: string | null; groupId?: string | null; serviceKind?: string | null }
 export interface MMark { personId: string; eventId: string; date: string; status: string; programId?: string | null; groupId?: string | null }
 export interface MPerson { id: string; fullName: string; status: string; firstVisitDate?: string | null }
 export interface MStage { personId: string; stageId: string; status: string; date?: string | null }
@@ -136,7 +136,8 @@ export function weeklyAttendance(events: readonly MEvent[], marks: readonly MMar
   for (const m of marks) if (attended(m.status)) checkedIn.set(m.eventId, (checkedIn.get(m.eventId) ?? 0) + 1);
   const weeks = new Map<string, WeeklyAttendance>();
   for (const e of events) {
-    if (!isService(e)) continue;
+    // Sunday services only; midweek and special services are counted apart (Andy, 2026-11-02, 5A).
+    if (!isService(e) || !isSundayService(e)) continue;
     const week = mondayOf(e.date);
     const w = weeks.get(week) ?? { week, total: 0, adults: 0, teens: 0, children: 0 };
     const counted = headcountTotal(e.headcounts, 'service');
@@ -200,6 +201,8 @@ export interface ProgramMetrics {
 export interface Scorecard {
   period: DayRange;
   attendance: { total: number; adults: number; teens: number; children: number; weeks: number; weeklyAverage: number | null };
+  /** Midweek, youth and special services in the period: how many, and everyone counted at them. */
+  otherServices?: { services: number; total: number };
   averageAttendance: { fourWeeks: number | null; yearToDate: number | null };
   visitors: { count: number; ids: string[] };
   returnRate: { cohort: number; returned: number; rate: number | null; from: string; to: string };
@@ -241,6 +244,13 @@ export function scorecard(input: MetricsInput, period: DayRange): Scorecard {
     weeks: periodWeeks.length,
     weeklyAverage: average(periodWeeks.map((w) => w.total)),
   };
+  const checkedIn = new Map<string, number>();
+  for (const m of input.marks) if (attended(m.status)) checkedIn.set(m.eventId, (checkedIn.get(m.eventId) ?? 0) + 1);
+  const servicesInPeriod = input.events.filter((e) => isService(e) && inRange(e.date, period));
+  const others = servicesInPeriod.filter((e) => !isSundayService(e));
+  const otherServices = { services: others.length, total: others.reduce((s, e) => s + (headcountTotal(e.headcounts, 'service') || (checkedIn.get(e.id) ?? 0)), 0) };
+  // Typed figures from past services count too; the larger of typed and recorded avoids counting anyone twice.
+  const typed = (k: 'firstTimers' | 'salvations') => servicesInPeriod.reduce((s, e) => s + (Number(e.headcounts?.[k]) || 0), 0);
   const lastMonday = mondayOf(period.to);
   const fourWeeks = [0, 1, 2, 3].map((i) => weeks.get(addDays(lastMonday, -7 * i))).filter((w): w is WeeklyAttendance => !!w);
   const yearStart = `${period.to.slice(0, 4)}-01-01`;
@@ -349,10 +359,11 @@ export function scorecard(input: MetricsInput, period: DayRange): Scorecard {
     period,
     attendance,
     averageAttendance,
-    visitors: { count: visitors.length, ids: visitors.map((v) => v.id) },
+    otherServices,
+    visitors: { count: Math.max(visitors.length, typed('firstTimers')), ids: visitors.map((v) => v.id) },
     returnRate: { cohort: cohort.length, returned: returned.length, rate: rate(returned.length, cohort.length), ...cohortRange },
     followUpSpeed: { visitors: speedVisitors, within48h, rate: rate(within48h, speedVisitors) },
-    salvations: { count: salvations.filter((s) => inRange(s.date, period)).length, ids: salvations.filter((s) => inRange(s.date, period)).map((s) => s.personId) },
+    salvations: { count: Math.max(salvations.filter((s) => inRange(s.date, period)).length, typed('salvations')), ids: salvations.filter((s) => inRange(s.date, period)).map((s) => s.personId) },
     baptisms: { count: baptisms.filter((s) => inRange(s.date, period)).length, ids: baptisms.filter((s) => inRange(s.date, period)).map((s) => s.personId) },
     salvationToBaptism: { salvations: yearOfSalvations.length, baptised: yearOfSalvations.filter((s) => baptised.has(s.personId)).length, rate: rate(yearOfSalvations.filter((s) => baptised.has(s.personId)).length, yearOfSalvations.length) },
     regularAttenders: regularEnd.size,

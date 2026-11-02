@@ -139,7 +139,7 @@ service cloud.firestore {
     function validOrganization() {
       let d = request.resource.data;
       return d.keys().hasOnly(['name', 'type', 'parentId', 'timeZone', 'currency', 'receiptPrefix',
-               'serviceTimes', 'activities', 'active', 'training', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'serviceTimes', 'otherServices', 'activities', 'active', 'training', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.name is string && d.name.size() >= 2 && d.name.size() <= 120
         && d.type in ['church_campus', 'college', 'ministry']
         && (d.parentId == null || d.parentId is string)
@@ -148,6 +148,7 @@ service cloud.firestore {
         && d.receiptPrefix is string && d.receiptPrefix.matches('^[A-Z]{2,6}$')
         && d.active is bool
         && (!('serviceTimes' in d) || (d.serviceTimes is list && d.serviceTimes.size() <= 20))
+        && (!('otherServices' in d) || (d.otherServices is list && d.otherServices.size() <= 20))
         && (!('activities' in d) || (d.activities is list && d.activities.size() <= 30));
     }
 
@@ -275,7 +276,7 @@ service cloud.firestore {
         let d = request.resource.data;
         let h = d.headcounts;
         return d.keys().hasOnly(['orgId', 'date', 'type', 'name', 'activity', 'headcounts', 'notes',
-                 'programId', 'cohortId', 'topicIds', 'mentor', 'mentorId', 'groupId',
+                 'programId', 'cohortId', 'topicIds', 'mentor', 'mentorId', 'groupId', 'serviceKind',
                  'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
           && eventId.matches('^' + d.date + '_[A-Za-z0-9_]+$')
@@ -284,7 +285,9 @@ service cloud.firestore {
           && (!('activity' in d) || d.activity == null || (d.activity is string && d.activity.size() <= 120))
           && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
           && h is map
-          && h.keys().hasOnly(['adults', 'teens', 'children', 'new', 'returning', 'total'])
+          && h.keys().hasOnly(['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations'])
+          && validCount(h, 'firstTimers') && validCount(h, 'salvations')
+          && (!('serviceKind' in d) || d.serviceKind == null || d.serviceKind == 'other')
           && validCount(h, 'adults') && validCount(h, 'teens') && validCount(h, 'children')
           && validCount(h, 'new') && validCount(h, 'returning') && validCount(h, 'total')
           && validProgramSession(eventId, d)

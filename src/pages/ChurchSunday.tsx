@@ -70,15 +70,17 @@ export function SundayCard({ org, onSundayPage = false }: { org: Organization; o
   if (!day) return null;
 
   // Each service counts its headcount, or the people checked in when no headcount was typed (as in the reports).
-  const services = events.filter((e) => e.date === day && e.type === 'service' && !e.programId && !e.groupId);
+  const services = events.filter((e) => e.date === day && e.type === 'service' && !e.programId && !e.groupId && e.serviceKind !== 'other');
   const checkedIn = new Map<string, number>();
   for (const m of marks) if (attended(m.status)) checkedIn.set(m.eventId, (checkedIn.get(m.eventId) ?? 0) + 1);
   const came = services.reduce((sum, e) => sum + (headcountTotal(e.headcounts, 'service') || checkedIn.get(e.id) || 0), 0);
-  const firstTimers = people.filter((p) => p.orgId === org.id && p.firstVisitDate === day).length;
+  // Typed figures count too; the larger of typed and recorded avoids counting anyone twice (Andy, 2026-11-02).
+  const typed = (k: 'firstTimers' | 'salvations') => services.reduce((s, e) => s + (Number(e.headcounts?.[k]) || 0), 0);
+  const firstTimers = Math.max(people.filter((p) => p.orgId === org.id && p.firstVisitDate === day).length, typed('firstTimers'));
   const givingCents = gifts.filter((g) => g.status !== 'void').reduce((s, g) => s + g.amountCents, 0);
 
   const figures: [string, string][] = [[isSunday ? 'Came so far' : 'Came', String(came)], ['First-timers', String(firstTimers)]];
-  if (seePastoral) figures.push(['Salvations', String(salvations.length)]);
+  if (seePastoral) figures.push(['Salvations', String(Math.max(salvations.length, typed('salvations')))]);
   if (seeGiving) figures.push(['Giving', formatMoney(givingCents)]);
 
   const text = [

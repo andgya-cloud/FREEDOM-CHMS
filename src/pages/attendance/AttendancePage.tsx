@@ -3,6 +3,7 @@ import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type 
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
 import { FirstTimersCard, SundayCard } from '../ChurchSunday';
+import { RecordServiceCard } from '../../components/RecordServiceCard';
 import type { ChurchEvent as AttendanceEvent } from '../../state/useAttendance';
 import { cohortStart } from '../../../functions/src/shared/pastRecords';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -115,7 +116,7 @@ export function AttendancePage() {
   }
 
   const org = current;
-  const choices = trainer ? myClasses.filter((c) => !c.includes(' · ')) : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org)])];
+  const choices = trainer ? myClasses.filter((c) => !c.includes(' · ')) : [...new Set([...school.courses.filter((c) => c.active !== false).map((c) => c.name), ...eventChoices(org), ...(org.type === 'church_campus' ? org.otherServices ?? [] : [])])];
   const todays = loaded.filter((e) => e.date === date);
   const adia = org.type === 'college';
   const canBackdate = !trainer && (!adia || BACKDATE_ROLES.includes(profile?.roleId ?? ''));
@@ -137,7 +138,8 @@ export function AttendancePage() {
     const id = eventIdFor(date, clean);
     if (!loaded.some((e) => e.id === id)) {
       try {
-        const { synced } = createEvent(org.id, { date, type: trainer ? 'class' : eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean });
+        const { synced } = createEvent(org.id, { date, type: trainer ? 'class' : eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean,
+          ...(org.type === 'church_campus' && !(org.serviceTimes ?? []).includes(clean) ? { serviceKind: 'other' as const } : {}) });
         synced.catch((err) => toast.show(friendlyError(err)));
       } catch (err) {
         toast.show(friendlyError(err));
@@ -288,14 +290,14 @@ function PastCard({ cohorts, closed, results }: { cohorts: string[]; closed: (c:
 
 /**
  * Freedom Church's Sunday page (Andy, 2026-11-01, 3A): Check in at the top, then the Sunday figures, the
- * first-timers with the QR poster, and the past services folded away. Another day or service is one dropdown.
+ * first-timers with the QR poster, and the past services folded away. "Record a past service" (2026-11-02) covers
+ * other days and midweek or special services.
  */
 function SundayPage({ org, date, setDate, today, choices, todays, events, loading, canRecord, open }: {
   org: Parameters<typeof SundayCard>[0]['org'];
   date: string; setDate: (d: string) => void; today: string; choices: string[]; todays: AttendanceEvent[];
   events: AttendanceEvent[]; loading: boolean; canRecord: boolean; open: (name: string) => void;
 }) {
-  const [otherName, setOtherName] = useState('');
   const other = date !== today;
   return (
     <div className="page narrow sunday-page">
@@ -303,6 +305,7 @@ function SundayPage({ org, date, setDate, today, choices, todays, events, loadin
       {canRecord && (
         <section className="card">
           <h2>{other ? `Check in for ${formatDateKey(date)}` : 'Check in'}</h2>
+          {other && <button type="button" className="btn btn-quiet align-start" onClick={() => setDate(today)}>Back to today</button>}
           <div className="start-grid">
             {choices.map((name) => {
               const already = todays.some((e) => e.id === eventIdFor(date, name));
@@ -314,22 +317,9 @@ function SundayPage({ org, date, setDate, today, choices, todays, events, loadin
               );
             })}
           </div>
-          <details className="fold" open={other || undefined}>
-            <summary>Different day or service</summary>
-            <div className="stack fold-body">
-              <label className="field"><span>Day</span>
-                <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
-              </label>
-              <form className="input-with-button" onSubmit={(e) => { e.preventDefault(); open(otherName); setOtherName(''); }}>
-                <input placeholder="Another service, for example Youth night" value={otherName} onChange={(e) => setOtherName(e.target.value)} aria-label="Name of another service" />
-                <button type="submit" className="btn" disabled={!otherName.trim()}>Start</button>
-              </form>
-              {other && <button type="button" className="btn btn-quiet align-start" onClick={() => setDate(today)}>Back to today</button>}
-              <p className="hint">Service times come from <Link to={`/settings/organizations/${org.id}`}>the organization settings</Link>.</p>
-            </div>
-          </details>
         </section>
       )}
+      {canRecord && <RecordServiceCard org={org} today={today} events={events} />}
       <SundayCard org={org} onSundayPage />
       <FirstTimersCard org={org} />
       <details className="card fold">

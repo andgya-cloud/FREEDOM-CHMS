@@ -60,7 +60,7 @@ export async function loadMetricsInput(orgId: string, period: DayRange, type: Re
   return {
     regularWeeks,
     now: now.getTime(),
-    events: rows(events).filter(until).map((e) => ({ id: e.id, date: e.date, type: e.type, headcounts: e.headcounts ?? null, programId: e.programId ?? null, groupId: e.groupId ?? null })),
+    events: rows(events).filter(until).map((e) => ({ id: e.id, date: e.date, type: e.type, headcounts: e.headcounts ?? null, programId: e.programId ?? null, groupId: e.groupId ?? null, serviceKind: e.serviceKind ?? null })),
     marks: rows(marks).filter(until).map((m) => ({ personId: m.personId, eventId: m.eventId, date: m.date, status: m.status, programId: m.programId ?? null, groupId: m.groupId ?? null })),
     people: rows(people).map((p) => ({ id: p.id, fullName: p.fullName ?? '', status: p.status, firstVisitDate: p.firstVisitDate ?? null })),
     stages: rows(stages).map((s) => ({ personId: s.personId, stageId: s.stageId, status: s.status, date: s.date ?? null })),

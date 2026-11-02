@@ -84,10 +84,16 @@ describe('report periods', () => {
 describe('attendance', () => {
   it('uses the headcount, or the people checked in when nobody counted', () => {
     const counted = service('a', '2026-10-18', { adults: 120, teens: 20, children: 40 });
-    const uncounted = service('b', '2026-10-15');
+    const uncounted = service('b', '2026-10-18');
     const marks = [present('p1', uncounted), present('p2', uncounted), { ...present('p3', uncounted), status: 'absent' }];
     const w = weeklyAttendance([counted, uncounted], marks).get('2026-10-12');
     expect(w).toEqual({ week: '2026-10-12', total: 182, adults: 120, teens: 20, children: 40 });
+  });
+  it('keeps midweek and special services apart from Sunday services (Andy, 2026-11-02)', () => {
+    const sunday = service('a', '2026-10-18', { adults: 100 });
+    const midweek = service('b', '2026-10-15', { adults: 30 });
+    const youth = { ...service('c', '2026-10-18', { teens: 25 }), serviceKind: 'other' };
+    expect(weeklyAttendance([sunday, midweek, youth], []).get('2026-10-12')?.total).toBe(100);
   });
 
   it('leaves classes and group meetings out of service attendance', () => {

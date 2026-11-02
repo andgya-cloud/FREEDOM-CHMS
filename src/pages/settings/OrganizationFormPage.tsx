@@ -18,7 +18,7 @@ import {
 import { DEFAULT_ACTIVITIES } from '../../../functions/src/shared/attendance';
 
 /** The three organizations named in the brief, offered as one-tap starting points. */
-type OrgForm = OrganizationInput & { active: boolean; serviceTimes: string[]; activities: string[] };
+type OrgForm = OrganizationInput & { active: boolean; serviceTimes: string[]; otherServices?: string[]; activities: string[] };
 
 const STARTERS: (OrganizationInput & { serviceTimes?: string[]; activities?: string[] })[] = [
   { name: 'Freedom Church Nairobi', type: 'church_campus', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'FCN', serviceTimes: ['Sunday 10:00'] },
@@ -41,6 +41,7 @@ export function OrganizationFormPage() {
   const existing = orgId ? allIncludingDeleted.find((o) => o.id === orgId) : undefined;
   const [form, setForm] = useState<OrgForm>(EMPTY);
   const [serviceText, setServiceText] = useState('');
+  const [otherText, setOtherText] = useState('');
   const [activityText, setActivityText] = useState('');
   const [prefixTouched, setPrefixTouched] = useState(false);
   const [problems, setProblems] = useState<string[]>([]);
@@ -53,6 +54,7 @@ export function OrganizationFormPage() {
         serviceTimes: existing.serviceTimes ?? [], activities: existing.activities ?? [],
       });
       setServiceText((existing.serviceTimes ?? []).join('\n'));
+      setOtherText((existing.otherServices ?? []).join('\n'));
       // Organizations saved before programmes were listed start from the defaults for their type.
       setActivityText((existing.activities?.length ? existing.activities : DEFAULT_ACTIVITIES[existing.type]).join('\n'));
       setPrefixTouched(true);
@@ -71,7 +73,8 @@ export function OrganizationFormPage() {
     e.preventDefault();
     const serviceTimes = serviceText.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 20);
     const activities = form.type === 'church_campus' ? [] : activityText.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 30);
-    const input = { ...form, name: form.name.trim(), receiptPrefix: form.receiptPrefix.trim().toUpperCase(), serviceTimes, activities };
+    const otherServices = form.type === 'church_campus' ? otherText.split('\n').map((t) => t.trim()).filter(Boolean).slice(0, 20) : [];
+    const input = { ...form, name: form.name.trim(), receiptPrefix: form.receiptPrefix.trim().toUpperCase(), serviceTimes, otherServices, activities };
     const found = organizationProblems(input);
     if (prefixTaken) found.push('Another organization already uses that receipt prefix.');
     setProblems(found);
@@ -157,6 +160,13 @@ export function OrganizationFormPage() {
           <textarea rows={2} value={serviceText} placeholder="Sunday 10:00" onChange={(e) => setServiceText(e.target.value)} />
           <small className="hint">Used on the visitor form{form.type === 'church_campus' ? ', for check-in' : ''} and in WhatsApp messages.</small>
         </label>
+        {form.type === 'church_campus' && (
+          <label className="field">
+            <span>Other services (one per line, optional)</span>
+            <textarea rows={3} value={otherText} placeholder={'Midweek service\nYouth service\nPrayer night'} onChange={(e) => setOtherText(e.target.value)} />
+            <small className="hint">Offered on the Sunday page under "Record a past service". Their numbers show apart from Sunday services in Reports.</small>
+          </label>
+        )}
         {form.type !== 'church_campus' && (
           <label className="field">
             <span>Programmes (one per line)</span>

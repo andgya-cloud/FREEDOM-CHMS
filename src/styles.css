@@ -1944,3 +1944,7 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .signups-card.signups-waiting b { color: #c62828; }
 .signups-waiting-link { color: #c62828 !important; font-weight: 700; }
 .signups-clear-link { color: #17241c !important; }
+
+/* Record a past service (Andy, 2026-11-02) */
+.record-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.record-count input { font-size: 1.15rem; }

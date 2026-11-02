@@ -14,6 +14,8 @@ export interface ChurchEvent {
   activity: string | null;
   headcounts: Headcounts;
   notes: string;
+  /** 'other' for a midweek, youth or special service (Andy, 2026-11-02). */
+  serviceKind?: 'other' | null;
   /** Set on a programme class (Stage 4). */
   programId?: string | null;
   cohortId?: string | null;

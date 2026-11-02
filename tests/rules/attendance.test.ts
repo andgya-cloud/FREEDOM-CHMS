@@ -37,6 +37,13 @@ describe('services and headcounts', () => {
     await assertFails(setDoc(doc(as('admin'), 'organizations/adia/events/2026-10-18_ict'), event('admin', { orgId: 'adia', type: 'class', name: 'ICT' })));
   });
 
+  it('records a past or other service with first-timers and salvations (Andy, 2026-11-02)', async () => {
+    const MID = 'organizations/fcn/events/2026-10-15_midweek_service';
+    await assertSucceeds(setDoc(doc(as('admin'), MID), event('admin', { date: '2026-10-15', name: 'Midweek service', serviceKind: 'other', headcounts: { adults: 40, teens: 0, children: 0, firstTimers: 3, salvations: 1 } })));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/events/2026-10-15_x'), event('admin', { date: '2026-10-15', name: 'X', serviceKind: 'sunday' })));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/events/2026-10-15_y'), event('admin', { date: '2026-10-15', name: 'Y', headcounts: { salvations: -2 } })));
+  });
+
   it('rejects counts that are negative, not whole numbers, or not a known count', async () => {
     await assertFails(setDoc(doc(as('admin'), EVENT), event('admin', { headcounts: { adults: -1 } })));
     await assertFails(setDoc(doc(as('admin'), EVENT), event('admin', { headcounts: { adults: 2.5 } })));

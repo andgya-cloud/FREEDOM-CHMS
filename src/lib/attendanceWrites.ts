@@ -1,4 +1,4 @@
-import { doc, setDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, setDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { createStamps, softDelete, updateRecord, updateStamps } from './records';
 import { trackWrite } from './sync';
@@ -16,6 +16,8 @@ export interface NewEvent {
   type: EventType;
   name: string;
   activity: string | null;
+  /** 'other' for a midweek, youth or special church service. */
+  serviceKind?: 'other' | null;
 }
 
 /** A programme class or group meeting carries these too; its id comes from them. */
@@ -53,6 +55,32 @@ export function createEvent(orgId: string, input: NewEvent, links?: EventLinks):
     // keeps theirs, and check-ins from here still attach to it.
     if (err.code !== 'permission-denied') throw err;
   });
+  return { id, synced };
+}
+
+/** A service already saved for that day, with its figures, or null (for "Record a past service"). */
+export async function findService(orgId: string, date: string, name: string): Promise<{ id: string; headcounts: Headcounts; serviceKind?: string | null } | null> {
+  const id = eventIdFor(date, name);
+  const snap = await getDoc(eventRef(orgId, id));
+  const d = snap.data();
+  return d && !d.deletedAt ? { id, headcounts: (d.headcounts ?? {}) as Headcounts, serviceKind: d.serviceKind ?? null } : null;
+}
+
+/**
+ * Records a service's figures, new or past (Andy, 2026-11-02): adds the service if it is not there yet, otherwise
+ * updates its figures. `other` marks a midweek or special service.
+ */
+export async function recordService(orgId: string, input: { date: string; name: string; other: boolean; headcounts: Headcounts }): Promise<{ id: string; synced: Promise<unknown> }> {
+  const found = await findService(orgId, input.date, input.name).catch(() => null);
+  const serviceKind = input.other ? 'other' : null;
+  if (found) {
+    return { id: found.id, synced: updateRecord(eventRef(orgId, found.id), { headcounts: { ...found.headcounts, ...input.headcounts }, serviceKind }) };
+  }
+  const id = eventIdFor(input.date, input.name);
+  const synced = trackWrite(setDoc(eventRef(orgId, id), {
+    orgId, date: input.date, type: 'service', name: input.name.trim().slice(0, 120), activity: null,
+    headcounts: input.headcounts, notes: '', serviceKind, ...createStamps(),
+  }));
   return { id, synced };
 }
 

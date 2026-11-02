@@ -9,6 +9,7 @@ import {
   HEADCOUNT_FIELDS,
   HEADCOUNT_LABELS,
   headcountTotal,
+  SERVICE_EXTRA_KEYS,
   type HeadcountKey,
   type Headcounts,
 } from '../../functions/src/shared/attendance';
@@ -20,6 +21,8 @@ const HINTS: Partial<Record<HeadcountKey, string>> = {
   new: 'First time here',
   returning: 'Been before',
   total: 'When names are not taken',
+  firstTimers: 'Already in the numbers above',
+  salvations: 'Already in the numbers above',
 };
 
 /**
@@ -29,7 +32,9 @@ const HINTS: Partial<Record<HeadcountKey, string>> = {
 export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdit: boolean }) {
   const toast = useToast();
   const saved = useSavedMessage();
-  const fields = HEADCOUNT_FIELDS[event.type];
+  const counted = HEADCOUNT_FIELDS[event.type];
+  // Services also take first-timers and salvations, which are not added to the total (Andy, 2026-11-02, 3A).
+  const fields: HeadcountKey[] = event.type === 'service' ? [...counted, ...SERVICE_EXTRA_KEYS] : counted;
   const [counts, setCounts] = useState<Headcounts>(event.headcounts ?? {});
   const [status, setStatus] = useState('');
   const dirty = useRef(false);
