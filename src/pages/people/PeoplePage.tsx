@@ -8,6 +8,7 @@ import { PersonRow } from '../../components/PersonRow';
 import { statusOptions, useCanChangeStatus, useStatusChanger } from '../../components/StatusPicker';
 import type { Person } from '../../state/PeopleContext';
 import { FamilyCard, FamilySuggestions } from '../../components/FamilyCard';
+import { useWaitingSignups } from './SignupsPage';
 import { useHouseholds } from '../../state/useFamilies';
 import { familyGroups, familyName, familySuggestions, groupedList } from '../../../functions/src/shared/families';
 import { matchesSearch, PERSON_STATUS_LABELS, statusesFor, type PersonStatus } from '../../../functions/src/shared/people';
@@ -106,7 +107,7 @@ export function PeoplePage() {
           </select>
         </label>
       )}
-      {church && can('people.write') && <p className="small people-join-link"><Link to="/people/join-qr">Family sign-up QR code</Link> <span className="muted">· people fill in their own family's details</span>{edit && <> · <Link to="/people/signups">Approve sign-ups</Link></>}</p>}
+      {church && can('people.write') && <p className="small people-join-link"><Link to="/people/join-qr">Family sign-up QR code</Link> <span className="muted">· people fill in their own family's details</span>{edit && <> · <ApproveLink orgId={current?.id} /></>}</p>}
       {church && current && <FamilySuggestions orgId={current.id} suggestions={suggestions} existing={households.existing} />}
       <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}${grouped && families.size ? ` in ${items.length} ${items.length === 1 ? 'row' : 'rows'}` : ''}`}</p>
       {selecting && (
@@ -141,4 +142,10 @@ export function PeoplePage() {
       )}
     </div>
   );
+}
+
+/** "Approve sign-ups", red with the count while forms wait, black when none do (Andy, 2026-11-02). */
+function ApproveLink({ orgId }: { orgId: string | undefined }) {
+  const { rows } = useWaitingSignups(orgId, true);
+  return <Link to="/people/signups" className={rows.length ? 'signups-waiting-link' : 'signups-clear-link'}>Approve sign-ups{rows.length ? ` (${rows.length})` : ''}</Link>;
 }

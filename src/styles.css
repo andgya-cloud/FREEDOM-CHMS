@@ -1938,3 +1938,9 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .signup-changes th, .signup-changes td { text-align: left; padding: 4px 6px; border-bottom: 1px solid var(--border, #e3e8e4); vertical-align: top; }
 .signup-changes th { font-weight: 600; color: var(--muted, #5c6b62); font-size: 0.8rem; }
 .join-age { margin: -4px 0 4px; }
+/* Red while sign-ups wait for approval, black when none do (Andy, 2026-11-02). */
+.signups-card b { color: #17241c; }
+.signups-card.signups-waiting { border-color: #c62828; }
+.signups-card.signups-waiting b { color: #c62828; }
+.signups-waiting-link { color: #c62828 !important; font-weight: 700; }
+.signups-clear-link { color: #17241c !important; }

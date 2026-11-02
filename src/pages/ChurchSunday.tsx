@@ -255,13 +255,16 @@ export function SignupsCard({ org }: { org: Organization }) {
   if (!keeper) return null;
   // Forms waiting for approval (Andy, 2026-11-02, 3A), plus anyone still flagged by the earlier form.
   const older = people.filter((p) => p.orgId === org.id && p.signup && !p.deletedAt).length;
-  if (!rows.length && !older) return null;
-  return rows.length ? (
-    <Link className="card signups-card" to="/people/signups">
-      <b>{rows.length} family sign-up{rows.length === 1 ? '' : 's'} to approve</b>
-      <span className="muted small">Nothing reaches People until you or Doreen approve it.</span>
-    </Link>
-  ) : (
+  // Red while anything waits, black when nothing does (Andy, 2026-11-02).
+  if (rows.length || !older) {
+    return (
+      <Link className={`card signups-card${rows.length ? ' signups-waiting' : ''}`} to="/people/signups">
+        <b>{rows.length ? `${rows.length} family sign-up${rows.length === 1 ? '' : 's'} to approve` : 'No family sign-ups to approve'}</b>
+        <span className="muted small">{rows.length ? 'Nothing reaches People until you or Doreen approve it.' : 'New forms from the family sign-up QR code show here.'}</span>
+      </Link>
+    );
+  }
+  return (
     <Link className="card signups-card" to="/people?status=signup">
       <b>{older} new sign-up{older === 1 ? '' : 's'} to check</b>
       <span className="muted small">Confirm each person&apos;s status on the People page.</span>
