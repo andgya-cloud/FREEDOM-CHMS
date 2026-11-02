@@ -139,3 +139,26 @@ export function upcomingBirthdays<T extends { birthday?: string | null }>(people
     .map((p) => ({ person: p, daysAway: keys.get(p.birthday!)! }))
     .sort((a, b) => a.daysAway - b.daysAway);
 }
+
+/**
+ * What to save when someone's status changes (Andy, 2026-11-02, 5A): becoming a Member records the day as
+ * memberSince; leaving membership clears it.
+ */
+export function statusChange(person: { status: PersonStatus; memberSince?: string | null }, next: PersonStatus, todayKey: string): { status: PersonStatus; memberSince: string | null } {
+  if (next === person.status) return { status: next, memberSince: person.memberSince ?? null };
+  if (next === 'member') return { status: next, memberSince: person.status === 'member' && person.memberSince ? person.memberSince : todayKey };
+  return { status: next, memberSince: null };
+}
+
+/** New members per month, newest month first, for the last `months` months. */
+export function newMembersByMonth<T extends { status: string; memberSince?: string | null }>(people: readonly T[], todayKey: string, months = 6): { month: string; people: T[] }[] {
+  const out: { month: string; people: T[] }[] = [];
+  let [y, m] = todayKey.split('-').map(Number) as [number, number];
+  for (let i = 0; i < months; i++) {
+    const key = `${y}-${String(m).padStart(2, '0')}`;
+    out.push({ month: key, people: people.filter((p) => p.status === 'member' && p.memberSince?.startsWith(key)) });
+    m -= 1;
+    if (m === 0) { m = 12; y -= 1; }
+  }
+  return out;
+}

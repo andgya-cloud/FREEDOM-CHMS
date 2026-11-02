@@ -20,7 +20,7 @@ describe('people', () => {
   it('lets an admin add and edit people in their own organization only', async () => {
     await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/new1'), { ...person('fcn'), ...created('admin') }));
     await assertFails(setDoc(doc(as('admin'), 'organizations/adia/people/new1'), { ...person('adia'), ...created('admin') }));
-    await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { status: 'regular', updatedAt: serverTimestamp(), updatedBy: 'admin' }));
+    await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { phone: '+254711000222', updatedAt: serverTimestamp(), updatedBy: 'admin' }));
   });
 
   it('accepts a birthday as day and month only (Andy, 2026-10-31)', async () => {
@@ -57,6 +57,16 @@ describe('people', () => {
     await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/fcn/birthdayCards/p1_2026'), { ...mark, whatsappBy: 'pastor' }, { merge: true }));
     await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/birthdayCards/p1_2026'), { year: 2030 }, { merge: true }));
     await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/birthdayCards')));
+  });
+
+  it('lets only Andrew and Doreen change a status at Freedom Church (Andy, 2026-11-02)', async () => {
+    const change = (uid: string, extra: Record<string, unknown>) => updateDoc(doc(as(uid), 'organizations/fcn/people/p1'), { ...extra, updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertFails(change('admin', { status: 'member', memberSince: '2026-11-02' }));
+    await assertFails(change('pastor', { status: 'inactive' }));
+    await assertFails(change('admin', { memberSince: '2026-11-02' }));
+    await assertSucceeds(change('admin', { fullName: 'Still Allowed' }));
+    await assertSucceeds(change('keeper', { status: 'member', memberSince: '2026-11-02' }));
+    await assertFails(change('keeper', { memberSince: '2/11/2026' }));
   });
 
   it('keeps each organization’s people apart', async () => {

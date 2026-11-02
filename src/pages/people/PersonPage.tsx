@@ -19,6 +19,7 @@ import { AttendanceForPerson } from '../../components/AttendanceForPerson';
 import { InvolvementForPerson } from '../../components/InvolvementForPerson';
 import { GivingForPerson } from '../../components/GivingForPerson';
 import { FamilyBox } from '../../components/FamilyBox';
+import { StatusPicker, useCanChangeStatus } from '../../components/StatusPicker';
 import { PERSON_STATUS_LABELS, birthdayLabel } from '../../../functions/src/shared/people';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
@@ -34,6 +35,7 @@ export function PersonPage() {
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
+  const canChangeStatus = useCanChangeStatus();
   const person = byId(personId);
   const org = organizations.find((o) => o.id === orgId);
 
@@ -86,6 +88,7 @@ export function PersonPage() {
       : consent?.given ? `Agreed${consent.date ? ` on ${formatDateKey(consent.date)}` : ''}` : 'Not agreed'],
   ];
   if (person.email) details.push(['Email', <a href={`mailto:${person.email}`}>{person.email}</a>]);
+  if (person.status === 'member' && person.memberSince) details.push(['Member since', formatDateKey(person.memberSince)]);
   if (person.firstVisitDate) details.push(['First visit', formatDateKey(person.firstVisitDate)]);
   if (person.serviceAttended) details.push(['Service attended', person.serviceAttended]);
   if (person.howHeard) details.push(['Heard about us', person.howHeard]);
@@ -108,7 +111,7 @@ export function PersonPage() {
       <div className="person-head">
         <div>
           <h1>{person.fullName}</h1>
-          <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>
+          {canChangeStatus ? <StatusPicker person={person} /> : <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>}
           {org && organizations.length > 1 && <span className="muted small"> · {org.name}</span>}
           {(callPhone || waPhone) && (
             <div className="contact-buttons no-print">

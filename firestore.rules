@@ -41,6 +41,11 @@ service cloud.firestore {
     function myDepartments() {
       return me().get('trainerCourseIds', []);
     }
+    // Andrew and Doreen, the two who keep the staff accounts (ACCOUNT_KEEPER_NAMES in permissions.ts).
+    function isAccountKeeper() {
+      return has('users.manage')
+        && me().get('displayName', '').lower().replace('[^a-z]', '') in ['andrewguya', 'doreenmayaka', 'doreenguya'];
+    }
     function hasAllOrgs() {
       return isActive() && me().allOrgs == true;
     }
@@ -163,7 +168,7 @@ service cloud.firestore {
     function validPerson() {
       let d = request.resource.data;
       return d.keys().hasOnly(['orgId', 'fullName', 'firstName', 'phone', 'whatsapp', 'whatsappConsent',
-               'email', 'status', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard',
+               'email', 'status', 'memberSince', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard',
                'invitedBy', 'invitedById', 'serviceAttended', 'customFields', 'possibleDuplicateIds',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.fullName is string && d.fullName.size() >= 1 && d.fullName.size() <= 120
@@ -173,6 +178,8 @@ service cloud.firestore {
         && d.whatsappConsent is map
         && (!('birthday' in d) || d.birthday == null
             || (d.birthday is string && d.birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
+        && (!('memberSince' in d) || d.memberSince == null
+            || (d.memberSince is string && d.memberSince.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
         && (!('birthYear' in d) || d.birthYear == null || (d.birthYear is int && d.birthYear >= 1900 && d.birthYear <= 2100))
         && (!('householdId' in d) || d.householdId == null || (d.householdId is string && d.householdId.size() <= 60))
         && (!('familyRole' in d) || d.familyRole == null || d.familyRole in ['parent', 'spouse', 'child'])
@@ -199,7 +206,13 @@ service cloud.firestore {
 
       match /people/{personId} {
         allow read: if canAccessOrg(orgId) && has('people.read');
-        allow create, update: if orgWrite(orgId, 'people.write') && validPerson();
+        allow create: if orgWrite(orgId, 'people.write') && validPerson();
+        // At Freedom Church only Andrew and Doreen change someone's status (Andy, 2026-11-02, 3).
+        allow update: if orgWrite(orgId, 'people.write') && validPerson()
+          && ((request.resource.data.status == resource.data.status
+               && request.resource.data.get('memberSince', null) == resource.data.get('memberSince', null))
+              || isAccountKeeper()
+              || get(/databases/$(database)/documents/organizations/$(orgId)).data.type != 'church_campus');
         allow delete: if false;
       }
 

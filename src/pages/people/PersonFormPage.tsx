@@ -11,7 +11,8 @@ import { useSavedMessage } from '../../lib/useSavedMessage';
 import { PersonPicker } from '../../components/PersonPicker';
 import { DuplicateNotice } from '../../components/DuplicateNotice';
 import { OrgPicker } from '../../components/OrgPicker';
-import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUS_LABELS, statusesFor, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
+import { findDuplicatesByPhone, HOW_HEARD_OPTIONS, PERSON_STATUS_LABELS, statusChange, statusesFor, tidyName, type PersonStatus } from '../../../functions/src/shared/people';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 
@@ -132,7 +133,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
         ? { given: form.consent, date: localDateKey(new Date(), org?.timeZone), recordedBy: profile?.uid ?? null, stoppedAt: form.consent ? null : prevConsent?.stoppedAt ?? null }
         : prevConsent,
       email: form.email.trim() || null,
-      status: form.status,
+      ...(existing ? statusChange(existing, form.status, localDateKey(new Date(), org?.timeZone)) : { status: form.status, memberSince: form.status === 'member' ? localDateKey(new Date(), org?.timeZone) : null }),
       firstVisitDate: form.firstVisitDate || null,
       gender: form.gender || null,
       birthday: form.birthday || null,
@@ -219,14 +220,19 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
           <input type="checkbox" checked={form.consent} onChange={(e) => set('consent', e.target.checked)} />
           <span><strong>They agreed</strong> to receive WhatsApp messages from us</span>
         </label>
-        <fieldset className="field">
-          <legend>Status</legend>
-          <div className="chips">
-            {statusesFor(org?.type).concat(existing && !statusesFor(org?.type).includes(existing.status) ? [existing.status] : []).map((s) => (
-              <button key={s} type="button" className={`chip ${form.status === s ? 'chip-on' : ''}`} aria-pressed={form.status === s} onClick={() => set('status', s)}>{PERSON_STATUS_LABELS[s]}</button>
-            ))}
-          </div>
-        </fieldset>
+        {/* At Freedom Church only Andrew and Doreen change an existing person's status (Andy, 2026-11-02, 3). */}
+        {existing && org?.type === 'church_campus' && !canKeepAccounts(profile) ? (
+          <p className="field muted small">Status: <span className={`badge badge-${existing.status}`}>{PERSON_STATUS_LABELS[existing.status]}</span> (only Andrew and Doreen change it)</p>
+        ) : (
+          <fieldset className="field">
+            <legend>Status</legend>
+            <div className="chips">
+              {statusesFor(org?.type).concat(existing && !statusesFor(org?.type).includes(existing.status) ? [existing.status] : []).map((s) => (
+                <button key={s} type="button" className={`chip ${form.status === s ? 'chip-on' : ''}`} aria-pressed={form.status === s} onClick={() => set('status', s)}>{PERSON_STATUS_LABELS[s]}</button>
+              ))}
+            </div>
+          </fieldset>
+        )}
         {(form.status === 'child' || form.status === 'student') && (
           <PersonPicker label="Parent or guardian" value={form.guardian} onChange={(v) => set('guardian', v)} excludeId={personId} hint="Messages go to the guardian, never to a child." />
         )}

@@ -1,3 +1,4 @@
+import { NewMembersCard } from '../../components/NewMembersCard';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { WeeklyDashboard } from './DashboardPage';
@@ -63,6 +64,7 @@ function Archive({ org }: { org: Organization }) {
           {tab === 'weekly' && <HomeScorecard org={org} inReports />}
           {tab === 'weekly' && <WeeklyDashboard org={org} />}
           {tab === 'weekly' && <CampusComparison />}
+          {tab === 'monthly' && org.type === 'church_campus' && <NewMembersCard org={org} />}
           <div className="narrow-block stack">
             <MakeReport key={tab} org={org} type={tab} />
             <h2>{tab === 'weekly' ? 'Weekly reports' : 'Monthly reports'}</h2>

@@ -5,6 +5,8 @@ import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { lookFor } from '../../lib/look';
 import { PersonRow } from '../../components/PersonRow';
+import { statusOptions, useCanChangeStatus, useStatusChanger } from '../../components/StatusPicker';
+import type { Person } from '../../state/PeopleContext';
 import { FamilyCard, FamilySuggestions } from '../../components/FamilyCard';
 import { useHouseholds } from '../../state/useFamilies';
 import { familyGroups, familyName, familySuggestions, groupedList } from '../../../functions/src/shared/families';
@@ -42,6 +44,21 @@ export function PeoplePage() {
     return members ? familyName(members, households.names.get(householdId!)) : null;
   };
 
+  // Andrew and Doreen change statuses from the list, one at a time or several at once (Andy, 2026-11-02, 1A 2A 3).
+  const edit = useCanChangeStatus();
+  const changeStatus = useStatusChanger();
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const pickFor = (p: Person) => (selecting ? {
+    on: picked.has(p.id),
+    toggle: () => setPicked((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n; }),
+  } : undefined);
+  const stopSelecting = () => { setSelecting(false); setPicked(new Set()); };
+  const applyToPicked = (next: PersonStatus) => {
+    changeStatus(people.filter((p) => picked.has(p.id)), next);
+    stopSelecting();
+  };
+
   const set = (key: string, value: string) => {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value); else next.delete(key);
@@ -53,7 +70,10 @@ export function PeoplePage() {
     <div className="page">
       <div className="page-head">
         <h1>People</h1>
-        {can('people.write') && <Link className="btn btn-primary" to="/people/new">Add person</Link>}
+        <span className="page-head-actions">
+          {edit && !selecting && <button type="button" className="btn" onClick={() => setSelecting(true)}>Select</button>}
+          {can('people.write') && <Link className="btn btn-primary" to="/people/new">Add person</Link>}
+        </span>
       </div>
       {!topSearch && (
         <input
@@ -87,17 +107,27 @@ export function PeoplePage() {
       )}
       {church && current && <FamilySuggestions orgId={current.id} suggestions={suggestions} existing={households.existing} />}
       <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}${grouped && families.size ? ` in ${items.length} ${items.length === 1 ? 'row' : 'rows'}` : ''}`}</p>
+      {selecting && (
+        <div className="select-bar" role="region" aria-label="Change status of the people chosen">
+          <span><b>{picked.size}</b> chosen</span>
+          <select value="" disabled={picked.size === 0} aria-label="Change status to" onChange={(e) => e.target.value && applyToPicked(e.target.value as PersonStatus)}>
+            <option value="">Change status to…</option>
+            {statusOptions(current?.type).map((s) => <option key={s} value={s}>{PERSON_STATUS_LABELS[s]}</option>)}
+          </select>
+          <button type="button" className="btn btn-quiet" onClick={stopSelecting}>Cancel</button>
+        </div>
+      )}
       {grouped && items.length > 0 && (
         <ul className="row-list">
           {items.slice(0, limit).map((i) => (i.kind === 'family'
-            ? <FamilyCard key={i.id} members={i.members} name={households.names.get(i.id)} />
-            : <PersonRow key={`${i.person.orgId}/${i.person.id}`} person={i.person} />))}
+            ? <FamilyCard key={i.id} members={i.members} name={households.names.get(i.id)} edit={edit && !selecting} pickFor={selecting ? pickFor : undefined} />
+            : <PersonRow key={`${i.person.orgId}/${i.person.id}`} person={i.person} edit={edit && !selecting} pick={pickFor(i.person)} />))}
         </ul>
       )}
       {grouped && items.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show more</button>}
       {!grouped && results.length > 0 && (
         <ul className="row-list">
-          {results.slice(0, limit).map((p) => <PersonRow key={`${p.orgId}/${p.id}`} person={p} family={familyOf(p.householdId)} />)}
+          {results.slice(0, limit).map((p) => <PersonRow key={`${p.orgId}/${p.id}`} person={p} family={familyOf(p.householdId)} edit={edit && !selecting} pick={pickFor(p)} />)}
         </ul>
       )}
       {!grouped && results.length > limit && <button type="button" className="btn" onClick={() => setLimit(limit + PAGE)}>Show more</button>}

@@ -57,3 +57,17 @@ describe('birthdays', () => {
     expect(upcomingBirthdays([{ birthday: '02-29' }], '2027-02-28')).toHaveLength(1);
   });
 });
+
+describe('status changes (Andy, 2026-11-02)', () => {
+  it('records the day someone becomes a Member and clears it when they leave', async () => {
+    const { statusChange, newMembersByMonth } = await import('./people');
+    expect(statusChange({ status: 'regular' }, 'member', '2026-11-02')).toEqual({ status: 'member', memberSince: '2026-11-02' });
+    expect(statusChange({ status: 'member', memberSince: '2025-01-05' }, 'member', '2026-11-02')).toEqual({ status: 'member', memberSince: '2025-01-05' });
+    expect(statusChange({ status: 'member', memberSince: '2025-01-05' }, 'inactive', '2026-11-02')).toEqual({ status: 'inactive', memberSince: null });
+    expect(statusChange({ status: 'member' }, 'member', '2026-11-02')).toEqual({ status: 'member', memberSince: null });
+    const months = newMembersByMonth([{ status: 'member', memberSince: '2026-11-01' }, { status: 'member', memberSince: '2026-01-03' }, { status: 'regular', memberSince: '2026-11-01' }], '2026-11-02', 12);
+    expect(months[0]).toEqual({ month: '2026-11', people: [{ status: 'member', memberSince: '2026-11-01' }] });
+    expect(months[10]!.month).toBe('2026-01');
+    expect(months[10]!.people).toHaveLength(1);
+  });
+});

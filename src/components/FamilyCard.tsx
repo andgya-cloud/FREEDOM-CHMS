@@ -7,6 +7,8 @@ import { addToFamily, notSameFamily } from '../state/useFamilies';
 import { friendlyError } from '../lib/errors';
 import { PERSON_STATUS_LABELS } from '../../functions/src/shared/people';
 import { formatPhone } from '../../functions/src/shared/phone';
+import { StatusPicker } from './StatusPicker';
+import type { RowPick } from './PersonRow';
 import { familyName, FAMILY_ROLE_LABELS, roleOf, type FamilySuggestion } from '../../functions/src/shared/families';
 
 /** The first parent who can take a WhatsApp message (6A). */
@@ -15,7 +17,7 @@ export function familyWhatsApp(members: readonly Person[]): Person | undefined {
 }
 
 /** One family on the People page (Andy, 2026-11-01, 1A): its name, then each person on their own line. */
-export function FamilyCard({ members, name }: { members: Person[]; name?: string | null }) {
+export function FamilyCard({ members, name, edit, pickFor }: { members: Person[]; name?: string | null; edit?: boolean; pickFor?: (p: Person) => RowPick | undefined }) {
   const title = familyName(members, name);
   const wa = familyWhatsApp(members);
   return (
@@ -26,15 +28,17 @@ export function FamilyCard({ members, name }: { members: Person[]; name?: string
       </div>
       <ul className="family-members">
         {members.map((p) => (
-          <li key={p.id}>
+          <li key={p.id} className={`family-member-row${pickFor?.(p)?.on ? ' row-picked' : ''}`}>
+            {pickFor && <input type="checkbox" className="row-pick" checked={!!pickFor(p)?.on} onChange={pickFor(p)?.toggle} aria-label={`Choose ${p.fullName}`} />}
             <Link to={`/people/${p.orgId}/${p.id}`} className="family-member">
               <span className="row-title">
                 {p.fullName}
                 <span className="muted small family-role">{FAMILY_ROLE_LABELS[roleOf(p)]}</span>
-                {p.status !== 'child' && <span className={`badge badge-${p.status}`}>{PERSON_STATUS_LABELS[p.status]}</span>}
+                {!edit && <span className={`badge badge-${p.status}`}>{PERSON_STATUS_LABELS[p.status]}</span>}
               </span>
               <span className="row-detail">{formatPhone(p.phone) || 'No phone'}</span>
             </Link>
+            {edit && <StatusPicker person={p} />}
           </li>
         ))}
       </ul>

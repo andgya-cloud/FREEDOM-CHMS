@@ -31,6 +31,8 @@ export interface Person {
   birthday?: string | null;
   /** Optional; orders a family's children (Andy, 2026-11-01). */
   birthYear?: number | null;
+  /** The day they became a Member, "YYYY-MM-DD" (Andy, 2026-11-02, 5A). */
+  memberSince?: string | null;
   householdId?: string | null;
   familyRole?: 'parent' | 'spouse' | 'child' | null;
   guardianId?: string | null;
