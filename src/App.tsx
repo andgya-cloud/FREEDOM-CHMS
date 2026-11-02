@@ -109,10 +109,13 @@ export function App() {
   if (welcome) {
     return (
       <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
-        <Routes>
-          <Route path="/welcome/:orgId" element={<WelcomeCardPage />} />
-          <Route path="/join/:orgId" element={<JoinFamilyPage />} />
-        </Routes>
+        {/* A church-green background so the white form stands out on a phone (Andy, 2026-11-02). */}
+        <div className="public-bg">
+          <Routes>
+            <Route path="/welcome/:orgId" element={<WelcomeCardPage />} />
+            <Route path="/join/:orgId" element={<JoinFamilyPage />} />
+          </Routes>
+        </div>
       </Suspense>
     );
   }

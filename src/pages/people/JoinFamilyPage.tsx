@@ -178,7 +178,7 @@ export function JoinFamilyPage() {
               </div>
             </fieldset>
             <BirthdayInput p={m} set={(k, v) => setMember(i, k, v)} yearLabel="Year of birth" />
-            <ClaimPicker who={`At ${info.name}, ${m.fullName.trim().split(' ')[0] || 'they'} is…`} value={m.claim} onChange={(v) => setMember(i, 'claim', v)} />
+            <ClaimPicker who={`At ${info.name}, ${m.fullName.trim().split(' ')[0] ? `${m.fullName.trim().split(' ')[0]} is` : 'this person is'}…`} value={m.claim} onChange={(v) => setMember(i, 'claim', v)} />
           </section>
         ))}
         {family.length < MAX_FAMILY && (

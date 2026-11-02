@@ -1908,3 +1908,23 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .signup-confirm { padding: 3px 10px; min-height: 0; font-size: 0.8rem; }
 .signups-card { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; border-left: 4px solid #e08a4a; }
 .people-join-link { margin: 4px 0 8px; }
+
+/* The public forms behind the QR codes: church-green background, white card and white boxes (Andy, 2026-11-02). */
+.public-bg { position: relative; isolation: isolate; min-height: 100vh; min-height: 100dvh; padding: 14px 12px 40px; color-scheme: light; background: #0f3b25; }
+/* A fixed layer, because iPhones ignore background-attachment: fixed. */
+.public-bg::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: radial-gradient(circle at 15% 0%, #a2c986 0%, transparent 45%), radial-gradient(circle at 100% 30%, #6dae85 0%, transparent 50%), linear-gradient(160deg, #1f5c3a 0%, #0f3b25 60%, #0b2e1c 100%); }
+.public-bg .welcome-card { margin: 2vh auto; background: #ffffff; color: #17241c; border: 2px solid rgb(201 162 78); border-radius: 22px; box-shadow: 0 18px 40px rgb(0 0 0 / 0.35); padding: 22px 16px; }
+.public-bg .welcome-card h1 { color: #0f3b25; }
+.public-bg .welcome-card p, .public-bg .welcome-card .muted { color: #3f5247; }
+.public-bg .welcome-card .field > span, .public-bg .welcome-card legend { color: #17241c; font-weight: 600; }
+.public-bg .welcome-card input:not([type=checkbox]):not([type=radio]), .public-bg .welcome-card select, .public-bg .welcome-card textarea {
+  background: #ffffff; color: #17241c; border: 1.5px solid #9fb8a8; box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.04); }
+.public-bg .welcome-card input:focus, .public-bg .welcome-card select:focus, .public-bg .welcome-card textarea:focus { border-color: #1f7a4d; outline: 2px solid rgb(31 122 77 / 0.25); outline-offset: 0; }
+.public-bg .welcome-card .chip { background: #ffffff; color: #17241c; border: 1.5px solid #9fb8a8; }
+.public-bg .welcome-card .chip-on { background: #1f7a4d; color: #ffffff; border-color: #1f7a4d; }
+.public-bg .welcome-card .btn { background: #ffffff; color: #0f3b25; border: 1.5px solid #1f7a4d; }
+.public-bg .welcome-card .btn-primary { background: linear-gradient(135deg, #1f7a4d, #0f3b25); color: #ffffff; border: 0; }
+.public-bg .join-member { background: #f4f8f3; border: 1.5px solid #c9d8cd; }
+.public-bg .join-section { color: #0f3b25; border-top-color: #dfe8e1; }
+.public-bg .splash { color: #ffffff; }
