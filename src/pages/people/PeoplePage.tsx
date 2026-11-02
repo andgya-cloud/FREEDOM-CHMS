@@ -107,7 +107,7 @@ export function PeoplePage() {
           </select>
         </label>
       )}
-      {church && can('people.write') && <p className="small people-join-link"><Link to="/people/join-qr">Family sign-up QR code</Link> <span className="muted">· people fill in their own family's details</span>{edit && <> · <ApproveLink orgId={current?.id} /></>}</p>}
+      {church && can('people.write') && <p className="small people-join-link"><Link to="/people/join-qr">Family sign-up QR code</Link> <span className="muted">· download or share it</span>{edit && <> · <ApproveLink orgId={current?.id} /></>}</p>}
       {church && current && <FamilySuggestions orgId={current.id} suggestions={suggestions} existing={households.existing} />}
       <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}${grouped && families.size ? ` in ${items.length} ${items.length === 1 ? 'row' : 'rows'}` : ''}`}</p>
       {selecting && (
