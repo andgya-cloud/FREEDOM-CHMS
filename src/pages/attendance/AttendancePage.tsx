@@ -139,7 +139,7 @@ export function AttendancePage() {
     if (!loaded.some((e) => e.id === id)) {
       try {
         const { synced } = createEvent(org.id, { date, type: trainer ? 'class' : eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean,
-          ...(org.type === 'church_campus' && !(org.serviceTimes ?? []).includes(clean) ? { serviceKind: 'other' as const } : {}) });
+          ...(org.type === 'church_campus' && !eventChoices(org).includes(clean) ? { serviceKind: 'other' as const } : {}) });
         synced.catch((err) => toast.show(friendlyError(err)));
       } catch (err) {
         toast.show(friendlyError(err));

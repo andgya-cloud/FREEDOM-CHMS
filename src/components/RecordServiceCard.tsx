@@ -5,7 +5,7 @@ import type { ChurchEvent } from '../state/useAttendance';
 import { useToast } from '../state/ToastContext';
 import { findService, recordService } from '../lib/attendanceWrites';
 import { friendlyError } from '../lib/errors';
-import { cleanCount, HEADCOUNT_LABELS, type Headcounts } from '../../functions/src/shared/attendance';
+import { cleanCount, eventChoices, HEADCOUNT_LABELS, type Headcounts } from '../../functions/src/shared/attendance';
 import { formatDateKey } from '../../functions/src/shared/datetime';
 
 const KEYS = ['adults', 'teens', 'children', 'firstTimers', 'salvations'] as const;
@@ -28,7 +28,8 @@ const lastSunday = (key: string) => shift(key, -new Date(`${key}T12:00:00Z`).get
  */
 export function RecordServiceCard({ org, today, events }: { org: Organization; today: string; events: ChurchEvent[] }) {
   const toast = useToast();
-  const sundays = useMemo(() => org.serviceTimes?.length ? org.serviceTimes : ['Sunday service'], [org.serviceTimes]);
+  // The same names the Check in buttons use ("Sunday 10:00 service"), so both write to the one record for that service.
+  const sundays = useMemo(() => eventChoices(org), [org]);
   const others = useMemo(() => {
     const listed = org.otherServices ?? [];
     const used = events.filter((e) => e.serviceKind === 'other').map((e) => e.name);
