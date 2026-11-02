@@ -32,6 +32,8 @@ const TeamPage = lazy(() => import('./pages/programs/TeamPage').then((m) => ({ d
 const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({ default: m.GroupPage })));
 const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
 const WelcomeCardPage = lazy(() => import('./pages/people/WelcomeCardPage').then((m) => ({ default: m.WelcomeCardPage })));
+const JoinFamilyPage = lazy(() => import('./pages/people/JoinFamilyPage').then((m) => ({ default: m.JoinFamilyPage })));
+const JoinPosterPage = lazy(() => import('./pages/people/JoinPosterPage').then((m) => ({ default: m.JoinPosterPage })));
 const WelcomePosterPage = lazy(() => import('./pages/people/WelcomePosterPage').then((m) => ({ default: m.WelcomePosterPage })));
 const PastRegisterPage = lazy(() => import('./pages/attendance/PastRegisterPage').then((m) => ({ default: m.PastRegisterPage })));
 const PastResultsPage = lazy(() => import('./pages/school/PastResultsPage').then((m) => ({ default: m.PastResultsPage })));
@@ -94,7 +96,8 @@ const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
   const settings = useAppSettings();
-  const welcome = useLocation().pathname.startsWith('/welcome/');
+  const path = useLocation().pathname;
+  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/');
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -106,7 +109,10 @@ export function App() {
   if (welcome) {
     return (
       <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
-        <Routes><Route path="/welcome/:orgId" element={<WelcomeCardPage />} /></Routes>
+        <Routes>
+          <Route path="/welcome/:orgId" element={<WelcomeCardPage />} />
+          <Route path="/join/:orgId" element={<JoinFamilyPage />} />
+        </Routes>
       </Suspense>
     );
   }
@@ -161,6 +167,7 @@ function AppRoutes() {
         <Route path="/giving/import" element={<RequirePermission permission="gifts.write"><ImportPage /></RequirePermission>} />
         <Route path="/giving/summary" element={<RequirePermission permission="finance.reports"><GivingSummaryPage /></RequirePermission>} />
         <Route path="/giving/dashboard" element={<Navigate to="/reports?tab=giving" replace />} />
+        <Route path="/people/join-qr" element={<RequirePermission permission="people.write"><JoinPosterPage /></RequirePermission>} />
         <Route path="/visitors/qr" element={<RequirePermission permission="people.write"><WelcomePosterPage /></RequirePermission>} />
         <Route path="/giving/pledges" element={<RequirePermission permission="giving.person.read"><PledgesPage /></RequirePermission>} />
         <Route path="/giving/statements" element={<RequirePermission permission="giving.person.read"><StatementsPage /></RequirePermission>} />

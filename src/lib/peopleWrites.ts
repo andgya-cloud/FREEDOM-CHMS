@@ -102,11 +102,12 @@ export function addPrayerRequest(orgId: string, personId: string, text: string) 
 export { updateStamps };
 
 /** Changes someone's status, recording the day they became a Member (Andy, 2026-11-02). */
-export function changeStatus(person: { orgId: string; id: string; status: PersonStatus; memberSince?: string | null }, next: PersonStatus, todayKey: string) {
-  return updatePerson(person.orgId, person.id, statusChange(person, next, todayKey));
+export function changeStatus(person: { orgId: string; id: string; status: PersonStatus; memberSince?: string | null; signup?: unknown }, next: PersonStatus, todayKey: string) {
+  // Choosing a status also settles a family sign-up's "Says: …" (Andy, 2026-11-02, 2A).
+  return updatePerson(person.orgId, person.id, { ...statusChange(person, next, todayKey), ...(person.signup ? { signup: null } : {}) });
 }
 
 /** Puts a status back exactly as it was, for Undo. */
-export function restoreStatus(person: { orgId: string; id: string; status: PersonStatus; memberSince?: string | null }) {
-  return updatePerson(person.orgId, person.id, { status: person.status, memberSince: person.memberSince ?? null });
+export function restoreStatus(person: { orgId: string; id: string; status: PersonStatus; memberSince?: string | null; signup?: unknown }) {
+  return updatePerson(person.orgId, person.id, { status: person.status, memberSince: person.memberSince ?? null, ...(person.signup ? { signup: person.signup } : {}) });
 }

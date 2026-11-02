@@ -7,6 +7,7 @@ import { friendlyError } from '../lib/errors';
 import { canKeepAccounts } from '../../functions/src/shared/permissions';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import { PERSON_STATUS_LABELS, statusesFor, type PersonStatus } from '../../functions/src/shared/people';
+import { confirmedStatus, SIGNUP_CLAIM_LABELS } from '../../functions/src/shared/familySignup';
 
 /** Whether this user may change statuses here: Andrew and Doreen, at Freedom Church (Andy, 2026-11-02, 3). */
 export function useCanChangeStatus(): boolean {
@@ -27,7 +28,7 @@ export function useStatusChanger() {
   const { current } = useOrg();
   return (people: Person[], next: PersonStatus) => {
     const today = localDateKey(new Date(), current?.timeZone || 'Africa/Nairobi');
-    const changing = people.filter((p) => p.status !== next);
+    const changing = people.filter((p) => p.status !== next || p.signup);
     if (!changing.length) return;
     const fail = (err: unknown) => toast.show(friendlyError(err));
     for (const p of changing) changeStatus(p, next, today).catch(fail);
@@ -55,5 +56,22 @@ export function StatusPicker({ person }: { person: Person }) {
     >
       {statusOptions(current?.type, person.status).map((s) => <option key={s} value={s}>{PERSON_STATUS_LABELS[s]}</option>)}
     </select>
+  );
+}
+
+/**
+ * "New sign-up · Says: Member" on someone from the family sign-up form, with Confirm for Andrew and Doreen
+ * (Andy, 2026-11-02, 2A 4A).
+ */
+export function SignupBadge({ person }: { person: Person }) {
+  const edit = useCanChangeStatus();
+  const change = useStatusChanger();
+  if (!person.signup) return null;
+  const claim = person.signup.claimed;
+  return (
+    <span className="signup-badge">
+      <span className="badge badge-signup">New sign-up · Says: {SIGNUP_CLAIM_LABELS[claim]}</span>
+      {edit && <button type="button" className="btn btn-small signup-confirm" onClick={() => change([person], confirmedStatus(claim))}>Confirm</button>}
+    </span>
   );
 }

@@ -67,6 +67,9 @@ describe('people', () => {
     await assertSucceeds(change('admin', { fullName: 'Still Allowed' }));
     await assertSucceeds(change('keeper', { status: 'member', memberSince: '2026-11-02' }));
     await assertFails(change('keeper', { memberSince: '2/11/2026' }));
+    await assertFails(change('admin', { signup: { claimed: 'member', at: '2026-11-02' } }));
+    await assertSucceeds(change('keeper', { signup: { claimed: 'member', at: '2026-11-02' } }));
+    await assertSucceeds(change('keeper', { signup: null }));
   });
 
   it('keeps each organization’s people apart', async () => {

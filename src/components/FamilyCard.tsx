@@ -7,7 +7,7 @@ import { addToFamily, notSameFamily } from '../state/useFamilies';
 import { friendlyError } from '../lib/errors';
 import { PERSON_STATUS_LABELS } from '../../functions/src/shared/people';
 import { formatPhone } from '../../functions/src/shared/phone';
-import { StatusPicker } from './StatusPicker';
+import { SignupBadge, StatusPicker } from './StatusPicker';
 import type { RowPick } from './PersonRow';
 import { familyName, FAMILY_ROLE_LABELS, roleOf, type FamilySuggestion } from '../../functions/src/shared/families';
 
@@ -33,11 +33,12 @@ export function FamilyCard({ members, name, edit, pickFor }: { members: Person[]
             <Link to={`/people/${p.orgId}/${p.id}`} className="family-member">
               <span className="row-title">
                 {p.fullName}
-                <span className="muted small family-role">{FAMILY_ROLE_LABELS[roleOf(p)]}</span>
+                {(p.familyRole || roleOf(p) === 'child') && <span className="muted small family-role">{FAMILY_ROLE_LABELS[roleOf(p)]}</span>}
                 {!edit && <span className={`badge badge-${p.status}`}>{PERSON_STATUS_LABELS[p.status]}</span>}
               </span>
               <span className="row-detail">{formatPhone(p.phone) || 'No phone'}</span>
             </Link>
+            <SignupBadge person={p} />
             {edit && <StatusPicker person={p} />}
           </li>
         ))}

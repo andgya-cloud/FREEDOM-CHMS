@@ -19,7 +19,7 @@ import { AttendanceForPerson } from '../../components/AttendanceForPerson';
 import { InvolvementForPerson } from '../../components/InvolvementForPerson';
 import { GivingForPerson } from '../../components/GivingForPerson';
 import { FamilyBox } from '../../components/FamilyBox';
-import { StatusPicker, useCanChangeStatus } from '../../components/StatusPicker';
+import { SignupBadge, StatusPicker, useCanChangeStatus } from '../../components/StatusPicker';
 import { PERSON_STATUS_LABELS, birthdayLabel } from '../../../functions/src/shared/people';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
@@ -112,6 +112,7 @@ export function PersonPage() {
         <div>
           <h1>{person.fullName}</h1>
           {canChangeStatus ? <StatusPicker person={person} /> : <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>}
+          {' '}<SignupBadge person={person} />
           {org && organizations.length > 1 && <span className="muted small"> · {org.name}</span>}
           {(callPhone || waPhone) && (
             <div className="contact-buttons no-print">

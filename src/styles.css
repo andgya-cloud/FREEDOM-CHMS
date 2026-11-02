@@ -1893,3 +1893,18 @@ select.badge-select.badge-regular { background-color: #dff3e8; color: #155c39; }
 select.badge-select.badge-member { background-color: #dfe7f7; color: #14284b; }
 select.badge-select.badge-inactive { background-color: var(--surface-2); color: var(--muted); }
 select.badge-select.badge-child, select.badge-select.badge-student { background-color: #efe3f7; color: #5b2a7a; }
+
+/* Family sign-up (Andy, 2026-11-02) */
+.join-card { max-width: 560px; }
+.join-section { font-size: 1.1rem; margin: 18px 0 2px; padding-top: 10px; border-top: 1px solid var(--border); }
+.join-birthday { display: grid; grid-template-columns: 1fr 1.6fr 1.2fr; gap: 6px; }
+.join-member { border: 1px solid var(--border); border-radius: 14px; padding: 12px; display: flex; flex-direction: column; gap: 8px; background: rgba(46, 107, 70, 0.03); }
+.join-member-head { display: flex; gap: 8px; align-items: center; }
+.join-member-head select { flex: 1; font-weight: 600; }
+.join-add { display: flex; gap: 8px; flex-wrap: wrap; }
+.join-claim .chips { flex-wrap: wrap; }
+.signup-badge { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; flex: none; }
+.badge-signup { background: #fde8d8; color: #8a3b0c; }
+.signup-confirm { padding: 3px 10px; min-height: 0; font-size: 0.8rem; }
+.signups-card { display: flex; flex-direction: column; gap: 2px; text-decoration: none; color: inherit; border-left: 4px solid #e08a4a; }
+.people-join-link { margin: 4px 0 8px; }

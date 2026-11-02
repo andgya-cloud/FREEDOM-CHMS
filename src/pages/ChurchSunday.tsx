@@ -243,3 +243,18 @@ export function AnniversariesCard({ org }: { org: Organization }) {
     </section>
   );
 }
+
+/** "3 new sign-ups to check" from the family sign-up form (Andy, 2026-11-02, 4A). */
+export function SignupsCard({ org }: { org: Organization }) {
+  const { can } = useAuth();
+  const { people } = usePeople();
+  if (!can('people.read')) return null;
+  const waiting = people.filter((p) => p.orgId === org.id && p.signup && !p.deletedAt);
+  if (!waiting.length) return null;
+  return (
+    <Link className="card signups-card" to="/people?status=signup">
+      <b>{waiting.length} new sign-up{waiting.length === 1 ? '' : 's'} to check</b>
+      <span className="muted small">From the family sign-up form. Confirm each person&apos;s status on the People page.</span>
+    </Link>
+  );
+}

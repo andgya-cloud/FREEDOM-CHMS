@@ -3,7 +3,7 @@ import type { Person } from '../state/PeopleContext';
 import { useOrg } from '../state/OrgContext';
 import { PERSON_STATUS_LABELS } from '../../functions/src/shared/people';
 import { formatPhone } from '../../functions/src/shared/phone';
-import { StatusPicker } from './StatusPicker';
+import { SignupBadge, StatusPicker } from './StatusPicker';
 
 export interface RowPick { on: boolean; toggle: () => void }
 
@@ -25,6 +25,7 @@ export function PersonRow({ person, family, edit, pick }: { person: Person; fami
           {orgName ? ` · ${orgName}` : ''}
         </span>
       </Link>
+      <SignupBadge person={person} />
       {edit && <StatusPicker person={person} />}
     </li>
   );

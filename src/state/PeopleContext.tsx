@@ -1,3 +1,4 @@
+import type { SignupMark } from '../../functions/src/shared/familySignup';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { collection, collectionGroup, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -33,6 +34,8 @@ export interface Person {
   birthYear?: number | null;
   /** The day they became a Member, "YYYY-MM-DD" (Andy, 2026-11-02, 5A). */
   memberSince?: string | null;
+  /** From the family sign-up form, until Andrew or Doreen confirm (Andy, 2026-11-02). */
+  signup?: SignupMark | null;
   householdId?: string | null;
   familyRole?: 'parent' | 'spouse' | 'child' | null;
   guardianId?: string | null;

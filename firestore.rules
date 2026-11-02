@@ -168,7 +168,7 @@ service cloud.firestore {
     function validPerson() {
       let d = request.resource.data;
       return d.keys().hasOnly(['orgId', 'fullName', 'firstName', 'phone', 'whatsapp', 'whatsappConsent',
-               'email', 'status', 'memberSince', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard',
+               'email', 'status', 'memberSince', 'signup', 'firstVisitDate', 'gender', 'birthday', 'birthYear', 'householdId', 'familyRole', 'guardianId', 'howHeard',
                'invitedBy', 'invitedById', 'serviceAttended', 'customFields', 'possibleDuplicateIds',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
         && d.fullName is string && d.fullName.size() >= 1 && d.fullName.size() <= 120
@@ -178,6 +178,7 @@ service cloud.firestore {
         && d.whatsappConsent is map
         && (!('birthday' in d) || d.birthday == null
             || (d.birthday is string && d.birthday.matches('^(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
+        && (!('signup' in d) || d.signup == null || d.signup is map)
         && (!('memberSince' in d) || d.memberSince == null
             || (d.memberSince is string && d.memberSince.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')))
         && (!('birthYear' in d) || d.birthYear == null || (d.birthYear is int && d.birthYear >= 1900 && d.birthYear <= 2100))
@@ -210,7 +211,8 @@ service cloud.firestore {
         // At Freedom Church only Andrew and Doreen change someone's status (Andy, 2026-11-02, 3).
         allow update: if orgWrite(orgId, 'people.write') && validPerson()
           && ((request.resource.data.status == resource.data.status
-               && request.resource.data.get('memberSince', null) == resource.data.get('memberSince', null))
+               && request.resource.data.get('memberSince', null) == resource.data.get('memberSince', null)
+               && request.resource.data.get('signup', null) == resource.data.get('signup', null))
               || isAccountKeeper()
               || get(/databases/$(database)/documents/organizations/$(orgId)).data.type != 'church_campus');
         allow delete: if false;

@@ -24,11 +24,11 @@ export function PeoplePage() {
   const topSearch = lookFor(current) !== 'standard';
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
-  const status = showStatus ? (params.get('status') ?? '') as PersonStatus | '' : '';
+  const status = showStatus ? (params.get('status') ?? '') as PersonStatus | 'signup' | '' : '';
   const [limit, setLimit] = useState(PAGE);
 
   const results = useMemo(
-    () => people.filter((p) => (!status || p.status === status) && matchesSearch(p, query)),
+    () => people.filter((p) => (!status || (status === 'signup' ? !!p.signup : p.status === status)) && matchesSearch(p, query)),
     [people, query, status],
   );
 
@@ -102,9 +102,11 @@ export function PeoplePage() {
           <select value={status} onChange={(e) => set('status', e.target.value)} aria-label="Filter by status">
             <option value="">Everyone</option>
             {statusesFor(current?.type).map((s) => <option key={s} value={s}>{PERSON_STATUS_LABELS[s]}</option>)}
+            {church && <option value="signup">New sign-ups</option>}
           </select>
         </label>
       )}
+      {church && can('people.write') && <p className="small people-join-link"><Link to="/people/join-qr">Family sign-up QR code</Link> <span className="muted">· people fill in their own family's details</span></p>}
       {church && current && <FamilySuggestions orgId={current.id} suggestions={suggestions} existing={households.existing} />}
       <p className="muted small">{loading ? 'Loading…' : `${results.length} ${results.length === 1 ? 'person' : 'people'}${grouped && families.size ? ` in ${items.length} ${items.length === 1 ? 'row' : 'rows'}` : ''}`}</p>
       {selecting && (
