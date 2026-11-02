@@ -114,7 +114,7 @@ export async function voucherPdf(org: OrgInfo, r: FirebaseFirestore.DocumentData
 }
 
 /** Why Gmail refused, in plain words, for the person who pressed Send Email. */
-function mailProblem(err: unknown): string {
+export function mailProblem(err: unknown): string {
   const e = err as { code?: string; responseCode?: number; message?: string };
   if (e?.code === 'EAUTH' || e?.responseCode === 535) return 'Gmail refused the app password for the sending address. Make a new app password on that Gmail account and save it again.';
   if (e?.code === 'ETIMEDOUT' || e?.code === 'ECONNECTION' || e?.code === 'ESOCKET') return 'Gmail could not be reached. Please try again.';

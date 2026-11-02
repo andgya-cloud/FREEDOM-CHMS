@@ -5,8 +5,11 @@ import { createCanvas, GlobalFonts, loadImage } from '@napi-rs/canvas';
 import { logger } from 'firebase-functions';
 import { defineSecret } from 'firebase-functions/params';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
+import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import nodemailer from 'nodemailer';
-import { db, FieldValue } from './common.js';
+import { db, FieldValue, requireCaller, requireString } from './common.js';
+import { canAccessOrg } from './shared/permissions.js';
+import { mailProblem } from './pettyNotify.js';
 import { localDateKey } from './shared/datetime.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { cardGreeting, cardId, CARD_FONT, cleanLayout, drawGreeting, type CardLayout } from './shared/birthdayCard.js';
@@ -114,3 +117,46 @@ export const birthdayCards = onSchedule(
   { schedule: 'every day 07:00', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, memory: '512MiB', secrets: [CHURCH_EMAIL_APP_PASSWORD] },
   async () => { logger.info(`Birthday cards emailed: ${await sendBirthdayCards()}`); },
 );
+
+/**
+ * "Email me a test card" in Settings › Birthday card (Andy, 2026-11-02): sends the saved card, with the caller's own
+ * first name on it, to the caller's own email from the church Gmail. Nothing is recorded as sent.
+ */
+export const birthdayTestCard = onCall({ invoker: 'public', memory: '512MiB', secrets: [CHURCH_EMAIL_APP_PASSWORD] }, async (request) => {
+  const caller = await requireCaller(request, 'settings.manage');
+  const orgId = requireString((request.data as { orgId?: unknown })?.orgId, 'orgId', { max: 60 });
+  if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You do not have access to that organization.');
+  const org = (await db.doc(`organizations/${orgId}`).get()).data();
+  if (!org || org.type !== 'church_campus') throw new HttpsError('failed-precondition', 'Birthday cards are for Freedom Church.');
+  const to = caller.profile.email || caller.email;
+  if (!to || !EMAIL.test(to)) throw new HttpsError('failed-precondition', 'Your account has no email address.');
+
+  const test = process.env.PETTY_MAIL_TEST_DIR;
+  const lh = letterheadFor({ type: 'church_campus', name: (org.name as string) ?? '' });
+  const pass = test ? 'test' : CHURCH_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
+  if (!lh.email || !pass) throw new HttpsError('failed-precondition', 'The church Gmail app password is not saved yet.');
+  const transport = test ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport({ service: 'gmail', auth: { user: lh.email, pass } });
+
+  const design = (await db.doc(`organizations/${orgId}/cards/birthday`).get()).data();
+  const image = typeof design?.image === 'string' ? design.image : null;
+  const picture = image ? Buffer.from(image.slice(image.indexOf(',') + 1), 'base64') : await defaultPicture();
+  const first = (caller.profile.displayName || to).split(/[\s@]/)[0] || 'Friend';
+  const card = await renderCard(picture, cardGreeting(first), cleanLayout(design as Partial<CardLayout> | undefined));
+  try {
+    const info = await transport.sendMail({
+      from: `"${lh.name}" <${lh.email}>`, to, replyTo: lh.email,
+      subject: `Test: Happy birthday, ${first}!`,
+      text: `Happy birthday, ${first}! (This is a test of the birthday card.)`,
+      html: `<div style="text-align:center"><img src="cid:card" alt="Happy birthday, ${first.replace(/[<>&"]/g, '')}!" style="max-width:100%;width:560px;height:auto"></div>`,
+      attachments: [{ filename: 'Happy-birthday.jpg', content: card, contentType: 'image/jpeg', cid: 'card' }],
+    });
+    if (test) {
+      await mkdir(test, { recursive: true });
+      await writeFile(join(test, `${Date.now()}-birthday-test.json`), String((info as { message?: unknown }).message ?? ''));
+    }
+  } catch (err) {
+    logger.warn('Birthday test card failed', err);
+    throw new HttpsError('unavailable', mailProblem(err));
+  }
+  return { to };
+});

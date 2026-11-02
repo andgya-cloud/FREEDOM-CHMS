@@ -27,4 +27,4 @@ export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whats
 export { inventoryEmail, inventoryReminders } from './inventory.js';
 export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
 export { welcomeCard } from './welcome.js';
-export { birthdayCards } from './birthdays.js';
+export { birthdayCards, birthdayTestCard } from './birthdays.js';

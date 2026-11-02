@@ -4,7 +4,7 @@ import type { Organization } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
 import { OrgGate } from '../../components/OrgGate';
 import { friendlyError } from '../../lib/errors';
-import { drawCard, saveCardDesign, shrinkPicture, useCardDesign, type CardDesign } from '../../lib/birthdayCard';
+import { drawCard, emailTestCard, saveCardDesign, shrinkPicture, useCardDesign, type CardDesign } from '../../lib/birthdayCard';
 import { CARD_COLORS, cardGreeting, DEFAULT_LAYOUT } from '../../../functions/src/shared/birthdayCard';
 
 /**
@@ -20,6 +20,7 @@ function BirthdayCard({ org }: { org: Organization }) {
   const toast = useToast();
   const [draft, setDraft] = useState<CardDesign | null>(null);
   const [busy, setBusy] = useState(false);
+  const [testing, setTesting] = useState(false);
   const canvas = useRef<HTMLCanvasElement>(null);
   const design = draft ?? saved;
   const changed = draft !== null;
@@ -51,6 +52,14 @@ function BirthdayCard({ org }: { org: Organization }) {
     } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   };
 
+  const sendTest = async () => {
+    setTesting(true);
+    try {
+      const { to } = await emailTestCard(org.id);
+      toast.show(`Test card sent to ${to}`);
+    } catch (err) { toast.show(friendlyError(err)); } finally { setTesting(false); }
+  };
+
   return (
     <div className="page narrow">
       <p><Link to="/settings">← Settings</Link></p>
@@ -74,6 +83,11 @@ function BirthdayCard({ org }: { org: Organization }) {
             <button type="button" className="btn btn-quiet" onClick={() => setDraft({ image: null, ...DEFAULT_LAYOUT })}>Back to Freedom Church's card</button>
           )}
         </div>
+        {!changed && (
+          <div className="button-row">
+            <button type="button" className="btn" disabled={testing} onClick={() => void sendTest()}>{testing ? 'Sending…' : 'Email me a test card'}</button>
+          </div>
+        )}
         {changed && (
           <div className="button-row">
             <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save'}</button>

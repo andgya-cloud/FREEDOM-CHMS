@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { db, auth } from '../firebase';
+import { httpsCallable } from 'firebase/functions';
+import { db, auth, functions } from '../firebase';
 import { useLiveDoc, useLiveQuery } from './useQuery';
 import { createStamps } from './records';
 import { trackWrite } from './sync';
@@ -111,4 +112,9 @@ export async function shrinkPicture(file: File): Promise<string> {
   } finally {
     URL.revokeObjectURL(url);
   }
+}
+
+/** Emails the saved card, with the caller's own name, to the caller (Andy, 2026-11-02). */
+export function emailTestCard(orgId: string) {
+  return httpsCallable<{ orgId: string }, { to: string }>(functions, 'birthdayTestCard', { timeout: 60_000 })({ orgId }).then((r) => r.data);
 }
