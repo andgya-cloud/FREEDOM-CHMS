@@ -79,7 +79,9 @@ export function SundayCard({ org, onSundayPage = false, pick }: { org: Organizat
   // Each service counts its headcount, or the people checked in when no headcount was typed (as in the reports).
   const dayServices = events.filter((e) => e.date === day && e.type === 'service' && !e.programId && !e.groupId);
   const picked = pick?.service ? dayServices.filter((e) => e.name === pick.service) : [];
-  const services = picked.length ? picked : dayServices.filter((e) => e.serviceKind !== 'other');
+  // A Sunday counts its Sunday services only; any other day counts every service held that day (2026-11-03).
+  const isSundayDay = new Date(`${day}T12:00:00Z`).getUTCDay() === 0;
+  const services = picked.length ? picked : isSundayDay ? dayServices.filter((e) => e.serviceKind !== 'other') : dayServices;
   const checkedIn = new Map<string, number>();
   for (const m of marks) if (attended(m.status)) checkedIn.set(m.eventId, (checkedIn.get(m.eventId) ?? 0) + 1);
   const came = services.reduce((sum, e) => sum + (headcountTotal(e.headcounts, 'service') || checkedIn.get(e.id) || 0), 0);
