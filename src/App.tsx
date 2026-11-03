@@ -1,4 +1,5 @@
 import { Suspense, lazy, useCallback } from 'react';
+import { InstallPage } from './pages/InstallPage';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useAuth } from './state/AuthContext';
 import { useAppSettings } from './state/useAppSettings';
@@ -98,7 +99,7 @@ export function App() {
   const { user, profile, loading, signOut } = useAuth();
   const settings = useAppSettings();
   const path = useLocation().pathname;
-  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/');
+  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path === '/install';
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -115,6 +116,7 @@ export function App() {
           <Routes>
             <Route path="/welcome/:orgId" element={<WelcomeCardPage />} />
             <Route path="/join/:orgId" element={<JoinFamilyPage />} />
+            <Route path="/install" element={<InstallPage />} />
           </Routes>
         </div>
       </Suspense>

@@ -1948,3 +1948,11 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 /* Record a past service (Andy, 2026-11-02) */
 .record-counts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
 .record-count input { font-size: 1.15rem; }
+
+/* Public install page (Andy, 2026-11-03). */
+.install-card { max-width: 520px; text-align: left; }
+.install-logo { display: block; margin: 0 auto 6px; border-radius: 16px; }
+.install-card h1 { text-align: center; }
+.install-go { width: 100%; font-size: 1.1rem; padding: 14px; margin: 6px 0 10px; }
+.public-bg .welcome-card .install-go { background: #1f7a4d; color: #ffffff; }
+.install-steps { padding-left: 22px; line-height: 1.6; }
