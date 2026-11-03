@@ -1960,3 +1960,9 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 /* Typed service name and time (Andy, 2026-11-03). */
 .service-input { display: grid; grid-template-columns: 1fr 130px; gap: 8px; align-items: end; }
 .service-input .service-time input { width: 100%; }
+.record-total { display: flex; flex-direction: column; justify-content: center; padding: 10px 12px; border-radius: 12px; background: rgb(var(--navy-rgb, 31 42 92) / 0.07); }
+.record-total b { font-size: 2rem; line-height: 1.1; }
+.record-total span { font-weight: 700; }
+.sunday-page .which-day-select { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; align-items: end; }
+.sunday-page .which-day-select .field { margin: 0; }
+.service-chips { margin-bottom: 10px; }

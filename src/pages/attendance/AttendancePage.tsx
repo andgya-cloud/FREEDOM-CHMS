@@ -2,9 +2,8 @@ import { useSchool } from '../../state/useSchool';
 import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type ExamSheetRow } from '../../state/useExams';
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
-import { FirstTimersCard, SundayCard } from '../ChurchSunday';
-import { RecordServiceCard } from '../../components/RecordServiceCard';
-import { ServiceInput, serviceSuggestions } from '../../components/ServiceInput';
+import { FirstTimersCard, SundayCard, weekdayName } from '../ChurchSunday';
+import { ServiceDayCard } from '../../components/ServiceDayCard';
 import type { ChurchEvent as AttendanceEvent } from '../../state/useAttendance';
 import { cohortStart } from '../../../functions/src/shared/pastRecords';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -291,49 +290,55 @@ function PastCard({ cohorts, closed, results }: { cohorts: string[]; closed: (c:
   );
 }
 
+/** The day `n` days before a YYYY-MM-DD day. */
+const daysBefore = (key: string, n: number) => {
+  const d = new Date(`${key}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+};
+const ANOTHER = 'another';
+
 /**
- * Freedom Church's Sunday page (Andy, 2026-11-01, 3A): Check in at the top, then the Sunday figures, the
- * first-timers with the QR poster, and the past services folded away. "Record a past service" (2026-11-02) covers
- * other days and midweek or special services.
+ * Freedom Church's Service page (Andy, 2026-11-03, 1A-4A; first built 2026-11-01 as the Sunday page). "Which day?"
+ * lists today and the six days before by name, or any earlier date from a calendar. One card then takes the service,
+ * its time and the numbers (with Total count), and the figures card follows the day and service picked.
  */
 function SundayPage({ org, date, setDate, today, todays, events, loading, canRecord, open }: {
   org: Parameters<typeof SundayCard>[0]['org'];
   date: string; setDate: (d: string) => void; today: string; choices: string[]; todays: AttendanceEvent[];
   events: AttendanceEvent[]; loading: boolean; canRecord: boolean; open: (name: string) => void;
 }) {
-  const other = date !== today;
   const [service, setService] = useState('');
   const [time, setTime] = useState('');
+  const week = Array.from({ length: 7 }, (_, i) => daysBefore(today, i));
+  const [another, setAnother] = useState(false);
+  const picking = another || !week.includes(date);
   const name = serviceName(service, time);
-  const suggestions = serviceSuggestions([...events.map((e) => e.name), ...(org.otherServices ?? [])]);
-  const running = todays.filter((e) => e.type === 'service');
-  const start = (e: FormEvent) => { e.preventDefault(); if (name) { open(name); setService(''); setTime(''); } };
+  const pick = { day: date, service: todays.some((e) => e.name === name) ? name : '' };
   return (
     <div className="page narrow sunday-page">
-      <h1>Sunday</h1>
+      <h1>Service</h1>
+      <section className="card which-day-select">
+        <label className="field"><span>Which day?</span>
+          <select value={picking ? ANOTHER : date} onChange={(e) => {
+            if (e.target.value === ANOTHER) { setAnother(true); return; }
+            setAnother(false); setDate(e.target.value);
+          }}>
+            {week.map((d, i) => <option key={d} value={d}>{i === 0 ? 'Today, ' : i === 1 ? 'Yesterday, ' : ''}{weekdayName(d)} {formatDateKey(d)}</option>)}
+            <option value={ANOTHER}>Another date…</option>
+          </select>
+        </label>
+        {picking && (
+          <label className="field"><span>Date</span>
+            <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value && e.target.value <= today ? e.target.value : today)} />
+          </label>
+        )}
+      </section>
       {canRecord && (
-        <section className="card">
-          <h2>{other ? `Check in for ${formatDateKey(date)}` : 'Check in'}</h2>
-          {other && <button type="button" className="btn btn-quiet align-start" onClick={() => setDate(today)}>Back to today</button>}
-          {running.length > 0 && (
-            <div className="start-grid">
-              {running.map((e) => (
-                <button key={e.id} type="button" className="start-tile" onClick={() => open(e.name)}>
-                  <span className="start-name">{e.name}</span>
-                  <span className="start-hint">Open, carry on</span>
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Type the service and its time (Andy, 2026-11-03). */}
-          <form className="stack" onSubmit={start}>
-            <ServiceInput service={service} time={time} onService={setService} onTime={setTime} suggestions={suggestions} />
-            <button type="submit" className="btn btn-primary align-start" disabled={!name}>Start check in</button>
-          </form>
-        </section>
+        <ServiceDayCard org={org} date={date} todays={todays} events={events} service={service} time={time}
+          setService={setService} setTime={setTime} onCheckIn={open} />
       )}
-      {canRecord && <RecordServiceCard org={org} today={today} events={events} />}
-      <SundayCard org={org} onSundayPage />
+      <SundayCard org={org} onSundayPage pick={pick} />
       <FirstTimersCard org={org} />
       <details className="card fold">
         <summary>Past services</summary>

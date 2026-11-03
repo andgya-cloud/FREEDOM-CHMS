@@ -45,14 +45,21 @@ interface PipelineRow { personId: string; status: string; deletedAt?: unknown }
  * the live count and a big Check in; on Monday it shows yesterday's figures. Either day, one tap sends the summary
  * to the leaders on WhatsApp from the user's own phone (nothing is sent automatically).
  */
-export function SundayCard({ org, onSundayPage = false }: { org: Organization; onSundayPage?: boolean }) {
+/** "Sunday", "Monday"… for a YYYY-MM-DD day. */
+export function weekdayName(day: string): string {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${day}T12:00:00Z`).getUTCDay()]!;
+}
+
+export function SundayCard({ org, onSundayPage = false, pick }: { org: Organization; onSundayPage?: boolean; pick?: { day: string; service: string } }) {
   const { can } = useAuth();
   const { people } = usePeople();
   const tz = org.timeZone || 'Africa/Nairobi';
   const { sunday, isSunday } = sundayFor(tz);
   // Mid-week the card shows last Sunday, so Today always has it (Andy, 2026-11-01, 4A).
-  const day = sunday ?? lastSunday(tz);
-  const yesterday = !!sunday && !isSunday;
+  // On the Service page it follows the day and service picked there (Andy, 2026-11-03, 4A).
+  const day = pick?.day ?? sunday ?? lastSunday(tz);
+  const yesterday = !pick && !!sunday && !isSunday;
+  const live = isSunday && (!pick || pick.day === sunday);
   const seeNames = can('people.read') || can('attendance.write');
   const seeGiving = can('giving.person.read');
   const seePastoral = can('pastoral.read');
@@ -70,7 +77,9 @@ export function SundayCard({ org, onSundayPage = false }: { org: Organization; o
   if (!day) return null;
 
   // Each service counts its headcount, or the people checked in when no headcount was typed (as in the reports).
-  const services = events.filter((e) => e.date === day && e.type === 'service' && !e.programId && !e.groupId && e.serviceKind !== 'other');
+  const dayServices = events.filter((e) => e.date === day && e.type === 'service' && !e.programId && !e.groupId);
+  const picked = pick?.service ? dayServices.filter((e) => e.name === pick.service) : [];
+  const services = picked.length ? picked : dayServices.filter((e) => e.serviceKind !== 'other');
   const checkedIn = new Map<string, number>();
   for (const m of marks) if (attended(m.status)) checkedIn.set(m.eventId, (checkedIn.get(m.eventId) ?? 0) + 1);
   const came = services.reduce((sum, e) => sum + (headcountTotal(e.headcounts, 'service') || checkedIn.get(e.id) || 0), 0);
@@ -79,27 +88,30 @@ export function SundayCard({ org, onSundayPage = false }: { org: Organization; o
   const firstTimers = Math.max(people.filter((p) => p.orgId === org.id && p.firstVisitDate === day).length, typed('firstTimers'));
   const givingCents = gifts.filter((g) => g.status !== 'void').reduce((s, g) => s + g.amountCents, 0);
 
-  const figures: [string, string][] = [[isSunday ? 'Came so far' : 'Came', String(came)], ['First-timers', String(firstTimers)]];
+  // "Total count" first (Andy, 2026-11-03, 3A 4A): adults, teens and children.
+  const figures: [string, string][] = [[live ? 'Total count so far' : 'Total count', String(came)], ['First-timers', String(firstTimers)]];
   if (seePastoral) figures.push(['Salvations', String(Math.max(salvations.length, typed('salvations')))]);
   if (seeGiving) figures.push(['Giving', formatMoney(givingCents)]);
 
   const text = [
-    `${org.name}, Sunday ${formatDateKey(day)}`,
-    ...figures.map(([k, v]) => `${k === 'Came so far' ? 'Came' : k}: ${v}`),
+    `${org.name}, ${picked.length ? `${pick!.service}, ` : ''}${weekdayName(day)} ${formatDateKey(day)}`,
+    ...figures.map(([k, v]) => `${k === 'Total count so far' ? 'Total count' : k}: ${v}`),
     'Sent from Insight-IQ',
   ].join('\n');
 
   return (
-    <section className={`card sunday-card${isSunday ? ' sunday-live' : ''}`} aria-label="Sunday">
+    <section className={`card sunday-card${live ? ' sunday-live' : ''}`} aria-label="Service figures">
       <div className="sunday-head">
-        <h2>{isSunday ? "Today's service" : yesterday ? "Yesterday's service" : `Last Sunday, ${formatDateKey(day)}`}</h2>
-        {isSunday && <span className="sunday-dot">Live</span>}
+        <h2>{pick
+          ? `${picked.length ? pick.service : day === sundayFor(tz).today ? "Today's services" : 'Services'}, ${weekdayName(day)} ${formatDateKey(day)}`
+          : isSunday ? "Today's service" : yesterday ? "Yesterday's service" : `Last Sunday, ${formatDateKey(day)}`}</h2>
+        {live && <span className="sunday-dot">Live</span>}
       </div>
       <dl className="sunday-figs">
         {figures.map(([k, v]) => <div key={k}><dd>{v}</dd><dt>{k}</dt></div>)}
       </dl>
       <div className="sunday-actions">
-        {!onSundayPage && (can('attendance.write') || can('people.read')) && <Link className={`btn${isSunday ? ' btn-primary' : ''}`} to="/attendance">{isSunday ? 'Check in' : 'Sunday page'}</Link>}
+        {!onSundayPage && (can('attendance.write') || can('people.read')) && <Link className={`btn${isSunday ? ' btn-primary' : ''}`} to="/attendance">{isSunday ? 'Check in' : 'Service page'}</Link>}
         {!onSundayPage && can('people.write') && <Link className="btn" to="/visitors/new">Add visitor</Link>}
         <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Send to leaders on WhatsApp</a>
       </div>

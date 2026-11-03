@@ -164,7 +164,7 @@ export function OrganizationFormPage() {
           <label className="field">
             <span>Other services (one per line, optional)</span>
             <textarea rows={3} value={otherText} placeholder={'Midweek service\nYouth service\nPrayer night'} onChange={(e) => setOtherText(e.target.value)} />
-            <small className="hint">Offered on the Sunday page under "Record a past service". Their numbers show apart from Sunday services in Reports.</small>
+            <small className="hint">Suggested on the Service page. Their numbers show apart from Sunday services in Reports.</small>
           </label>
         )}
         {form.type !== 'church_campus' && (
