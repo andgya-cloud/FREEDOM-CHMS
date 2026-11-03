@@ -7,6 +7,7 @@ describe('typed service name and time (Andy, 2026-11-03)', () => {
     expect(serviceName('Main service', '')).toBe('Main service');
     expect(serviceName('Youth service 16:30', '10:00')).toBe('Youth service 16:30');
     expect(serviceName('', '10:00')).toBe('');
+    expect(serviceName('Sunday 10:00 service', '09:30')).toBe('Sunday 10:00 service');
     expect(eventIdFor('2026-11-08', serviceName('Main service', '10:00'))).toBe('2026-11-08_main_service_10_00');
   });
   it('splits it back and spots other services', () => {

@@ -188,7 +188,7 @@ export function serviceName(service: string, time: string): string {
   const name = service.trim().replace(/\s+/g, ' ');
   const t = time.trim();
   if (!name) return '';
-  if (!t || /\b\d{1,2}[:.]\d{2}\s*(am|pm)?$/i.test(name)) return name;
+  if (!t || /\b\d{1,2}[:.]\d{2}\b/.test(name)) return name;
   return `${name} ${t}`;
 }
 

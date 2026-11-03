@@ -1960,9 +1960,22 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 /* Typed service name and time (Andy, 2026-11-03). */
 .service-input { display: grid; grid-template-columns: 1fr 130px; gap: 8px; align-items: end; }
 .service-input .service-time input { width: 100%; }
-.record-total { display: flex; flex-direction: column; justify-content: center; padding: 10px 12px; border-radius: 12px; background: rgb(var(--navy-rgb, 31 42 92) / 0.07); }
-.record-total b { font-size: 2rem; line-height: 1.1; }
-.record-total span { font-weight: 700; }
-.sunday-page .which-day-select { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; align-items: end; }
-.sunday-page .which-day-select .field { margin: 0; }
-.service-chips { margin-bottom: 10px; }
+/* Service page counting (Andy, 2026-11-03, 2A 4A): date + time line, six equal boxes with dark green borders. */
+.sunday-page .when-card { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: start; }
+.sunday-page .when-card .field { margin: 0; }
+.count-status { margin: 4px 0 10px; color: #14532d; font-weight: 600; min-height: 1.2em; }
+.count-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.count-box { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 10px; border: 2px solid #14532d; border-radius: 14px; background: #ffffff; text-align: center; }
+.count-label { font-weight: 700; color: #14532d; }
+.count-box input.count-number { width: 100%; max-width: 140px; text-align: center; font-size: 2rem; font-weight: 800; padding: 4px; border: 0; background: transparent; color: #0f2a1a; -moz-appearance: textfield; }
+.count-box input.count-number::-webkit-outer-spin-button, .count-box input.count-number::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.count-box input.count-number:focus { outline: 2px solid rgb(20 83 45 / 0.35); border-radius: 8px; }
+.count-taps { display: flex; gap: 10px; }
+.count-tap { width: 48px; height: 48px; border-radius: 50%; border: 2px solid #14532d; background: #ffffff; color: #14532d; font-size: 1.6rem; font-weight: 800; line-height: 1; cursor: pointer; touch-action: manipulation; }
+.count-tap.count-plus { background: #14532d; color: #ffffff; }
+.count-tap:disabled { opacity: 0.35; cursor: default; }
+.count-hint { color: #4b5d52; font-size: 0.78rem; }
+.count-total { background: #14532d; justify-content: center; }
+.count-total .count-label, .count-total .count-hint { color: #e8f3ec; }
+.count-total b.count-number { font-size: 2.6rem; color: #ffffff; line-height: 1.1; }
+@media (max-width: 560px) { .count-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } .count-tap { width: 44px; height: 44px; } }

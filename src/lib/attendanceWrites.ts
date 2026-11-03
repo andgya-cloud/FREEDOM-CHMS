@@ -1,4 +1,4 @@
-import { doc, getDoc, setDoc, Timestamp, writeBatch } from 'firebase/firestore';
+import { doc, getDoc, increment, setDoc, Timestamp, writeBatch } from 'firebase/firestore';
 import { db } from '../firebase';
 import { createStamps, softDelete, updateRecord, updateStamps } from './records';
 import { trackWrite } from './sync';
@@ -171,4 +171,32 @@ export function markMany(
     writes.push(trackWrite(batch.commit()));
   }
   return Promise.all(writes);
+}
+
+/**
+ * One count on a service, saved straight away (Andy, 2026-11-03, 5A 6A). A tap adds or takes one with an increment, so
+ * taps from several phones and the web add up instead of overwriting each other; a typed number sets the count. The
+ * service is created on its first count. Works offline: the write waits in the phone and goes when the internet returns.
+ */
+export function saveServiceCount(
+  orgId: string,
+  service: { date: string; name: string; other: boolean; exists: boolean },
+  key: keyof Headcounts,
+  change: { add: number } | { set: number },
+): Promise<unknown> {
+  const id = eventIdFor(service.date, service.name);
+  const ref = eventRef(orgId, id);
+  if (service.exists) {
+    const value = 'add' in change ? increment(change.add) : change.set;
+    return updateRecord(ref, { [`headcounts.${key}`]: value });
+  }
+  const first = 'add' in change ? Math.max(0, change.add) : change.set;
+  return trackWrite(setDoc(ref, {
+    orgId, date: service.date, type: 'service', name: service.name.trim().slice(0, 120), activity: null,
+    headcounts: { [key]: first }, notes: '', serviceKind: service.other ? 'other' : null, ...createStamps(),
+  })).catch((err: { code?: string }) => {
+    // Another phone created it first: count into theirs.
+    if (err.code === 'permission-denied') return updateRecord(ref, { [`headcounts.${key}`]: 'add' in change ? increment(change.add) : change.set });
+    throw err;
+  });
 }

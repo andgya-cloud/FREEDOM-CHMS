@@ -20,7 +20,6 @@ import {
   EVENT_TYPE_LABELS,
   eventChoices,
   isOtherServiceName,
-  serviceName,
   eventIdFor,
   eventTypeFor,
   headcountTotal,
@@ -290,53 +289,36 @@ function PastCard({ cohorts, closed, results }: { cohorts: string[]; closed: (c:
   );
 }
 
-/** The day `n` days before a YYYY-MM-DD day. */
-const daysBefore = (key: string, n: number) => {
-  const d = new Date(`${key}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() - n);
-  return d.toISOString().slice(0, 10);
-};
-const ANOTHER = 'another';
 
 /**
- * Freedom Church's Service page (Andy, 2026-11-03, 1A-4A; first built 2026-11-01 as the Sunday page). "Which day?"
- * lists today and the six days before by name, or any earlier date from a calendar. One card then takes the service,
- * its time and the numbers (with Total count), and the figures card follows the day and service picked.
+ * Freedom Church's Service page (Andy, 2026-11-03, 1A-6A; first built 2026-11-01 as the Sunday page): the date from a
+ * calendar and the time, then one counting card (type the service, tap the six boxes, everything saves by itself), and
+ * the figures card for the day and service picked.
  */
 function SundayPage({ org, date, setDate, today, todays, events, loading, canRecord, open }: {
   org: Parameters<typeof SundayCard>[0]['org'];
   date: string; setDate: (d: string) => void; today: string; choices: string[]; todays: AttendanceEvent[];
   events: AttendanceEvent[]; loading: boolean; canRecord: boolean; open: (name: string) => void;
 }) {
-  const [service, setService] = useState('');
   const [time, setTime] = useState('');
-  const week = Array.from({ length: 7 }, (_, i) => daysBefore(today, i));
-  const [another, setAnother] = useState(false);
-  const picking = another || !week.includes(date);
-  const name = serviceName(service, time);
-  const pick = { day: date, service: todays.some((e) => e.name === name) ? name : '' };
+  const [chosen, setChosen] = useState('');
+  const pick = { day: date, service: todays.some((e) => e.name === chosen) ? chosen : '' };
   return (
     <div className="page narrow sunday-page">
       <h1>Service</h1>
-      <section className="card which-day-select">
-        <label className="field"><span>Which day?</span>
-          <select value={picking ? ANOTHER : date} onChange={(e) => {
-            if (e.target.value === ANOTHER) { setAnother(true); return; }
-            setAnother(false); setDate(e.target.value);
-          }}>
-            {week.map((d, i) => <option key={d} value={d}>{i === 0 ? 'Today, ' : i === 1 ? 'Yesterday, ' : ''}{weekdayName(d)} {formatDateKey(d)}</option>)}
-            <option value={ANOTHER}>Another date…</option>
-          </select>
+      {/* Pick the day on a calendar and the time beside it (Andy, 2026-11-03, 2A). */}
+      <section className="card when-card">
+        <label className="field"><span>Date</span>
+          <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value && e.target.value <= today ? e.target.value : today)} />
+          <small className="hint">{weekdayName(date)}{date === today ? ', today' : ''}</small>
         </label>
-        {picking && (
-          <label className="field"><span>Date</span>
-            <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value && e.target.value <= today ? e.target.value : today)} />
-          </label>
-        )}
+        <label className="field"><span>Time</span>
+          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} />
+          <small className="hint">Optional</small>
+        </label>
       </section>
       {canRecord && (
-        <ServiceDayCard org={org} date={date} todays={todays} events={events} service={service} time={time}
-          setService={setService} setTime={setTime} onCheckIn={open} />
+        <ServiceDayCard org={org} date={date} time={time} setTime={setTime} todays={todays} events={events} onCheckIn={open} onName={setChosen} />
       )}
       <SundayCard org={org} onSundayPage pick={pick} />
       <FirstTimersCard org={org} />
