@@ -4,6 +4,7 @@ import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
 import { FirstTimersCard, SundayCard } from '../ChurchSunday';
 import { RecordServiceCard } from '../../components/RecordServiceCard';
+import { ServiceInput, serviceSuggestions } from '../../components/ServiceInput';
 import type { ChurchEvent as AttendanceEvent } from '../../state/useAttendance';
 import { cohortStart } from '../../../functions/src/shared/pastRecords';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -19,6 +20,8 @@ import { PRINCIPAL_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/share
 import {
   EVENT_TYPE_LABELS,
   eventChoices,
+  isOtherServiceName,
+  serviceName,
   eventIdFor,
   eventTypeFor,
   headcountTotal,
@@ -139,7 +142,7 @@ export function AttendancePage() {
     if (!loaded.some((e) => e.id === id)) {
       try {
         const { synced } = createEvent(org.id, { date, type: trainer ? 'class' : eventTypeFor(org.type, clean), name: clean, activity: org.type === 'church_campus' ? null : clean,
-          ...(org.type === 'church_campus' && !eventChoices(org).includes(clean) ? { serviceKind: 'other' as const } : {}) });
+          ...(org.type === 'church_campus' && isOtherServiceName(org.otherServices, clean) ? { serviceKind: 'other' as const } : {}) });
         synced.catch((err) => toast.show(friendlyError(err)));
       } catch (err) {
         toast.show(friendlyError(err));
@@ -293,12 +296,18 @@ function PastCard({ cohorts, closed, results }: { cohorts: string[]; closed: (c:
  * first-timers with the QR poster, and the past services folded away. "Record a past service" (2026-11-02) covers
  * other days and midweek or special services.
  */
-function SundayPage({ org, date, setDate, today, choices, todays, events, loading, canRecord, open }: {
+function SundayPage({ org, date, setDate, today, todays, events, loading, canRecord, open }: {
   org: Parameters<typeof SundayCard>[0]['org'];
   date: string; setDate: (d: string) => void; today: string; choices: string[]; todays: AttendanceEvent[];
   events: AttendanceEvent[]; loading: boolean; canRecord: boolean; open: (name: string) => void;
 }) {
   const other = date !== today;
+  const [service, setService] = useState('');
+  const [time, setTime] = useState('');
+  const name = serviceName(service, time);
+  const suggestions = serviceSuggestions([...events.map((e) => e.name), ...(org.otherServices ?? [])]);
+  const running = todays.filter((e) => e.type === 'service');
+  const start = (e: FormEvent) => { e.preventDefault(); if (name) { open(name); setService(''); setTime(''); } };
   return (
     <div className="page narrow sunday-page">
       <h1>Sunday</h1>
@@ -306,17 +315,21 @@ function SundayPage({ org, date, setDate, today, choices, todays, events, loadin
         <section className="card">
           <h2>{other ? `Check in for ${formatDateKey(date)}` : 'Check in'}</h2>
           {other && <button type="button" className="btn btn-quiet align-start" onClick={() => setDate(today)}>Back to today</button>}
-          <div className="start-grid">
-            {choices.map((name) => {
-              const already = todays.some((e) => e.id === eventIdFor(date, name));
-              return (
-                <button key={name} type="button" className="start-tile" onClick={() => open(name)}>
-                  <span className="start-name">{name}</span>
-                  <span className="start-hint">{already ? 'Open, carry on' : 'Start'}</span>
+          {running.length > 0 && (
+            <div className="start-grid">
+              {running.map((e) => (
+                <button key={e.id} type="button" className="start-tile" onClick={() => open(e.name)}>
+                  <span className="start-name">{e.name}</span>
+                  <span className="start-hint">Open, carry on</span>
                 </button>
-              );
-            })}
-          </div>
+              ))}
+            </div>
+          )}
+          {/* Type the service and its time (Andy, 2026-11-03). */}
+          <form className="stack" onSubmit={start}>
+            <ServiceInput service={service} time={time} onService={setService} onTime={setTime} suggestions={suggestions} />
+            <button type="submit" className="btn btn-primary align-start" disabled={!name}>Start check in</button>
+          </form>
         </section>
       )}
       {canRecord && <RecordServiceCard org={org} today={today} events={events} />}

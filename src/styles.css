@@ -1956,3 +1956,7 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .install-go { width: 100%; font-size: 1.1rem; padding: 14px; margin: 6px 0 10px; }
 .public-bg .welcome-card .install-go { background: #1f7a4d; color: #ffffff; }
 .install-steps { padding-left: 22px; line-height: 1.6; }
+
+/* Typed service name and time (Andy, 2026-11-03). */
+.service-input { display: grid; grid-template-columns: 1fr 130px; gap: 8px; align-items: end; }
+.service-input .service-time input { width: 100%; }

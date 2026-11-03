@@ -179,3 +179,28 @@ export function weeksAttended(records: readonly AttendanceRecord[], now: Date, w
   }
   return seen.size;
 }
+
+/**
+ * A church service is typed as a name and a time (Andy, 2026-11-03): "Main service" + "10:00" is saved as
+ * "Main service 10:00". The time is optional, and a name that already ends in a time keeps it.
+ */
+export function serviceName(service: string, time: string): string {
+  const name = service.trim().replace(/\s+/g, ' ');
+  const t = time.trim();
+  if (!name) return '';
+  if (!t || /\b\d{1,2}[:.]\d{2}\s*(am|pm)?$/i.test(name)) return name;
+  return `${name} ${t}`;
+}
+
+/** Splits "Main service 10:00" back into the name and the time, for suggestions. */
+export function splitServiceName(name: string): { service: string; time: string } {
+  const m = /^(.*\S)\s+(\d{1,2}:\d{2})$/.exec(name.trim());
+  return m ? { service: m[1]!, time: m[2]!.padStart(5, '0') } : { service: name.trim(), time: '' };
+}
+
+/** A service counts apart from the Sunday totals only when it is one of the organization's "Other services". */
+export function isOtherServiceName(otherServices: string[] | undefined, name: string): boolean {
+  const n = name.trim().toLowerCase();
+  const base = splitServiceName(name).service.toLowerCase();
+  return (otherServices ?? []).some((o) => { const x = o.trim().toLowerCase(); return x === n || x === base; });
+}

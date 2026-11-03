@@ -5,13 +5,13 @@ import type { ChurchEvent } from '../state/useAttendance';
 import { useToast } from '../state/ToastContext';
 import { findService, recordService } from '../lib/attendanceWrites';
 import { friendlyError } from '../lib/errors';
-import { cleanCount, eventChoices, HEADCOUNT_LABELS, type Headcounts } from '../../functions/src/shared/attendance';
+import { cleanCount, HEADCOUNT_LABELS, isOtherServiceName, serviceName, type Headcounts } from '../../functions/src/shared/attendance';
+import { ServiceInput, serviceSuggestions } from './ServiceInput';
 import { formatDateKey } from '../../functions/src/shared/datetime';
 
 const KEYS = ['adults', 'teens', 'children', 'firstTimers', 'salvations'] as const;
 type Key = (typeof KEYS)[number];
 const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', children: 'Under 13', firstTimers: 'Already in the numbers above', salvations: 'Already in the numbers above' };
-const OTHER = '__other__';
 
 const shift = (key: string, days: number) => {
   const d = new Date(`${key}T12:00:00Z`);
@@ -28,23 +28,18 @@ const lastSunday = (key: string) => shift(key, -new Date(`${key}T12:00:00Z`).get
  */
 export function RecordServiceCard({ org, today, events }: { org: Organization; today: string; events: ChurchEvent[] }) {
   const toast = useToast();
-  // The same names the Check in buttons use ("Sunday 10:00 service"), so both write to the one record for that service.
-  const sundays = useMemo(() => eventChoices(org), [org]);
-  const others = useMemo(() => {
-    const listed = org.otherServices ?? [];
-    const used = events.filter((e) => e.serviceKind === 'other').map((e) => e.name);
-    return [...new Set([...listed, ...used])].filter((n) => !sundays.includes(n));
-  }, [org.otherServices, events, sundays]);
+  // Type the service and its time (Andy, 2026-11-03); names used before are suggested.
+  const suggestions = useMemo(() => serviceSuggestions([...events.map((e) => e.name), ...(org.otherServices ?? [])]), [events, org.otherServices]);
 
   const [date, setDate] = useState(() => lastSunday(today));
-  const [choice, setChoice] = useState(sundays[0] ?? OTHER);
-  const [typed, setTyped] = useState('');
+  const [service, setService] = useState('');
+  const [time, setTime] = useState('');
   const [counts, setCounts] = useState<Headcounts>({});
   const [found, setFound] = useState(false);
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<{ id: string; label: string } | null>(null);
-  const name = (choice === OTHER ? typed : choice).trim();
-  const isOther = choice === OTHER ? !sundays.includes(name) : others.includes(choice);
+  const name = serviceName(service, time);
+  const isOther = isOtherServiceName(org.otherServices, name);
 
   // Show what is already saved for that day and service, so it can be corrected rather than typed twice.
   useEffect(() => {
@@ -60,7 +55,7 @@ export function RecordServiceCard({ org, today, events }: { org: Organization; t
   const total = (counts.adults ?? 0) + (counts.teens ?? 0) + (counts.children ?? 0);
 
   async function save(andBack: boolean) {
-    if (!name) return toast.show('Choose the service, or type its name.');
+    if (!name) return toast.show('Type the name of the service.');
     if (date > today) return toast.show('Choose a day that has already happened.');
     setBusy(true);
     try {
@@ -89,19 +84,8 @@ export function RecordServiceCard({ org, today, events }: { org: Organization; t
           <label className="field"><span>Day</span>
             <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || lastSunday(today))} />
           </label>
-          <label className="field"><span>Service</span>
-            <select value={choice} onChange={(e) => setChoice(e.target.value)}>
-              <optgroup label="Sunday services">{sundays.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup>
-              {others.length > 0 && <optgroup label="Other services">{others.map((s) => <option key={s} value={s}>{s}</option>)}</optgroup>}
-              <option value={OTHER}>Other…</option>
-            </select>
-          </label>
         </div>
-        {choice === OTHER && (
-          <label className="field"><span>Name of the service</span>
-            <input value={typed} maxLength={120} placeholder="For example Youth night" onChange={(e) => setTyped(e.target.value)} />
-          </label>
-        )}
+        <ServiceInput service={service} time={time} onService={setService} onTime={setTime} suggestions={suggestions} />
         {found && <p className="hint">Already recorded. Saving updates it.</p>}
         <div className="record-counts">
           {KEYS.map((k) => (
