@@ -43,8 +43,19 @@ export function ServiceDayCard({ org, date, todays, events, service, time, setSe
     return () => { live = false; };
   }, [org.id, date, name]);
 
-  const total = (counts.adults ?? 0) + (counts.teens ?? 0) + (counts.children ?? 0);
   const choose = (n: string) => { const s = splitServiceName(n); setService(s.service); setTime(s.time); };
+  // Open the day on its service, so its numbers show straight away (Andy, 2026-11-03); typing a new name still works.
+  const firstName = running[0]?.name ?? '';
+  const lastDate = useRef(date);
+  useEffect(() => {
+    const newDay = lastDate.current !== date;
+    lastDate.current = date;
+    if (firstName && (newDay || (!service.trim() && !time)) && !running.some((e) => e.name === name)) choose(firstName);
+    // Only when the day or its first service changes, not while typing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, firstName]);
+
+  const total = (counts.adults ?? 0) + (counts.teens ?? 0) + (counts.children ?? 0);
 
   async function save(e: FormEvent) {
     e.preventDefault();
