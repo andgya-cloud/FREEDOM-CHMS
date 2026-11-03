@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Organization } from '../state/OrgContext';
 import type { ChurchEvent } from '../state/useAttendance';
 import { useToast } from '../state/ToastContext';
-import { findService, recordService } from '../lib/attendanceWrites';
+import { recordService } from '../lib/attendanceWrites';
 import { friendlyError } from '../lib/errors';
 import { cleanCount, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { ServiceInput, serviceSuggestions } from './ServiceInput';
@@ -31,17 +31,16 @@ export function ServiceDayCard({ org, date, todays, events, service, time, setSe
   const name = serviceName(service, time);
   const running = todays.filter((e) => e.type === 'service' && !e.programId && !e.groupId);
 
-  // Show what is already saved for that day and service, so it can be corrected rather than typed twice.
+  // The saved record, kept live: counts sent from the usher phone show here within seconds (Andy, 2026-11-03).
+  const saved = running.find((e) => e.name === name) ?? null;
+  const savedKey = saved ? JSON.stringify(saved.headcounts ?? {}) : '';
+  useEffect(() => { typedRef.current = false; }, [date, name]);
   useEffect(() => {
-    let live = true;
-    setFound(false);
-    typedRef.current = false;
-    if (!name || !date) { setCounts({}); return; }
-    findService(org.id, date, name)
-      .then((f) => { if (live) { setFound(!!f); if (!typedRef.current) setCounts(f?.headcounts ?? {}); } })
-      .catch(() => { if (live && !typedRef.current) setCounts({}); });
-    return () => { live = false; };
-  }, [org.id, date, name]);
+    setFound(!!saved);
+    // Numbers being typed here are kept until saved, never wiped by an update from elsewhere.
+    if (!typedRef.current) setCounts(saved ? { ...(saved.headcounts ?? {}) } : {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [date, name, savedKey]);
 
   const choose = (n: string) => { const s = splitServiceName(n); setService(s.service); setTime(s.time); };
   // Open the day on its service, so its numbers show straight away (Andy, 2026-11-03); typing a new name still works.
@@ -67,6 +66,7 @@ export function ServiceDayCard({ org, date, todays, events, service, time, setSe
       const { synced } = await recordService(org.id, { date, name, other: isOtherServiceName(org.otherServices, name), headcounts: clean });
       synced.catch((err) => toast.show(friendlyError(err)));
       setFound(true);
+      typedRef.current = false;
       toast.show(`Saved: ${name}, ${formatDateKey(date)}`);
     } catch (err) {
       toast.show(friendlyError(err));
