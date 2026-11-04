@@ -48,7 +48,7 @@ export const tutorFiles = onCall({ invoker: 'public', memory: '512MiB', timeoutS
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   if (!canAccessOrg(me, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this organization.');
-  const manager = isInventoryManager(me);
+  const manager = isInventoryManager(me) || can(me, 'exams.manage');
   const today = localDateKey();
   const action = String(data.action ?? '');
 

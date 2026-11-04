@@ -191,7 +191,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}
         </NavLink>
       )}
-      {current?.type === 'college' && (trainer || (full && !!profile && isInventoryManager(profile))) && (
+      {current?.type === 'college' && (trainer || (full && ((!!profile && isInventoryManager(profile)) || can('exams.manage')))) && (
         <NavLink to="/tutor-files" className={`tab${extra}`}>
           <AdiaIcon name="files" />
           <TabLabel full="Tutor Files" short="Files" />

@@ -42,10 +42,10 @@ function useFiles(orgId: string, uid: string, all: boolean) {
 
 /** ADIA Tutor Files (Andy, 2026-11-04, 1A-8A): the principal asks, tutors send. */
 export function TutorFilesPage() {
-  const { profile } = useAuth();
+  const { profile, can } = useAuth();
   const { current } = useOrg();
   const orgId = current?.type === 'college' ? current.id : '';
-  const manager = !!profile && isInventoryManager(profile);
+  const manager = (!!profile && isInventoryManager(profile)) || can('exams.manage');
   if (!orgId) return <div className="page narrow"><p>Tutor Files is part of ADIA Training Centre.</p></div>;
   return manager ? <PrincipalView orgId={orgId} /> : <TutorView orgId={orgId} />;
 }

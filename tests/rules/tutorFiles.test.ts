@@ -20,6 +20,7 @@ beforeEach(async () => {
     const db = ctx.firestore();
     const base = { extraPermissions: [], orgIds: ['adia'], allOrgs: false, active: true, mustChangePassword: false };
     await setDoc(doc(db, 'users/principal'), { ...base, email: 'p@example.org', displayName: 'Flavier Akinyi', roleId: 'principal', permissions: ['exams.manage', 'school.manage'] });
+    await setDoc(doc(db, 'users/exams'), { ...base, email: 'e@example.org', displayName: 'Flavier', roleId: 'staff', permissions: ['exams.manage'] });
     await setDoc(doc(db, 'users/jane'), { ...base, email: 'j@example.org', displayName: 'Jane', roleId: 'trainer', permissions: ['exams.mark'] });
     await setDoc(doc(db, 'users/tom'), { ...base, email: 't@example.org', displayName: 'Tom', roleId: 'trainer', permissions: ['exams.mark'] });
     await setDoc(doc(db, 'organizations/adia/fileRequests/r1'), { ...request('principal'), createdAt: new Date(), updatedAt: new Date() });
@@ -30,6 +31,7 @@ beforeEach(async () => {
 describe('tutor files rules', () => {
   it('the principal asks for a file; a tutor cannot', async () => {
     await assertSucceeds(setDoc(doc(as('principal'), 'organizations/adia/fileRequests/r2'), request('principal')));
+    await assertSucceeds(setDoc(doc(as('exams'), 'organizations/adia/fileRequests/r4'), request('exams')));
     await assertFails(setDoc(doc(as('jane'), 'organizations/adia/fileRequests/r3'), request('jane')));
   });
   it('tutors read requests and only their own files', async () => {

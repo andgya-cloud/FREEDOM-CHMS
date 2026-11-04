@@ -1657,6 +1657,10 @@ service cloud.firestore {
       // ADIA Tutor Files (Andy, 2026-11-04). The principal (and Admin, the pastor, Doreen) asks tutors for a file with
       // a deadline; tutors read the requests. The files themselves and their status are written only by Cloud
       // Functions (callable tutorFiles), which keep the lock; a tutor reads only their own.
+      // The principal is anyone with the Principal role, or anyone who runs Exam Records (Andy, 2026-11-04).
+      function tfManager() {
+        return invManager() || ex('exams.manage');
+      }
       function fileRequestFields(d) {
         return d.keys().hasOnly(['orgId', 'title', 'kind', 'deadline', 'courseIds', 'note', 'createdByName',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
@@ -1665,13 +1669,13 @@ service cloud.firestore {
           && shortText(d.note, 500) && shortText(d.createdByName, 120);
       }
       match /fileRequests/{requestId} {
-        allow read: if invManager() || (canAccessOrg(orgId) && me().roleId == 'trainer');
-        allow create: if invManager() && fileRequestFields(request.resource.data) && stampedCreate() && freshRecord();
-        allow update: if invManager() && fileRequestFields(request.resource.data) && stampedUpdate() && validSoftDelete();
+        allow read: if tfManager() || (canAccessOrg(orgId) && me().roleId == 'trainer');
+        allow create: if tfManager() && fileRequestFields(request.resource.data) && stampedCreate() && freshRecord();
+        allow update: if tfManager() && fileRequestFields(request.resource.data) && stampedUpdate() && validSoftDelete();
         allow delete: if false;
       }
       match /tutorFiles/{fileId} {
-        allow read: if invManager() || (canAccessOrg(orgId) && (resource == null || resource.data.tutorUid == request.auth.uid));
+        allow read: if tfManager() || (canAccessOrg(orgId) && (resource == null || resource.data.tutorUid == request.auth.uid));
         allow write: if false;
       }
 
