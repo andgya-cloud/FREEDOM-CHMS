@@ -1662,9 +1662,10 @@ service cloud.firestore {
         return invManager() || ex('exams.manage');
       }
       function fileRequestFields(d) {
-        return d.keys().hasOnly(['orgId', 'title', 'kind', 'deadline', 'courseIds', 'note', 'createdByName',
+        return d.keys().hasOnly(['orgId', 'title', 'kind', 'otherKind', 'deadline', 'courseIds', 'note', 'createdByName',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
-          && d.orgId == orgId && shortText(d.title, 120) && d.title.size() > 0 && d.kind in ['report', 'course', 'other']
+          && d.orgId == orgId && shortText(d.title, 120) && d.title.size() > 0 && d.kind in ['course', 'lesson', 'report', 'other']
+          && (!('otherKind' in d) || d.otherKind == null || shortText(d.otherKind, 60))
           && invDay(d.deadline) && d.courseIds is list && d.courseIds.size() <= 40
           && shortText(d.note, 500) && shortText(d.createdByName, 120);
       }

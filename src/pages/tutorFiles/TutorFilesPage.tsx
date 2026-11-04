@@ -15,7 +15,7 @@ import { isInventoryManager, TRAINER_ROLE_ID } from '../../../functions/src/shar
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 import { addDays, mondayOf } from '../../../functions/src/shared/metrics';
 import {
-  canSend, dueText, FILE_KIND_LABELS, FILE_KINDS, isForTutor, lessonFileId, requestFileId, urgency,
+  canSend, dueText, FILE_KIND_LABELS, FILE_KINDS, kindLabel, isForTutor, lessonFileId, requestFileId, urgency,
   type FileKind, type FileRequest, type TutorFile,
 } from '../../../functions/src/shared/tutorFiles';
 
@@ -110,7 +110,7 @@ function TutorRequestCard({ orgId, request: r, file: f }: { orgId: string; reque
       <div className="tf-head">
         <div>
           <h3>{r.title}</h3>
-          <p className="muted small">{FILE_KIND_LABELS[r.kind]} · Deadline {formatDateKey(r.deadline)}</p>
+          <p className="muted small">{kindLabel(r) !== r.title ? `${kindLabel(r)} · ` : ''}Deadline {formatDateKey(r.deadline)}</p>
         </div>
         {sendable && <span className="tf-due">{dueText(r.deadline, now)}</span>}
       </div>
@@ -250,8 +250,9 @@ function AskForFileForm({ orgId, onDone }: { orgId: string; onDone: () => void }
   const toast = useToast();
   const { rows: courses } = useLiveQuery<{ id: string; name: string; deletedAt?: unknown; active?: boolean }>(() => collection(db, 'organizations', orgId, 'courses'), [orgId]);
   const live = courses.filter((c) => !c.deletedAt && c.active !== false).sort((a, b) => a.name.localeCompare(b.name));
-  const [title, setTitle] = useState('');
-  const [kind, setKind] = useState<FileKind>('report');
+  const [title, setTitle] = useState(FILE_KIND_LABELS.course);
+  const [kind, setKind] = useState<FileKind>('course');
+  const [otherKind, setOtherKind] = useState('');
   const [deadline, setDeadline] = useState(addDays(today(), 14));
   const [who, setWho] = useState<'all' | 'some'>('all');
   const [picked, setPicked] = useState<string[]>([]);
@@ -260,7 +261,8 @@ function AskForFileForm({ orgId, onDone }: { orgId: string; onDone: () => void }
   function save() {
     if (!title.trim()) return toast.show('Type what you are asking for.');
     if (who === 'some' && !picked.length) return toast.show('Tick at least one department.');
-    askForFile(orgId, { title, kind, deadline, courseIds: who === 'all' ? [] : picked, note, createdByName: profile?.displayName ?? '' })
+    if (kind === 'other' && !otherKind.trim()) return toast.show('Type what kind of file it is.');
+    askForFile(orgId, { title, kind, otherKind: kind === 'other' ? otherKind.trim().slice(0, 60) : null, deadline, courseIds: who === 'all' ? [] : picked, note, createdByName: profile?.displayName ?? '' })
       .catch((err) => toast.show(friendlyError(err)));
     toast.show(`Asked for ${title.trim()}. Tutors see it now.`);
     onDone();
@@ -270,11 +272,17 @@ function AskForFileForm({ orgId, onDone }: { orgId: string; onDone: () => void }
     <section className="card tf-form">
       <h3>Ask for a file</h3>
       <label className="field"><span>What do you need?</span>
-        <input value={title} maxLength={120} placeholder="For example Term 1 report" onChange={(e) => setTitle(e.target.value)} autoFocus />
+        <input value={title} maxLength={120} placeholder="For example Term 1 report" onChange={(e) => setTitle(e.target.value)} />
       </label>
       <div className="tf-row">
         <label className="field"><span>Type</span>
-          <select value={kind} onChange={(e) => setKind(e.target.value as FileKind)}>{FILE_KINDS.map((k) => <option key={k} value={k}>{FILE_KIND_LABELS[k]}</option>)}</select>
+          <select value={kind} onChange={(e) => {
+            const next = e.target.value as FileKind;
+            // Picking a type fills the name while it is still empty or still the last type's name (4A).
+            const auto = (k: FileKind) => (k === 'other' ? otherKind.trim() : FILE_KIND_LABELS[k]);
+            if (!title.trim() || title === auto(kind)) setTitle(next === 'other' ? otherKind.trim() : FILE_KIND_LABELS[next]);
+            setKind(next);
+          }}>{FILE_KINDS.map((k) => <option key={k} value={k}>{FILE_KIND_LABELS[k]}</option>)}</select>
         </label>
         <label className="field"><span>Deadline</span>
           <input type="date" value={deadline} min={today()} onChange={(e) => setDeadline(e.target.value || deadline)} />
@@ -283,6 +291,15 @@ function AskForFileForm({ orgId, onDone }: { orgId: string; onDone: () => void }
           <select value={who} onChange={(e) => setWho(e.target.value as 'all' | 'some')}><option value="all">All tutors</option><option value="some">Chosen departments</option></select>
         </label>
       </div>
+      {kind === 'other' && (
+        <label className="field"><span>What kind of file?</span>
+          <input value={otherKind} maxLength={60} placeholder="For example Timetable" autoFocus onChange={(e) => {
+            const v = e.target.value;
+            if (!title.trim() || title === otherKind.trim()) setTitle(v);
+            setOtherKind(v);
+          }} />
+        </label>
+      )}
       {who === 'some' && (
         <div className="chip-row">
           {live.map((c) => (
@@ -336,7 +353,7 @@ function RequestCard({ orgId, request: r, files, tutors }: { orgId: string; requ
   return (
     <details className="card tf-req" open={!late || sent < forThem.length}>
       <summary>
-        <span className="tf-req-title"><strong>{r.title}</strong><span className="muted small"> · {FILE_KIND_LABELS[r.kind]} · Deadline {formatDateKey(r.deadline)}</span></span>
+        <span className="tf-req-title"><strong>{r.title}</strong><span className="muted small"> · {kindLabel(r) !== r.title ? `${kindLabel(r)} · ` : ''}Deadline {formatDateKey(r.deadline)}</span></span>
         <span className={`tf-count${sent === forThem.length && forThem.length ? ' tf-done' : late ? ' tf-late' : ''}`}>{tutors ? `${sent} of ${forThem.length} sent` : '…'}</span>
       </summary>
       {r.note && <p className="small muted">{r.note}</p>}

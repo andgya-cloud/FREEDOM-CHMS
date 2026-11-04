@@ -75,7 +75,7 @@ export const approveFile = (orgId: string, fileId: string) => call({ orgId, acti
 export const sendBackFile = (orgId: string, fileId: string, note: string) => call({ orgId, action: 'sendBack', fileId, note });
 export const loadTutors = (orgId: string) => call<{ tutors: Tutor[] }>({ orgId, action: 'roster' }).then((r) => r.tutors);
 
-export function askForFile(orgId: string, input: { title: string; kind: FileKind; deadline: string; courseIds: string[]; note: string; createdByName: string }) {
+export function askForFile(orgId: string, input: { title: string; kind: FileKind; otherKind: string | null; deadline: string; courseIds: string[]; note: string; createdByName: string }) {
   return trackWrite(addDoc(collection(db, 'organizations', orgId, 'fileRequests'), {
     orgId, ...input, title: input.title.trim().slice(0, 120), note: input.note.trim().slice(0, 500), createdByName: input.createdByName.slice(0, 120), ...createStamps(),
   }));

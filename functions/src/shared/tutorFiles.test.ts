@@ -33,3 +33,13 @@ describe('tutor files (Andy, 2026-11-04)', () => {
     expect(isForTutor({ courseIds: ['b'] }, ['a'])).toBe(false);
   });
 });
+
+import { FILE_KINDS, kindLabel } from './tutorFiles';
+describe('file types (Andy, 2026-11-04)', () => {
+  it('lists them in Andy\'s order and shows a typed Other', () => {
+    expect(FILE_KINDS).toEqual(['course', 'lesson', 'report', 'other']);
+    expect(kindLabel({ kind: 'lesson' })).toBe('Lesson plan');
+    expect(kindLabel({ kind: 'other', otherKind: 'Timetable' })).toBe('Timetable');
+    expect(kindLabel({ kind: 'other', otherKind: '' })).toBe('Other');
+  });
+});

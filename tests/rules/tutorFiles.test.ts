@@ -7,7 +7,7 @@ import { makeEnv, seed } from './helpers';
 let env: RulesTestEnvironment;
 const as = (uid: string) => env.authenticatedContext(uid).firestore();
 const request = (by: string) => ({
-  orgId: 'adia', title: 'Term 1 report', kind: 'report', deadline: '2026-11-20', courseIds: [], note: '', createdByName: 'Flavier Akinyi',
+  orgId: 'adia', title: 'Timetable', kind: 'other', otherKind: 'Timetable', deadline: '2026-11-20', courseIds: [], note: '', createdByName: 'Flavier Akinyi',
   deletedAt: null, deletedBy: null, createdAt: serverTimestamp(), createdBy: by, updatedAt: serverTimestamp(), updatedBy: by,
 });
 

@@ -8,15 +8,22 @@
  */
 import { addDays } from './metrics.js';
 
-export type FileKind = 'report' | 'course' | 'other';
-export const FILE_KINDS: FileKind[] = ['report', 'course', 'other'];
-export const FILE_KIND_LABELS: Record<FileKind, string> = { report: 'Report', course: 'Course outline', other: 'Other' };
+// Andy, 2026-11-04 (1A): in this order. "Other" lets the principal type the type.
+export type FileKind = 'course' | 'lesson' | 'report' | 'other';
+export const FILE_KINDS: FileKind[] = ['course', 'lesson', 'report', 'other'];
+export const FILE_KIND_LABELS: Record<FileKind, string> = { course: 'Course outline', lesson: 'Lesson plan', report: 'Report', other: 'Other' };
+
+/** The type as shown: the typed word for "Other" (3A), for example "Timetable". */
+export const kindLabel = (r: { kind: FileKind; otherKind?: string | null }) =>
+  (r.kind === 'other' && r.otherKind?.trim()) || FILE_KIND_LABELS[r.kind] || 'Other';
 
 /** What the principal asks for. Stored in organizations/{org}/fileRequests. */
 export interface FileRequest {
   orgId: string;
   title: string;
   kind: FileKind;
+  /** What "Other" is, typed by the principal. */
+  otherKind?: string | null;
   /** "YYYY-MM-DD", the last day (Nairobi). */
   deadline: string;
   /** Departments it is for; empty means every tutor. */
@@ -121,11 +128,11 @@ export function reminderSubject(r: Pick<FileRequest, 'title' | 'deadline'>, toda
   return `Reminder: ${r.title} is ${dueText(r.deadline, today).toLowerCase()}`;
 }
 
-export function reminderText(r: Pick<FileRequest, 'title' | 'deadline' | 'note'>, today: string, firstName: string, link: string, formatDay: (k: string) => string): string {
+export function reminderText(r: Pick<FileRequest, 'title' | 'deadline' | 'note' | 'kind' | 'otherKind'>, today: string, firstName: string, link: string, formatDay: (k: string) => string): string {
   return [
     `Dear ${firstName},`,
     '',
-    `This is a reminder that "${r.title}" is ${dueText(r.deadline, today).toLowerCase()} (deadline ${formatDay(r.deadline)}).`,
+    `This is a reminder that "${r.title}" (${kindLabel(r).toLowerCase()}) is ${dueText(r.deadline, today).toLowerCase()} (deadline ${formatDay(r.deadline)}).`,
     ...(r.note ? ['', `Note from the principal: ${r.note}`] : []),
     '',
     `Send it here as a PDF or Word file, or take photos of it: ${link}`,
