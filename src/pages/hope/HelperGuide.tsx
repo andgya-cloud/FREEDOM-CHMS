@@ -6,6 +6,7 @@ const STEPS: [string, string, string][] = [
   ['🖼️', 'Tap each child', 'Open the Children\'s register. Tap a child\'s photo as they come in. A green tick means they are here.'],
   ['☑️', 'Or tick boxes', 'Prefer a list? Tap "Tick list" and tick the box next to each child.'],
   ['✅', 'Finish', 'At the end, tap "Finish". Children without a tick are marked absent.'],
+  ['📷', 'Send photos', 'Something good happened, an activity, or an accident? Tap "Send photos", choose the kind, write a few lines and add photos.'],
 ];
 
 const seenKey = (uid: string) => `hope.helperGuide.${uid}`;

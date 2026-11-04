@@ -2254,3 +2254,24 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .fee-box > div > span { grid-column: 1 / -1; }
 .fee-box b { font-size: 1.25rem; letter-spacing: 0.02em; word-break: break-all; }
 .fee-box p { margin: 0; }
+
+/* Hope photo reports (Andy, 2026-11-04) */
+.btn-line { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.ph-kinds { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.ph-kind { display: flex; align-items: center; gap: 8px; min-height: 52px; padding: 8px 12px; border-radius: 12px; border: 1.5px solid var(--border, #e2e8e4); background: var(--surface, #fff); color: inherit; font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.ph-kind > span { font-size: 1.35rem; }
+.ph-kind.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
+.ph-kind.incident.on { border-color: #c0392b; background: #ffe1dc; color: #8a1c0f; }
+.ph-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; }
+.ph-thumb { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--surface-2, #f5f7f6); border: 1px solid var(--border, #e2e8e4); display: flex; flex-direction: column; align-items: center; justify-content: center; text-decoration: none; color: inherit; font: inherit; padding: 0; }
+.ph-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-doc { font-size: 1.6rem; cursor: pointer; }
+.ph-name { font-size: 0.7rem; padding: 2px 6px; text-align: center; word-break: break-word; color: var(--muted); }
+.ph-x { position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgba(0, 0, 0, 0.6); color: #fff; font-size: 1rem; line-height: 1; cursor: pointer; }
+.ph-add { position: relative; cursor: pointer; }
+.ph-text { white-space: pre-wrap; margin: 0; }
+.ph-incident { border-left: 4px solid #c0392b; }
+.ph-send { border-top: 1px solid var(--border, #e2e8e4); padding-top: 12px; }
+.ph-send h3 { margin: 0; }
+.ph-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ph-people li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

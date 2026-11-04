@@ -70,6 +70,7 @@ function HelperHome({ org }: { org: Organization }) {
         <Link key={x.id} to={`/hope/clubs/${x.id}`} className="hp-big"><span className="hp-ico" aria-hidden="true">{x.emoji || '⭐'}</span><span><b>{x.name}</b><span>{x.time ? `Today at ${x.time}` : 'Meets today'}</span></span></Link>
       ))}
       {clubsToday.length === 0 && <Link to="/hope/register?w=club" className="hp-big hp-small"><span className="hp-ico" aria-hidden="true">⭐</span><span><b>Club registers</b><span>No club meets today</span></span></Link>}
+      <Link to="/hope/photos?new=1" className="hp-big hp-small"><span className="hp-ico" aria-hidden="true">📷</span><span><b>Send photos</b><span>Good news, an activity or an incident</span></span></Link>
       <button type="button" className="btn btn-quiet align-start" onClick={() => setGuide(true)}>❓ How it works</button>
       <PoweredBy />
     </div>
@@ -232,6 +233,7 @@ function LeaderToday({ org }: { org: Organization }) {
               {chart === 'school' && <Donut label="Children by school" rows={SCHOOL_STATUSES.map((k) => ({ label: SCHOOL_STATUS_LABELS[k], value: current.filter((c) => c.schoolStatus === k).length }))} center={pct(m.schoolEnrolmentRate)} centerNote="in school" />}
             </div>
             <Link to="/hope/reports" className="btn btn-quiet align-start">Weekly and monthly reports</Link>
+            <Link to="/hope/photos" className="btn btn-quiet align-start">📷 Photo reports</Link>
           </div>
         </details>
       )}

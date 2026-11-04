@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   // A Hope helper sees only Today (their "I'm here" button), the registers and the clubs (Andy, 2026-11-04, 2A).
   const helper = profile?.roleId === HELPER_ROLE_ID;
-  if (helper && !/^\/($|hope\/register|hope\/clubs|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
+  if (helper && !/^\/($|hope\/register|hope\/clubs|hope\/photos|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
   // Each person sees only their own work (Andy, 2026-11-01, 8A): an usher Sunday and People, finance Giving and Petty Cash.
@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </NavLink>
       )}
  {can('people.read') && !helper && (
-        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || location.pathname === '/hope/exports' ? ' active' : ''}`}>
+        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
           Reports
         </NavLink>

@@ -8,7 +8,11 @@ import { useToast } from '../../state/ToastContext';
 import { useLiveQuery } from '../../lib/useQuery';
 import { friendlyError } from '../../lib/errors';
 import { requestHopeReport } from '../../lib/hopeWrites';
-import { hopeReportPdf } from '../../lib/hopePdf';
+import { hopeReportPdf, type PdfPhoto } from '../../lib/hopePdf';
+import { photoFile, photoForPdf } from '../../lib/hopePhotos';
+import { usePhotoReports } from './HopePhotosPage';
+import { formatDateKey } from '../../../functions/src/shared/datetime';
+import { PHOTO_REPORT_EMOJI } from '../../../functions/src/shared/hopePhotos';
 import { shareOrDownload } from '../../lib/givingPdf';
 import { lastCompletePeriod, periodFor, periodLabel, type ReportType } from '../../../functions/src/shared/metrics';
 import type { HopeReportDoc } from '../../../functions/src/shared/hope';
@@ -56,7 +60,7 @@ function Reports({ org }: { org: Organization }) {
   const open = rows.find((r) => r.id === openId);
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>Reports</h1>{can('people.read') && <Link to="/hope/exports" className="btn">⬇︎ Download lists</Link>}</div>
+      <div className="page-head"><h1>Reports</h1><div className="btn-line"><Link to="/hope/photos" className="btn">📷 Photo reports</Link>{can('people.read') && <Link to="/hope/exports" className="btn">⬇︎ Download lists</Link>}</div></div>
       <p className="small muted">Make a monthly or weekly report. <Help>The monthly report has numbers only, no names, and is made by itself on the 1st for leaders and donors. The weekly report is for the pastor and lists the children to follow up.</Help></p>
       <section className="card stack">
         <h2>Make a report</h2>
@@ -92,10 +96,23 @@ function Reports({ org }: { org: Organization }) {
 function ReportView({ org, report }: { org: Organization; report: HopeReportDoc & StoredHopeReport }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const photos = usePhotoReports(org.id, report.id);
+  const linked = photos.list?.reports ?? [];
+  const photoCount = linked.reduce((n, r) => n + r.files.filter((f) => f.photo).length, 0);
   const m = report.metrics;
+  /** The photos added to this report are printed at the end of the PDF (Andy, 2026-11-04, 5A). */
   async function pdf() {
     setBusy(true);
-    try { await shareOrDownload(await hopeReportPdf(org, report), `${org.name} report`); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
+    try {
+      const pics: PdfPhoto[] = [];
+      for (const r of linked) {
+        for (const f of r.files.filter((x) => x.photo)) {
+          const p = await photoForPdf(await photoFile(org.id, r.id, f)).catch(() => null);
+          if (p) pics.push({ ...p, caption: `${r.title} · ${formatDateKey(r.day)} · ${r.senderName}${r.text ? ` · ${r.text.replace(/\s+/g, ' ').slice(0, 140)}` : ''}` });
+        }
+      }
+      await shareOrDownload(await hopeReportPdf(org, report, pics), `${org.name} report`);
+    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
   const rows: [string, string][] = [
     ['Children registered', String(m.registered)], ['Children active', String(m.active)], ['Came in the last 8 weeks', String(m.attendingLast8Weeks)],
@@ -114,6 +131,12 @@ function ReportView({ org, report }: { org: Organization; report: HopeReportDoc 
         <thead><tr><th>Programme</th><th className="num">Children</th><th className="num">Sessions</th><th className="num">Average</th></tr></thead>
         <tbody>{m.byProgramme.map((p) => <tr key={p.name}><td>{p.name}</td><td className="num">{p.children}</td><td className="num">{p.sessions}</td><td className="num">{p.averageAttendance ?? '–'}</td></tr>)}</tbody>
       </table>
+      <h3>Photos</h3>
+      {linked.length > 0 && (
+        <ul className="link-list">{linked.map((r) => <li key={r.id}><Link to={`/hope/photos?report=${r.id}`}><span className="link-title">{PHOTO_REPORT_EMOJI[r.kind]} {r.title}</span><span className="link-detail">{formatDateKey(r.day)} · {r.senderName} · {r.files.length} {r.files.length === 1 ? 'file' : 'files'}</span></Link></li>)}</ul>
+      )}
+      <p className="small muted">{photoCount ? `${photoCount} ${photoCount === 1 ? 'photo is' : 'photos are'} printed at the end of the PDF.` : 'Photos you add here are printed at the end of the PDF.'}</p>
+      {photos.list?.sends && <Link className="btn align-start" to={`/hope/photos?new=1&for=${report.id}&label=${encodeURIComponent(report.label)}`}>📷 Add photos</Link>}
       {report.audience === 'pastor' && (
         <>
           <h3>Guardians to call</h3>
