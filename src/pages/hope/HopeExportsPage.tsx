@@ -9,7 +9,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { ATTENDANCE_STATUS_LABELS } from '../../../functions/src/shared/attendance';
 import { SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
-import { HopeGate, HopeNav, useHopePage } from './common';
+import { HopeGate, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function HopeExportsPage() {
@@ -55,7 +55,6 @@ function Exports({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <h1>Exports</h1>
-      <HopeNav />
       <p className="notice small">Anything that takes children's details out of the system needs the pastor's approval, and every request and download is written to the activity log. Welfare notes and safeguarding records are never exported.</p>
       <section className="card stack">
         <h2>Ask for an export</h2>

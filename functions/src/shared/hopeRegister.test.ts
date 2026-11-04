@@ -86,3 +86,26 @@ describe('uploads', () => {
     expect(plan[1]!.skip).toBe('no name');
   });
 });
+
+describe('little delights', async () => {
+  const { streak, birthdayThisWeek, daysToBirthday } = await import('./hopeRegister');
+  it('counts a streak, skipping excused days', () => {
+    const days: HopeDay[] = [
+      { date: '2026-10-03', marks: { a: { s: 'absent' }, b: { s: 'present' } } },
+      { date: '2026-10-10', marks: { a: { s: 'present' }, b: { s: 'present' } } },
+      { date: '2026-10-17', marks: { a: { s: 'excused' }, b: { s: 'present' } } },
+      { date: '2026-10-24', marks: { a: { s: 'present' }, b: { s: 'present' } } },
+      { date: '2026-10-31', marks: { a: { s: 'departing' } } },
+    ];
+    expect(streak('a', days)).toBe(3);
+    expect(streak('b', days)).toBe(0);
+  });
+  it('finds birthdays in the week around today', () => {
+    expect(daysToBirthday('2016-11-06', '2026-11-04')).toBe(2);
+    expect(daysToBirthday('2016-01-02', '2026-12-31')).toBe(2);
+    expect(birthdayThisWeek('2016-11-06', '2026-11-04')).toBe(true);
+    expect(birthdayThisWeek('2016-11-02', '2026-11-04')).toBe(true);
+    expect(birthdayThisWeek('2016-11-10', '2026-11-04')).toBe(false);
+    expect(birthdayThisWeek(null, '2026-11-04')).toBe(false);
+  });
+});

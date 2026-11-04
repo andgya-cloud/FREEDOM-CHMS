@@ -1,20 +1,71 @@
 import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useChildPhotos, useHopeDays } from '../../state/useHope';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
 import { markKid, markMany, updateChild } from '../../lib/hopeWrites';
+import { createEvent } from '../../lib/attendanceWrites';
+import { eventTypeFor } from '../../../functions/src/shared/attendance';
+import { ChampionsPanel } from './ChampionsPage';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
-import { dayTrend, KID_MARK_LABELS, KID_MARKS, kidRate, rateFrom, saturdayOnOrBefore, type KidEntry, type KidMark } from '../../../functions/src/shared/hopeRegister';
-import { HopeGate, HopeNav, useHopePage } from './common';
-import { Avatar, nowTime, PctBadge, RegisterCalendar, TrendCard } from './registerParts';
+import { birthdayThisWeek, dayTrend, KID_MARK_LABELS, streak, KID_MARKS, kidRate, rateFrom, saturdayOnOrBefore, type KidEntry, type KidMark } from '../../../functions/src/shared/hopeRegister';
+import { HopeGate, useHopePage } from './common';
+import { Avatar, Delights, nowTime, PctBadge, RegisterCalendar, tick, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
 export function KidsRegisterPage() {
-  return <HopeGate title="Children's register">{(org) => <KidsRegister org={org} />}</HopeGate>;
+  return <HopeGate title="Registers">{(org) => <Registers org={org} />}</HopeGate>;
+}
+
+type Which = 'children' | 'champions' | 'club';
+
+/**
+ * One Registers page (Andy, 2026-11-04, 9A): a switch for the children, the Child Champions or a club, each with
+ * the same calendar and the same marking buttons.
+ */
+function Registers({ org }: { org: Organization }) {
+  const [params, setParams] = useSearchParams();
+  const w = (['children', 'champions', 'club'].includes(params.get('w') ?? '') ? params.get('w') : 'children') as Which;
+  const opts: [Which, string][] = [['children', 'Children'], ['champions', 'Champions'], ['club', 'Clubs']];
+  return (
+    <div className="page narrow">
+      <h1>Registers</h1>
+      <div className="segmented hr-switch" role="radiogroup" aria-label="Which register">
+        {opts.map(([k, label]) => (
+          <button key={k} type="button" role="radio" aria-checked={w === k} className={w === k ? 'on' : ''} onClick={() => setParams(k === 'children' ? {} : { w: k }, { replace: true })}>{label}</button>
+        ))}
+      </div>
+      {w === 'children' && <KidsRegister org={org} />}
+      {w === 'champions' && <ChampionsPanel org={org} />}
+      {w === 'club' && <ClubSessions org={org} />}
+    </div>
+  );
+}
+
+/** Until clubs have their own registers (Part 2), a club's register is a session of its programme. */
+function ClubSessions({ org }: { org: Organization }) {
+  const h = useHopePage(org);
+  const { can } = useAuth();
+  const toast = useToast();
+  const navigate = useNavigate();
+  const names = [...new Set(h.programmes.flatMap((p) => (p.toLowerCase() === 'football academy' ? [`${p} training`, `${p} match`] : [p])))];
+  function start(name: string) {
+    try {
+      const { id, synced } = createEvent(org.id, { date: h.today, type: eventTypeFor(org.type, name), name, activity: name });
+      synced.catch((err) => toast.show(friendlyError(err)));
+      navigate(`/attendance/${org.id}/${id}`);
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+  return (
+    <section className="card stack">
+      <h2>Start a club session</h2>
+      {can('attendance.write') ? <div className="chips">{names.map((n) => <button key={n} type="button" className="chip" onClick={() => start(n)}>{n}</button>)}</div> : <p className="muted">You can see registers but not take them.</p>}
+      <p className="small muted">Tap a club, then tap each child's name or type or scan their code. Past sessions are under <Link to="/attendance">Attendance</Link>.</p>
+    </section>
+  );
 }
 
 const SHORT: Record<KidMark, string> = { present: 'Present', absent: 'Absent', excused: 'Excused', departing: 'Departing', departed: 'Departed' };
@@ -57,6 +108,7 @@ function KidsRegister({ org }: { org: Organization }) {
     const old = marks[childId];
     if (s === 'departed' && old?.s !== 'departed') { setDeparted(childId); return; }
     const entry: KidEntry = { s, t: s === 'present' || s === 'departing' ? (old?.t ?? (date === h.today ? nowTime() : null)) : null, r: s === 'present' ? null : (old?.s === s ? old.r ?? null : null), ...extra };
+    if (s === 'present' && old?.s !== 'present') tick();
     markKid(org.id, date, childId, entry).catch(fail);
     const child = h.children.find((c) => c.id === childId);
     if (s === 'departing' && child?.status === 'active') updateChild(org.id, childId, { status: 'departing' }).catch(fail);
@@ -75,9 +127,7 @@ function KidsRegister({ org }: { org: Organization }) {
   }
 
   return (
-    <div className="page narrow">
-      <div className="page-head"><h1>Children's register</h1>{can('people.write') && <Link to="/hope/children/import" className="btn">Upload from Excel</Link>}</div>
-      <HopeNav />
+    <>
 
       <section className="card hr-top">
         <RegisterCalendar value={date} onChange={setDate} marked={markedDays} today={h.today} />
@@ -113,6 +163,7 @@ function KidsRegister({ org }: { org: Organization }) {
                     <Link to={`/hope/children/${c.id}`} className="link-title">{name}</Link>
                     <span className="small muted"> {h.codeOf(c)}{c.status === 'departing' ? ' · Departing' : c.status === 'exited' ? ' · Departed' : ''}</span>
                   </div>
+                  <Delights birthday={birthdayThisWeek(c.dateOfBirth, h.today)} streak={streak(c.id, days)} />
                   <PctBadge pct={rate.pct} />
                 </div>
                 <div className="hr-marks" role="group" aria-label={`Mark ${name}`}>
@@ -143,6 +194,6 @@ function KidsRegister({ org }: { org: Organization }) {
       <ConfirmDialog open={!!departed} title={`Has ${departed ? h.nameOf(departed) : ''} left the Hope Centre for good?`}
         body="They move to Past children and leave the weekly register. Their records are kept, and you can bring them back from their page."
         confirmLabel="Yes, departed" danger onConfirm={confirmDeparted} onCancel={() => setDeparted(null)} />
-    </div>
+    </>
   );
 }

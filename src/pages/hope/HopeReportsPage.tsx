@@ -12,7 +12,7 @@ import { shareOrDownload } from '../../lib/givingPdf';
 import { lastCompletePeriod, periodFor, periodLabel, type ReportType } from '../../../functions/src/shared/metrics';
 import type { HopeReportDoc } from '../../../functions/src/shared/hope';
 import type { StoredHopeReport } from '../../state/useHope';
-import { HopeGate, HopeNav, pct, useHopePage } from './common';
+import { HopeGate, pct, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function HopeReportsPage() {
@@ -55,8 +55,7 @@ function Reports({ org }: { org: Organization }) {
   const open = rows.find((r) => r.id === openId);
   return (
     <div className="page narrow">
-      <h1>Hope Center reports</h1>
-      <HopeNav />
+      <div className="page-head"><h1>Reports</h1>{can('people.read') && <Link to="/hope/exports" className="btn">Exports</Link>}</div>
       <p className="small muted">The monthly report (counts and trends only, no names) is made on the 1st for leadership and donors. The weekly attendance and follow-up report is for the pastor and lists children by code and name.</p>
       <section className="card stack">
         <h2>Make a report</h2>

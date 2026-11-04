@@ -267,3 +267,42 @@ export function planChampionImport(rows: readonly (readonly Cell[])[], existingN
   });
   return out;
 }
+
+// ---- Little delights (Andy, 2026-11-04, 8A) ------------------------------------------------------
+
+/**
+ * How many register days in a row, up to the latest, the child came. Excused days are skipped (they don't
+ * break a streak); an absence, or a register day the child was not marked, ends it.
+ */
+export function streak(id: string, days: readonly HopeDay[]): number {
+  let n = 0;
+  for (const d of [...days].filter((x) => !x.deletedAt && Object.keys(x.marks ?? {}).length).sort((a, b) => b.date.localeCompare(a.date))) {
+    const s = d.marks[id]?.s;
+    if (s === 'excused') continue;
+    if (!kidCame(s)) break;
+    n += 1;
+  }
+  return n;
+}
+export const STREAK_SHOWN = 4;
+
+/** Days from the day to the child's next birthday (0 on the day), or null when the date of birth is not known. */
+export function daysToBirthday(dateOfBirth: string | null | undefined, today: string): number | null {
+  if (!dateOfBirth || !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth)) return null;
+  const y = Number(today.slice(0, 4));
+  const at = (year: number) => {
+    const md = dateOfBirth.slice(5) === '02-29' && !(year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0)) ? '02-28' : dateOfBirth.slice(5);
+    return Date.parse(`${year}-${md}T12:00:00Z`);
+  };
+  const now = Date.parse(`${today}T12:00:00Z`);
+  const days = (t: number) => Math.round((t - now) / 86_400_000);
+  const next = days(at(y)) >= 0 ? days(at(y)) : days(at(y + 1));
+  return next;
+}
+/** A birthday this week: from three days before to three days after. */
+export function birthdayThisWeek(dateOfBirth: string | null | undefined, today: string): boolean {
+  const ahead = daysToBirthday(dateOfBirth, today);
+  if (ahead == null) return false;
+  const behind = daysToBirthday(dateOfBirth, addDays(today, -3));
+  return ahead <= 3 || (behind != null && behind <= 3);
+}

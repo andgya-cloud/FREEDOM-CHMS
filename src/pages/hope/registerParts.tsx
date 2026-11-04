@@ -1,6 +1,6 @@
 import { useState, type ChangeEvent, type ReactNode } from 'react';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { monthGrid, shiftMonth } from '../../../functions/src/shared/hopeRegister';
+import { monthGrid, shiftMonth, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
 import { LineChart } from '../../components/charts';
 import { readSpreadsheetSheets } from '../../lib/statementFile';
 import { toCsv } from '../../lib/analytics';
@@ -35,11 +35,35 @@ export function RegisterCalendar({ value, onChange, marked, today }: { value: st
 export function TrendCard({ title, trend }: { title: string; trend: { date: string; pct: number | null; came: number }[] }) {
   if (trend.length < 2) return null;
   return (
-    <section className="card stack">
-      <h2>{title}</h2>
-      <LineChart label={title} labels={trend.map((t) => short(t.date))} series={[{ name: 'Attendance %', values: trend.map((t) => t.pct) }]} format={(v) => `${Math.round(v)}%`} axis={(v) => `${Math.round(v)}%`} height={170} />
-    </section>
+    <details className="card hr-fold">
+      <summary><h2>{title}</h2><span className="small muted">{trend[trend.length - 1]!.pct ?? '–'}% on the latest day</span></summary>
+      <TrendChart label={title} trend={trend} />
+    </details>
   );
+}
+export function TrendChart({ label, trend }: { label: string; trend: { date: string; pct: number | null }[] }) {
+  return <LineChart label={label} labels={trend.map((t) => short(t.date))} series={[{ name: 'Attendance %', values: trend.map((t) => t.pct) }]} format={(v) => `${Math.round(v)}%`} axis={(v) => `${Math.round(v)}%`} height={170} />;
+}
+
+/** A soft "tick" when a child is marked present (Andy 8A). Quiet, short, and skipped where sound can't play. */
+export function tick() {
+  try {
+    const W = window as unknown as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext; __hrAudio?: AudioContext };
+    const Ctx = W.AudioContext ?? W.webkitAudioContext;
+    if (!Ctx) return;
+    const ctx = W.__hrAudio ?? (W.__hrAudio = new Ctx());
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(880, ctx.currentTime);
+    o.frequency.exponentialRampToValueAtTime(1320, ctx.currentTime + 0.06);
+    g.gain.setValueAtTime(0.0001, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.12, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
+    o.connect(g).connect(ctx.destination);
+    o.start();
+    o.stop(ctx.currentTime + 0.15);
+  } catch { /* no sound on this device */ }
 }
 
 /** "86%" with a colour: green from 75%, amber from 50%, red below. */
@@ -117,5 +141,15 @@ export function SheetPicker({ onRows, children }: { onRows: (rows: (string | num
       <label className="btn btn-primary align-start">{children ?? 'Choose the filled-in file'}<input type="file" hidden accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onChange={(e) => void choose(e)} /></label>
       {error && <p className="error" role="alert">{error}</p>}
     </div>
+  );
+}
+
+/** 🎈 in a child's birthday week, 🔥 with the number of Saturdays in a row they came (from 4). */
+export function Delights({ birthday, streak }: { birthday: boolean; streak: number }) {
+  return (
+    <>
+      {birthday && <span className="hr-delight" title="Birthday this week" aria-label="Birthday this week">🎈</span>}
+      {streak >= STREAK_SHOWN && <span className="hr-delight hr-streak" title={`Came ${streak} Saturdays in a row`} aria-label={`Came ${streak} times in a row`}>🔥{streak}</span>}
+    </>
   );
 }

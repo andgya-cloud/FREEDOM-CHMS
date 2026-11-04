@@ -5,7 +5,7 @@ import { friendlyError } from '../../lib/errors';
 import { importChildren } from '../../lib/hopeWrites';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { CHILD_TEMPLATE_EXAMPLE, CHILD_TEMPLATE_HEAD, planChildImport, type ChildImportRow } from '../../../functions/src/shared/hopeRegister';
-import { HopeGate, HopeNav, useHopePage } from './common';
+import { HopeGate, useHopePage } from './common';
 import { SheetPicker, TemplateButtons } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
@@ -35,7 +35,6 @@ function ChildImport({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/hope/children">← Children</Link></p>
       <h1>Upload children from Excel or CSV</h1>
-      <HopeNav />
       <section className="card stack">
         <p className="small">1. Download a template. 2. Fill in one child per row (only the name is needed). 3. Choose the file and check the list before adding.</p>
         <TemplateButtons name="Hope-children-template" head={CHILD_TEMPLATE_HEAD} example={CHILD_TEMPLATE_EXAMPLE} />

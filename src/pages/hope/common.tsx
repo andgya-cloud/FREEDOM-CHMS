@@ -1,6 +1,4 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
-import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
 import { usePeople } from '../../state/PeopleContext';
 import { useHope, type ChildRow } from '../../state/useHope';
@@ -24,22 +22,6 @@ export function HopeGate({ title, children }: { title: string; children: (org: O
         )}
       </div>
     </div>
-  );
-}
-
-/** The row of Hope Center sections shown at the top of every page. */
-export function HopeNav() {
-  const { can } = useAuth();
-  const items: [string, string, boolean][] = [
-    ['/hope', 'Overview', true], ['/hope/children', 'Children', true], ['/hope/register', 'Register', true], ['/hope/champions', 'Champions', true],
-    ['/hope/reports', 'Reports', true], ['/hope/exports', 'Exports', can('people.read')],
-  ];
-  return (
-    <nav className="chips" aria-label="Hope Center">
-      {items.filter((i) => i[2]).map(([to, label]) => (
-        <NavLink key={to} to={to} end={to === '/hope'} className={({ isActive }) => `chip${isActive ? ' chip-on' : ''}`}>{label}</NavLink>
-      ))}
-    </nav>
   );
 }
 

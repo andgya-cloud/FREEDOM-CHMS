@@ -102,7 +102,45 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   ) : null;
-  const tabs = churchTabs ?? (
+  // Freedom Hope Centre's own menu (Andy, 2026-11-04, 1A): Today, Children, Registers and Reports. People and
+  // Attendance are folded in (the children are its people; the registers are its attendance).
+  const hopeTabs = current?.type === 'ministry' && full ? (
+    <nav className="tabbar" aria-label="Main">
+      <NavLink to="/" end className={({ isActive }) => `tab${isActive || location.pathname === '/hope' ? ' active' : ''}`}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
+        Today
+      </NavLink>
+      {can('people.read') && (
+        <NavLink to="/hope/children" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6.6 5.3 5.3 0 0 1 21.3 12C19 16.6 12 21 12 21Z" /></svg>
+          Children
+        </NavLink>
+      )}
+      {(can('attendance.write') || can('people.read')) && (
+        <NavLink to="/hope/register" className={({ isActive }) => `tab${isActive || /^\/(hope\/champions|attendance)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
+          <TabLabel full="Registers" short="Register" />
+        </NavLink>
+      )}
+      {can('people.read') && (
+        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || location.pathname === '/hope/exports' ? ' active' : ''}`}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
+          Reports
+        </NavLink>
+      )}
+      {pettyAllowed && (
+        <NavLink to={pettyCashBase('ministry')} className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
+          <TabLabel full="Petty Cash" short="Cash" />
+        </NavLink>
+      )}
+      <NavLink to="/settings" className="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" /></svg>
+        Settings
+      </NavLink>
+    </nav>
+  ) : null;
+  const tabs = churchTabs ?? hopeTabs ?? (
     <nav className={`tabbar${phoneMore ? ' has-more' : ''}${moreOpen ? ' more-open' : ''}`} aria-label="Main">
       {full && (<>
       <NavLink to="/" end className="tab">

@@ -8,7 +8,7 @@ import { registerChild, type PersonInput } from '../../lib/hopeWrites';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 import { NO_CONSENT, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS, type ChildProgramme, type Consent, type SchoolStatus } from '../../../functions/src/shared/hope';
-import { HopeGate, HopeNav, useHopePage } from './common';
+import { HopeGate, useHopePage } from './common';
 import { ConsentField, ProgrammeFields } from './fields';
 import type { Organization } from '../../state/OrgContext';
 
@@ -77,7 +77,6 @@ function Register({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/hope/children">← Children</Link></p>
       <div className="page-head"><h1>Register a child</h1><Link to="/hope/children/import" className="btn">Upload many from Excel</Link></div>
-      <HopeNav />
       <form className="form" onSubmit={submit} noValidate>
         <PersonPicker label="Child's name" value={who} onChange={setWho} allowFreeText orgId={org.id} hint="Type a new name, or pick a child already in the system." />
         <div className="field-row">

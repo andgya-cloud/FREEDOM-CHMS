@@ -89,13 +89,11 @@ const CommonFinalsPage = lazy(() => import('./pages/school/ExamsPage').then((m) 
 const ExamSheetPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.ExamSheetPage })));
 const PayrollRunPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollRunPage })));
 const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage').then((m) => ({ default: m.SchoolSettingsPage })));
-const HopeHome = lazy(() => import('./pages/hope/HopeHome').then((m) => ({ default: m.HopeHome })));
 const ChildrenPage = lazy(() => import('./pages/hope/ChildrenPage').then((m) => ({ default: m.ChildrenPage })));
 const RegisterChildPage = lazy(() => import('./pages/hope/RegisterChildPage').then((m) => ({ default: m.RegisterChildPage })));
 const ChildPage = lazy(() => import('./pages/hope/ChildPage').then((m) => ({ default: m.ChildPage })));
 const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
 const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then((m) => ({ default: m.KidsRegisterPage })));
-const ChampionsPage = lazy(() => import('./pages/hope/ChampionsPage').then((m) => ({ default: m.ChampionsPage })));
 const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((m) => ({ default: m.ChildImportPage })));
 const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((m) => ({ default: m.HopeExportsPage })));
 
@@ -223,12 +221,12 @@ function AppRoutes() {
         <Route path="/school/payroll/staff/:staffId" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollPersonPage /></RequirePermission>} />
         <Route path="/school/payroll/:month" element={<RequirePermission anyOf={['payroll.manage', 'payroll.approve', 'users.manage']}><PayrollRunPage /></RequirePermission>} />
         <Route path="/school/settings" element={<RequirePermission permission="settings.manage"><SchoolSettingsPage /></RequirePermission>} />
-        <Route path="/hope" element={<RequirePermission permission="people.read"><HopeHome /></RequirePermission>} />
+        <Route path="/hope" element={<Navigate to="/" replace />} />
         <Route path="/hope/children" element={<RequirePermission permission="people.read"><ChildrenPage /></RequirePermission>} />
         <Route path="/hope/children/new" element={<RequirePermission permission="people.write"><RegisterChildPage /></RequirePermission>} />
         <Route path="/hope/children/import" element={<RequirePermission permission="people.write"><ChildImportPage /></RequirePermission>} />
         <Route path="/hope/register" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><KidsRegisterPage /></RequirePermission>} />
-        <Route path="/hope/champions" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ChampionsPage /></RequirePermission>} />
+        <Route path="/hope/champions" element={<Navigate to="/hope/register?w=champions" replace />} />
         <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
         <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />

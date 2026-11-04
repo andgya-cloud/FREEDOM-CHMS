@@ -10,13 +10,10 @@ import {
   CHAMPION_MARKS, CHAMPION_MARK_LABELS, CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
   planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
 } from '../../../functions/src/shared/hopeRegister';
-import { HopeGate, HopeNav, useHopePage } from './common';
+import { useHopePage } from './common';
 import { Avatar, nowTime, PctBadge, RegisterCalendar, SheetPicker, TemplateButtons, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
-export function ChampionsPage() {
-  return <HopeGate title="Child Champions">{(org) => <Champions org={org} />}</HopeGate>;
-}
 
 type Tab = 'register' | 'people' | 'upload';
 
@@ -24,24 +21,22 @@ type Tab = 'register' | 'people' | 'upload';
  * The Child Champions register (Andy, 2026-11-04): the people who teach and serve the Hope Centre children.
  * The Director or an admin marks it (6A): time in, time out, duty and notes, with each champion's percentage.
  */
-function Champions({ org }: { org: Organization }) {
+export function ChampionsPanel({ org }: { org: Organization }) {
   const h = useHopePage(org);
   const { profile } = useAuth();
   const c = useChampions(org.id);
   const manager = isInventoryManager(profile);
   const [tab, setTab] = useState<Tab>('register');
-  const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'Champions'], ...(manager ? [['upload', 'Upload from Excel'] as [Tab, string]] : [])];
+  const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'The champions'], ...(manager ? [['upload', 'Upload from Excel'] as [Tab, string]] : [])];
   return (
-    <div className="page narrow">
-      <h1>Child Champions</h1>
-      <HopeNav />
-      <div className="chips" role="tablist">
+    <>
+      <div className="chips hr-subtabs" role="tablist">
         {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={`chip${tab === k ? ' chip-on' : ''}`} onClick={() => setTab(k)}>{label}</button>)}
       </div>
       {tab === 'register' && <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} />}
       {tab === 'people' && <ChampionList org={org} today={h.today} data={c} manager={manager} />}
       {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions.map((x) => x.name)} done={() => setTab('people')} />}
-    </div>
+    </>
   );
 }
 
