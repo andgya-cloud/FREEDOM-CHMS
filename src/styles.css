@@ -1979,3 +1979,46 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .count-total .count-label, .count-total .count-hint { color: #e8f3ec; }
 .count-total b.count-number { font-size: 2.6rem; color: #ffffff; line-height: 1.1; }
 @media (max-width: 560px) { .count-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; } .count-tap { width: 44px; height: 44px; } }
+
+/* ADIA Tutor Files (Andy, 2026-11-04): the tutor's page and cards turn redder as a deadline closes in (--heat 0..1). */
+.tf-page { --heat: 0; background: linear-gradient(180deg, color-mix(in srgb, #dc2626 calc(var(--heat) * 26%), transparent), color-mix(in srgb, #dc2626 calc(var(--heat) * 8%), transparent) 70%, transparent); border-radius: 18px; }
+.tf-card, .lite-look.side-look .tf-card.card, .side-look .tf-card.card { --heat: 0; border: 2px solid color-mix(in srgb, #dc2626 calc(var(--heat) * 100%), var(--border, #e5e7eb)); background: color-mix(in srgb, #fee2e2 calc(var(--heat) * 70%), var(--surface, #fff)); }
+.tf-card.tf-hot, .side-look .tf-card.card.tf-hot { box-shadow: 0 0 0 4px rgb(220 38 38 / 0.12); }
+.tf-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.tf-head h3, .tf-head h2 { margin: 0; }
+.tf-due { font-weight: 700; padding: 4px 10px; border-radius: 999px; color: #fff; background: color-mix(in srgb, #dc2626 calc(var(--heat) * 100%), #1f2a5c); white-space: nowrap; }
+.tf-status { font-weight: 600; margin: 6px 0; }
+.tf-done, .tf-ok { color: #15803d; }
+.tf-late { color: #b91c1c; }
+.tf-ask { color: #a16207; }
+.tf-muted { color: var(--muted); }
+.tf-note { background: #fff7ed; border-left: 3px solid #f59e0b; padding: 6px 10px; border-radius: 6px; margin: 4px 0 8px; }
+.tf-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+div.tf-ask { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; color: inherit; margin-top: 6px; }
+div.tf-ask input { flex: 1 1 200px; min-width: 0; }
+.tf-lessons { display: grid; gap: 10px; }
+.tf-lesson { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; padding-bottom: 10px; border-bottom: 1px solid var(--border, #eee); }
+.tf-lesson:last-child { border-bottom: 0; padding-bottom: 0; }
+.tf-lesson-ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tf-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+@media (max-width: 560px) { .tf-row { grid-template-columns: 1fr; } }
+.tf-req > summary { display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer; list-style: none; }
+.tf-req > summary::-webkit-details-marker { display: none; }
+.tf-count { font-weight: 700; padding: 3px 10px; border-radius: 999px; background: var(--surface-2, #eef0f6); white-space: nowrap; }
+.tf-count.tf-done { background: #dcfce7; }
+.tf-count.tf-late { background: #fee2e2; }
+.tf-tutors { display: grid; gap: 8px; margin-top: 10px; }
+.tf-tutor { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px 0; border-top: 1px solid var(--border, #eee); }
+.tf-tutor-main, .tf-tutor-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tf-chip { font-size: 0.78rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--surface-2, #eef0f6); }
+.tf-chip.tf-done, .tf-chip.tf-ok { background: #dcfce7; }
+.tf-chip.tf-late { background: #fee2e2; }
+.tf-chip.tf-ask { background: #fef3c7; }
+.tf-req-foot { margin-top: 8px; }
+.tf-askbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tf-askbar-ctl { display: flex; gap: 6px; align-items: center; }
+.tf-grid { width: 100%; border-collapse: collapse; }
+.tf-grid th, .tf-grid td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--border, #eee); }
+.tf-grid tbody th { text-align: left; font-weight: 600; }
+.tf-tick { border: 0; background: #dcfce7; color: #15803d; font-weight: 800; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
+.tf-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 3px rgb(220 38 38 / 0.18); }

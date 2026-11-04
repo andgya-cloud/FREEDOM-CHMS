@@ -1,3 +1,4 @@
+import { LessonPlanCard } from '../tutorFiles/TutorFilesPage';
 import { useEffect, useState } from 'react';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -106,6 +107,8 @@ export function EventPage() {
       {isClass
         ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} rosterOnly={trainer} names={trainer ? linked.names : undefined} />
         : <CheckInPanel org={org} event={event} byPerson={byPerson} canRecord={canRecord} />}
+
+      {trainer && mine && <LessonPlanCard orgId={orgId} eventId={eventId} />}
 
       <section className="card">
         <label className="field">

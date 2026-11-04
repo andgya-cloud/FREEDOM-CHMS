@@ -1654,6 +1654,27 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // ADIA Tutor Files (Andy, 2026-11-04). The principal (and Admin, the pastor, Doreen) asks tutors for a file with
+      // a deadline; tutors read the requests. The files themselves and their status are written only by Cloud
+      // Functions (callable tutorFiles), which keep the lock; a tutor reads only their own.
+      function fileRequestFields(d) {
+        return d.keys().hasOnly(['orgId', 'title', 'kind', 'deadline', 'courseIds', 'note', 'createdByName',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.orgId == orgId && shortText(d.title, 120) && d.title.size() > 0 && d.kind in ['report', 'course', 'other']
+          && invDay(d.deadline) && d.courseIds is list && d.courseIds.size() <= 40
+          && shortText(d.note, 500) && shortText(d.createdByName, 120);
+      }
+      match /fileRequests/{requestId} {
+        allow read: if invManager() || (canAccessOrg(orgId) && me().roleId == 'trainer');
+        allow create: if invManager() && fileRequestFields(request.resource.data) && stampedCreate() && freshRecord();
+        allow update: if invManager() && fileRequestFields(request.resource.data) && stampedUpdate() && validSoftDelete();
+        allow delete: if false;
+      }
+      match /tutorFiles/{fileId} {
+        allow read: if invManager() || (canAccessOrg(orgId) && (resource == null || resource.data.tutorUid == request.auth.uid));
+        allow write: if false;
+      }
+
       // ADIA exam records. A trainer (exams.mark) sees and keys in only their own marks sheets, and only while
       // they are drafts; submitting locks a sheet. The principal (exams.manage, and the pastor) sees every sheet,
       // may change marks on a locked sheet, unlocks it, and keeps the remarks, attendance and grading. Every change

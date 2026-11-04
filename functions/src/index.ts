@@ -25,6 +25,7 @@ export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmai
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';
 export { inventoryEmail, inventoryReminders } from './inventory.js';
+export { tutorFiles, tutorFileReminders } from './tutorFiles.js';
 export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
 export { welcomeCard } from './welcome.js';
 export { birthdayCards, birthdayTestCard } from './birthdays.js';

@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A trainer's only pages are their marks sheets and their own settings.
   // A trainer with register classes also marks those classes' registers (Andy, 2026-10-26).
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
-  if (trainer && !new RegExp(`^/(school/exams|settings${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
+  if (trainer && !new RegExp(`^/(school/exams|settings|tutor-files${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
@@ -189,6 +189,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/school/exams" className={`tab${extra}`}>
           {adia ? <AdiaIcon name="exams" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>}
           {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}
+        </NavLink>
+      )}
+      {current?.type === 'college' && (trainer || (full && !!profile && isInventoryManager(profile))) && (
+        <NavLink to="/tutor-files" className={`tab${extra}`}>
+          <AdiaIcon name="files" />
+          <TabLabel full="Tutor Files" short="Files" />
         </NavLink>
       )}
       {inventoryTab && (

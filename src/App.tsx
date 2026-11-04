@@ -81,6 +81,7 @@ const PayrollPage = lazy(() => import('./pages/school/PayrollPage').then((m) => 
 const PayrollStaffPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollStaffPage })));
 const PayrollPersonPage = lazy(() => import('./pages/school/PayrollPage').then((m) => ({ default: m.PayrollPersonPage })));
 const StudentImportPage = lazy(() => import('./pages/school/StudentImportPage').then((m) => ({ default: m.StudentImportPage })));
+const TutorFilesPage = lazy(() => import('./pages/tutorFiles/TutorFilesPage').then((m) => ({ default: m.TutorFilesPage })));
 const InventoryPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })));
 const InventoryCountPage = lazy(() => import('./pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryCountPage })));
 const ExamsPage = lazy(() => import('./pages/school/ExamsPage').then((m) => ({ default: m.ExamsPage })));
@@ -156,6 +157,7 @@ function AppRoutes() {
         <Route path="/" element={<TodayPage />} />
         <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/attendance/past" element={<RequirePermission permission="attendance.write"><PastRegisterPage /></RequirePermission>} />
+        <Route path="/tutor-files" element={<TutorFilesPage />} />
         <Route path="/inventory" element={<InventoryPage />} />
         <Route path="/inventory/:countId" element={<InventoryCountPage />} />
         <Route path="/attendance/:orgId/:eventId" element={<EventPage />} />
