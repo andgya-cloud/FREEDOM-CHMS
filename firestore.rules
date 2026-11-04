@@ -1148,6 +1148,13 @@ service cloud.firestore {
       function hopeRead() {
         return canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
       }
+      // How a child's school fees are paid (Andy, 2026-11-04, 8B).
+      function validPayment(p) {
+        return p == null || (p is map && p.keys().hasOnly(['by', 'number', 'account', 'payTo', 'amount', 'note'])
+          && (p.get('by', null) == null || p.by in ['paybill', 'till', 'send_money', 'cash'])
+          && shortText(p.get('number', ''), 40) && shortText(p.get('account', ''), 80) && shortText(p.get('payTo', ''), 120)
+          && shortText(p.get('amount', ''), 80) && shortText(p.get('note', ''), 300));
+      }
       function validConsent(c) {
         return c is map && c.keys().hasOnly(['given', 'date'])
           && (c.given == null || c.given is bool)
@@ -1161,7 +1168,7 @@ service cloud.firestore {
         allow create, update: if orgWrite(orgId, 'people.write')
           && request.resource.data.keys().hasOnly(['orgId', 'code', 'status', 'enrolledOn', 'exitedOn', 'schoolStatus', 'programmes', 'dateOfBirth', 'school',
                'photoConsent', 'guardianConsent', 'sponsorName', 'sponsorPhone', 'sponsorEmail', 'parentName', 'parentPhone', 'departingNote', 'hasPhoto',
-               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'schoolClass', 'payment', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', childId)
           && request.resource.data.status in ['active', 'departing', 'exited']
           && shortText(request.resource.data.get('sponsorName', ''), 120)
@@ -1170,6 +1177,8 @@ service cloud.firestore {
           && shortText(request.resource.data.get('parentName', ''), 120)
           && shortText(request.resource.data.get('parentPhone', ''), 30)
           && shortText(request.resource.data.get('departingNote', ''), 500)
+          && shortText(request.resource.data.get('schoolClass', ''), 40)
+          && validPayment(request.resource.data.get('payment', null))
           && request.resource.data.get('hasPhoto', false) is bool
           && request.resource.data.schoolStatus in ['in_school', 'not_in_school', 'unknown']
           && optionalDate(request.resource.data.get('enrolledOn', null))

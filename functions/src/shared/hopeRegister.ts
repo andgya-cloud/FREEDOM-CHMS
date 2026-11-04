@@ -5,7 +5,7 @@
  * Pure functions, shared by the app and the tests.
  */
 import { addDays } from './metrics.js';
-import { normalizeCode } from './hope.js';
+import { normalizeCode, readPayBy, type ChildPayment } from './hope.js';
 
 // ---- The children's register --------------------------------------------------------------------
 
@@ -135,8 +135,8 @@ export function hoursText(minutes: number | null): string {
 
 type Cell = string | number | Date | null | undefined;
 
-export const CHILD_TEMPLATE_HEAD = ['Name', 'Gender', 'Date of birth', 'School', 'Sponsor name', 'Sponsor phone', 'Sponsor email', 'Parent name', 'Parent phone', 'Joined on', 'Photo consent', 'Guardian consent'];
-export const CHILD_TEMPLATE_EXAMPLE = ['Faith Akinyi', 'Female', '2016-05-14', 'Kibera Primary', 'John Smith', '', 'john@example.org', 'Mary Atieno', '0712345678', '2025-01-11', 'Yes', 'Yes'];
+export const CHILD_TEMPLATE_HEAD = ['Name', 'Gender', 'Date of birth', 'School', 'Class', 'Sponsor name', 'Sponsor phone', 'Sponsor email', 'Parent name', 'Parent phone', 'Joined on', 'Photo consent', 'Guardian consent', 'Pay by', 'Pay number', 'Account', 'Pay to', 'Amount', 'Payment note'];
+export const CHILD_TEMPLATE_EXAMPLE = ['Faith Akinyi', 'Female', '2016-05-14', 'Kibera Primary', 'Grade 4', 'John Smith', '', 'john@example.org', 'Mary Atieno', '0712345678', '2025-01-11', 'Yes', 'Yes', 'Paybill', '247247', '804212#Faith', 'Kibera Primary', 'KES 1,500', ''];
 export const CHAMPION_TEMPLATE_HEAD = ['Name', 'Phone', 'Email', 'Duty', 'Joined on'];
 export const CHAMPION_TEMPLATE_EXAMPLE = ['Peter Otieno', '0722345678', 'peter@example.org', 'Football coach', '2025-03-01'];
 
@@ -176,6 +176,9 @@ function columns(rows: readonly (readonly Cell[])[], head: readonly string[]) {
     if (k === 'parentscontact' || k === 'parentcontact' || k === 'guardianphone' || k === 'parentsphone') k = 'parentphone';
     if (k === 'joined' || k === 'enrolledon' || k === 'datejoined') k = 'joinedon';
     if (k === 'role') k = 'duty';
+    if (k === 'grade' || k === 'schoolclass') k = 'class';
+    if (k === 'paybillnumber' || k === 'paybilltillphone' || k === 'paynumber' || k === 'number') k = 'paynumber';
+    if (k === 'accountnumber' || k === 'acc') k = 'account';
     if (wanted.includes(k) && map[k] == null) map[k] = i;
   });
   return { at, get: (r: readonly Cell[], name: string) => (map[key(name)] != null ? r[map[key(name)]!] : undefined) };
@@ -197,6 +200,9 @@ export interface ChildImportRow {
   enrolledOn: string | null;
   photoConsent: boolean | null;
   guardianConsent: boolean | null;
+  schoolClass: string;
+  /** How fees are paid, or null when the sheet says nothing about it. */
+  payment: ChildPayment | null;
   /** Why the row will not be added. */
   skip: string | null;
   /** A note that doesn't stop it, such as a date that couldn't be read. */
@@ -227,9 +233,18 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
     const codeWarn = codeText && !code ? `code "${codeText}" not read` : code && (takenCodes.has(code) || seenCodes.has(code)) ? `code ${code} is already used, a new one will be given` : '';
     if (codeWarn) code = null;
     if (code) seenCodes.add(code);
+    const payText = clean(cols.get(r, 'Pay by'));
+    const payment: ChildPayment = {
+      by: readPayBy(payText), number: clean(cols.get(r, 'Pay number')).slice(0, 40), account: clean(cols.get(r, 'Account')).slice(0, 80),
+      payTo: clean(cols.get(r, 'Pay to')).slice(0, 120), amount: clean(cols.get(r, 'Amount')).slice(0, 80), note: clean(cols.get(r, 'Payment note')).slice(0, 300),
+    };
+    const anyPay = payText || payment.number || payment.account || payment.payTo || payment.amount || payment.note;
+    // "Birth date missing" or "not known" in the date column just means no date yet.
+    const dobBlank = /missing|not known|unknown/i.test(dobText);
     const warns = [
       codeWarn,
-      dobText && !dateOfBirth ? `date of birth "${dobText}" not read` : '',
+      dobText && !dateOfBirth && !dobBlank ? `date of birth "${dobText}" not read` : '',
+      payText && !payment.by ? `pay by "${payText}" not read` : '',
       joinText && !enrolledOn ? `joined on "${joinText}" not read` : '',
       sponsorEmail && !emailOk(sponsorEmail) ? 'sponsor email not saved' : '',
     ].filter(Boolean);
@@ -248,6 +263,8 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
       enrolledOn: enrolledOn && enrolledOn <= today ? enrolledOn : null,
       photoConsent: yes(cols.get(r, 'Photo consent')),
       guardianConsent: yes(cols.get(r, 'Guardian consent')),
+      schoolClass: clean(cols.get(r, 'Class')).slice(0, 40),
+      payment: anyPay ? payment : null,
       skip: name.length < 2 ? 'no name' : have.has(k) ? 'already on the register' : seen.has(k) ? 'listed twice' : null,
       warn: warns.join('; ') || null,
     });

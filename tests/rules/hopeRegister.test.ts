@@ -135,3 +135,17 @@ describe('helpers arriving', () => {
     await assertFails(setDoc(doc(as('hopeAdmin'), `${O}/helperDays/2026-11-07`), at('hopeAdmin', { hopeAdmin: { name: 'John', t: 'soon' } }), { merge: true }));
   });
 });
+
+describe('school fees', () => {
+  it('keeps how the fees are paid, and the class', async () => {
+    const db = as('hopeStaff');
+    const pay = { by: 'paybill', number: '247247', account: '804212#Miles', payTo: 'Petunia School', amount: '', note: '' };
+    const up = (changes: Record<string, unknown>) => updateDoc(doc(db, `${O}/children/c1`), { ...changes, updatedAt: serverTimestamp(), updatedBy: 'hopeStaff' });
+    await assertSucceeds(up({ payment: pay, schoolClass: 'Grade 3' }));
+    await assertSucceeds(up({ payment: null }));
+    await assertFails(up({ payment: { ...pay, by: 'bitcoin' } }));
+    await assertFails(up({ payment: { ...pay, secret: 'x' } }));
+    await assertFails(up({ payment: { ...pay, note: 'x'.repeat(301) } }));
+    await assertFails(up({ schoolClass: 'x'.repeat(41) }));
+  });
+});

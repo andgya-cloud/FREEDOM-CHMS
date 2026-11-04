@@ -87,6 +87,19 @@ describe('uploads', () => {
     expect(plan[2]!.warn).toContain('already used');
     expect(plan[3]!.warn).toContain('not read');
   });
+  it('reads the school fees and class, and "Birth date missing" as no date', () => {
+    const plan = planChildImport([
+      ['Code', 'Name', 'Date of birth', 'School', 'Class', 'Pay by', 'Pay number', 'Account', 'Pay to', 'Amount', 'Payment note'],
+      ['HC-0001', 'A One', 'Birth date missing', 'Petunia School', '', 'Paybill', '247247', '804212#A', 'Petunia School', '', ''],
+      ['HC-0002', 'B Two', '', 'Ruai Primary', 'Grade 3', 'Send money', '0723 432 743', '', 'Anna', 'KES 1,300 to the teacher', 'Also KES 700 to KCB'],
+      ['HC-0003', 'C Three', '', '', '', 'bitcoin', '', '', '', '', ''],
+      ['HC-0004', 'D Four'],
+    ], [], '2026-11-04')!;
+    expect(plan[0]).toMatchObject({ dateOfBirth: null, warn: null, payment: { by: 'paybill', number: '247247', account: '804212#A', payTo: 'Petunia School', amount: '', note: '' } });
+    expect(plan[1]).toMatchObject({ schoolClass: 'Grade 3', payment: { by: 'send_money', number: '0723 432 743', amount: 'KES 1,300 to the teacher' } });
+    expect(plan[2]!.warn).toContain('pay by');
+    expect(plan[3]!.payment).toBeNull();
+  });
   it('reads the champions template', () => {
     const plan = planChampionImport([['Name', 'Phone', 'Email', 'Role'], ['Peter Otieno', '0722', 'p@x.org', 'Coach'], ['X']], [], '2026-11-04')!;
     expect(plan[0]).toMatchObject({ name: 'Peter Otieno', duty: 'Coach', skip: null });

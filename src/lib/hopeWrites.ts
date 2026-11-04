@@ -3,7 +3,7 @@ import { auth, db } from '../firebase';
 import { createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { firstName } from '../../functions/src/shared/people';
-import type { Child, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
+import type { Child, ChildPayment, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
 import type { ChampionEntry, ChildImportRow, ChampionImportRow, KidEntry } from '../../functions/src/shared/hopeRegister';
 import { normalizePhone } from '../../functions/src/shared/phone';
 import { clubDayId, STARTER_CLUBS, type Club, type ClubWin } from '../../functions/src/shared/hopeClubs';
@@ -29,6 +29,8 @@ export interface ChildDetails {
   sponsorEmail?: string;
   parentName?: string;
   parentPhone?: string;
+  schoolClass?: string;
+  payment?: ChildPayment | null;
 }
 export interface PersonInput { fullName: string; phone: string | null; whatsapp: string | null; whatsappConsent: WhatsAppConsent; gender?: string | null }
 
@@ -150,6 +152,7 @@ export function importChildren(orgId: string, rows: ChildImportRow[], today: str
         dateOfBirth: r.dateOfBirth, school: r.school, schoolStatus: r.school ? 'in_school' : 'unknown', enrolledOn: r.enrolledOn, programmes: [],
         photoConsent: consent(r.photoConsent), guardianConsent: consent(r.guardianConsent),
         sponsorName: r.sponsorName, sponsorPhone: r.sponsorPhone, sponsorEmail: r.sponsorEmail, parentName: r.parentName, parentPhone: r.parentPhone,
+        schoolClass: r.schoolClass, payment: r.payment,
       },
       r.code,
     );

@@ -14,8 +14,8 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { ATTENDANCE_STATUS_LABELS } from '../../../functions/src/shared/attendance';
 import {
-  consentMissing, MEALS_PROGRAMME, missedInARow, programmeOf, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
-  type ChildProgramme, type Consent, type SchoolStatus,
+  consentMissing, hasPayment, MEALS_PROGRAMME, missedInARow, NO_PAYMENT, PAY_BY, PAY_BY_LABELS, paymentLine, programmeOf, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
+  type ChildPayment, type ChildProgramme, type Consent, type PayBy, type SchoolStatus,
 } from '../../../functions/src/shared/hope';
 import { HopeGate, useHopePage } from './common';
 import { ConsentField } from './fields';
@@ -37,6 +37,7 @@ function ChildScreen({ org }: { org: Organization }) {
 
   const [dob, setDob] = useState('');
   const [school, setSchool] = useState('');
+  const [schoolClass, setSchoolClass] = useState('');
   const [schoolStatus, setSchoolStatus] = useState<SchoolStatus>('unknown');
   const [enrolledOn, setEnrolledOn] = useState('');
   const [programmes, setProgrammes] = useState<ChildProgramme[]>([]);
@@ -57,7 +58,7 @@ function ChildScreen({ org }: { org: Organization }) {
 
   useEffect(() => {
     if (!child) return;
-    setDob(child.dateOfBirth ?? ''); setSchool(child.school ?? ''); setSchoolStatus(child.schoolStatus); setEnrolledOn(child.enrolledOn ?? '');
+    setDob(child.dateOfBirth ?? ''); setSchool(child.school ?? ''); setSchoolClass(child.schoolClass ?? ''); setSchoolStatus(child.schoolStatus); setEnrolledOn(child.enrolledOn ?? '');
     setProgrammes(child.programmes); setPhotoConsent(child.photoConsent); setGuardianConsent(child.guardianConsent);
     setSponsorName(child.sponsorName ?? ''); setSponsorPhone(child.sponsorPhone ?? ''); setSponsorEmail(child.sponsorEmail ?? '');
     setParentName(child.parentName ?? ''); setParentPhone(child.parentPhone ?? ''); setLeaveNote(child.departingNote ?? '');
@@ -78,7 +79,7 @@ function ChildScreen({ org }: { org: Organization }) {
 
   function save() {
     updateChild(org.id, child!.id, {
-      dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolStatus, enrolledOn: enrolledOn || null, programmes, photoConsent, guardianConsent,
+      dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolClass: schoolClass.trim().slice(0, 40), schoolStatus, enrolledOn: enrolledOn || null, programmes, photoConsent, guardianConsent,
       sponsorName: sponsorName.trim().slice(0, 120), sponsorPhone: sponsorPhone.trim().slice(0, 30), sponsorEmail: sponsorEmail.trim().slice(0, 120),
       parentName: parentName.trim().slice(0, 120), parentPhone: parentPhone.trim().slice(0, 30),
     }).catch((err) => toast.show(friendlyError(err)));
@@ -140,7 +141,7 @@ function ChildScreen({ org }: { org: Organization }) {
           <dl className="hc-facts">
             <div><dt>Age</dt><dd>{age != null ? `${age} years` : 'Not known'}</dd></div>
             <div><dt>Birthday</dt><dd>{born ?? 'Not known'}{toBirthday != null && toBirthday <= 7 ? (toBirthday === 0 ? ' 🎈 today!' : ` 🎈 in ${toBirthday} ${toBirthday === 1 ? 'day' : 'days'}`) : ''}</dd></div>
-            <div><dt>School</dt><dd>{child.school || 'Not known'}</dd></div>
+            <div><dt>School</dt><dd>{child.school || 'Not known'}{child.schoolClass ? ` · ${child.schoolClass}` : ''}</dd></div>
             <div><dt>Sponsor</dt><dd>{child.sponsorName || 'None yet'}{child.sponsorEmail && <> · <a href={`mailto:${child.sponsorEmail}`}>email</a></>}{child.sponsorPhone && <> · <a href={`tel:${child.sponsorPhone}`}>call</a></>}</dd></div>
             <div><dt>Parent</dt><dd>{guardian ? <Link to={`/people/${org.id}/${guardian.id}`}>{parentShown}</Link> : parentShown || 'Not saved'}</dd></div>
             <div><dt>Attendance</dt><dd><PctBadge pct={rate.pct} /> {fire >= STREAK_SHOWN && <span className="hr-delight hr-streak">🔥{fire} in a row</span>}</dd></div>
@@ -164,6 +165,9 @@ function ChildScreen({ org }: { org: Organization }) {
         </div>
         <div className="field-row">
           <label className="field"><span>School</span><input disabled={!canEdit} value={school} maxLength={120} onChange={(e) => setSchool(e.target.value)} /></label>
+          <label className="field"><span>Class</span><input disabled={!canEdit} value={schoolClass} maxLength={40} onChange={(e) => setSchoolClass(e.target.value)} placeholder="Grade 3" /></label>
+        </div>
+        <div className="field-row">
           <label className="field"><span>In school?</span>
             <select disabled={!canEdit} value={schoolStatus} onChange={(e) => setSchoolStatus(e.target.value as SchoolStatus)}>
               {SCHOOL_STATUSES.map((v) => <option key={v} value={v}>{SCHOOL_STATUS_LABELS[v]}</option>)}
@@ -184,6 +188,8 @@ function ChildScreen({ org }: { org: Organization }) {
         {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}
         </div>
       </details>
+
+      <SchoolFees orgId={org.id} childId={child.id} saved={child.payment ?? null} school={child.school ?? ''} canEdit={canEdit} />
 
       <RegisterHistory history={history} rate={rate} />
 
@@ -357,6 +363,72 @@ function PastorSection({ orgId, childId, today }: { orgId: string; childId: stri
         <label className="field"><span>Why</span><textarea rows={2} maxLength={1000} value={refReason} onChange={(e) => setRefReason(e.target.value)} /></label>
         <button type="button" className="btn align-start" disabled={!refTo.trim()} onClick={() => { addReferral(orgId, childId, { date: today, to: refTo, reason: refReason }).catch(fail); setRefTo(''); setRefReason(''); toast.show('Referral logged'); }}>Log the referral</button>
       </section>
+      </div>
+    </details>
+  );
+}
+
+/**
+ * How the school fees are paid (Andy, 2026-11-04, 8B): Paybill, Till, Send money or Cash, with the number and
+ * account ready to copy into M-Pesa.
+ */
+function SchoolFees({ orgId, childId, saved, school, canEdit }: { orgId: string; childId: string; saved: ChildPayment | null; school: string; canEdit: boolean }) {
+  const toast = useToast();
+  const [p, setP] = useState<ChildPayment>(saved ?? NO_PAYMENT);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { setP(saved ?? NO_PAYMENT); }, [childId, JSON.stringify(saved)]);
+  const set = (k: keyof ChildPayment, v: string) => setP((x) => ({ ...x, [k]: k === 'by' ? (v || null) : v }));
+  function copy(text: string, what: string) {
+    void navigator.clipboard?.writeText(text).then(() => toast.show(`${what} copied`), () => toast.show(text));
+  }
+  function save() {
+    const clean: ChildPayment = {
+      by: p.by, number: p.number.trim().slice(0, 40), account: p.by === 'paybill' ? p.account.trim().slice(0, 80) : '',
+      payTo: p.payTo.trim().slice(0, 120), amount: p.amount.trim().slice(0, 80), note: p.note.trim().slice(0, 300),
+    };
+    updateChild(orgId, childId, { payment: hasPayment(clean) ? clean : null }).catch((err) => toast.show(friendlyError(err)));
+    toast.show('Saved');
+  }
+  const s = saved;
+  const numberLabel = p.by === 'send_money' ? 'Phone number' : p.by === 'till' ? 'Till number' : 'Paybill number';
+  return (
+    <details className="card hr-fold">
+      <summary><h2>School fees</h2><span className="small muted">{s && hasPayment(s) ? paymentLine(s) || 'Saved' : 'Not saved'}</span></summary>
+      <div className="stack">
+        {s && hasPayment(s) && s.by !== 'cash' && (s.number || s.account) && (
+          <div className="fee-box">
+            {s.number && <div><span className="small muted">{s.by === 'send_money' ? 'Send money to' : s.by === 'till' ? 'Till' : 'Paybill'}</span><b>{s.number}</b><button type="button" className="btn btn-quiet" onClick={() => copy(s.number.replace(/\s/g, ''), 'Number')}>📋 Copy</button></div>}
+            {s.account && <div><span className="small muted">Account</span><b>{s.account}</b><button type="button" className="btn btn-quiet" onClick={() => copy(s.account, 'Account')}>📋 Copy</button></div>}
+            {(s.payTo || s.amount) && <p className="small">{[s.payTo && `To ${s.payTo}`, s.amount].filter(Boolean).join(' · ')}</p>}
+            {s.note && <p className="small muted">{s.note}</p>}
+          </div>
+        )}
+        {s?.by === 'cash' && <p>💵 Paid in cash{s.payTo ? ` at ${s.payTo}` : ''}.{s.amount ? ` ${s.amount}.` : ''}{s.note ? ` ${s.note}` : ''}</p>}
+        {canEdit && (
+          <>
+            <label className="field"><span>Pay by</span>
+              <select value={p.by ?? ''} onChange={(e) => set('by', e.target.value as PayBy | '')}>
+                <option value="">Choose…</option>
+                {PAY_BY.map((v) => <option key={v} value={v}>{PAY_BY_LABELS[v]}</option>)}
+              </select>
+            </label>
+            {p.by && p.by !== 'cash' && (
+              <div className="field-row">
+                <label className="field"><span>{numberLabel}</span><input inputMode="numeric" value={p.number} maxLength={40} onChange={(e) => set('number', e.target.value)} /></label>
+                {p.by === 'paybill' && <label className="field"><span>Account</span><input value={p.account} maxLength={80} onChange={(e) => set('account', e.target.value)} placeholder="804212#Name" /></label>}
+              </div>
+            )}
+            {p.by && (
+              <div className="field-row">
+                <label className="field"><span>{p.by === 'send_money' ? 'Name of the person' : 'Pay to'}</span><input value={p.payTo} maxLength={120} onChange={(e) => set('payTo', e.target.value)} placeholder={p.by === 'send_money' ? 'The teacher' : school} /></label>
+                <label className="field"><span>Amount (optional)</span><input value={p.amount} maxLength={80} onChange={(e) => set('amount', e.target.value)} placeholder="KES 1,500" /></label>
+              </div>
+            )}
+            {p.by && <label className="field"><span>Note (optional)</span><input value={p.note} maxLength={300} onChange={(e) => set('note', e.target.value)} /></label>}
+            <button type="button" className="btn btn-primary align-start" onClick={save}>Save school fees</button>
+          </>
+        )}
+        {!canEdit && !(s && hasPayment(s)) && <p className="muted">Not saved yet.</p>}
       </div>
     </details>
   );

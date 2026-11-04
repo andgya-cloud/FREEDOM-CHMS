@@ -52,11 +52,49 @@ export interface Child {
   /** The parent's or guardian's name and phone, as shown on the register. */
   parentName?: string | null;
   parentPhone?: string | null;
+  /** The child's class or grade at school (Grade 3, ECDE). */
+  schoolClass?: string | null;
+  /** How the school fees are paid (Andy, 2026-11-04, 8B). */
+  payment?: ChildPayment | null;
   /** Why the child is leaving, while departing or after. */
   departingNote?: string | null;
   /** A photo is kept in childPhotos (only while photo consent is given). */
   hasPhoto?: boolean;
   deletedAt?: unknown;
+}
+
+/** How a child's school fees are paid (Andy, 2026-11-04, 8B): M-Pesa Paybill, Till, Send money, or cash. */
+export const PAY_BY = ['paybill', 'till', 'send_money', 'cash'] as const;
+export type PayBy = (typeof PAY_BY)[number];
+export const PAY_BY_LABELS: Record<PayBy, string> = { paybill: 'Paybill', till: 'Till', send_money: 'Send money', cash: 'Cash' };
+export interface ChildPayment {
+  by: PayBy | null;
+  /** The Paybill or Till number, or the phone money is sent to. */
+  number: string;
+  /** The Paybill account, such as 804212#Miles. */
+  account: string;
+  /** The school, or the person money is sent to. */
+  payTo: string;
+  amount: string;
+  note: string;
+}
+export const NO_PAYMENT: ChildPayment = { by: null, number: '', account: '', payTo: '', amount: '', note: '' };
+/** "Paybill", "M-Pesa till", "send money", "cash" as typed in a sheet. */
+export function readPayBy(text: string): PayBy | null {
+  const k = text.toLowerCase().replace(/[^a-z]/g, '');
+  if (!k) return null;
+  if (k.includes('paybill')) return 'paybill';
+  if (k.includes('till') || k.includes('buygoods')) return 'till';
+  if (k.includes('send') || k.includes('mpesa') || k.includes('phone')) return 'send_money';
+  if (k.includes('cash')) return 'cash';
+  return null;
+}
+export const hasPayment = (p: ChildPayment | null | undefined) => !!p && (p.by != null || !!p.number || !!p.account || !!p.payTo || !!p.amount || !!p.note);
+/** One line to read out or copy: "Paybill 247247 · Account 804212#Miles". */
+export function paymentLine(p: ChildPayment): string {
+  const by = p.by ? PAY_BY_LABELS[p.by] : '';
+  if (p.by === 'cash') return 'Cash';
+  return [p.number ? `${by} ${p.number}`.trim() : by, p.account ? `Account ${p.account}` : ''].filter(Boolean).join(' · ');
 }
 
 /** Codes like HC-0042: short enough to read aloud or type from a card. */
