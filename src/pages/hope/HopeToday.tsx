@@ -14,16 +14,13 @@ import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon } from '../../components/icons';
 import { PoweredBy } from '../../components/PoweredBy';
-import { ColumnChart, Donut, Gauge, KpiCard, KpiRow } from '../../components/charts';
+import { DeptBars, HOPE_DONUT_COLOURS, Kpi, Ring, StatusDonut } from '../../components/LavFigures';
 import { consentMissing, isCurrentChild, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
-import { addDays } from '../../../functions/src/shared/metrics';
 import { birthdayThisWeek, dayTrend, rateFrom, saturdayOnOrBefore } from '../../../functions/src/shared/hopeRegister';
 import { pct, useHopePage } from './common';
 import { TrendChart } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
-type Chart = 'trend' | 'doing' | 'programmes' | 'ages' | 'school';
-const CHARTS: [Chart, string][] = [['trend', 'Attendance as time goes'], ['doing', 'How the children are doing'], ['programmes', 'Children in each programme'], ['ages', 'Ages'], ['school', 'School']];
 
 /**
  * Freedom Hope Centre's one home page (Andy, 2026-11-04, 2A-5A): Today and Overview merged. A greeting, what
@@ -86,7 +83,6 @@ function LeaderToday({ org }: { org: Organization }) {
   const { days } = useHopeDays(org.id);
   const champ = useChampions(org.id);
   const clubs = useClubs(org.id);
-  const [chart, setChart] = useState<Chart>('trend');
   const [checking, setChecking] = useState(false);
 
   const isSaturday = saturdayOnOrBefore(h.today) === h.today;
@@ -96,9 +92,6 @@ function LeaderToday({ org }: { org: Organization }) {
   const champs = rateFrom(Object.values(champ.days.find((d) => d.date === sat)?.marks ?? {}));
   const serving = champ.champions.filter((x) => x.status === 'active').length;
   const trend = useMemo(() => dayTrend(days), [days]);
-  const since = addDays(h.today, -55);
-  const cameRecently = useMemo(() => new Set(days.filter((d) => d.date >= since)
-    .flatMap((d) => Object.entries(d.marks ?? {}).filter(([, e]) => e.s === 'present' || e.s === 'departing').map(([id]) => id))), [days, since]);
   const m = h.metrics;
 
   const missing = h.children.filter(consentMissing).length;
@@ -131,7 +124,20 @@ function LeaderToday({ org }: { org: Organization }) {
     ['Under 6', (a) => a != null && a < 6], ['6 to 9', (a) => a != null && a >= 6 && a <= 9], ['10 to 13', (a) => a != null && a >= 10 && a <= 13],
     ['14 to 17', (a) => a != null && a >= 14 && a <= 17], ['18 and over', (a) => a != null && a >= 18], ['Age not known', (a) => a == null],
   ];
-  const gauge = (label: string, v: number | null) => <Gauge key={label} value={v ?? 0} max={100} label={label} display={pct(v)} bands={[0.5, 0.75]} />;
+  const sponsored = current.filter((c) => !!c.sponsorName?.trim()).length;
+  const marked = trend.filter((t) => t.pct != null);
+  const sparkline = marked.map((t) => t.pct as number);
+  const lastSat = trend.find((t) => t.date === sat)?.pct ?? null;
+  const prevSat = [...marked].reverse().find((t) => t.date < sat)?.pct ?? null;
+  const satChange = lastSat == null || prevSat == null ? null : Math.round(lastSat - prevSat);
+  // Attending regularly: came on at least 3 of the last 4 Saturdays marked.
+  const last4 = days.filter((d) => !d.deletedAt && Object.keys(d.marks ?? {}).length > 0).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 4);
+  const regular = last4.length < 4 ? null : current.length === 0 ? null
+    : Math.round((current.filter((c) => last4.filter((d) => ['present', 'departing'].includes(d.marks?.[c.id]?.s ?? '')).length >= 3).length / current.length) * 100);
+  const activeClubs = clubs.clubs.filter((x) => x.status === 'active');
+  const groupRows = activeClubs.length
+    ? activeClubs.map((x) => ({ label: x.name.replace(/ (Academy|Club)$/i, ''), title: x.name, value: x.memberIds.length }))
+    : m.byProgramme.map((p) => ({ label: p.name.replace(/ (Academy|Club)$/i, ''), title: p.name, value: p.children }));
 
   return (
     <div className="page lav-today">
@@ -213,27 +219,68 @@ function LeaderToday({ org }: { org: Organization }) {
 
       {can('people.read') && (
         <details className="lav-figs">
-          <summary><span className="lav-ico small i5"><AdiaIcon name="trend" /></span><b>See figures</b><span className="lav-sub">Numbers and charts</span>
+          <summary><span className="lav-ico small i5"><AdiaIcon name="trend" /></span><b>See figures</b><span className="lav-sub">Children, attendance, champions and charts</span>
             <svg className="lav-caret" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg></summary>
-          <div className="lav-figs-body stack">
-            <KpiRow label="Hope Centre numbers">
-              <KpiCard label="Children" value={String(current.length)} tone="gold" note={`${m.newlyRegistered} new this month`} to="/hope/children" />
-              <KpiCard label="Came in the last 8 weeks" value={String(Math.max(m.attendingLast8Weeks, cameRecently.size))} />
-              <KpiCard label={`${satWord}'s attendance`} value={pct(kids.pct)} tone="ok" note={`${kids.present} came`} to="/hope/register" />
-              <KpiCard label="Champions serving" value={`${champs.present}/${serving}`} note={satWord} to="/hope/register?w=champions" />
-            </KpiRow>
-            <label className="field ht-chart-pick"><span>Chart</span>
-              <select value={chart} onChange={(e) => setChart(e.target.value as Chart)}>{CHARTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}</select>
-            </label>
-            <div className="card ht-chart">
-              {chart === 'trend' && (trend.length >= 2 ? <TrendChart label="Attendance as time goes" trend={trend} /> : <p className="muted">The line appears after two Saturdays are marked.</p>)}
-              {chart === 'doing' && <div className="gauges">{gauge('Attending regularly', m.consistencyRate)}{gauge('Still here after 6 months', m.retentionRate)}{gauge('In school', m.schoolEnrolmentRate)}{gauge('Guardians reached', m.guardianContactRate)}</div>}
-              {chart === 'programmes' && <ColumnChart label="Children in each programme" rows={m.byProgramme.map((p) => ({ label: p.name.replace(/ Academy$/i, ''), value: p.children }))} height={180} />}
-              {chart === 'ages' && <Donut label="Children by age" rows={AGES.map(([label, f]) => ({ label, value: current.filter((c) => f(ageOf(c.dateOfBirth))).length }))} center={String(current.length)} centerNote="children" />}
-              {chart === 'school' && <Donut label="Children by school" rows={SCHOOL_STATUSES.map((k) => ({ label: SCHOOL_STATUS_LABELS[k], value: current.filter((c) => c.schoolStatus === k).length }))} center={pct(m.schoolEnrolmentRate)} centerNote="in school" />}
+          <div className="lav-figs-body">
+            {/* The same figures page as ADIA (Andy, 2026-11-04), in the Hope Centre's greens. Counts only, no names. */}
+            <section className="lav-kpis" aria-label="Hope Centre key figures">
+              <Kpi to="/hope/children" label="Children registered" chip={activeClubs.length ? `${activeClubs.length} ${activeClubs.length === 1 ? 'club' : 'clubs'}` : undefined} value={String(current.length)}
+                sub={`${m.newlyRegistered} new this month`} />
+              <Kpi to="/hope/register" label={`Attendance ${isSaturday ? 'today' : 'last Saturday'}`} chip={satChange == null ? 'Saturday' : `${satChange >= 0 ? '▲' : '▼'} ${Math.abs(satChange)}%`}
+                tone={satChange == null ? undefined : satChange >= 0 ? 'ok' : 'warn'} value={pct(kids.pct)}
+                sub={prevSat == null ? `${kids.present} children came` : `Saturday before ${prevSat}%`} spark={sparkline.length > 1 ? sparkline : undefined} />
+              <Kpi to="/hope/register?w=champions" label="Champions serving" chip={champs.pct == null ? undefined : `${champs.pct}% came`} tone="ok" value={String(serving)}
+                sub={`${champs.present} came ${isSaturday ? 'today' : 'last Saturday'}`} />
+              <Kpi to="/hope/children?show=nosponsor" label="Sponsored" chip={current.length ? `${Math.round((sponsored / current.length) * 100)}%` : undefined} tone={sponsored < current.length ? 'warn' : 'ok'}
+                value={String(sponsored)} sub={`${current.length - sponsored} ${current.length - sponsored === 1 ? 'child needs' : 'children need'} a sponsor`} />
+            </section>
+
+            <section className="card lav-panel">
+              <div className="lav-head"><div><h2>How the children are doing</h2><p className="lav-sub">Key outcomes across the Hope Centre</p></div></div>
+              <div className="lav-rings">
+                <Ring label="Attending regularly" value={regular ?? m.consistencyRate} note="3 of the last 4 Saturdays" />
+                <Ring label="Still here after 6 months" value={m.retentionRate} />
+                <Ring label="In school" value={m.schoolEnrolmentRate} note="Of those known" />
+                <Ring label="Guardians reached" value={m.guardianContactRate} note="After absences" />
+                <Ring label="Consent recorded" value={current.length ? Math.round(((current.length - missing) / current.length) * 100) : null} note={missing ? `${missing} missing` : 'All done'} />
+                <Ring label="Champions came" value={champs.pct} note={satWord} />
+              </div>
+            </section>
+
+            <section className="lav-grid2">
+              <div className="card lav-panel">
+                <div className="lav-head"><div><h2>Saturday attendance</h2><p className="lav-sub">The last 12 Saturdays marked</p></div></div>
+                {trend.length < 2 ? (
+                  <div className="lav-empty">
+                    <span className="lav-ico i5"><AdiaIcon name="trend" /></span>
+                    <b>No trend yet</b>
+                    <span>The line appears after two Saturdays are marked.</span>
+                    {marker && <Link to="/hope/register" className="lav-btn dark small">Mark register</Link>}
+                  </div>
+                ) : <TrendChart label="Attendance on each Saturday" trend={trend} />}
+              </div>
+              <div className="card lav-panel">
+                <div className="lav-head"><div><h2>Children in each club</h2><p className="lav-sub">Members of each club</p></div><span className="lav-chip">{activeClubs.length} {activeClubs.length === 1 ? 'club' : 'clubs'}</span></div>
+                {groupRows.some((r) => r.value > 0) ? <DeptBars what="Children in each club" rows={groupRows} /> : (
+                  <div className="lav-empty">
+                    <span className="lav-ico i5"><AdiaIcon name="trend" /></span>
+                    <b>No club members yet</b>
+                    <span>The columns appear once children join clubs.</span>
+                    <Link to="/hope/clubs" className="lav-btn dark small">Open clubs</Link>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            <StatusDonut title="Children by age" sub="Ages of the children" noun="children" colours={HOPE_DONUT_COLOURS}
+                rows={AGES.map(([label, f]) => ({ label, value: current.filter((c) => f(ageOf(c.dateOfBirth))).length }))} />
+            <StatusDonut title="Children in school" sub="School, as recorded" noun="children" colours={HOPE_DONUT_COLOURS}
+                rows={SCHOOL_STATUSES.map((k) => ({ label: SCHOOL_STATUS_LABELS[k], value: current.filter((c) => c.schoolStatus === k).length }))} />
+
+            <div className="btn-line">
+              <Link to="/hope/reports" className="btn btn-quiet">Weekly and monthly reports</Link>
+              <Link to="/hope/photos" className="btn btn-quiet">📷 Photo reports</Link>
             </div>
-            <Link to="/hope/reports" className="btn btn-quiet align-start">Weekly and monthly reports</Link>
-            <Link to="/hope/photos" className="btn btn-quiet align-start">📷 Photo reports</Link>
           </div>
         </details>
       )}

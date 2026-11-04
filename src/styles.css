@@ -2275,3 +2275,8 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .ph-send h3 { margin: 0; }
 .ph-people { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
 .ph-people li { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Hope figures in the Hope Centre's greens (Andy, 2026-11-04: "like ADIA") */
+.look-aurora .lg-a { stop-color: #02341b; } .look-aurora .lg-b { stop-color: #038241; } .look-aurora .lg-c { stop-color: #4fd18f; }
+.look-aurora .lav-bar-col { background: linear-gradient(180deg, #7fdcb0 0%, #16a058 45%, #038241 72%, #02341b 100%); box-shadow: 0 12px 22px -10px rgba(3, 130, 65, 0.55); }
+.lav-figs-body > .btn-line { margin-top: 18px; }
