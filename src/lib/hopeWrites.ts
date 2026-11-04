@@ -1,9 +1,11 @@
-import { collection, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import { collection, deleteField, doc, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { createStamps, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { firstName } from '../../functions/src/shared/people';
 import type { Child, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
+import type { ChampionEntry, ChildImportRow, ChampionImportRow, KidEntry } from '../../functions/src/shared/hopeRegister';
+import { normalizePhone } from '../../functions/src/shared/phone';
 import type { WhatsAppConsent } from '../state/PeopleContext';
 
 const ref = (orgId: string, name: string, id: string) => doc(db, 'organizations', orgId, name, id);
@@ -21,6 +23,11 @@ export interface ChildDetails {
   programmes: ChildProgramme[];
   photoConsent: Consent;
   guardianConsent: Consent;
+  sponsorName?: string;
+  sponsorPhone?: string;
+  sponsorEmail?: string;
+  parentName?: string;
+  parentPhone?: string;
 }
 export interface PersonInput { fullName: string; phone: string | null; whatsapp: string | null; whatsappConsent: WhatsAppConsent; gender?: string | null }
 
@@ -64,8 +71,80 @@ export function registerChild(
   return { id: childId, synced: trackWrite(batch.commit()) };
 }
 
-export function updateChild(orgId: string, childId: string, changes: Partial<ChildDetails> & Partial<Pick<Child, 'status' | 'exitedOn'>>) {
+export function updateChild(orgId: string, childId: string, changes: Partial<ChildDetails> & Partial<Pick<Child, 'status' | 'exitedOn' | 'departingNote' | 'hasPhoto'>>) {
+  // Photo consent taken away: the photo goes too, in the same save.
+  if (changes.photoConsent && changes.photoConsent.given !== true) {
+    const batch = writeBatch(db);
+    batch.update(ref(orgId, 'children', childId), { ...changes, hasPhoto: false, updatedAt: serverTimestamp(), updatedBy: me() });
+    batch.delete(ref(orgId, 'childPhotos', childId));
+    return trackWrite(batch.commit());
+  }
   return updateRecord(ref(orgId, 'children', childId), changes);
+}
+
+/** Saves the child's photo (a small JPEG) and notes on the child that there is one. Needs photo consent. */
+export function saveChildPhoto(orgId: string, childId: string, photo: string) {
+  const batch = writeBatch(db);
+  batch.set(ref(orgId, 'childPhotos', childId), { orgId, photo, updatedAt: serverTimestamp(), updatedBy: me() });
+  batch.update(ref(orgId, 'children', childId), { hasPhoto: true, updatedAt: serverTimestamp(), updatedBy: me() });
+  return trackWrite(batch.commit());
+}
+export function removeChildPhoto(orgId: string, childId: string) {
+  const batch = writeBatch(db);
+  batch.update(ref(orgId, 'children', childId), { hasPhoto: false, updatedAt: serverTimestamp(), updatedBy: me() });
+  batch.delete(ref(orgId, 'childPhotos', childId));
+  return trackWrite(batch.commit());
+}
+
+/**
+ * Marks one child (or champion) on a day's register. A merge, so two tablets marking the same Saturday never
+ * overwrite each other's marks, even offline.
+ */
+function markDay(orgId: string, name: 'hopeDays' | 'championDays', date: string, id: string, entry: DocumentData | null) {
+  return markMany(orgId, name, date, { [id]: entry ?? deleteField() });
+}
+export const markKid = (orgId: string, date: string, childId: string, entry: KidEntry | null) => markDay(orgId, 'hopeDays', date, childId, entry as DocumentData | null);
+export const markChampion = (orgId: string, date: string, championId: string, entry: ChampionEntry | null) => markDay(orgId, 'championDays', date, championId, entry as DocumentData | null);
+
+/** Marks several at once ("Mark the rest absent"). */
+export function markMany(orgId: string, name: 'hopeDays' | 'championDays', date: string, entries: Record<string, unknown>) {
+  return trackWrite(setDoc(ref(orgId, name, date), { orgId, date, marks: entries, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
+}
+
+export interface ChampionInput { name: string; phone: string; email: string; duty: string; status: 'active' | 'left'; joinedOn: string | null }
+export function addChampion(orgId: string, input: ChampionInput) {
+  const r = doc(collection(db, 'organizations', orgId, 'champions'));
+  void trackWrite(setDoc(r, { orgId, ...input, ...createStamps() }));
+  return r.id;
+}
+export function updateChampion(orgId: string, id: string, changes: Partial<ChampionInput>) {
+  return updateRecord(ref(orgId, 'champions', id), changes);
+}
+export function importChampions(orgId: string, rows: ChampionImportRow[]) {
+  const batch = writeBatch(db);
+  for (const r of rows) {
+    batch.set(doc(collection(db, 'organizations', orgId, 'champions')), { orgId, name: r.name, phone: r.phone, email: r.email, duty: r.duty, status: 'active', joinedOn: r.joinedOn, ...createStamps() });
+  }
+  return trackWrite(batch.commit());
+}
+
+/** Adds the children from a spreadsheet, each with their parent as guardian when a parent is named. */
+export function importChildren(orgId: string, rows: ChildImportRow[], today: string) {
+  const consent = (v: boolean | null): Consent => (v == null ? { given: null, date: null } : { given: v, date: today });
+  return Promise.all(rows.map((r) => {
+    const phone = r.parentPhone ? normalizePhone(r.parentPhone) : null;
+    const { synced } = registerChild(
+      orgId,
+      { person: { fullName: r.name, phone: null, whatsapp: null, whatsappConsent: { given: false, date: null, recordedBy: null, stoppedAt: null }, gender: r.gender } },
+      r.parentName ? { person: { fullName: r.parentName, phone, whatsapp: null, whatsappConsent: { given: false, date: null, recordedBy: null, stoppedAt: null } } } : null,
+      {
+        dateOfBirth: r.dateOfBirth, school: r.school, schoolStatus: r.school ? 'in_school' : 'unknown', enrolledOn: r.enrolledOn, programmes: [],
+        photoConsent: consent(r.photoConsent), guardianConsent: consent(r.guardianConsent),
+        sponsorName: r.sponsorName, sponsorPhone: r.sponsorPhone, sponsorEmail: r.sponsorEmail, parentName: r.parentName, parentPhone: r.parentPhone,
+      },
+    );
+    return synced;
+  }));
 }
 
 export function saveChildPrivate(orgId: string, childId: string, data: { welfare: string; health: string; home: string }, exists: boolean) {

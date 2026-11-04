@@ -7,8 +7,13 @@ import { addDays } from './metrics.js';
  * the monthly report builder is never given names.
  */
 
-export const CHILD_STATUSES = ['active', 'exited'] as const;
+// Andy, 2026-11-04 (1B): "Departing" is in the process of leaving the Hope Centre for good; "Departed" has left
+// for good and moves to Past children. Departed keeps its old stored value, 'exited'.
+export const CHILD_STATUSES = ['active', 'departing', 'exited'] as const;
 export type ChildStatus = (typeof CHILD_STATUSES)[number];
+export const CHILD_STATUS_LABELS: Record<ChildStatus, string> = { active: 'Active', departing: 'Departing', exited: 'Departed' };
+/** Still coming to the centre: active, or departing but not gone yet. */
+export const isCurrentChild = (c: Pick<Child, 'status' | 'deletedAt'>) => !c.deletedAt && (c.status === 'active' || c.status === 'departing');
 
 export const SCHOOL_STATUSES = ['in_school', 'not_in_school', 'unknown'] as const;
 export type SchoolStatus = (typeof SCHOOL_STATUSES)[number];
@@ -40,6 +45,17 @@ export interface Child {
   programmes: ChildProgramme[];
   photoConsent: Consent;
   guardianConsent: Consent;
+  /** The sponsor (Andy, 4A): a name, with a phone and email if known. */
+  sponsorName?: string | null;
+  sponsorPhone?: string | null;
+  sponsorEmail?: string | null;
+  /** The parent's or guardian's name and phone, as shown on the register. */
+  parentName?: string | null;
+  parentPhone?: string | null;
+  /** Why the child is leaving, while departing or after. */
+  departingNote?: string | null;
+  /** A photo is kept in childPhotos (only while photo consent is given). */
+  hasPhoto?: boolean;
   deletedAt?: unknown;
 }
 
@@ -55,7 +71,7 @@ export function normalizeCode(text: string): string | null {
 }
 
 export const consentMissing = (c: Pick<Child, 'photoConsent' | 'guardianConsent' | 'status' | 'deletedAt'>) =>
-  !c.deletedAt && c.status === 'active' && (!consentOnFile(c.photoConsent) || !consentOnFile(c.guardianConsent));
+  !c.deletedAt && (c.status === 'active' || c.status === 'departing') && (!consentOnFile(c.photoConsent) || !consentOnFile(c.guardianConsent));
 
 // ---- Programmes and sessions -----------------------------------------------------------------
 
@@ -179,7 +195,7 @@ export function monthsBefore(day: string, months: number): string {
 
 export function hopeMetrics(input: HopeInput, period: { from: string; to: string }): HopeMetrics {
   const kids = input.children.filter((c) => !c.deletedAt);
-  const active = kids.filter((c) => c.status === 'active');
+  const active = kids.filter((c) => c.status === 'active' || c.status === 'departing');
   const events = input.events.filter((e) => !e.deletedAt);
   const inPeriod = events.filter((e) => e.date >= period.from && e.date <= period.to);
 
@@ -219,7 +235,7 @@ export function hopeMetrics(input: HopeInput, period: { from: string; to: string
 
   const sixMonthsAgo = monthsBefore(input.today, 6);
   const old = kids.filter((c) => c.enrolledOn && c.enrolledOn <= sixMonthsAgo);
-  const keptSixMonths = old.filter((c) => c.status === 'active' || (c.exitedOn != null && c.exitedOn >= monthsBefore(c.enrolledOn!, -6)));
+  const keptSixMonths = old.filter((c) => c.status !== 'exited' || (c.exitedOn != null && c.exitedOn >= monthsBefore(c.enrolledOn!, -6)));
 
   const known = active.filter((c) => c.schoolStatus !== 'unknown');
   const done = input.absenceTasks.filter((t) => t.status === 'done' && t.outcome !== CAME_BACK);

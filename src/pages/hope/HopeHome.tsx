@@ -6,7 +6,10 @@ import { friendlyError } from '../../lib/errors';
 import { createEvent } from '../../lib/attendanceWrites';
 import { requestAbsenceCheck } from '../../lib/hopeWrites';
 import { eventTypeFor } from '../../../functions/src/shared/attendance';
-import { MEALS_PROGRAMME, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
+import { isCurrentChild, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
+import { addDays } from '../../../functions/src/shared/metrics';
+import { rateFrom, saturdayOnOrBefore } from '../../../functions/src/shared/hopeRegister';
+import { useChampions, useHopeDays } from '../../state/useHope';
 import { ColumnChart, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
 import { HopeGate, HopeNav, pct, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
@@ -41,7 +44,15 @@ function Home({ org }: { org: Organization }) {
     window.setTimeout(() => setChecking(false), 4000);
   }
 
-  const active = h.children.filter((c) => c.status === 'active');
+  const active = h.children.filter(isCurrentChild);
+  const { days } = useHopeDays(org.id);
+  const champ = useChampions(org.id);
+  const sat = saturdayOnOrBefore(h.today);
+  const kidsDay = rateFrom(Object.values(days.find((d) => d.date === sat)?.marks ?? {}));
+  // Came in the last 8 weeks: programme sessions or the weekly register, whichever shows more.
+  const since = addDays(h.today, -55);
+  const cameOnRegister = new Set(days.filter((d) => d.date >= since).flatMap((d) => Object.entries(d.marks ?? {}).filter(([, e]) => e.s === 'present' || e.s === 'departing').map(([id]) => id)));
+  const champDay = rateFrom(Object.values(champ.days.find((d) => d.date === sat)?.marks ?? {}));
   const ageOf = (dob: string | null | undefined) => (dob ? Math.floor((Date.parse(h.today) - Date.parse(dob)) / (365.25 * 864e5)) : null);
   const AGES: [string, (a: number | null) => boolean][] = [
     ['Under 6', (a) => a != null && a < 6], ['6 to 9', (a) => a != null && a >= 6 && a <= 9], ['10 to 13', (a) => a != null && a >= 10 && a <= 13],
@@ -73,9 +84,9 @@ function Home({ org }: { org: Organization }) {
 
       <KpiRow label="Hope Center numbers">
         <KpiCard label="Registered" value={String(m.registered)} tone="gold" note={`${m.active} active`} to="/hope/children" />
-        <KpiCard label="Came in the last 8 weeks" value={String(m.attendingLast8Weeks)} note={`${m.reachTwoPlus} join two or more programmes`} />
-        <KpiCard label="New this month" value={String(m.newlyRegistered)} tone="ok" />
-        <KpiCard label="Meals this month" value={String(m.meals.total)} note={`${m.meals.sessions} ${m.meals.sessions === 1 ? 'Saturday' : 'Saturdays'} · ${m.meals.newChildren} new`} />
+        <KpiCard label="Came in the last 8 weeks" value={String(Math.max(m.attendingLast8Weeks, cameOnRegister.size))} note={`${m.reachTwoPlus} join two or more programmes`} />
+        <KpiCard label="Children this Saturday" value={String(kidsDay.present)} tone="ok" note={kidsDay.pct != null ? `${kidsDay.pct}% came · ${m.newlyRegistered} new this month` : `${m.newlyRegistered} new this month`} to="/hope/register" />
+        <KpiCard label="Champions this Saturday" value={String(champDay.present)} note={`of ${champ.champions.filter((x) => x.status === 'active').length} champions`} to="/hope/champions" />
       </KpiRow>
       <div className="dash-grid">
         <Panel title="How the children are doing" wide>
@@ -87,7 +98,7 @@ function Home({ org }: { org: Organization }) {
           </div>
         </Panel>
         <Panel title="Children in each programme this month">
-          <ColumnChart label="Children in each programme this month" rows={[{ label: 'Meals', value: m.meals.newChildren + m.meals.returningChildren }, ...m.byProgramme.map((p) => ({ label: p.name.replace(/ Academy$/, ''), value: p.children }))]} highlight={0} height={170} />
+          <ColumnChart label="Children in each programme this month" rows={m.byProgramme.map((p) => ({ label: p.name.replace(/ Academy$/i, ''), value: p.children }))} height={170} />
         </Panel>
         <Panel title="Ages">
           <Donut label="Active children by age" rows={AGES.map(([label, f]) => ({ label, value: active.filter((c) => f(ageOf(c.dateOfBirth))).length }))} center={String(active.length)} centerNote="active" />
@@ -100,7 +111,7 @@ function Home({ org }: { org: Organization }) {
       {can('attendance.write') && (
         <section className="card stack">
           <h2>Start today's session</h2>
-          <p className="small muted">Saturday meals can be counted without names. For the other programmes, tap each child's name or type or scan their code.</p>
+          <p className="small muted">The weekly check-in is the <Link to="/hope/register">children's register</Link>. For a programme, tap each child's name or type or scan their code.</p>
           <div className="chips">{sessions.map((n) => <button key={n} type="button" className="chip" onClick={() => start(n)}>{n}</button>)}</div>
         </section>
       )}
@@ -108,7 +119,6 @@ function Home({ org }: { org: Organization }) {
       <section className="card stack">
         <h2>Programmes this month</h2>
         <ul className="link-list">
-          <li><div><span className="link-title">{MEALS_PROGRAMME}</span><span className="link-detail">{m.meals.sessions} {m.meals.sessions === 1 ? 'Saturday' : 'Saturdays'} · {m.meals.total} meals · {m.meals.newChildren} new, {m.meals.returningChildren} returning</span></div></li>
           {m.byProgramme.map((p) => (
             <li key={p.name}><div><span className="link-title">{p.name}</span><span className="link-detail">{p.children} {p.children === 1 ? 'child' : 'children'} · {p.sessions} sessions · average {p.averageAttendance ?? '–'} per session</span></div></li>
           ))}

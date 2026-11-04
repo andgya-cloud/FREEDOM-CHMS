@@ -2022,3 +2022,63 @@ div.tf-ask input { flex: 1 1 200px; min-width: 0; }
 .tf-grid tbody th { text-align: left; font-weight: 600; }
 .tf-tick { border: 0; background: #dcfce7; color: #15803d; font-weight: 800; width: 30px; height: 30px; border-radius: 50%; cursor: pointer; }
 .tf-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; background: #dc2626; box-shadow: 0 0 0 3px rgb(220 38 38 / 0.18); }
+
+/* ---- Hope Centre weekly registers (v164) ---- */
+.hr-top { display: grid; grid-template-columns: minmax(0, 300px) 1fr; gap: 1.25rem; align-items: start; }
+@media (max-width: 640px) { .hr-top { grid-template-columns: 1fr; } }
+.hr-cal-head { display: flex; align-items: center; justify-content: space-between; gap: .5rem; margin-bottom: .4rem; }
+.hr-cal-head .btn { min-width: 2.4rem; padding: .3rem .6rem; }
+.hr-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; text-align: center; }
+.hr-cal-dow { font-size: .72rem; color: var(--muted, #6b7280); padding: .15rem 0; }
+.hr-cal-dow.sat { color: #b45309; font-weight: 700; }
+.hr-cal-day { position: relative; border: 1px solid transparent; background: transparent; border-radius: 10px; padding: .45rem 0; font: inherit; font-size: .88rem; cursor: pointer; color: inherit; }
+.hr-cal-day:hover:not(:disabled) { background: rgba(120, 90, 200, .08); }
+.hr-cal-day:disabled { opacity: .35; cursor: default; }
+.hr-cal-day.sat { background: rgba(245, 158, 11, .12); font-weight: 600; }
+.hr-cal-day.today { border-color: rgba(120, 90, 200, .45); }
+.hr-cal-day.has::after { content: ''; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #16a34a; }
+.hr-cal-day.on { background: linear-gradient(135deg, #6d28d9, #db2777); color: #fff; }
+.hr-cal-day.on::after { background: #fff; }
+.hr-counts { display: flex; flex-wrap: wrap; gap: .4rem 1rem; font-size: .92rem; }
+.hr-counts b { font-size: 1.15rem; }
+.hr-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.hr-row { display: grid; gap: .55rem; padding: .8rem 1rem; border-left: 4px solid transparent; }
+.hr-row.m-present, .hr-row.m-departing, .hr-row.m-late { border-left-color: #16a34a; }
+.hr-row.m-absent { border-left-color: #dc2626; }
+.hr-row.m-excused { border-left-color: #f59e0b; }
+.hr-row.m-departed { border-left-color: #6b7280; }
+.hr-who { display: flex; align-items: center; gap: .7rem; text-decoration: none; color: inherit; }
+.hr-who > div, .hr-who > .grow { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.hr-avatar { border-radius: 50%; object-fit: cover; flex: none; }
+.hr-avatar-none { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #ede9fe, #fce7f3); color: #6d28d9; font-weight: 700; font-size: .85rem; }
+.hr-marks { display: flex; flex-wrap: wrap; gap: .35rem; }
+.hr-mark { border: 1px solid rgba(0, 0, 0, .14); background: #fff; color: #374151; border-radius: 999px; padding: .38rem .8rem; font: inherit; font-size: .85rem; cursor: pointer; }
+.hr-mark:disabled { cursor: default; opacity: .7; }
+.hr-mark.on { color: #fff; border-color: transparent; }
+.hr-mark.on.k-present, .hr-mark.on.c-present { background: #16a34a; }
+.hr-mark.on.c-late { background: #0d9488; }
+.hr-mark.on.k-absent, .hr-mark.on.c-absent { background: #dc2626; }
+.hr-mark.on.k-excused, .hr-mark.on.c-excused { background: #d97706; }
+.hr-mark.on.k-departing { background: #7c3aed; }
+.hr-mark.on.k-departed { background: #4b5563; }
+.hr-fields { display: flex; flex-wrap: wrap; gap: .5rem .9rem; align-items: center; }
+.hr-inline { display: inline-flex; align-items: center; gap: .45rem; font-size: .85rem; }
+.hr-inline.grow { flex: 1; min-width: 200px; display: flex; }
+.hr-inline.grow input { flex: 1; }
+.hr-inline input { padding: .3rem .5rem; border: 1px solid rgba(0, 0, 0, .15); border-radius: 8px; font: inherit; font-size: .88rem; }
+.hr-pct { font-weight: 700; }
+.hr-pct.ok { background: #dcfce7; color: #166534; }
+.hr-pct.mid { background: #fef3c7; color: #92400e; }
+.hr-pct.low { background: #fee2e2; color: #991b1b; }
+.hr-photo { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; }
+.hr-dots { display: flex; gap: 5px; flex-wrap: wrap; }
+.hr-dot { width: 14px; height: 14px; border-radius: 4px; background: #e5e7eb; }
+.hr-dot.m-present, .hr-dot.m-departing { background: #16a34a; }
+.hr-dot.m-absent { background: #dc2626; }
+.hr-dot.m-excused { background: #f59e0b; }
+.hr-dot.m-departed { background: #6b7280; }
+.hr-today { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .8rem; }
+.hr-today-card { display: flex; flex-direction: column; gap: .3rem; text-decoration: none; color: inherit; }
+.warn-text { color: #b45309; }
+.hr-inline > span { white-space: nowrap; }
+.hr-inline:not(.grow) input { width: auto; max-width: 9rem; }

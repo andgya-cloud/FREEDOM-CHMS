@@ -3,10 +3,12 @@ import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
-import { useChildPrivate } from '../../state/useHope';
+import { useChildPhoto, useChildPrivate, useHopeDays } from '../../state/useHope';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
-import { addHomeVisit, addReferral, closeConcern, closeReferral, raiseConcern, saveChildPrivate, updateChild } from '../../lib/hopeWrites';
+import { addHomeVisit, addReferral, closeConcern, closeReferral, raiseConcern, removeChildPhoto, saveChildPhoto, saveChildPrivate, updateChild } from '../../lib/hopeWrites';
+import { KID_MARK_LABELS, kidHistory, rateFrom } from '../../../functions/src/shared/hopeRegister';
+import { Avatar, PctBadge, shrinkPhoto } from './registerParts';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import { ATTENDANCE_STATUS_LABELS } from '../../../functions/src/shared/attendance';
@@ -39,7 +41,15 @@ function ChildScreen({ org }: { org: Organization }) {
   const [programmes, setProgrammes] = useState<ChildProgramme[]>([]);
   const [photoConsent, setPhotoConsent] = useState<Consent>({ given: null, date: null });
   const [guardianConsent, setGuardianConsent] = useState<Consent>({ given: null, date: null });
-  const [confirmExit, setConfirmExit] = useState(false);
+  const [sponsorName, setSponsorName] = useState('');
+  const [sponsorPhone, setSponsorPhone] = useState('');
+  const [sponsorEmail, setSponsorEmail] = useState('');
+  const [parentName, setParentName] = useState('');
+  const [parentPhone, setParentPhone] = useState('');
+  const [leaveNote, setLeaveNote] = useState('');
+  const [confirmExit, setConfirmExit] = useState<null | 'departing' | 'exited'>(null);
+  const photo = useChildPhoto(org.id, childId);
+  const { days } = useHopeDays(org.id);
   const [concernOpen, setConcernOpen] = useState(false);
   const [concern, setConcern] = useState('');
 
@@ -47,6 +57,8 @@ function ChildScreen({ org }: { org: Organization }) {
     if (!child) return;
     setDob(child.dateOfBirth ?? ''); setSchool(child.school ?? ''); setSchoolStatus(child.schoolStatus); setEnrolledOn(child.enrolledOn ?? '');
     setProgrammes(child.programmes); setPhotoConsent(child.photoConsent); setGuardianConsent(child.guardianConsent);
+    setSponsorName(child.sponsorName ?? ''); setSponsorPhone(child.sponsorPhone ?? ''); setSponsorEmail(child.sponsorEmail ?? '');
+    setParentName(child.parentName ?? ''); setParentPhone(child.parentPhone ?? ''); setLeaveNote(child.departingNote ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child?.id]);
 
@@ -65,13 +77,22 @@ function ChildScreen({ org }: { org: Organization }) {
   function save() {
     updateChild(org.id, child!.id, {
       dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolStatus, enrolledOn: enrolledOn || null, programmes, photoConsent, guardianConsent,
+      sponsorName: sponsorName.trim().slice(0, 120), sponsorPhone: sponsorPhone.trim().slice(0, 30), sponsorEmail: sponsorEmail.trim().slice(0, 120),
+      parentName: parentName.trim().slice(0, 120), parentPhone: parentPhone.trim().slice(0, 30),
     }).catch((err) => toast.show(friendlyError(err)));
     toast.show('Saved');
   }
   function leave() {
-    setConfirmExit(false);
-    updateChild(org.id, child!.id, { status: 'exited', exitedOn: h.today }).catch((err) => toast.show(friendlyError(err)));
-    toast.show(`${name} is marked as having left.`);
+    const to = confirmExit!;
+    setConfirmExit(null);
+    updateChild(org.id, child!.id, to === 'exited' ? { status: 'exited', exitedOn: h.today, departingNote: leaveNote.trim().slice(0, 500) } : { status: 'departing', departingNote: leaveNote.trim().slice(0, 500) })
+      .catch((err) => toast.show(friendlyError(err)));
+    toast.show(to === 'exited' ? `${name} moved to Past children.` : `${name} is marked as departing.`);
+  }
+  async function takePhoto(f: File | undefined) {
+    if (!f) return;
+    try { saveChildPhoto(org.id, child!.id, await shrinkPhoto(f)).catch((err) => toast.show(friendlyError(err))); toast.show('Photo saved'); }
+    catch (err) { toast.show(friendlyError(err)); }
   }
   function sendConcern() {
     if (!concern.trim()) return;
@@ -88,12 +109,27 @@ function ChildScreen({ org }: { org: Organization }) {
           <h1>{name}</h1>
           <p className="muted">{h.codeOf(child)}{age != null ? ` · ${age} years` : ''}{person?.gender ? ` · ${person.gender}` : ''}
             {consentMissing(child) && <span className="badge badge-warn">Consent missing</span>}
-            {child.status === 'exited' && <span className="badge badge-muted">Left{child.exitedOn ? ` ${formatDateKey(child.exitedOn)}` : ''}</span>}
+            {child.status === 'departing' && <span className="badge badge-warn">Departing</span>}
+            {child.status === 'exited' && <span className="badge badge-muted">Departed{child.exitedOn ? ` ${formatDateKey(child.exitedOn)}` : ''}</span>}
           </p>
         </div>
         <CleanupButton orgId={org.id} kind="person" id={child.id} back="/hope/children" />
       </div>
       <HopeNav />
+
+      <section className="card hr-photo">
+        <Avatar photo={child.photoConsent?.given ? photo : null} name={name} size={96} />
+        <div className="stack">
+          {child.photoConsent?.given ? (canEdit && (
+            <div className="chips">
+              <label className="btn">Take a photo<input type="file" hidden accept="image/*" capture="environment" onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+              <label className="btn">Upload a photo<input type="file" hidden accept="image/*" onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+              {photo && <button type="button" className="btn btn-quiet" onClick={() => { removeChildPhoto(org.id, child.id).catch((err) => toast.show(friendlyError(err))); }}>Remove photo</button>}
+            </div>
+          )) : <p className="small muted">A photo can be added once the guardian's photo consent is "Yes, agreed" (below).</p>}
+          {(() => { const r = rateFrom(kidHistory(child.id, days).map((x) => x.entry)); return <p className="small">Weekly register: <PctBadge pct={r.pct} /> {r.marked ? `${r.present} present, ${r.absent} absent, ${r.excused} excused` : 'not marked yet'}</p>; })()}
+        </div>
+      </section>
 
       <section className="card stack">
         <h2>Guardian or caregiver</h2>
@@ -120,14 +156,25 @@ function ChildScreen({ org }: { org: Organization }) {
             </select>
           </label>
         </div>
+        <div className="field-row">
+          <label className="field"><span>Parent's name</span><input disabled={!canEdit} value={parentName} maxLength={120} onChange={(e) => setParentName(e.target.value)} placeholder={guardian?.fullName ?? ''} /></label>
+          <label className="field"><span>Parent's contact</span><input disabled={!canEdit} inputMode="tel" value={parentPhone} maxLength={30} onChange={(e) => setParentPhone(e.target.value)} placeholder={guardian?.phone ? formatPhone(guardian.phone) : '0712 345 678'} /></label>
+        </div>
+        <label className="field"><span>Sponsor's name</span><input disabled={!canEdit} value={sponsorName} maxLength={120} onChange={(e) => setSponsorName(e.target.value)} /></label>
+        <div className="field-row">
+          <label className="field"><span>Sponsor's phone (optional)</span><input disabled={!canEdit} inputMode="tel" value={sponsorPhone} maxLength={30} onChange={(e) => setSponsorPhone(e.target.value)} /></label>
+          <label className="field"><span>Sponsor's email (optional)</span><input disabled={!canEdit} type="email" value={sponsorEmail} maxLength={120} onChange={(e) => setSponsorEmail(e.target.value)} /></label>
+        </div>
         <ProgrammeFields programmes={h.programmes} value={programmes} onChange={setProgrammes} disabled={!canEdit} />
         <ConsentField label="Guardian consent to keep this child's details" value={guardianConsent} onChange={setGuardianConsent} today={h.today} disabled={!canEdit} />
-        <ConsentField label="Consent to take photos at events" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
+        <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
         {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}
       </section>
 
+      <RegisterHistory history={kidHistory(child.id, days)} />
+
       <section className="card stack">
-        <h2>Attendance</h2>
+        <h2>Programme sessions</h2>
         {child.programmes.filter((p) => p.name.toLowerCase() !== MEALS_PROGRAMME.toLowerCase()).map((p) => {
           const { missed } = missedInARow(child.id, p.name, h.programmes, h.events, h.records, child.enrolledOn, h.today);
           return <p key={p.name} className="small"><strong>{p.name}</strong>{p.group ? ` (${p.group})` : ''}{p.level ? ` · ${p.level}` : ''} · {missed === 0 ? 'came to the latest session' : `missed the last ${missed} ${missed === 1 ? 'session' : 'sessions'}`}</p>;
@@ -160,12 +207,41 @@ function ChildScreen({ org }: { org: Organization }) {
       {h.pastoral && <PastorSection orgId={org.id} childId={child.id} today={h.today} />}
 
       {canEdit && (
-        child.status === 'active'
-          ? <button type="button" className="btn btn-quiet danger-text align-start" onClick={() => setConfirmExit(true)}>Mark as left the programme</button>
-          : <button type="button" className="btn btn-quiet align-start" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null }).catch((err) => toast.show(friendlyError(err))); }}>Return to active</button>
+        <section className="card stack">
+          <h2>Leaving the Hope Centre</h2>
+          {child.status !== 'exited' && <label className="field"><span>Reason or note (optional)</span><input value={leaveNote} maxLength={500} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Moving away, finished the programme…" /></label>}
+          {child.departingNote && child.status !== 'active' && <p className="small muted">Note: {child.departingNote}</p>}
+          <div className="chips">
+            {child.status === 'active' && <button type="button" className="btn" onClick={() => setConfirmExit('departing')}>Mark as departing</button>}
+            {child.status !== 'exited' && <button type="button" className="btn btn-quiet danger-text" onClick={() => setConfirmExit('exited')}>Mark as departed</button>}
+            {child.status !== 'active' && <button type="button" className="btn btn-quiet" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null, departingNote: null }).catch((err) => toast.show(friendlyError(err))); }}>Return to active</button>}
+          </div>
+          <p className="small muted">Departing: in the process of leaving for good. Departed: has left for good and moves to Past children.</p>
+        </section>
       )}
-      <ConfirmDialog open={confirmExit} title={`Mark ${name} as left?`} body="They stay on the register as 'Left' and are no longer counted as active or followed up. You can return them to active at any time." confirmLabel="Mark as left" danger onConfirm={leave} onCancel={() => setConfirmExit(false)} />
+      <ConfirmDialog open={!!confirmExit} title={confirmExit === 'exited' ? `Has ${name} left for good?` : `Mark ${name} as departing?`}
+        body={confirmExit === 'exited' ? 'They move to Past children and leave the weekly register. Their records are kept, and you can return them to active at any time.' : 'They stay on the register, marked Departing, until they leave.'}
+        confirmLabel={confirmExit === 'exited' ? 'Yes, departed' : 'Mark as departing'} danger={confirmExit === 'exited'} onConfirm={leave} onCancel={() => setConfirmExit(null)} />
     </div>
+  );
+}
+
+/** The child's weekly register marks, newest first. */
+function RegisterHistory({ history }: { history: ReturnType<typeof kidHistory> }) {
+  if (!history.length) return null;
+  return (
+    <section className="card stack">
+      <h2>Weekly register</h2>
+      <div className="hr-dots" aria-label="Latest weeks, oldest first">
+        {history.slice(0, 16).reverse().map((x) => <span key={x.date} className={`hr-dot m-${x.entry.s}`} title={`${formatDateKey(x.date)}: ${KID_MARK_LABELS[x.entry.s]}`} />)}
+      </div>
+      <ul className="link-list">
+        {history.slice(0, 8).map((x) => (
+          <li key={x.date}><div><span className="link-title">{formatDateKey(x.date)} · {KID_MARK_LABELS[x.entry.s]}</span>
+            {(x.entry.t || x.entry.r) && <span className="link-detail">{[x.entry.t && `Checked in ${x.entry.t}`, x.entry.r].filter(Boolean).join(' · ')}</span>}</div></li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

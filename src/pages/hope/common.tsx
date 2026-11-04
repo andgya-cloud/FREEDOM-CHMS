@@ -31,7 +31,8 @@ export function HopeGate({ title, children }: { title: string; children: (org: O
 export function HopeNav() {
   const { can } = useAuth();
   const items: [string, string, boolean][] = [
-    ['/hope', 'Overview', true], ['/hope/children', 'Children', true], ['/hope/reports', 'Reports', true], ['/hope/exports', 'Exports', can('people.read')],
+    ['/hope', 'Overview', true], ['/hope/children', 'Children', true], ['/hope/register', 'Register', true], ['/hope/champions', 'Champions', true],
+    ['/hope/reports', 'Reports', true], ['/hope/exports', 'Exports', can('people.read')],
   ];
   return (
     <nav className="chips" aria-label="Hope Center">

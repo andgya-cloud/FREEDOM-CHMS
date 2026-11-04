@@ -2,7 +2,10 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useFollowUpCounts } from '../state/useFollowUps';
 import { useLatestReport } from '../state/useReports';
-import { useChildren } from '../state/useHope';
+import { useChampions, useChildren, useHopeDays } from '../state/useHope';
+import { isCurrentChild } from '../../functions/src/shared/hope';
+import { rateFrom, saturdayOnOrBefore } from '../../functions/src/shared/hopeRegister';
+import { localDateKey } from '../../functions/src/shared/datetime';
 import { SceneVideo } from '../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../components/Greeting';
 import { FirstRunChecklist } from '../components/FirstRunChecklist';
@@ -30,7 +33,7 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
   // On Sunday the service card above carries Check in, so the tile is not repeated (4A).
   const sundayNow = !hope && sundayFor(tz).isSunday;
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
-    { to: '/attendance', icon: 'checkIn', label: 'Check in', sub: hope ? 'Who came to the activity' : 'Who came to the service', show: can('attendance.write') || can('people.read') },
+    { to: hope ? '/hope/register' : '/attendance', icon: 'checkIn', label: 'Check in', sub: hope ? "The children's weekly register" : 'Who came to the service', show: can('attendance.write') || can('people.read') },
     hope
       ? { to: '/hope/children/new', icon: 'addStudent', label: 'Register child', sub: 'A new child in the programme', show: can('people.write') }
       : { to: '/visitors/new', icon: 'addStudent', label: 'Add visitor', sub: 'A first-time guest', show: can('people.write') },
@@ -95,6 +98,7 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
       </section>
 
       {!hope && <BirthdaysCard org={org} />}
+      {hope && (can('people.read') || can('attendance.write')) && <HopeRegisters org={org} />}
 
       {figures && (
         <details className="lav-figs">
@@ -119,7 +123,38 @@ function ChurchSummary({ orgId, due }: { orgId: string; due: string }) {
 /** "120 children are registered. 3 follow-ups are due today." */
 function HopeSummary({ orgId, due }: { orgId: string; due: string }) {
   const { children, loading } = useChildren(orgId);
-  const active = children.filter((c) => c.status !== 'exited').length;
+  const active = children.filter(isCurrentChild).length;
   if (loading) return <>{due}</>;
   return <>{active ? `${active} ${active === 1 ? 'child is' : 'children are'} registered. ` : 'Register the first child to start. '}{due}</>;
+}
+
+/**
+ * Hope's two weekly registers on Today (Andy, 2026-11-04): the children's register and the Child Champions
+ * register, which took Saturday meals' place (7B). Each shows this Saturday's figures.
+ */
+function HopeRegisters({ org }: { org: Organization }) {
+  const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
+  const sat = saturdayOnOrBefore(today);
+  const { children } = useChildren(org.id);
+  const { days } = useHopeDays(org.id);
+  const champ = useChampions(org.id);
+  const kids = rateFrom(Object.values(days.find((d) => d.date === sat)?.marks ?? {}));
+  const champs = rateFrom(Object.values(champ.days.find((d) => d.date === sat)?.marks ?? {}));
+  const current = children.filter(isCurrentChild).length;
+  const serving = champ.champions.filter((x) => x.status === 'active').length;
+  const label = sat === today ? 'Today' : 'Last Saturday';
+  return (
+    <div className="hr-today">
+      <Link to="/hope/register" className="card hr-today-card">
+        <span className="lav-ico i1"><AdiaIcon name="register" /></span>
+        <b>Children's register</b>
+        <span className="lav-sub">{kids.marked ? `${label}: ${kids.present} came, ${kids.absent} absent, ${kids.excused} excused` : `${label}: not marked yet · ${current} children`}</span>
+      </Link>
+      <Link to="/hope/champions" className="card hr-today-card">
+        <span className="lav-ico i2"><AdiaIcon name="people" /></span>
+        <b>Child Champions register</b>
+        <span className="lav-sub">{champs.marked ? `${label}: ${champs.present} of ${serving} served, ${champs.absent} absent` : `${label}: not marked yet · ${serving} champions`}</span>
+      </Link>
+    </div>
+  );
 }

@@ -1143,7 +1143,7 @@ service cloud.firestore {
       // Protecting children comes first. The register is open to staff who see
       // people (names, codes, attendance). Welfare notes, home visits, referrals
       // and safeguarding concerns are pastor-only: staff can raise a concern but
-      // cannot open it again. No record anywhere holds a photo.
+      // cannot open it again. A child's photo is kept only while photo consent is "Yes".
 
       function hopeRead() {
         return canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
@@ -1160,9 +1160,17 @@ service cloud.firestore {
         allow read: if hopeRead();
         allow create, update: if orgWrite(orgId, 'people.write')
           && request.resource.data.keys().hasOnly(['orgId', 'code', 'status', 'enrolledOn', 'exitedOn', 'schoolStatus', 'programmes', 'dateOfBirth', 'school',
-               'photoConsent', 'guardianConsent', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'photoConsent', 'guardianConsent', 'sponsorName', 'sponsorPhone', 'sponsorEmail', 'parentName', 'parentPhone', 'departingNote', 'hasPhoto',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', childId)
-          && request.resource.data.status in ['active', 'exited']
+          && request.resource.data.status in ['active', 'departing', 'exited']
+          && shortText(request.resource.data.get('sponsorName', ''), 120)
+          && shortText(request.resource.data.get('sponsorPhone', ''), 30)
+          && shortText(request.resource.data.get('sponsorEmail', ''), 120)
+          && shortText(request.resource.data.get('parentName', ''), 120)
+          && shortText(request.resource.data.get('parentPhone', ''), 30)
+          && shortText(request.resource.data.get('departingNote', ''), 500)
+          && request.resource.data.get('hasPhoto', false) is bool
           && request.resource.data.schoolStatus in ['in_school', 'not_in_school', 'unknown']
           && optionalDate(request.resource.data.get('enrolledOn', null))
           && optionalDate(request.resource.data.get('exitedOn', null))
@@ -1173,6 +1181,53 @@ service cloud.firestore {
           && validConsent(request.resource.data.guardianConsent)
           && (resource == null ? request.resource.data.get('code', null) == null
                                : request.resource.data.get('code', null) == resource.data.get('code', null));
+        allow delete: if false;
+      }
+
+      // The child's photo (Andy 3A): a small picture from the camera or an upload, kept only while the guardian's
+      // photo consent is "Yes". Removing it deletes it.
+      match /childPhotos/{childId} {
+        allow read: if hopeRead();
+        allow create, update: if canAccessOrg(orgId) && has('people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'photo', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.photo is string && request.resource.data.photo.size() <= 300000
+          && request.resource.data.photo.matches('^data:image/jpeg;base64,.*')
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/children/$(childId)).data.photoConsent.given == true;
+        allow delete: if canAccessOrg(orgId) && has('people.write');
+      }
+
+      // The weekly registers (Andy, 2026-11-04). One record a day, a mark per child or champion.
+      // Children: whoever takes registers. Champions: the Director or an admin (6A).
+      // Written as a merge so two tablets never overwrite each other's marks.
+      function hopeDayWrite(day) {
+        let d = request.resource.data;
+        return d.orgId == orgId && d.keys().hasOnly(['orgId', 'date', 'marks', 'updatedAt', 'updatedBy'])
+          && d.date == day && isDate(d.date) && d.marks is map && d.marks.size() <= 1500
+          && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+      }
+      match /hopeDays/{day} {
+        allow read: if hopeRead();
+        allow create, update: if canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day);
+        allow delete: if false;
+      }
+      match /champions/{championId} {
+        allow read: if hopeRead();
+        allow create, update: if invManager() && request.resource.data.orgId == orgId
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete())
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 2
+          && shortText(request.resource.data.phone, 30) && shortText(request.resource.data.email, 120)
+          && shortText(request.resource.data.duty, 80)
+          && request.resource.data.status in ['active', 'left']
+          && optionalDate(request.resource.data.get('joinedOn', null));
+        allow delete: if false;
+      }
+      match /championDays/{day} {
+        allow read: if hopeRead();
+        allow create, update: if invManager() && hopeDayWrite(day);
         allow delete: if false;
       }
 

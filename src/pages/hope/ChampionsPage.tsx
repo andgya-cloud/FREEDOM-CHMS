@@ -1,0 +1,242 @@
+import { useMemo, useState, type FormEvent } from 'react';
+import { useAuth } from '../../state/AuthContext';
+import { useToast } from '../../state/ToastContext';
+import { useChampions } from '../../state/useHope';
+import { friendlyError } from '../../lib/errors';
+import { addChampion, importChampions, markChampion, markMany, updateChampion, type ChampionInput } from '../../lib/hopeWrites';
+import { formatDateKey } from '../../../functions/src/shared/datetime';
+import { isInventoryManager } from '../../../functions/src/shared/permissions';
+import {
+  CHAMPION_MARKS, CHAMPION_MARK_LABELS, CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
+  planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
+} from '../../../functions/src/shared/hopeRegister';
+import { HopeGate, HopeNav, useHopePage } from './common';
+import { Avatar, nowTime, PctBadge, RegisterCalendar, SheetPicker, TemplateButtons, TrendCard } from './registerParts';
+import type { Organization } from '../../state/OrgContext';
+
+export function ChampionsPage() {
+  return <HopeGate title="Child Champions">{(org) => <Champions org={org} />}</HopeGate>;
+}
+
+type Tab = 'register' | 'people' | 'upload';
+
+/**
+ * The Child Champions register (Andy, 2026-11-04): the people who teach and serve the Hope Centre children.
+ * The Director or an admin marks it (6A): time in, time out, duty and notes, with each champion's percentage.
+ */
+function Champions({ org }: { org: Organization }) {
+  const h = useHopePage(org);
+  const { profile } = useAuth();
+  const c = useChampions(org.id);
+  const manager = isInventoryManager(profile);
+  const [tab, setTab] = useState<Tab>('register');
+  const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'Champions'], ...(manager ? [['upload', 'Upload from Excel'] as [Tab, string]] : [])];
+  return (
+    <div className="page narrow">
+      <h1>Child Champions</h1>
+      <HopeNav />
+      <div className="chips" role="tablist">
+        {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={`chip${tab === k ? ' chip-on' : ''}`} onClick={() => setTab(k)}>{label}</button>)}
+      </div>
+      {tab === 'register' && <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} />}
+      {tab === 'people' && <ChampionList org={org} today={h.today} data={c} manager={manager} />}
+      {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions.map((x) => x.name)} done={() => setTab('people')} />}
+    </div>
+  );
+}
+
+type Data = ReturnType<typeof useChampions>;
+
+function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organization; today: string; data: Data; manager: boolean; onAdd: () => void }) {
+  const toast = useToast();
+  const [date, setDate] = useState(() => saturdayOnOrBefore(today));
+  const fail = (err: unknown) => toast.show(friendlyError(err));
+  const day = data.days.find((d) => d.date === date);
+  const marks = day?.marks ?? {};
+  const markedDays = useMemo(() => new Set(data.days.filter((d) => Object.keys(d.marks ?? {}).length).map((d) => d.date)), [data.days]);
+  const list = data.champions.filter((x) => marks[x.id] || (x.status === 'active' && (!x.joinedOn || x.joinedOn <= date)));
+  const unmarked = list.filter((x) => !marks[x.id]);
+  const rate = rateFrom(Object.values(marks));
+  const totalMinutes = Object.values(marks).reduce((n, e) => n + (minutesBetween(e.in, e.out) ?? 0), 0);
+
+  function mark(x: Champion, s: ChampionMark, extra: Partial<ChampionEntry> = {}) {
+    const old = marks[x.id];
+    const there = s === 'present' || s === 'late';
+    const entry: ChampionEntry = {
+      s, in: there ? (old?.in ?? (date === today ? nowTime() : null)) : null, out: there ? (old?.out ?? null) : null,
+      duty: old?.duty ?? (x.duty || null), r: old?.r ?? null, ...extra,
+    };
+    markChampion(org.id, date, x.id, entry).catch(fail);
+  }
+
+  return (
+    <>
+      <section className="card hr-top">
+        <RegisterCalendar value={date} onChange={setDate} marked={markedDays} today={today} />
+        <div className="stack">
+          <h2>{formatDateKey(date)}</h2>
+          <div className="hr-counts">
+            <span><b>{rate.present}</b> came</span>
+            <span><b>{Object.values(marks).filter((e) => e.s === 'late').length}</b> late</span>
+            <span><b>{rate.absent}</b> absent</span>
+            <span><b>{rate.excused}</b> excused</span>
+          </div>
+          {rate.pct != null && <p className="lead">{rate.pct}% came{totalMinutes ? ` · ${hoursText(totalMinutes)} served` : ''}</p>}
+          {manager && unmarked.length > 0 && Object.keys(marks).length > 0 && (
+            <button type="button" className="btn btn-quiet align-start" onClick={() => { markMany(org.id, 'championDays', date, Object.fromEntries(unmarked.map((x) => [x.id, { s: 'absent', in: null, out: null, duty: x.duty || null, r: null }]))).catch(fail); }}>
+              Mark the {unmarked.length} not marked as absent
+            </button>
+          )}
+          {!manager && <p className="small muted">Only the Director or an admin marks this register.</p>}
+        </div>
+      </section>
+
+      {data.loading ? <p className="muted">Loading…</p> : list.length === 0 ? (
+        <div className="card"><p>No champions yet.{manager && <> <button type="button" className="btn btn-quiet" onClick={onAdd}>Add the champions</button></>}</p></div>
+      ) : (
+        <ul className="hr-list">
+          {list.map((x) => {
+            const e = marks[x.id];
+            const sum = championSummary(x.id, data.days);
+            const mins = minutesBetween(e?.in, e?.out);
+            return (
+              <li key={x.id} className={`card hr-row${e ? ` m-${e.s}` : ''}`}>
+                <div className="hr-who">
+                  <Avatar name={x.name} />
+                  <div><b>{x.name}</b><span className="small muted"> {x.duty}</span></div>
+                  <PctBadge pct={sum.rate.pct} />
+                </div>
+                <div className="hr-marks" role="group" aria-label={`Mark ${x.name}`}>
+                  {CHAMPION_MARKS.map((s) => (
+                    <button key={s} type="button" disabled={!manager} aria-pressed={e?.s === s} className={`hr-mark c-${s}${e?.s === s ? ' on' : ''}`} onClick={() => mark(x, s)}>{CHAMPION_MARK_LABELS[s]}</button>
+                  ))}
+                </div>
+                {e && (e.s === 'present' || e.s === 'late') && (
+                  <div className="hr-fields">
+                    <label className="hr-inline"><span>Time in</span><input type="time" disabled={!manager} defaultValue={e.in ?? ''} key={`i${date}${e.in}`} onBlur={(ev) => ev.target.value !== (e.in ?? '') && mark(x, e.s, { in: ev.target.value || null })} /></label>
+                    <label className="hr-inline"><span>Time out</span><input type="time" disabled={!manager} defaultValue={e.out ?? ''} key={`o${date}${e.out}`} onBlur={(ev) => ev.target.value !== (e.out ?? '') && mark(x, e.s, { out: ev.target.value || null })} /></label>
+                    {date === today && !e.out && manager && <button type="button" className="btn btn-quiet" onClick={() => mark(x, e.s, { out: nowTime() })}>Check out now</button>}
+                    {mins != null && <span className="small muted">{hoursText(mins)}</span>}
+                    <label className="hr-inline grow"><span>Duty</span><input disabled={!manager} maxLength={80} defaultValue={e.duty ?? ''} key={`d${date}${e.duty}`} placeholder="Teaching, kitchen, football…" onBlur={(ev) => ev.target.value.trim() !== (e.duty ?? '') && mark(x, e.s, { duty: ev.target.value.trim() || null })} /></label>
+                  </div>
+                )}
+                {e && (
+                  <label className="hr-inline grow"><span>{e.s === 'excused' ? 'Reason' : 'Notes'}</span>
+                    <input disabled={!manager} maxLength={200} defaultValue={e.r ?? ''} key={`r${date}${e.r}`} placeholder={e.s === 'excused' ? 'Why they could not come' : 'Anything to remember'} onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && mark(x, e.s, { r: ev.target.value.trim() || null })} />
+                  </label>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <TrendCard title="Champions' attendance as time goes" trend={dayTrend(data.days)} />
+      <p className="small muted">Late counts as came. Excused days are not held against a champion.</p>
+    </>
+  );
+}
+
+const EMPTY: ChampionInput = { name: '', phone: '', email: '', duty: '', status: 'active', joinedOn: null };
+
+function ChampionList({ org, today, data, manager }: { org: Organization; today: string; data: Data; manager: boolean }) {
+  const toast = useToast();
+  const [editing, setEditing] = useState<string | 'new' | null>(null);
+  const [form, setForm] = useState<ChampionInput>(EMPTY);
+  const [showLeft, setShowLeft] = useState(false);
+  const [error, setError] = useState('');
+  const rows = data.champions.filter((x) => showLeft || x.status === 'active');
+
+  function open(x: Champion | null) {
+    setError('');
+    setEditing(x ? x.id : 'new');
+    setForm(x ? { name: x.name, phone: x.phone, email: x.email, duty: x.duty, status: x.status, joinedOn: x.joinedOn } : { ...EMPTY, joinedOn: today });
+  }
+  function submit(e: FormEvent) {
+    e.preventDefault();
+    const clean = { ...form, name: form.name.trim().slice(0, 120), phone: form.phone.trim().slice(0, 30), email: form.email.trim().slice(0, 120), duty: form.duty.trim().slice(0, 80), joinedOn: form.joinedOn || null };
+    if (clean.name.length < 2) return setError('Enter the champion\'s name.');
+    if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) return setError('The email does not look right.');
+    try {
+      if (editing === 'new') addChampion(org.id, clean);
+      else if (editing) updateChampion(org.id, editing, clean).catch((err) => toast.show(friendlyError(err)));
+      toast.show('Saved');
+      setEditing(null);
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+
+  const formCard = (
+    <form className="card form" onSubmit={submit} noValidate>
+      <h2>{editing === 'new' ? 'Add a champion' : 'Edit champion'}</h2>
+      <label className="field"><span>Name</span><input value={form.name} maxLength={120} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+      <div className="field-row">
+        <label className="field"><span>Phone</span><input inputMode="tel" value={form.phone} maxLength={30} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></label>
+        <label className="field"><span>Email</span><input type="email" value={form.email} maxLength={120} onChange={(e) => setForm({ ...form, email: e.target.value })} /></label>
+      </div>
+      <div className="field-row">
+        <label className="field"><span>Usual duty</span><input value={form.duty} maxLength={80} placeholder="Football coach, teacher, kitchen…" onChange={(e) => setForm({ ...form, duty: e.target.value })} /></label>
+        <label className="field"><span>Joined on</span><input type="date" value={form.joinedOn ?? ''} max={today} onChange={(e) => setForm({ ...form, joinedOn: e.target.value || null })} /></label>
+      </div>
+      {editing !== 'new' && <label className="check"><input type="checkbox" checked={form.status === 'left'} onChange={(e) => setForm({ ...form, status: e.target.checked ? 'left' : 'active' })} /><span>No longer serving (kept in the records)</span></label>}
+      {error && <p className="error" role="alert">{error}</p>}
+      <div className="chips"><button type="submit" className="btn btn-primary">Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(null)}>Cancel</button></div>
+    </form>
+  );
+
+  return (
+    <>
+      {manager && !editing && <button type="button" className="btn btn-primary align-start" onClick={() => open(null)}>Add a champion</button>}
+      {editing === 'new' && formCard}
+      <label className="check"><input type="checkbox" checked={showLeft} onChange={(e) => setShowLeft(e.target.checked)} /><span>Show champions who no longer serve</span></label>
+      {rows.length === 0 ? <div className="card"><p className="muted">No champions yet.</p></div> : (
+        <ul className="link-list">
+          {rows.map((x) => {
+            const s = championSummary(x.id, data.days);
+            return editing === x.id ? <li key={x.id}>{formCard}</li> : (
+              <li key={x.id}>
+                <div className="hr-who">
+                  <Avatar name={x.name} />
+                  <div>
+                    <span className="link-title">{x.name}{x.status === 'left' && <span className="badge badge-muted">No longer serving</span>}</span>
+                    <span className="link-detail">{[x.duty, x.phone, x.email].filter(Boolean).join(' · ') || 'No details yet'}</span>
+                    <span className="link-detail">{s.rate.marked ? `${s.rate.present} of ${s.rate.present + s.rate.absent} days · ${s.late} late · ${s.hours} hours served` : 'Not marked yet'}</span>
+                  </div>
+                  <PctBadge pct={s.rate.pct} />
+                  {manager && <button type="button" className="btn btn-quiet" onClick={() => open(x)}>Edit</button>}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </>
+  );
+}
+
+function ChampionUpload({ org, today, existing, done }: { org: Organization; today: string; existing: string[]; done: () => void }) {
+  const toast = useToast();
+  const [plan, setPlan] = useState<ChampionImportRow[] | null>(null);
+  const [error, setError] = useState('');
+  const ready = plan?.filter((r) => !r.skip) ?? [];
+  return (
+    <section className="card stack">
+      <h2>Upload champions from Excel or CSV</h2>
+      <p className="small">1. Download a template. 2. Fill in one champion per row. 3. Choose the file and check the list.</p>
+      <TemplateButtons name="Hope-champions-template" head={CHAMPION_TEMPLATE_HEAD} example={CHAMPION_TEMPLATE_EXAMPLE} />
+      <SheetPicker onRows={(rows) => { const p = planChampionImport(rows, existing, today); setError(p ? '' : 'No "Name" column was found. Use the template\'s headings.'); setPlan(p); }} />
+      {error && <p className="error" role="alert">{error}</p>}
+      {plan && (
+        <>
+          <p><b>{ready.length}</b> to add{plan.length > ready.length ? `, ${plan.length - ready.length} skipped` : ''}.</p>
+          <ul className="link-list">
+            {plan.slice(0, 100).map((r) => <li key={r.line}><div><span className="link-title">{r.name || `Row ${r.line}`}</span><span className="link-detail">{r.skip ? `Skipped: ${r.skip}` : [r.duty, r.phone, r.email].filter(Boolean).join(' · ') || 'Will add'}</span></div></li>)}
+          </ul>
+          <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={() => {
+            importChampions(org.id, ready).catch((err) => toast.show(friendlyError(err)));
+            toast.show(`${ready.length} ${ready.length === 1 ? 'champion' : 'champions'} added`);
+            setPlan(null); done();
+          }}>Add {ready.length} {ready.length === 1 ? 'champion' : 'champions'}</button>
+        </>
+      )}
+    </section>
+  );
+}

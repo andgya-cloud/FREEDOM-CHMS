@@ -7,6 +7,7 @@ import { useLiveQuery } from '../lib/useQuery';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import { activitiesFor } from '../../functions/src/shared/attendance';
 import { hopeMetrics, type Child, type SessionEvent, type SessionRecord } from '../../functions/src/shared/hope';
+import type { Champion, ChampionDay, HopeDay } from '../../functions/src/shared/hopeRegister';
 
 export interface ChildRow extends Child { orgId: string; createdAt?: Timestamp }
 export interface ChildPrivate { id: string; welfare: string; health: string; home: string }
@@ -105,4 +106,36 @@ export function useOpenConcerns(orgId: string) {
   const { can, profile } = useAuth();
   const on = !!orgId && !!profile?.active && can('pastoral.read');
   return useLiveQuery<Concern>(() => (on ? query(col(orgId, 'safeguardingConcerns'), where('status', '==', 'open')) : null), [orgId, on]).rows;
+}
+
+/** The children's weekly register: one record a day. */
+export function useHopeDays(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const { rows, loading } = useLiveQuery<HopeDay & { id: string }>(() => (on ? col(orgId, 'hopeDays') : null), [orgId, on]);
+  return { days: useMemo(() => live(rows), [rows]), loading };
+}
+
+/** The Child Champions and their weekly register. */
+export function useChampions(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const people = useLiveQuery<Champion>(() => (on ? col(orgId, 'champions') : null), [orgId, on]);
+  const days = useLiveQuery<ChampionDay & { id: string }>(() => (on ? col(orgId, 'championDays') : null), [orgId, on]);
+  const champions = useMemo(() => live(people.rows).sort((a, b) => a.name.localeCompare(b.name)), [people.rows]);
+  return { champions, days: useMemo(() => live(days.rows), [days.rows]), loading: people.loading || days.loading };
+}
+
+/** Children's photos, by child id. Only children with photo consent have one. */
+export function useChildPhotos(orgId: string, enabled = true) {
+  const { profile } = useAuth();
+  const on = enabled && !!orgId && !!profile?.active;
+  const { rows } = useLiveQuery<{ id: string; photo: string }>(() => (on ? col(orgId, 'childPhotos') : null), [orgId, on]);
+  return useMemo(() => new Map(rows.map((r) => [r.id, r.photo])), [rows]);
+}
+export function useChildPhoto(orgId: string, childId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!childId && !!profile?.active;
+  const { rows } = useLiveQuery<{ id: string; photo: string }>(() => (on ? query(col(orgId, 'childPhotos'), where(documentId(), '==', childId)) : null), [orgId, childId, on]);
+  return rows[0]?.photo ?? null;
 }

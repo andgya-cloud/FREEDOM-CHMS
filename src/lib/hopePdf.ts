@@ -32,12 +32,14 @@ export async function hopeReportPdf(org: Organization, r: HopeReportDoc): Promis
     ['Of those known, in school', pc(m.schoolEnrolmentRate)], ['Absence follow-ups that reached a guardian', pc(m.guardianContactRate)],
     ['Absence follow-ups still open', String(m.openAbsenceFollowUps)], ['Children with consent missing', String(m.consentMissing)],
   ], h - 30);
-  y += 4;
-  section('Saturday meals');
-  y = drawTable(pdf, y, [{ label: 'Measure', x: 14 }, { label: 'Value', x: w - 14, align: 'right' }], [
-    ['Meals served', String(m.meals.total)], ['Saturdays', String(m.meals.sessions)], ['Average per Saturday', String(m.meals.averagePerSession ?? '–')],
-    ['New children', String(m.meals.newChildren)], ['Returning children', String(m.meals.returningChildren)],
-  ], h - 30);
+  if (m.meals.sessions) {
+    y += 4;
+    section('Saturday meals');
+    y = drawTable(pdf, y, [{ label: 'Measure', x: 14 }, { label: 'Value', x: w - 14, align: 'right' }], [
+      ['Meals served', String(m.meals.total)], ['Saturdays', String(m.meals.sessions)], ['Average per Saturday', String(m.meals.averagePerSession ?? '–')],
+      ['New children', String(m.meals.newChildren)], ['Returning children', String(m.meals.returningChildren)],
+    ], h - 30);
+  }
   y += 4;
   section('Programmes');
   y = drawTable(pdf, y, [{ label: 'Programme', x: 14 }, { label: 'Children', x: 110, align: 'right' }, { label: 'Sessions', x: 145, align: 'right' }, { label: 'Average present', x: w - 14, align: 'right' }],

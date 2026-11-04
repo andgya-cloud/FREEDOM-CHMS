@@ -78,11 +78,13 @@ export function isSundayService(e: { type: string; date: string; serviceKind?: S
 export const DEFAULT_ACTIVITIES: Record<OrganizationType, string[]> = {
   church_campus: [],
   college: ['Food and Beverage Production', 'Dressmaking & Tailoring', 'ICT', 'Beauty Therapy & Cosmetology'],
-  ministry: ['Saturday meals', 'Football academy', 'Chess club', 'Music academy'],
+  ministry: ['Football academy', 'Chess club', 'Music academy'],
 };
 
 export function activitiesFor(org: { type: OrganizationType; activities?: string[] | null }): string[] {
-  return org.activities?.length ? org.activities : DEFAULT_ACTIVITIES[org.type];
+  const list = org.activities?.length ? org.activities : DEFAULT_ACTIVITIES[org.type];
+  // Saturday meals left the Hope Centre's screens (Andy, 2026-11-04, 7B); its old records are kept.
+  return org.type === 'ministry' ? list.filter((a) => a.trim().toLowerCase() !== 'saturday meals') : list;
 }
 
 /** What a new gathering is called for each choice: "Sunday 10:00" becomes "Sunday 10:00 service". */

@@ -47,7 +47,7 @@ const TOPICS: Topic[] = [
     permission: 'people.write',
     body: ['Choose Freedom Hope Center at the top, then open Hope. Register a child: type the name, date of birth, school and the programmes they join, and add a guardian with a phone number. The code (for example HC-0042) is made once you are online.',
       'Consent can be left blank, but the child shows "Consent missing" until the guardian agrees. No photos are stored in the system.',
-      'For Saturday meals, open Hope and tap Saturday meals, then type how many new and returning children came if you are not taking names. For football, chess or music, tap the programme, then tap each name, or type or scan the child\'s code and press Enter. It works offline on a tablet.'],
+      'For the weekly check-in, open Hope, then Register: pick the day on the calendar (Saturday is chosen for you) and tap Present, Absent, Excused, Departing or Departed for each child. The Child Champions register is under Champions. For football, chess or music, tap the programme, then tap each name, or type or scan the child\'s code and press Enter. It works offline on a tablet.'],
     link: { to: '/hope', label: 'Open Hope' },
   },
   {

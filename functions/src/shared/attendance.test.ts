@@ -29,7 +29,8 @@ describe('gatherings', () => {
       .toEqual(['Sunday 08:00 service', 'Sunday 10:00 service', 'Youth service']);
     expect(eventChoices({ type: 'church_campus' })).toEqual(['Sunday 10:00 service']);
     expect(eventChoices({ type: 'college' })).toContain('ICT');
-    expect(eventChoices({ type: 'ministry' })).toEqual(['Saturday meals', 'Football academy', 'Chess club', 'Music academy']);
+    expect(eventChoices({ type: 'ministry' })).toEqual(['Football academy', 'Chess club', 'Music academy']);
+    expect(eventChoices({ type: 'ministry', activities: ['Saturday meals', 'Chess club'] })).toEqual(['Chess club']);
     expect(eventChoices({ type: 'ministry', activities: ['Holiday club'] })).toEqual(['Holiday club']);
   });
 

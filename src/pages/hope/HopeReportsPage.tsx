@@ -102,7 +102,8 @@ function ReportView({ org, report }: { org: Organization; report: HopeReportDoc 
     ['Newly registered', String(m.newlyRegistered)], ['Attending regularly', pct(m.consistencyRate)], ['Still here after 6 months', pct(m.retentionRate)],
     ['In one programme', String(m.reachOne)], ['In two or more', String(m.reachTwoPlus)], ['In school (of those known)', pct(m.schoolEnrolmentRate)],
     ['Guardians reached after absences', pct(m.guardianContactRate)], ['Consent missing', String(m.consentMissing)],
-    ['Meals served', String(m.meals.total)], ['Average meals per Saturday', String(m.meals.averagePerSession ?? '–')],
+    // Saturday meals left the screens (Andy, 2026-11-04, 7B); old reports that had meals still show them.
+    ...(m.meals.sessions ? [['Meals served', String(m.meals.total)], ['Average meals per Saturday', String(m.meals.averagePerSession ?? '–')]] as [string, string][] : []),
   ];
   return (
     <section className="card stack">
