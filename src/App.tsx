@@ -92,6 +92,8 @@ const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage'
 const ChildrenPage = lazy(() => import('./pages/hope/ChildrenPage').then((m) => ({ default: m.ChildrenPage })));
 const RegisterChildPage = lazy(() => import('./pages/hope/RegisterChildPage').then((m) => ({ default: m.RegisterChildPage })));
 const ChildPage = lazy(() => import('./pages/hope/ChildPage').then((m) => ({ default: m.ChildPage })));
+const HopeChatsPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.HopeChatsPage })));
+const HopeChatPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.HopeChatPage })));
 const HopePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.HopePhotosPage })));
 const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
 const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then((m) => ({ default: m.KidsRegisterPage })));
@@ -239,6 +241,8 @@ function AppRoutes() {
         <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
         {/* Who sees which photo report is checked by the server (Andy, 2026-11-04, 3A): board members without Hope work open it from the email link. */}
         <Route path="/hope/photos" element={<HopePhotosPage />} />
+        <Route path="/hope/chats" element={<HopeChatsPage />} />
+        <Route path="/hope/chats/:id" element={<HopeChatPage />} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
         <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />

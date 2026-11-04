@@ -27,6 +27,7 @@ export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whats
 export { inventoryEmail, inventoryReminders } from './inventory.js';
 export { tutorFiles, tutorFileReminders } from './tutorFiles.js';
 export { hopePhotoReports } from './hopePhotos.js';
+export { hopeChats } from './hopeChats.js';
 export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
 export { welcomeCard } from './welcome.js';
 export { birthdayCards, birthdayTestCard } from './birthdays.js';

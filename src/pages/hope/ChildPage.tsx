@@ -7,7 +7,7 @@ import { useChildPhoto, useChildPrivate, useClubs, useHopeDays } from '../../sta
 import { memberRate, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
-import { addHomeVisit, addReferral, closeConcern, closeReferral, raiseConcern, removeChildPhoto, saveChildPhoto, saveChildPrivate, updateChild } from '../../lib/hopeWrites';
+import { addHomeVisit, addReferral, closeReferral, removeChildPhoto, saveChildPhoto, saveChildPrivate, updateChild } from '../../lib/hopeWrites';
 import { daysToBirthday, KID_MARK_LABELS, kidHistory, rateFrom, streak, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
 import { Avatar, PctBadge, shrinkPhoto } from './registerParts';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
@@ -17,6 +17,7 @@ import {
   consentMissing, hasPayment, MEALS_PROGRAMME, missedInARow, NO_PAYMENT, PAY_BY, PAY_BY_LABELS, paymentLine, programmeOf, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
   type ChildPayment, type ChildProgramme, type Consent, type PayBy, type SchoolStatus,
 } from '../../../functions/src/shared/hope';
+import { ChildChats } from './HopeChatsPage';
 import { HopeGate, useHopePage } from './common';
 import { ConsentField } from './fields';
 import type { Organization } from '../../state/OrgContext';
@@ -53,8 +54,6 @@ function ChildScreen({ org }: { org: Organization }) {
   const photo = useChildPhoto(org.id, childId);
   const { days } = useHopeDays(org.id);
   const clubs = useClubs(org.id);
-  const [concernOpen, setConcernOpen] = useState(false);
-  const [concern, setConcern] = useState('');
 
   useEffect(() => {
     if (!child) return;
@@ -96,12 +95,6 @@ function ChildScreen({ org }: { org: Organization }) {
     if (!f) return;
     try { saveChildPhoto(org.id, child!.id, await shrinkPhoto(f)).catch((err) => toast.show(friendlyError(err))); toast.show('Photo saved'); }
     catch (err) { toast.show(friendlyError(err)); }
-  }
-  function sendConcern() {
-    if (!concern.trim()) return;
-    raiseConcern(org.id, child!.id, concern).catch((err) => toast.show(friendlyError(err)));
-    setConcern(''); setConcernOpen(false);
-    toast.show('Concern sent to the pastor. Only the pastor can see it.');
   }
 
   const history = kidHistory(child.id, days);
@@ -220,23 +213,7 @@ function ChildScreen({ org }: { org: Organization }) {
         </div>
       </details>
 
-      {(can('people.write') || can('attendance.write')) && (
-        <details className="card hr-fold">
-          <summary><h2>Worried about {person?.firstName ?? 'this child'}?</h2><span className="small muted">Only the pastor reads it</span></summary>
-          <div className="stack">
-          {concernOpen ? (
-            <>
-              <p className="small">Write what you saw or heard. <strong>Only the pastor will be told and can read this.</strong> Do not talk to others about it.</p>
-              <label className="field"><span>What are you worried about?</span><textarea rows={4} maxLength={4000} value={concern} onChange={(e) => setConcern(e.target.value)} /></label>
-              <div className="chips">
-                <button type="button" className="btn btn-primary" disabled={!concern.trim()} onClick={sendConcern}>Send to the pastor</button>
-                <button type="button" className="btn btn-quiet" onClick={() => setConcernOpen(false)}>Cancel</button>
-              </div>
-            </>
-          ) : <button type="button" className="btn align-start" onClick={() => setConcernOpen(true)}>Raise a safeguarding concern</button>}
-          </div>
-        </details>
-      )}
+      <ChildChats org={org} childId={child.id} firstName={person?.firstName ?? 'this child'} />
 
       {h.pastoral && <PastorSection orgId={org.id} childId={child.id} today={h.today} />}
 
@@ -283,7 +260,7 @@ function RegisterHistory({ history, rate }: { history: ReturnType<typeof kidHist
   );
 }
 
-/** Welfare notes, home visits, referrals and safeguarding concerns. Only the pastor's account can read these. */
+/** Welfare notes, home visits and referrals (safeguarding concerns are now conversations). Only the pastor's account can read these. */
 function PastorSection({ orgId, childId, today }: { orgId: string; childId: string; today: string }) {
   const toast = useToast();
   const p = useChildPrivate(orgId, childId);
@@ -299,31 +276,10 @@ function PastorSection({ orgId, childId, today }: { orgId: string; childId: stri
     setWelfare(p.private?.welfare ?? ''); setHealth(p.private?.health ?? ''); setHome(p.private?.home ?? '');
   }, [p.private?.id, p.private?.welfare, p.private?.health, p.private?.home]);
 
-  const openConcerns = p.concerns.filter((c) => c.status === 'open').length;
   return (
-    <details className="card hr-fold" open={openConcerns > 0}>
-      <summary><h2>Welfare (pastor only)</h2><span className="small muted">{openConcerns ? `${openConcerns} open ${openConcerns === 1 ? 'concern' : 'concerns'}` : 'Notes, visits and referrals'}</span></summary>
+    <details className="card hr-fold">
+      <summary><h2>Welfare (pastor only)</h2><span className="small muted">Notes, visits and referrals</span></summary>
       <div className="stack">
-      {p.concerns.length > 0 && (
-        <section className="stack hr-sub">
-          <h3>Safeguarding concerns</h3>
-          <ul className="link-list">
-            {p.concerns.map((c) => (
-              <li key={c.id}>
-                <div>
-                  <span className="link-title">{c.status === 'open' ? 'Open' : 'Closed'}{c.createdAt ? ` · ${formatDateKey(c.createdAt.toDate().toISOString().slice(0, 10))}` : ''}</span>
-                  <span className="link-detail">{c.summary}</span>
-                  {c.closingNote && <span className="link-detail">Closed: {c.closingNote}</span>}
-                  {c.status === 'open' && <button type="button" className="btn btn-quiet" onClick={() => {
-                    const note = window.prompt('How was this dealt with? (kept private)') ?? '';
-                    if (note.trim()) closeConcern(orgId, c.id, note).catch(fail);
-                  }}>Close with a note</button>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
 
       <section className="stack hr-sub">
         <h3>Welfare notes</h3>

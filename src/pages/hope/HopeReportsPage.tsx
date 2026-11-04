@@ -60,7 +60,7 @@ function Reports({ org }: { org: Organization }) {
   const open = rows.find((r) => r.id === openId);
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>Reports</h1><div className="btn-line"><Link to="/hope/photos" className="btn">📷 Photo reports</Link>{can('people.read') && <Link to="/hope/exports" className="btn">⬇︎ Download lists</Link>}</div></div>
+      <div className="page-head"><h1>Reports</h1><div className="btn-line"><Link to="/hope/photos" className="btn">📷 Photo reports</Link><Link to="/hope/chats" className="btn">🔒 Conversations</Link>{can('people.read') && <Link to="/hope/exports" className="btn">⬇︎ Download lists</Link>}</div></div>
       <p className="small muted">Make a monthly or weekly report. <Help>The monthly report has numbers only, no names, and is made by itself on the 1st for leaders and donors. The weekly report is for the pastor and lists the children to follow up.</Help></p>
       <section className="card stack">
         <h2>Make a report</h2>

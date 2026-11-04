@@ -8,6 +8,7 @@ import { friendlyError } from '../../lib/errors';
 import { markHelperArrived, requestAbsenceCheck } from '../../lib/hopeWrites';
 import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { HelperGuide } from './HelperGuide';
+import { useChatSummary } from './HopeChatsPage';
 import { nowTime } from './registerParts';
 import { SceneVideo } from '../../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
@@ -96,11 +97,13 @@ function LeaderToday({ org }: { org: Organization }) {
 
   const missing = h.children.filter(consentMissing).length;
   const { helpers } = useHelperDay(org.id, h.today);
+  const chats = useChatSummary(org.id);
   const departing = h.children.filter((c) => c.status === 'departing').length;
   const birthdays = current.filter((c) => birthdayThisWeek(c.dateOfBirth, h.today)).length;
   const toCall = h.absenceTasks.filter((t) => t.status === 'open').length;
   const alerts = [
-    h.openConcerns.length > 0 && { warn: true, to: '/hope/children?show=concerns', text: `${h.openConcerns.length} safeguarding ${h.openConcerns.length === 1 ? 'concern is' : 'concerns are'} open` },
+    !!chats?.urgent && { warn: true, to: '/hope/chats', text: `🔴 ${chats.urgent} ${chats.urgent === 1 ? 'conversation needs' : 'conversations need'} your URGENT response` },
+    !!chats?.unread && chats.unread > (chats.urgent ?? 0) && { warn: false, to: '/hope/chats', text: `💬 ${chats.unread} ${chats.unread === 1 ? 'conversation has' : 'conversations have'} new messages` },
     can('followups.manage') && (counts.due > 0 || toCall > 0) && { warn: false, to: '/follow-ups', text: `${Math.max(counts.due, toCall)} ${Math.max(counts.due, toCall) === 1 ? 'guardian' : 'guardians'} to call` },
     helpers.length > 0 && { warn: false, to: '/hope/register', text: `🙋 Helpers here today: ${helpers.map((x) => `${firstNameOf(x.name) || x.name} ${x.t}`).join(', ')}` },
     missing > 0 && { warn: true, to: '/hope/consent', text: `${missing} ${missing === 1 ? 'child needs' : 'children need'} consent recorded` },

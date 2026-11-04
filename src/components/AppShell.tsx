@@ -132,7 +132,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </NavLink>
       )}
  {can('people.read') && !helper && (
-        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos)/.test(location.pathname) ? ' active' : ''}`}>
+        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos|chats)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
           Reports
         </NavLink>
