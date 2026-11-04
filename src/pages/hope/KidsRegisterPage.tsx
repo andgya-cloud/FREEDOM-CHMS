@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useChildPhotos, useHopeDays } from '../../state/useHope';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
 import { markKid, markMany, updateChild } from '../../lib/hopeWrites';
-import { createEvent } from '../../lib/attendanceWrites';
-import { eventTypeFor } from '../../../functions/src/shared/attendance';
+import { useClubs } from '../../state/useHope';
+import { clubDayOnOrBefore, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ChampionsPanel } from './ChampionsPage';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
@@ -45,26 +45,29 @@ function Registers({ org }: { org: Organization }) {
   );
 }
 
-/** Until clubs have their own registers (Part 2), a club's register is a session of its programme. */
+/** Each club's own register (Part 2): pick the club; it opens on its last meeting day. */
 function ClubSessions({ org }: { org: Organization }) {
   const h = useHopePage(org);
-  const { can } = useAuth();
-  const toast = useToast();
-  const navigate = useNavigate();
-  const names = [...new Set(h.programmes.flatMap((p) => (p.toLowerCase() === 'football academy' ? [`${p} training`, `${p} match`] : [p])))];
-  function start(name: string) {
-    try {
-      const { id, synced } = createEvent(org.id, { date: h.today, type: eventTypeFor(org.type, name), name, activity: name });
-      synced.catch((err) => toast.show(friendlyError(err)));
-      navigate(`/attendance/${org.id}/${id}`);
-    } catch (err) { toast.show(friendlyError(err)); }
-  }
+  const c = useClubs(org.id);
+  const clubs = c.clubs.filter((x) => x.status === 'active');
+  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${h.today}T12:00:00Z`));
+  if (!c.loading && clubs.length === 0) return <div className="card"><p>No clubs yet. <Link to="/hope/clubs">Set up the clubs</Link> first.</p></div>;
   return (
-    <section className="card stack">
-      <h2>Start a club session</h2>
-      {can('attendance.write') ? <div className="chips">{names.map((n) => <button key={n} type="button" className="chip" onClick={() => start(n)}>{n}</button>)}</div> : <p className="muted">You can see registers but not take them.</p>}
-      <p className="small muted">Tap a club, then tap each child's name or type or scan their code. Past sessions are under <Link to="/attendance">Attendance</Link>.</p>
-    </section>
+    <ul className="link-list">
+      {clubs.map((x) => {
+        const last = clubDayOnOrBefore(x.day, h.today);
+        const r = rateFrom(Object.values(c.days.find((d) => d.clubId === x.id && d.date === last)?.marks ?? {}));
+        return (
+          <li key={x.id}>
+            <Link to={`/hope/clubs/${x.id}`} className="hr-who">
+              <span className="cl-emoji" aria-hidden="true">{x.emoji || '⭐'}</span>
+              <span className="grow"><span className="link-title">{x.name}{x.day === weekday && <span className="badge badge-ok">Meets today</span>}</span>
+                <span className="link-detail">{scheduleText(x) || 'Day not set'} · {x.memberIds.length} members · {r.marked ? `${r.present} came on ${formatDateKey(last)}` : `not marked for ${formatDateKey(last)}`}</span></span>
+            </Link>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

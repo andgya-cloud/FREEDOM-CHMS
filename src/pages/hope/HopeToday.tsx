@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useFollowUpCounts } from '../../state/useFollowUps';
-import { useChampions, useHopeDays } from '../../state/useHope';
+import { useChampions, useClubs, useHopeDays } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
 import { requestAbsenceCheck } from '../../lib/hopeWrites';
 import { SceneVideo } from '../../components/SceneVideo';
@@ -35,6 +35,7 @@ export function HopeToday({ org }: { org: Organization }) {
   const counts = useFollowUpCounts(org.id, tz);
   const { days } = useHopeDays(org.id);
   const champ = useChampions(org.id);
+  const clubs = useClubs(org.id);
   const [chart, setChart] = useState<Chart>('trend');
   const [checking, setChecking] = useState(false);
 
@@ -68,6 +69,8 @@ export function HopeToday({ org }: { org: Organization }) {
     window.setTimeout(() => setChecking(false), 4000);
   }
 
+  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${h.today}T12:00:00Z`));
+  const clubsToday = clubs.clubs.filter((x) => x.status === 'active' && x.day === weekday).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
   const first = firstNameOf(profile?.displayName);
   const marker = can('attendance.write');
   const satWord = isSaturday ? 'Today' : 'Last Saturday';
@@ -138,6 +141,23 @@ export function HopeToday({ org }: { org: Organization }) {
           )}
         </div>
       </section>
+
+      {clubsToday.length > 0 && (
+        <section className="card ht-clubs" aria-label="Clubs meeting today">
+          <h2>Clubs today</h2>
+          <div className="ht-club-row">
+            {clubsToday.map((x) => {
+              const r = rateFrom(Object.values(clubs.days.find((d) => d.clubId === x.id && d.date === h.today)?.marks ?? {}));
+              return (
+                <Link key={x.id} to={`/hope/clubs/${x.id}`} className="ht-club">
+                  <span className="cl-emoji" aria-hidden="true">{x.emoji || '⭐'}</span>
+                  <span><b>{x.name}</b><span className="small muted">{x.time || 'Time not set'} · {r.marked ? `${r.present} of ${x.memberIds.length} here` : `${x.memberIds.length} members`}</span></span>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {can('people.read') && (
         <details className="lav-figs">

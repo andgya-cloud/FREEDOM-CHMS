@@ -1231,6 +1231,47 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Clubs (Andy, 2026-11-04, Part 2): members, champion leaders, a day and time, a weekly register and a wins log.
+      match /clubs/{clubId} {
+        allow read: if hopeRead();
+        allow create, update: if orgWrite(orgId, 'people.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'emoji', 'description', 'day', 'time', 'endTime', 'place', 'capacity',
+               'memberIds', 'leaderIds', 'levels', 'legacyProgramme', 'status', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.name, 60) && request.resource.data.name.size() >= 2
+          && shortText(request.resource.data.emoji, 16) && shortText(request.resource.data.description, 500)
+          && request.resource.data.day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+          && shortText(request.resource.data.time, 5) && shortText(request.resource.data.endTime, 5) && shortText(request.resource.data.place, 80)
+          && request.resource.data.capacity is int && request.resource.data.capacity >= 0 && request.resource.data.capacity <= 1000
+          && listOf(request.resource.data.memberIds, 1000) && listOf(request.resource.data.leaderIds, 30)
+          && request.resource.data.levels is map && request.resource.data.levels.size() <= 1000
+          && (request.resource.data.legacyProgramme == null || shortText(request.resource.data.legacyProgramme, 60))
+          && request.resource.data.status in ['active', 'paused'];
+        allow delete: if false;
+      }
+      match /clubDays/{dayId} {
+        allow read: if hopeRead();
+        allow create, update: if canAccessOrg(orgId) && has('attendance.write')
+          && request.resource.data.orgId == orgId
+          && request.resource.data.keys().hasOnly(['orgId', 'clubId', 'date', 'marks', 'updatedAt', 'updatedBy'])
+          && isDate(request.resource.data.date) && request.resource.data.clubId is string
+          && dayId == request.resource.data.clubId + '_' + request.resource.data.date
+          && existsInOrg('clubs', request.resource.data.clubId)
+          && request.resource.data.marks is map && request.resource.data.marks.size() <= 1000
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+      match /clubWins/{winId} {
+        allow read: if hopeRead();
+        allow create, update: if orgWrite(orgId, 'attendance.write')
+          && request.resource.data.keys().hasOnly(['orgId', 'clubId', 'date', 'kind', 'title', 'note', 'childIds',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && existsInOrg('clubs', request.resource.data.clubId) && isDate(request.resource.data.date)
+          && request.resource.data.kind in ['award', 'match', 'performance', 'milestone', 'product', 'other']
+          && shortText(request.resource.data.title, 120) && request.resource.data.title.size() >= 2
+          && shortText(request.resource.data.note, 1000) && listOf(request.resource.data.childIds, 100);
+        allow delete: if false;
+      }
+
       // Welfare notes, dietary and health flags, home circumstances. Pastor only.
       match /childPrivate/{childId} {
         allow read: if canAccessOrg(orgId) && has('pastoral.read');

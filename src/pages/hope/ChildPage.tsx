@@ -3,7 +3,8 @@ import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
-import { useChildPhoto, useChildPrivate, useHopeDays } from '../../state/useHope';
+import { useChildPhoto, useChildPrivate, useClubs, useHopeDays } from '../../state/useHope';
+import { memberRate, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
 import { addHomeVisit, addReferral, closeConcern, closeReferral, raiseConcern, removeChildPhoto, saveChildPhoto, saveChildPrivate, updateChild } from '../../lib/hopeWrites';
@@ -17,7 +18,7 @@ import {
   type ChildProgramme, type Consent, type SchoolStatus,
 } from '../../../functions/src/shared/hope';
 import { HopeGate, useHopePage } from './common';
-import { ConsentField, ProgrammeFields } from './fields';
+import { ConsentField } from './fields';
 import type { Organization } from '../../state/OrgContext';
 
 export function ChildPage() {
@@ -50,6 +51,7 @@ function ChildScreen({ org }: { org: Organization }) {
   const [confirmExit, setConfirmExit] = useState<null | 'departing' | 'exited'>(null);
   const photo = useChildPhoto(org.id, childId);
   const { days } = useHopeDays(org.id);
+  const clubs = useClubs(org.id);
   const [concernOpen, setConcernOpen] = useState(false);
   const [concern, setConcern] = useState('');
 
@@ -102,6 +104,7 @@ function ChildScreen({ org }: { org: Organization }) {
   }
 
   const history = kidHistory(child.id, days);
+  const myClubs = clubs.clubs.filter((x) => x.memberIds.includes(child.id));
   const rate = rateFrom(history.map((x) => x.entry));
   const fire = streak(child.id, days);
   const parentPhoneShown = child.parentPhone || guardian?.phone || '';
@@ -176,7 +179,6 @@ function ChildScreen({ org }: { org: Organization }) {
           <label className="field"><span>Sponsor's phone (optional)</span><input disabled={!canEdit} inputMode="tel" value={sponsorPhone} maxLength={30} onChange={(e) => setSponsorPhone(e.target.value)} /></label>
           <label className="field"><span>Sponsor's email (optional)</span><input disabled={!canEdit} type="email" value={sponsorEmail} maxLength={120} onChange={(e) => setSponsorEmail(e.target.value)} /></label>
         </div>
-        <ProgrammeFields programmes={h.programmes} value={programmes} onChange={setProgrammes} disabled={!canEdit} />
         <ConsentField label="Guardian consent to keep this child's details" value={guardianConsent} onChange={setGuardianConsent} today={h.today} disabled={!canEdit} />
         <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
         {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}
@@ -186,8 +188,18 @@ function ChildScreen({ org }: { org: Organization }) {
       <RegisterHistory history={history} rate={rate} />
 
       <details className="card hr-fold">
-        <summary><h2>Clubs and programmes</h2><span className="small muted">{child.programmes.length ? child.programmes.map((p) => p.name).join(', ') : 'None yet'}</span></summary>
+        <summary><h2>Clubs</h2><span className="small muted">{myClubs.length ? myClubs.map((x) => `${x.emoji} ${x.name}`).join(', ') : 'None yet'}</span></summary>
         <div className="stack">
+          {myClubs.length > 0 && (
+            <ul className="link-list">
+              {myClubs.map((x) => { const r = memberRate(child.id, clubs.days.filter((d) => d.clubId === x.id)); return (
+                <li key={x.id}><Link to={`/hope/clubs/${x.id}`} className="hr-who"><span className="cl-emoji" aria-hidden="true">{x.emoji}</span>
+                  <span className="grow"><span className="link-title">{x.name}</span><span className="link-detail">{[x.levels[child.id], scheduleText(x)].filter(Boolean).join(' · ')}</span></span><PctBadge pct={r.pct} /></Link></li>
+              ); })}
+            </ul>
+          )}
+          {myClubs.length === 0 && <p className="small muted">Not in a club yet. Add children to a club from the club's Members tab.</p>}
+          <h3>Earlier programme sessions</h3>
         {child.programmes.filter((p) => p.name.toLowerCase() !== MEALS_PROGRAMME.toLowerCase()).map((p) => {
           const { missed } = missedInARow(child.id, p.name, h.programmes, h.events, h.records, child.enrolledOn, h.today);
           return <p key={p.name} className="small"><strong>{p.name}</strong>{p.group ? ` (${p.group})` : ''}{p.level ? ` · ${p.level}` : ''} · {missed === 0 ? 'came to the latest session' : `missed the last ${missed} ${missed === 1 ? 'session' : 'sessions'}`}</p>;

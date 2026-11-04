@@ -84,3 +84,24 @@ describe('the weekly registers', () => {
     await assertSucceeds(getDoc(doc(as('pastor'), `${O}/champions/p1`)));
   });
 });
+
+describe('clubs', () => {
+  const club = (uid: string, over: Record<string, unknown> = {}) => ({
+    orgId: 'hope', name: 'Chess Club', emoji: '♟️', description: '', day: 'Saturday', time: '10:00', endTime: '12:00', place: 'Hall', capacity: 20,
+    memberIds: ['c1'], leaderIds: [], levels: { c1: 'Level 2' }, legacyProgramme: 'Chess club', status: 'active', ...created(uid), ...over,
+  });
+  it('lets staff keep clubs, mark them and log wins', async () => {
+    await assertSucceeds(setDoc(doc(as('hopeStaff'), `${O}/clubs/chess`), club('hopeStaff')));
+    await assertFails(setDoc(doc(as('hopeStaff'), `${O}/clubs/bad`), club('hopeStaff', { day: 'Someday' })));
+    await assertFails(setDoc(doc(as('admin'), `${O}/clubs/x`), club('admin')));
+    const mark = (uid: string, id: string, clubId: string, date: string) => setDoc(doc(as(uid), `${O}/clubDays/${id}`),
+      { orgId: 'hope', clubId, date, marks: { c1: { s: 'present' } }, updatedAt: serverTimestamp(), updatedBy: uid }, { merge: true });
+    await assertSucceeds(mark('hopeStaff', 'chess_2026-10-31', 'chess', '2026-10-31'));
+    await assertFails(mark('hopeStaff', 'chess_2026-10-24', 'chess', '2026-10-31')); // id must match
+    await assertFails(mark('hopeStaff', 'ghost_2026-10-31', 'ghost', '2026-10-31')); // no such club
+    const win = (uid: string, over: Record<string, unknown> = {}) => ({ orgId: 'hope', clubId: 'chess', date: '2026-10-31', kind: 'award', title: 'County champions', note: '', childIds: ['c1'], ...created(uid), ...over });
+    await assertSucceeds(setDoc(doc(as('hopeStaff'), `${O}/clubWins/w1`), win('hopeStaff')));
+    await assertFails(setDoc(doc(as('hopeStaff'), `${O}/clubWins/w2`), win('hopeStaff', { kind: 'trophy' })));
+    await assertSucceeds(getDoc(doc(as('hopeAdmin'), `${O}/clubWins/w1`)));
+  });
+});

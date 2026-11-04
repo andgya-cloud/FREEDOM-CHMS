@@ -102,7 +102,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   ) : null;
-  // Freedom Hope Centre's own menu (Andy, 2026-11-04, 1A): Today, Children, Registers and Reports. People and
+  // Freedom Hope Centre's own menu (Andy, 2026-11-04, 1A): Today, Children, Registers, Clubs and Reports. People and
   // Attendance are folded in (the children are its people; the registers are its attendance).
   const hopeTabs = current?.type === 'ministry' && full ? (
     <nav className="tabbar" aria-label="Main">
@@ -120,6 +120,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/hope/register" className={({ isActive }) => `tab${isActive || /^\/(hope\/champions|attendance)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
           <TabLabel full="Registers" short="Register" />
+        </NavLink>
+      )}
+      {(can('attendance.write') || can('people.read')) && (
+        <NavLink to="/hope/clubs" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z" /></svg>
+          Clubs
         </NavLink>
       )}
       {can('people.read') && (

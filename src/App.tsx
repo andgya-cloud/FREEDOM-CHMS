@@ -94,6 +94,8 @@ const RegisterChildPage = lazy(() => import('./pages/hope/RegisterChildPage').th
 const ChildPage = lazy(() => import('./pages/hope/ChildPage').then((m) => ({ default: m.ChildPage })));
 const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
 const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then((m) => ({ default: m.KidsRegisterPage })));
+const ClubsPage = lazy(() => import('./pages/hope/ClubsPage').then((m) => ({ default: m.ClubsPage })));
+const ClubPage = lazy(() => import('./pages/hope/ClubPage').then((m) => ({ default: m.ClubPage })));
 const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((m) => ({ default: m.ChildImportPage })));
 const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((m) => ({ default: m.HopeExportsPage })));
 
@@ -226,6 +228,8 @@ function AppRoutes() {
         <Route path="/hope/children/new" element={<RequirePermission permission="people.write"><RegisterChildPage /></RequirePermission>} />
         <Route path="/hope/children/import" element={<RequirePermission permission="people.write"><ChildImportPage /></RequirePermission>} />
         <Route path="/hope/register" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><KidsRegisterPage /></RequirePermission>} />
+        <Route path="/hope/clubs" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ClubsPage /></RequirePermission>} />
+        <Route path="/hope/clubs/:clubId" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ClubPage /></RequirePermission>} />
         <Route path="/hope/champions" element={<Navigate to="/hope/register?w=champions" replace />} />
         <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />

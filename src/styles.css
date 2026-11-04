@@ -2142,3 +2142,30 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .lite-look .card.ht-saturday, .side-look .card.ht-saturday, .card.ht-saturday { background: linear-gradient(135deg, #038241, #0f9f5a 55%, #34c27a); color: #fff; border-color: transparent; }
 .card.ht-saturday .ht-sat-text span { color: rgba(255, 255, 255, .9); }
+
+/* ---- Hope Centre clubs (v166) ---- */
+.badge-ok { background: rgba(22, 163, 74, .14); color: #15803d; }
+.cl-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .9rem; }
+@media (max-width: 480px) { .cl-grid { grid-template-columns: 1fr; } }
+.cl-card { position: relative; display: flex; flex-direction: column; gap: .3rem; padding: 1.1rem; text-decoration: none; color: inherit; height: 100%; transition: transform .15s ease, box-shadow .15s ease; }
+.cl-card:hover { transform: translateY(-2px); box-shadow: 0 12px 26px -14px rgba(3, 130, 65, .55); }
+.cl-card.paused { opacity: .65; }
+.cl-emoji { display: inline-grid; place-items: center; width: 2.6rem; height: 2.6rem; border-radius: 14px; background: linear-gradient(135deg, #e7f6ee, #fef3c7); font-size: 1.4rem; flex: none; }
+.cl-emoji.big { width: 4rem; height: 4rem; font-size: 2.2rem; border-radius: 20px; }
+.cl-badge { position: absolute; top: .9rem; right: .9rem; }
+.cl-name { font-size: 1.08rem; margin-top: .3rem; }
+.cl-stats { display: flex; flex-wrap: wrap; gap: .3rem .9rem; font-size: .85rem; color: var(--muted, #6b7280); margin-top: .2rem; }
+.cl-stats b { color: var(--text, #111); }
+.cl-head { display: grid; grid-template-columns: auto 1fr auto; gap: 1rem; align-items: center; }
+.cl-head h1 { margin: 0; }
+.cl-head-stats { display: flex; flex-direction: column; align-items: flex-end; gap: .2rem; }
+@media (max-width: 520px) { .cl-head { grid-template-columns: auto 1fr; } .cl-head-stats { grid-column: 1 / -1; flex-direction: row; align-items: center; } }
+.cl-emoji-pick { display: flex; flex-wrap: wrap; gap: .3rem; }
+.cl-emoji-pick button { font-size: 1.3rem; width: 2.5rem; height: 2.5rem; border-radius: 12px; border: 1px solid rgba(0, 0, 0, .1); background: #fff; cursor: pointer; }
+.cl-emoji-pick button.on { border-color: #038241; box-shadow: 0 0 0 2px rgba(3, 130, 65, .3); }
+.cl-wins { list-style: none; margin: 0; padding: 0; display: grid; gap: .6rem; }
+.cl-wins li { display: grid; grid-template-columns: auto 1fr auto; gap: .9rem; align-items: start; }
+.cl-win-emoji { font-size: 1.8rem; line-height: 1; }
+.ht-club-row { display: flex; gap: .6rem; overflow-x: auto; padding-bottom: .2rem; }
+.ht-club { display: flex; align-items: center; gap: .6rem; padding: .6rem .9rem; border-radius: 14px; background: rgba(3, 130, 65, .06); text-decoration: none; color: inherit; flex: none; }
+.ht-club > span:last-child { display: flex; flex-direction: column; }

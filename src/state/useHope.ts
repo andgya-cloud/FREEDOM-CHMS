@@ -8,6 +8,7 @@ import { localDateKey } from '../../functions/src/shared/datetime';
 import { activitiesFor } from '../../functions/src/shared/attendance';
 import { hopeMetrics, type Child, type SessionEvent, type SessionRecord } from '../../functions/src/shared/hope';
 import type { Champion, ChampionDay, HopeDay } from '../../functions/src/shared/hopeRegister';
+import type { Club, ClubDay, ClubWin } from '../../functions/src/shared/hopeClubs';
 
 export interface ChildRow extends Child { orgId: string; createdAt?: Timestamp }
 export interface ChildPrivate { id: string; welfare: string; health: string; home: string }
@@ -138,4 +139,19 @@ export function useChildPhoto(orgId: string, childId: string) {
   const on = !!orgId && !!childId && !!profile?.active;
   const { rows } = useLiveQuery<{ id: string; photo: string }>(() => (on ? query(col(orgId, 'childPhotos'), where(documentId(), '==', childId)) : null), [orgId, childId, on]);
   return rows[0]?.photo ?? null;
+}
+
+/** The clubs, every club register day and the wins log. */
+export function useClubs(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const clubs = useLiveQuery<Club>(() => (on ? col(orgId, 'clubs') : null), [orgId, on]);
+  const days = useLiveQuery<ClubDay & { id: string }>(() => (on ? col(orgId, 'clubDays') : null), [orgId, on]);
+  const wins = useLiveQuery<ClubWin>(() => (on ? col(orgId, 'clubWins') : null), [orgId, on]);
+  return {
+    clubs: useMemo(() => live(clubs.rows).sort((a, b) => a.name.localeCompare(b.name)), [clubs.rows]),
+    days: useMemo(() => live(days.rows), [days.rows]),
+    wins: useMemo(() => live(wins.rows).sort((a, b) => b.date.localeCompare(a.date)), [wins.rows]),
+    loading: clubs.loading,
+  };
 }

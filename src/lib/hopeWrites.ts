@@ -1,11 +1,12 @@
 import { collection, deleteField, doc, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { createStamps, updateRecord } from './records';
+import { createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { firstName } from '../../functions/src/shared/people';
 import type { Child, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
 import type { ChampionEntry, ChildImportRow, ChampionImportRow, KidEntry } from '../../functions/src/shared/hopeRegister';
 import { normalizePhone } from '../../functions/src/shared/phone';
+import { clubDayId, STARTER_CLUBS, type Club, type ClubWin } from '../../functions/src/shared/hopeClubs';
 import type { WhatsAppConsent } from '../state/PeopleContext';
 
 const ref = (orgId: string, name: string, id: string) => doc(db, 'organizations', orgId, name, id);
@@ -202,4 +203,58 @@ export function requestAbsenceCheck(orgId: string) {
   const r = doc(collection(db, 'organizations', orgId, 'absenceCheckRequests'));
   void trackWrite(setDoc(r, { orgId, status: 'pending', createdAt: serverTimestamp(), createdBy: me() }));
   return r.id;
+}
+
+// ---- Clubs (Part 2) --------------------------------------------------------------------------------
+
+export type ClubInput = Omit<Club, 'id' | 'deletedAt'>;
+
+export function addClub(orgId: string, input: ClubInput) {
+  const r = doc(collection(db, 'organizations', orgId, 'clubs'));
+  void trackWrite(setDoc(r, { orgId, ...input, ...createStamps() }));
+  return r.id;
+}
+export function updateClub(orgId: string, id: string, changes: Partial<ClubInput>) {
+  return updateRecord(ref(orgId, 'clubs', id), changes);
+}
+
+/**
+ * Makes Andy's eight clubs in one go. Football, Chess and Music start with the children already in those
+ * programmes, and their team or level carried over.
+ */
+export function addStarterClubs(orgId: string, children: readonly Pick<Child, 'id' | 'status' | 'programmes'>[], existing: readonly string[]) {
+  const batch = writeBatch(db);
+  const have = new Set(existing.map((n) => n.toLowerCase()));
+  let n = 0;
+  for (const s of STARTER_CLUBS) {
+    if (have.has(s.name.toLowerCase())) continue;
+    const members = s.legacy ? children.filter((c) => c.status !== 'exited' && c.programmes.some((p) => p.name.toLowerCase() === s.legacy!.toLowerCase())) : [];
+    const levels: Record<string, string> = {};
+    for (const c of members) {
+      const p = c.programmes.find((x) => x.name.toLowerCase() === s.legacy!.toLowerCase())!;
+      const level = [p.group, p.level].filter(Boolean).join(' · ');
+      if (level) levels[c.id] = level.slice(0, 60);
+    }
+    batch.set(doc(collection(db, 'organizations', orgId, 'clubs')), {
+      orgId, name: s.name, emoji: s.emoji, description: '', day: 'Saturday', time: '', endTime: '', place: '', capacity: 0,
+      memberIds: members.map((c) => c.id), leaderIds: [], levels, legacyProgramme: s.legacy, status: 'active', ...createStamps(),
+    });
+    n += 1;
+  }
+  return { added: n, synced: trackWrite(batch.commit()) };
+}
+
+/** Marks children on a club's register for a day (a merge, so two tablets never overwrite each other). */
+export function markClub(orgId: string, clubId: string, date: string, entries: Record<string, KidEntry | null>) {
+  const marks: Record<string, unknown> = {};
+  for (const [id, e] of Object.entries(entries)) marks[id] = e ?? deleteField();
+  return trackWrite(setDoc(ref(orgId, 'clubDays', clubDayId(clubId, date)), { orgId, clubId, date, marks, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
+}
+
+export function addClubWin(orgId: string, input: Omit<ClubWin, 'id' | 'deletedAt'>) {
+  const r = doc(collection(db, 'organizations', orgId, 'clubWins'));
+  return trackWrite(setDoc(r, { orgId, ...input, title: input.title.trim().slice(0, 120), note: input.note.trim().slice(0, 1000), ...createStamps() }));
+}
+export function removeClubWin(orgId: string, id: string) {
+  return softDelete(ref(orgId, 'clubWins', id));
 }

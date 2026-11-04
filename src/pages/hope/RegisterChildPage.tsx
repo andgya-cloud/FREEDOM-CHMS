@@ -9,7 +9,9 @@ import { useSavedMessage } from '../../lib/useSavedMessage';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 import { NO_CONSENT, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS, type ChildProgramme, type Consent, type SchoolStatus } from '../../../functions/src/shared/hope';
 import { HopeGate, useHopePage } from './common';
-import { ConsentField, ProgrammeFields } from './fields';
+import { ConsentField } from './fields';
+import { useClubs } from '../../state/useHope';
+import { updateClub } from '../../lib/hopeWrites';
 import type { Organization } from '../../state/OrgContext';
 
 export function RegisterChildPage() {
@@ -28,7 +30,7 @@ function Register({ org }: { org: Organization }) {
   const [school, setSchool] = useState('');
   const [schoolStatus, setSchoolStatus] = useState<SchoolStatus>('unknown');
   const [enrolledOn, setEnrolledOn] = useState(h.today);
-  const [programmes, setProgrammes] = useState<ChildProgramme[]>([]);
+  const programmes: ChildProgramme[] = [];
   const [guardian, setGuardian] = useState<{ id: string | null; name: string }>({ id: null, name: '' });
   const [gPhone, setGPhone] = useState('');
   const [gConsent, setGConsent] = useState(false);
@@ -38,6 +40,8 @@ function Register({ org }: { org: Organization }) {
   const [sponsorPhone, setSponsorPhone] = useState('');
   const [sponsorEmail, setSponsorEmail] = useState('');
   const [error, setError] = useState('');
+  const clubs = useClubs(org.id);
+  const [joinClubs, setJoinClubs] = useState<string[]>([]);
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -66,6 +70,10 @@ function Register({ org }: { org: Organization }) {
         },
       );
       synced.catch((err) => toast.show(friendlyError(err)));
+      for (const cid of joinClubs) {
+        const club = clubs.clubs.find((x) => x.id === cid);
+        if (club) updateClub(org.id, cid, { memberIds: [...club.memberIds, id] }).catch((err) => toast.show(friendlyError(err)));
+      }
       toast.show(saved(`${name} registered`));
       navigate(`/hope/children/${id}`);
     } catch (err) {
@@ -96,7 +104,15 @@ function Register({ org }: { org: Organization }) {
           </label>
         </div>
         <label className="field"><span>Joined on</span><input type="date" value={enrolledOn} max={h.today} onChange={(e) => setEnrolledOn(e.target.value)} /></label>
-        <ProgrammeFields programmes={h.programmes} value={programmes} onChange={setProgrammes} />
+        {clubs.clubs.some((x) => x.status === 'active') && (
+          <fieldset className="stack">
+            <legend>Clubs (optional)</legend>
+            <div className="chips">{clubs.clubs.filter((x) => x.status === 'active').map((x) => (
+              <button key={x.id} type="button" className={`chip${joinClubs.includes(x.id) ? ' chip-on' : ''}`} aria-pressed={joinClubs.includes(x.id)}
+                onClick={() => setJoinClubs(joinClubs.includes(x.id) ? joinClubs.filter((y) => y !== x.id) : [...joinClubs, x.id])}>{x.emoji} {x.name}</button>
+            ))}</div>
+          </fieldset>
+        )}
 
         <h2>Sponsor</h2>
         <label className="field"><span>Sponsor's name (optional)</span><input value={sponsorName} maxLength={120} onChange={(e) => setSponsorName(e.target.value)} /></label>
