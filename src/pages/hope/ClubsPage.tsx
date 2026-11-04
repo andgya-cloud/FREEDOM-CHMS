@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { Help } from '../../components/Help';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useClubs } from '../../state/useHope';
@@ -46,7 +47,7 @@ function Clubs({ org }: { org: Organization }) {
       {!c.loading && c.clubs.length < 8 && canEdit && (
         <section className="card stack">
           <h2>Set up the Hope Centre clubs</h2>
-          <p className="small">One tap adds Football Academy, Chess Club, Music Academy, Fashion and Design, Baking, Computer, Mat Making, and Soap and Detergents. Clubs already here are skipped. You can change each club's day, time and leaders afterwards.</p>
+          <p className="small">One tap adds the 8 Hope Centre clubs. <Help>Football Academy, Chess Club, Music Academy, Fashion and Design, Baking, Computer, Mat Making, and Soap and Detergents. Clubs already here are skipped. Change each club's day, time and leaders afterwards.</Help></p>
           <button type="button" className="btn btn-primary align-start" onClick={starters}>Add the clubs</button>
         </section>
       )}

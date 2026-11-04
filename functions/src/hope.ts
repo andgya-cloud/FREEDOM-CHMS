@@ -29,11 +29,25 @@ export const onChildCreated = onDocumentCreated('organizations/{orgId}/children/
   const { orgId, childId } = event.params;
   const childRef = db.doc(`organizations/${orgId}/children/${childId}`);
   const counterRef = db.doc(`organizations/${orgId}/counters/children`);
+  const codes = db.collection(`organizations/${orgId}/childCodes`);
   await db.runTransaction(async (tx) => {
     const [child, counter] = await Promise.all([tx.get(childRef), tx.get(counterRef)]);
-    if (!child.exists || child.get('code')) return;
-    const sequence = ((counter.data()?.last as number | undefined) ?? 0) + 1;
+    if (!child.exists) return;
+    const last = (counter.data()?.last as number | undefined) ?? 0;
+    const kept = child.get('code') as string | null;
+    if (kept) {
+      // A code kept from an uploaded sheet: later children carry on after the highest one.
+      const n = Number(/^HC-(\d+)$/.exec(kept)?.[1] ?? 0);
+      if (n > last) tx.set(counterRef, { orgId, last: n, ...system() }, { merge: true });
+      return;
+    }
+    // Skip any code a sheet has already taken.
+    let sequence = last + 1;
+    for (let i = 0; i < 2000; i++, sequence++) {
+      if (!(await tx.get(codes.doc(childCode(sequence)))).exists) break;
+    }
     tx.set(counterRef, { orgId, last: sequence, ...system() }, { merge: true });
+    tx.set(codes.doc(childCode(sequence)), { orgId, childId });
     tx.update(childRef, { code: childCode(sequence), ...system() });
   });
   const person = db.doc(`organizations/${orgId}/people/${childId}`);

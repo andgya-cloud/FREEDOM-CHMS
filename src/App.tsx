@@ -97,6 +97,8 @@ const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then
 const ClubsPage = lazy(() => import('./pages/hope/ClubsPage').then((m) => ({ default: m.ClubsPage })));
 const ClubPage = lazy(() => import('./pages/hope/ClubPage').then((m) => ({ default: m.ClubPage })));
 const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((m) => ({ default: m.ChildImportPage })));
+const PhotoUploadPage = lazy(() => import('./pages/hope/PhotoUploadPage').then((m) => ({ default: m.PhotoUploadPage })));
+const ConsentPage = lazy(() => import('./pages/hope/ConsentPage').then((m) => ({ default: m.ConsentPage })));
 const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((m) => ({ default: m.HopeExportsPage })));
 
 export function App() {
@@ -227,6 +229,8 @@ function AppRoutes() {
         <Route path="/hope/children" element={<RequirePermission permission="people.read"><ChildrenPage /></RequirePermission>} />
         <Route path="/hope/children/new" element={<RequirePermission permission="people.write"><RegisterChildPage /></RequirePermission>} />
         <Route path="/hope/children/import" element={<RequirePermission permission="people.write"><ChildImportPage /></RequirePermission>} />
+        <Route path="/hope/children/photos" element={<RequirePermission permission="people.write"><PhotoUploadPage /></RequirePermission>} />
+        <Route path="/hope/consent" element={<RequirePermission permission="people.read"><ConsentPage /></RequirePermission>} />
         <Route path="/hope/register" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><KidsRegisterPage /></RequirePermission>} />
         <Route path="/hope/clubs" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ClubsPage /></RequirePermission>} />
         <Route path="/hope/clubs/:clubId" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ClubPage /></RequirePermission>} />

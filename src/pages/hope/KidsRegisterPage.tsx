@@ -5,15 +5,16 @@ import { useToast } from '../../state/ToastContext';
 import { useChildPhotos, useHopeDays } from '../../state/useHope';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
-import { markKid, markMany, updateChild } from '../../lib/hopeWrites';
+import { markKid, markMany } from '../../lib/hopeWrites';
 import { useClubs } from '../../state/useHope';
 import { clubDayOnOrBefore, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ChampionsPanel } from './ChampionsPage';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
-import { birthdayThisWeek, dayTrend, KID_MARK_LABELS, streak, KID_MARKS, kidRate, rateFrom, saturdayOnOrBefore, type KidEntry, type KidMark } from '../../../functions/src/shared/hopeRegister';
+import { birthdayThisWeek, dayTrend, streak, rateFrom, saturdayOnOrBefore, type KidEntry } from '../../../functions/src/shared/hopeRegister';
+import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { HopeGate, useHopePage } from './common';
-import { Avatar, Delights, nowTime, PctBadge, RegisterCalendar, tick, TrendCard } from './registerParts';
+import { Avatar, Delights, nowTime, RegisterCalendar, tick, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
 export function KidsRegisterPage() {
@@ -29,7 +30,9 @@ type Which = 'children' | 'champions' | 'club';
 function Registers({ org }: { org: Organization }) {
   const [params, setParams] = useSearchParams();
   const w = (['children', 'champions', 'club'].includes(params.get('w') ?? '') ? params.get('w') : 'children') as Which;
-  const opts: [Which, string][] = [['children', 'Children'], ['champions', 'Champions'], ['club', 'Clubs']];
+  const { profile } = useAuth();
+  const helper = profile?.roleId === HELPER_ROLE_ID;
+  const opts: [Which, string][] = helper ? [['children', '🧒 Children'], ['club', '⭐ Clubs']] : [['children', '🧒 Children'], ['champions', '🙌 Champions'], ['club', '⭐ Clubs']];
   return (
     <div className="page narrow">
       <h1>Registers</h1>
@@ -71,22 +74,28 @@ function ClubSessions({ org }: { org: Organization }) {
   );
 }
 
-const SHORT: Record<KidMark, string> = { present: 'Present', absent: 'Absent', excused: 'Excused', departing: 'Departing', departed: 'Departed' };
+type View = 'photos' | 'ticks';
+const VIEW_KEY = 'hope.register.view';
+const here = (e?: KidEntry) => e?.s === 'present' || e?.s === 'departing';
 
 /**
- * The children's weekly register (Andy, 2026-11-04): a calendar (Saturday first), each child marked Present,
- * Absent, Excused (with the reason), Departing or Departed, the check-in time, and each child's percentage.
+ * The children's weekly register as a check-in (Andy, 2026-11-04, 1A): tap a child's photo, or tick their box, as
+ * they arrive. The time is kept. "Finish" marks everyone not ticked as absent. Excused, with a reason, is on the
+ * tick list. Departing and Departed are no longer here; they are on the child's page (3A).
  */
 function KidsRegister({ org }: { org: Organization }) {
   const h = useHopePage(org);
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const toast = useToast();
   const { days } = useHopeDays(org.id);
   const photos = useChildPhotos(org.id);
   const [date, setDate] = useState(() => saturdayOnOrBefore(h.today));
+  const [pick, setPick] = useState(false);
   const [q, setQ] = useState('');
-  const [departed, setDeparted] = useState<string | null>(null);
+  const [view, setView] = useState<View>(() => { try { return localStorage.getItem(VIEW_KEY) === 'ticks' ? 'ticks' : 'photos'; } catch { return 'photos'; } });
+  const [finishing, setFinishing] = useState(false);
   const canMark = can('attendance.write');
+  const helper = profile?.roleId === HELPER_ROLE_ID;
   const fail = (err: unknown) => toast.show(friendlyError(err));
 
   const day = days.find((d) => d.date === date);
@@ -94,96 +103,109 @@ function KidsRegister({ org }: { org: Organization }) {
   const markedDays = useMemo(() => new Set(days.filter((d) => Object.keys(d.marks ?? {}).length).map((d) => d.date)), [days]);
   const trend = useMemo(() => dayTrend(days), [days]);
 
+  const everyone = useMemo(() => h.children
+    .filter((c) => marks[c.id] || (isCurrentChild(c) && (!c.enrolledOn || c.enrolledOn <= date)))
+    .map((c) => ({ c, name: h.nameOf(c.id) }))
+    .sort((a, b) => a.name.localeCompare(b.name)), [h.children, h.nameOf, marks, date]);
   const list = useMemo(() => {
     const text = q.trim().toLowerCase();
     const code = normalizeCode(q);
-    return h.children
-      .filter((c) => marks[c.id] || (isCurrentChild(c) && (!c.enrolledOn || c.enrolledOn <= date)))
-      .map((c) => ({ c, name: h.nameOf(c.id) }))
-      .filter(({ c, name }) => !text || name.toLowerCase().includes(text) || (c.code ?? '').toLowerCase().includes(text) || (!!code && c.code === code))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }, [h.children, h.nameOf, marks, date, q]);
+    return everyone.filter(({ c, name }) => !text || name.toLowerCase().includes(text) || (c.code ?? '').toLowerCase().includes(text) || (!!code && c.code === code));
+  }, [everyone, q]);
 
-  const dayRate = rateFrom(Object.values(marks));
-  const unmarked = list.filter(({ c }) => !marks[c.id]);
+  const r = rateFrom(Object.values(marks));
+  const notYet = everyone.filter(({ c }) => !marks[c.id]);
 
-  function mark(childId: string, s: KidMark, extra: Partial<KidEntry> = {}) {
-    const old = marks[childId];
-    if (s === 'departed' && old?.s !== 'departed') { setDeparted(childId); return; }
-    const entry: KidEntry = { s, t: s === 'present' || s === 'departing' ? (old?.t ?? (date === h.today ? nowTime() : null)) : null, r: s === 'present' ? null : (old?.s === s ? old.r ?? null : null), ...extra };
-    if (s === 'present' && old?.s !== 'present') tick();
-    markKid(org.id, date, childId, entry).catch(fail);
-    const child = h.children.find((c) => c.id === childId);
-    if (s === 'departing' && child?.status === 'active') updateChild(org.id, childId, { status: 'departing' }).catch(fail);
+  function choose(v: View) { setView(v); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } }
+  function toggle(childId: string) {
+    if (!canMark) return;
+    if (here(marks[childId])) { markKid(org.id, date, childId, null).catch(fail); return; }
+    tick();
+    markKid(org.id, date, childId, { s: 'present', t: date === h.today ? nowTime() : null, r: null }).catch(fail);
   }
-  function confirmDeparted() {
-    const id = departed!;
-    setDeparted(null);
-    markKid(org.id, date, id, { s: 'departed', t: null, r: marks[id]?.r ?? null }).catch(fail);
-    updateChild(org.id, id, { status: 'exited', exitedOn: date }).catch(fail);
-    toast.show(`${h.nameOf(id)} moved to Past children.`);
+  function excuse(childId: string) {
+    if (!canMark) return;
+    markKid(org.id, date, childId, marks[childId]?.s === 'excused' ? null : { s: 'excused', t: null, r: null }).catch(fail);
   }
-  function restAbsent() {
-    const entries = Object.fromEntries(unmarked.map(({ c }) => [c.id, { s: 'absent', t: null, r: null }]));
+  function reason(childId: string, text: string) {
+    markKid(org.id, date, childId, { s: 'excused', t: null, r: text.trim().slice(0, 200) || null }).catch(fail);
+  }
+  function finish() {
+    setFinishing(false);
+    const entries = Object.fromEntries(notYet.map(({ c }) => [c.id, { s: 'absent', t: null, r: null }]));
     markMany(org.id, 'hopeDays', date, entries).catch(fail);
-    toast.show(`${unmarked.length} marked absent`);
+    setQ('');
+    toast.show(`Register finished: ${r.present} here, ${notYet.length + r.absent} absent.`);
   }
 
   return (
     <>
-
-      <section className="card hr-top">
-        <RegisterCalendar value={date} onChange={setDate} marked={markedDays} today={h.today} />
-        <div className="stack">
-          <h2>{formatDateKey(date)}</h2>
-          <div className="hr-counts">
-            <span><b>{dayRate.present}</b> present</span>
-            <span><b>{dayRate.absent}</b> absent</span>
-            <span><b>{dayRate.excused}</b> excused</span>
-            <span><b>{unmarked.length}</b> not marked</span>
-          </div>
-          {dayRate.pct != null && <p className="lead">{dayRate.pct}% came</p>}
-          {canMark && unmarked.length > 0 && Object.keys(marks).length > 0 && (
-            <button type="button" className="btn btn-quiet align-start" onClick={restAbsent}>Mark the {unmarked.length} not marked as absent</button>
-          )}
+      <section className="card ck-head">
+        <div className="ck-day">
+          <span className="ck-day-ico" aria-hidden="true">📅</span>
+          <span className="grow"><b>{date === h.today ? 'Today' : formatDateKey(date)}</b>
+            <span className="small muted">{date === h.today ? formatDateKey(date) : 'Tap "Change day" for another day'}</span></span>
+          <button type="button" className="btn btn-quiet" aria-expanded={pick} onClick={() => setPick(!pick)}>{pick ? 'Close' : 'Change day'}</button>
+        </div>
+        {pick && <RegisterCalendar value={date} onChange={(d) => { setDate(d); setPick(false); }} marked={markedDays} today={h.today} />}
+        <div className="ck-counts" aria-live="polite">
+          <span className="ok"><b>{r.present}</b> here</span>
+          <span><b>{notYet.length}</b> not yet</span>
+          {r.absent > 0 && <span className="bad"><b>{r.absent}</b> absent</span>}
+          {r.excused > 0 && <span><b>{r.excused}</b> excused</span>}
         </div>
       </section>
 
-      <input type="search" className="search" placeholder="Find by name or code" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
+      <div className="ck-tools">
+        <input type="search" className="search" placeholder="Find a name or code" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="segmented" role="radiogroup" aria-label="How to mark">
+          <button type="button" role="radio" aria-checked={view === 'photos'} className={view === 'photos' ? 'on' : ''} onClick={() => choose('photos')}>🖼️ Photos</button>
+          <button type="button" role="radio" aria-checked={view === 'ticks'} className={view === 'ticks' ? 'on' : ''} onClick={() => choose('ticks')}>☑️ Tick list</button>
+        </div>
+      </div>
+      <p className="small muted ck-hint">{view === 'photos' ? 'Tap a child\'s photo when they arrive. Tap again to undo.' : 'Tick each child who is here. Tap "Excused" if they are away for a good reason.'}</p>
 
-      {h.loading ? <p className="muted">Loading…</p> : list.length === 0 ? (
-        <div className="card"><p>No children on the register yet. <Link to="/hope/children/new">Register a child</Link> or <Link to="/hope/children/import">upload them from Excel</Link>.</p></div>
-      ) : (
-        <ul className="hr-list">
+      {h.loading ? <p className="muted">Loading…</p> : everyone.length === 0 ? (
+        <div className="card"><p>No children on the register yet.{can('people.write') && <> <Link to="/hope/children/import">Upload them from Excel</Link>.</>}</p></div>
+      ) : list.length === 0 ? <div className="card"><p className="muted">No child matches "{q}".</p></div> : view === 'photos' ? (
+        <ul className="ck-grid">
           {list.map(({ c, name }) => {
             const e = marks[c.id];
-            const rate = kidRate(c.id, days);
+            const on = here(e);
+            const [first, ...rest] = name.split(' ');
             return (
-              <li key={c.id} className={`card hr-row${e ? ` m-${e.s}` : ''}`}>
-                <div className="hr-who">
-                  <Avatar photo={c.photoConsent?.given ? photos.get(c.id) : null} name={name} />
-                  <div>
-                    <Link to={`/hope/children/${c.id}`} className="link-title">{name}</Link>
-                    <span className="small muted"> {h.codeOf(c)}{c.status === 'departing' ? ' · Departing' : c.status === 'exited' ? ' · Departed' : ''}</span>
-                  </div>
-                  <Delights birthday={birthdayThisWeek(c.dateOfBirth, h.today)} streak={streak(c.id, days)} />
-                  <PctBadge pct={rate.pct} />
-                </div>
-                <div className="hr-marks" role="group" aria-label={`Mark ${name}`}>
-                  {KID_MARKS.map((s) => (
-                    <button key={s} type="button" disabled={!canMark} aria-pressed={e?.s === s} className={`hr-mark k-${s}${e?.s === s ? ' on' : ''}`} onClick={() => mark(c.id, s)}>{SHORT[s]}</button>
-                  ))}
-                </div>
-                {e && (e.s === 'present' || e.s === 'departing') && (
-                  <label className="hr-inline"><span>Checked in at</span>
-                    <input type="time" disabled={!canMark} defaultValue={e.t ?? ''} key={`${date}${e.t}`} onBlur={(ev) => ev.target.value !== (e.t ?? '') && mark(c.id, e.s, { t: ev.target.value || null })} />
-                  </label>
-                )}
-                {e && e.s !== 'present' && e.s !== 'absent' && (
-                  <label className="hr-inline grow"><span>{e.s === 'excused' ? 'Reason' : 'Note'}</span>
-                    <input disabled={!canMark} maxLength={200} defaultValue={e.r ?? ''} key={`${date}${e.r}`} placeholder={e.s === 'excused' ? 'Sick, school trip, travelled…' : 'Moving away, finished the programme…'}
-                      onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && mark(c.id, e.s, { r: ev.target.value.trim() || null })} />
-                  </label>
+              <li key={c.id}>
+                <button type="button" className={`ck-tile${on ? ' on' : ''}${e?.s === 'absent' ? ' ab' : ''}${e?.s === 'excused' ? ' ex' : ''}`} aria-pressed={on} disabled={!canMark}
+                  aria-label={`${name}${on ? ', here' : e?.s === 'absent' ? ', absent' : e?.s === 'excused' ? ', excused' : ''}`} onClick={() => toggle(c.id)}>
+                  <span className="ck-photo">
+                    <Avatar photo={c.photoConsent?.given ? photos.get(c.id) : null} name={name} size={84} />
+                    {on && <span className="ck-mark" aria-hidden="true">✓</span>}
+                    <span className="ck-delight"><Delights birthday={birthdayThisWeek(c.dateOfBirth, h.today)} streak={streak(c.id, days)} /></span>
+                  </span>
+                  <b className="ck-first">{first}</b>
+                  <span className="ck-rest">{rest.join(' ')}</span>
+                  <span className="ck-state">{on ? (e?.t ? `✓ ${e.t}` : '✓ Here') : e?.s === 'absent' ? 'Absent' : e?.s === 'excused' ? 'Excused' : h.codeOf(c)}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <ul className="ck-list">
+          {list.map(({ c, name }) => {
+            const e = marks[c.id];
+            const on = here(e);
+            return (
+              <li key={c.id} className={`card ck-row${on ? ' on' : ''}${e?.s === 'absent' ? ' ab' : ''}`}>
+                <label className="ck-tick">
+                  <input type="checkbox" checked={on} disabled={!canMark} onChange={() => toggle(c.id)} />
+                  <Avatar photo={c.photoConsent?.given ? photos.get(c.id) : null} name={name} size={44} />
+                  <span className="grow"><b>{name}</b><span className="small muted">{h.codeOf(c)}{on && e?.t ? ` · came ${e.t}` : e?.s === 'absent' ? ' · absent' : ''}</span></span>
+                </label>
+                <button type="button" className={`chip${e?.s === 'excused' ? ' chip-on' : ''}`} aria-pressed={e?.s === 'excused'} disabled={!canMark} onClick={() => excuse(c.id)}>Excused</button>
+                {e?.s === 'excused' && (
+                  <input className="ck-reason" aria-label={`Why ${name} is away`} disabled={!canMark} maxLength={200} defaultValue={e.r ?? ''} key={`${date}${e.r}`} placeholder="Why? Sick, school trip…"
+                    onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && reason(c.id, ev.target.value)} />
                 )}
               </li>
             );
@@ -191,12 +213,18 @@ function KidsRegister({ org }: { org: Organization }) {
         </ul>
       )}
 
-      <TrendCard title="Attendance as time goes" trend={trend} />
-      <p className="small muted">Percentages count Present and Departing as there. Excused days are not held against a child. {KID_MARK_LABELS.departed} moves the child to Past children.</p>
+      {canMark && everyone.length > 0 && notYet.length > 0 && r.present > 0 && (
+        <div className="ck-finish">
+          <span><b>{r.present}</b> here · <b>{notYet.length}</b> not yet</span>
+          <button type="button" className="btn btn-primary" onClick={() => setFinishing(true)}>Finish</button>
+        </div>
+      )}
 
-      <ConfirmDialog open={!!departed} title={`Has ${departed ? h.nameOf(departed) : ''} left the Hope Centre for good?`}
-        body="They move to Past children and leave the weekly register. Their records are kept, and you can bring them back from their page."
-        confirmLabel="Yes, departed" danger onConfirm={confirmDeparted} onCancel={() => setDeparted(null)} />
+      {!helper && <TrendCard title="Attendance as time goes" trend={trend} />}
+
+      <ConfirmDialog open={finishing} title="Finish the register?"
+        body={`The ${notYet.length} ${notYet.length === 1 ? 'child' : 'children'} not ticked will be marked absent. You can still change anyone afterwards.`}
+        confirmLabel="Yes, finish" onConfirm={finish} onCancel={() => setFinishing(false)} />
     </>
   );
 }

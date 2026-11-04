@@ -130,7 +130,7 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
   return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'usher' | 'finance', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'usher' | 'finance' | 'helper', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -157,10 +157,14 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   // Freedom Church (Andy, 2026-11-01, 8A): an usher sees only Sunday and People; a finance person only Giving and Petty Cash.
   usher: { name: 'Usher', permissions: ['people.read', 'people.write', 'attendance.write'] },
   finance: { name: 'Finance', permissions: ['people.read', 'gifts.write', 'receipts.issue', 'giving.person.read', 'finance.reports'] },
+  // Freedom Hope Centre (Andy, 2026-11-04, 2A): a helper sees only the registers and clubs, with big buttons, and
+  // records the time they arrive.
+  helper: { name: 'Hope helper', permissions: ['people.read', 'attendance.write'] },
 };
 
 export const USHER_ROLE_ID = 'usher';
 export const FINANCE_ROLE_ID = 'finance';
+export const HELPER_ROLE_ID = 'helper';
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {
   return Object.prototype.hasOwnProperty.call(DEFAULT_ROLES, id);

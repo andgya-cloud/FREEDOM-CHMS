@@ -80,6 +80,13 @@ describe('uploads', () => {
     expect(plan[3]!.skip).toBe('already on the register');
     expect(planChildImport([['a', 'b']], [], '2026-11-04')).toBeNull();
   });
+  it('keeps a code from the sheet, unless it is taken or repeated', () => {
+    const plan = planChildImport([['Code', 'Name'], ['hc-7', 'A One'], ['HC-0002', 'B Two'], ['HC-0007', 'C Three'], ['nonsense', 'D Four']], [], '2026-11-04', ['HC-0002'])!;
+    expect(plan.map((r) => r.code)).toEqual(['HC-0007', null, null, null]);
+    expect(plan[1]!.warn).toContain('already used');
+    expect(plan[2]!.warn).toContain('already used');
+    expect(plan[3]!.warn).toContain('not read');
+  });
   it('reads the champions template', () => {
     const plan = planChampionImport([['Name', 'Phone', 'Email', 'Role'], ['Peter Otieno', '0722', 'p@x.org', 'Coach'], ['X']], [], '2026-11-04')!;
     expect(plan[0]).toMatchObject({ name: 'Peter Otieno', duty: 'Coach', skip: null });

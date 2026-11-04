@@ -45,6 +45,7 @@ const ROLE_HINTS: Record<string, string> = {
   principal: ': ADIA students, attendance, Exam Records and graduation, with each student\'s fee balance; nothing else',
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
   labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
+  helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 
 const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [] };

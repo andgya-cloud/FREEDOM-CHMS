@@ -15,7 +15,7 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { FINANCE_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
@@ -59,6 +59,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
   if (trainer && !new RegExp(`^/(school/exams|settings|tutor-files${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
+  // A Hope helper sees only Today (their "I'm here" button), the registers and the clubs (Andy, 2026-11-04, 2A).
+  const helper = profile?.roleId === HELPER_ROLE_ID;
+  if (helper && !/^\/($|hope\/register|hope\/clubs|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
   // Each person sees only their own work (Andy, 2026-11-01, 8A): an usher Sunday and People, finance Giving and Petty Cash.
@@ -110,7 +113,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>
         Today
       </NavLink>
-      {can('people.read') && (
+      {can('people.read') && !helper && (
         <NavLink to="/hope/children" className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-4.4-9.3-9A5.3 5.3 0 0 1 12 6.6 5.3 5.3 0 0 1 21.3 12C19 16.6 12 21 12 21Z" /></svg>
           Children
@@ -128,13 +131,13 @@ export function AppShell({ children }: { children: ReactNode }) {
           Clubs
         </NavLink>
       )}
-      {can('people.read') && (
+ {can('people.read') && !helper && (
         <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || location.pathname === '/hope/exports' ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
           Reports
         </NavLink>
       )}
-      {pettyAllowed && (
+      {pettyAllowed && !helper && (
         <NavLink to={pettyCashBase('ministry')} className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
           <TabLabel full="Petty Cash" short="Cash" />

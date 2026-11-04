@@ -1179,7 +1179,9 @@ service cloud.firestore {
           && listOf(request.resource.data.programmes, 8)
           && validConsent(request.resource.data.photoConsent)
           && validConsent(request.resource.data.guardianConsent)
-          && (resource == null ? request.resource.data.get('code', null) == null
+          && (resource == null ? (request.resource.data.get('code', null) == null
+                                  || (request.resource.data.code is string
+                                      && getAfter(/databases/$(database)/documents/organizations/$(orgId)/childCodes/$(request.resource.data.code)).data.childId == childId))
                                : request.resource.data.get('code', null) == resource.data.get('code', null));
         allow delete: if false;
       }
@@ -1206,6 +1208,28 @@ service cloud.firestore {
         return d.orgId == orgId && d.keys().hasOnly(['orgId', 'date', 'marks', 'updatedAt', 'updatedBy'])
           && d.date == day && isDate(d.date) && d.marks is map && d.marks.size() <= 1500
           && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+      }
+      // A code kept from an uploaded sheet (Andy, 2026-11-04, 4A): claimed once, in the same save as the child, so
+      // no two children share it. The server claims its own codes here too.
+      match /childCodes/{code} {
+        allow read: if hopeRead();
+        allow create: if canAccessOrg(orgId) && has('people.write')
+          && code.matches('^HC-[0-9]{4,6}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'childId'])
+          && request.resource.data.orgId == orgId && request.resource.data.childId is string
+          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/children/$(request.resource.data.childId)).data.code == code;
+        allow update, delete: if false;
+      }
+      // When each helper arrived (Andy, 2026-11-04, 2A): a helper writes only their own time.
+      match /helperDays/{day} {
+        allow read: if hopeRead();
+        allow create, update: if canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day)
+          && (resource == null ? request.resource.data.marks.keys().hasOnly([request.auth.uid])
+                               : request.resource.data.marks.diff(resource.data.marks).affectedKeys().hasOnly([request.auth.uid]))
+          && request.resource.data.marks[request.auth.uid].keys().hasOnly(['name', 't'])
+          && shortText(request.resource.data.marks[request.auth.uid].name, 120)
+          && request.resource.data.marks[request.auth.uid].t.matches('^[0-2][0-9]:[0-5][0-9]$');
+        allow delete: if false;
       }
       match /hopeDays/{day} {
         allow read: if hopeRead();

@@ -4,7 +4,8 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { PersonPicker } from '../../components/PersonPicker';
 import { friendlyError } from '../../lib/errors';
-import { registerChild, type PersonInput } from '../../lib/hopeWrites';
+import { registerChild, saveChildPhoto, type PersonInput } from '../../lib/hopeWrites';
+import { Avatar, shrinkPhoto } from './registerParts';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 import { NO_CONSENT, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS, type ChildProgramme, type Consent, type SchoolStatus } from '../../../functions/src/shared/hope';
@@ -42,6 +43,13 @@ function Register({ org }: { org: Organization }) {
   const [error, setError] = useState('');
   const clubs = useClubs(org.id);
   const [joinClubs, setJoinClubs] = useState<string[]>([]);
+  const [photo, setPhoto] = useState<string | null>(null);
+  const [photoOk, setPhotoOk] = useState(false);
+
+  async function pickPhoto(f: File | undefined) {
+    if (!f) return;
+    try { setPhoto(await shrinkPhoto(f)); } catch (err) { toast.show(friendlyError(err)); }
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -50,6 +58,7 @@ function Register({ org }: { org: Organization }) {
     if (name.length < 2) return setError('Enter the child\'s name.');
     if (who.id && h.children.some((c) => c.id === who.id)) return setError('This child is already on the register.');
     if (dob && dob > h.today) return setError('The date of birth is in the future.');
+    if (photo && !photoOk) return setError('Tick that the parent agreed to photos, or remove the photo.');
     if (sponsorEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorEmail.trim())) return setError('The sponsor\'s email does not look right.');
     let guardianTarget: { personId: string } | { person: PersonInput } | null = null;
     if (guardian.id) guardianTarget = { personId: guardian.id };
@@ -64,12 +73,14 @@ function Register({ org }: { org: Organization }) {
         who.id ? { personId: who.id } : { person: { fullName: name, phone: null, whatsapp: null, whatsappConsent: { given: false, date: null, recordedBy: null, stoppedAt: null }, gender: gender || null } },
         guardianTarget,
         {
-          dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolStatus, enrolledOn: enrolledOn || null, programmes, photoConsent, guardianConsent,
+          dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolStatus, enrolledOn: enrolledOn || null, programmes,
+          photoConsent: photo && photoOk && photoConsent.given !== true ? { given: true, date: h.today } : photoConsent, guardianConsent,
           sponsorName: sponsorName.trim().slice(0, 120), sponsorPhone: sponsorPhone.trim().slice(0, 30), sponsorEmail: sponsorEmail.trim().slice(0, 120),
           parentName: guardian.name.trim().slice(0, 120), parentPhone: (guardian.id ? h.byId(guardian.id)?.phone ?? '' : gPhone.trim()).slice(0, 30),
         },
       );
       synced.catch((err) => toast.show(friendlyError(err)));
+      if (photo && photoOk) saveChildPhoto(org.id, id, photo).catch((err) => toast.show(friendlyError(err)));
       for (const cid of joinClubs) {
         const club = clubs.clubs.find((x) => x.id === cid);
         if (club) updateClub(org.id, cid, { memberIds: [...club.memberIds, id] }).catch((err) => toast.show(friendlyError(err)));
@@ -84,9 +95,9 @@ function Register({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/hope/children">← Children</Link></p>
-      <div className="page-head"><h1>Register a child</h1><Link to="/hope/children/import" className="btn">Upload many from Excel</Link></div>
+      <h1>Register a child</h1>
       <form className="form" onSubmit={submit} noValidate>
-        <PersonPicker label="Child's name" value={who} onChange={setWho} allowFreeText orgId={org.id} hint="Type a new name, or pick a child already in the system." />
+        <PersonPicker label="Child's name" value={who} onChange={setWho} allowFreeText orgId={org.id} hint="" />
         <div className="field-row">
           {!who.id && (
             <label className="field"><span>Gender</span>
@@ -95,6 +106,22 @@ function Register({ org }: { org: Organization }) {
           )}
           <label className="field"><span>Date of birth</span><input type="date" value={dob} max={h.today} onChange={(e) => setDob(e.target.value)} /></label>
         </div>
+        <div className="field">
+          <span>Photo (optional)</span>
+          <div className="rc-photo">
+            {photo ? <img src={photo} alt="" width={84} height={84} className="hr-avatar" /> : <Avatar name={who.name || '?'} size={84} />}
+            <div className="chips">
+              <label className="btn">📷 Take<input type="file" hidden accept="image/*" capture="environment" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+              <label className="btn">⬆︎ Choose<input type="file" hidden accept="image/*" onChange={(e) => { void pickPhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
+              {photo && <button type="button" className="btn btn-quiet" onClick={() => { setPhoto(null); setPhotoOk(false); }}>✕ Remove</button>}
+            </div>
+          </div>
+          {photo && <label className="check"><input type="checkbox" checked={photoOk} onChange={(e) => setPhotoOk(e.target.checked)} /><span>The parent agreed to photos</span></label>}
+        </div>
+
+        <details className="hr-fold rc-more">
+          <summary><span>➕ Add more details</span><span className="small muted">School, clubs, sponsor, parent, consent</span></summary>
+          <div className="stack">
         <div className="field-row">
           <label className="field"><span>School (optional)</span><input value={school} maxLength={120} onChange={(e) => setSchool(e.target.value)} /></label>
           <label className="field"><span>In school?</span>
@@ -114,7 +141,7 @@ function Register({ org }: { org: Organization }) {
           </fieldset>
         )}
 
-        <h2>Sponsor</h2>
+        <h3>Sponsor</h3>
         <label className="field"><span>Sponsor's name (optional)</span><input value={sponsorName} maxLength={120} onChange={(e) => setSponsorName(e.target.value)} /></label>
         {sponsorName.trim() && (
           <div className="field-row">
@@ -123,8 +150,7 @@ function Register({ org }: { org: Organization }) {
           </div>
         )}
 
-        <h2>Parent or guardian</h2>
-        <p className="small muted">Messages about a child always go to the guardian, never to the child.</p>
+        <h3>Parent or guardian</h3>
         <PersonPicker label="Parent's name" value={guardian} onChange={setGuardian} allowFreeText orgId={org.id} excludeId={who.id ?? undefined} hint="Type a new name, or pick someone already in the system." />
         {!guardian.id && guardian.name.trim() && (
           <>
@@ -132,12 +158,13 @@ function Register({ org }: { org: Organization }) {
             {gPhone.trim() && <label className="check"><input type="checkbox" checked={gConsent} onChange={(e) => setGConsent(e.target.checked)} /><span>The guardian agreed to receive WhatsApp messages</span></label>}
           </>
         )}
-        {!guardian.name.trim() && <p className="notice notice-warn small">No guardian yet. You can save now and add one later, but nobody can be contacted if the child stops coming.</p>}
 
-        <h2>Consent</h2>
-        <p className="small muted">Ask the guardian to agree to the Hope Center keeping the child's details. You can save without it; the child will show "Consent missing" until it is recorded. A photo can be added on the child's page once photo consent is "Yes".</p>
+        <h3>Consent</h3>
         <ConsentField label="Guardian consent to keep this child's details" value={guardianConsent} onChange={setGuardianConsent} today={h.today} />
         <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} />
+
+          </div>
+        </details>
 
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary btn-block">Register child</button>

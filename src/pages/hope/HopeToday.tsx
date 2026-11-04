@@ -3,9 +3,12 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useFollowUpCounts } from '../../state/useFollowUps';
-import { useChampions, useClubs, useHopeDays } from '../../state/useHope';
+import { useChampions, useClubs, useHelperDay, useHopeDays } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
-import { requestAbsenceCheck } from '../../lib/hopeWrites';
+import { markHelperArrived, requestAbsenceCheck } from '../../lib/hopeWrites';
+import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { HelperGuide } from './HelperGuide';
+import { nowTime } from './registerParts';
 import { SceneVideo } from '../../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
@@ -28,6 +31,52 @@ const CHARTS: [Chart, string][] = [['trend', 'Attendance as time goes'], ['doing
  * with a dropdown to pick one chart. Counts only: no child is named on this page.
  */
 export function HopeToday({ org }: { org: Organization }) {
+  const { profile } = useAuth();
+  return profile?.roleId === HELPER_ROLE_ID ? <HelperHome org={org} /> : <LeaderToday org={org} />;
+}
+
+/**
+ * A helper's home (Andy, 2026-11-04, 2A and 10A): "I'm here" records the time they arrived, then two big buttons,
+ * the children's register and today's clubs. A picture guide shows the first time.
+ */
+function HelperHome({ org }: { org: Organization }) {
+  const h = useHopePage(org);
+  const { profile } = useAuth();
+  const toast = useToast();
+  const tz = org.timeZone || 'Africa/Nairobi';
+  const { helpers } = useHelperDay(org.id, h.today);
+  const { days } = useHopeDays(org.id);
+  const clubs = useClubs(org.id);
+  const [guide, setGuide] = useState(false);
+  const mine = helpers.find((x) => x.uid === profile?.uid);
+  const kids = rateFrom(Object.values(days.find((d) => d.date === h.today)?.marks ?? {}));
+  const weekday = new Intl.DateTimeFormat('en-GB', { weekday: 'long', timeZone: 'UTC' }).format(new Date(`${h.today}T12:00:00Z`));
+  const clubsToday = clubs.clubs.filter((x) => x.status === 'active' && x.day === weekday).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
+  function arrived() {
+    if (!profile) return;
+    markHelperArrived(org.id, h.today, profile.uid, profile.displayName || 'Helper', nowTime()).catch((err) => toast.show(friendlyError(err)));
+  }
+  return (
+    <div className="page narrow hp-home">
+      <HelperGuide open={guide} onClose={() => setGuide(false)} />
+      <h1 className="hp-greet">{timeGreeting(tz)}{firstNameOf(profile?.displayName) ? `, ${firstNameOf(profile?.displayName)}` : ''} 👋</h1>
+      {mine ? (
+        <div className="card hp-here"><span aria-hidden="true">✅</span><span><b>You arrived at {mine.t}</b><span className="small muted">Thank you for serving today.</span></span></div>
+      ) : (
+        <button type="button" className="hp-big hp-arrive" onClick={arrived}><span className="hp-ico" aria-hidden="true">🙋</span><span><b>I'm here</b><span>Tap when you arrive</span></span></button>
+      )}
+      <Link to="/hope/register" className="hp-big"><span className="hp-ico" aria-hidden="true">🧒</span><span><b>Children's register</b><span>{kids.present ? `${kids.present} here today` : 'Tap each child as they arrive'}</span></span></Link>
+      {clubsToday.map((x) => (
+        <Link key={x.id} to={`/hope/clubs/${x.id}`} className="hp-big"><span className="hp-ico" aria-hidden="true">{x.emoji || '⭐'}</span><span><b>{x.name}</b><span>{x.time ? `Today at ${x.time}` : 'Meets today'}</span></span></Link>
+      ))}
+      {clubsToday.length === 0 && <Link to="/hope/register?w=club" className="hp-big hp-small"><span className="hp-ico" aria-hidden="true">⭐</span><span><b>Club registers</b><span>No club meets today</span></span></Link>}
+      <button type="button" className="btn btn-quiet align-start" onClick={() => setGuide(true)}>❓ How it works</button>
+      <PoweredBy />
+    </div>
+  );
+}
+
+function LeaderToday({ org }: { org: Organization }) {
   const h = useHopePage(org);
   const { profile, can } = useAuth();
   const toast = useToast();
@@ -52,13 +101,15 @@ export function HopeToday({ org }: { org: Organization }) {
   const m = h.metrics;
 
   const missing = h.children.filter(consentMissing).length;
+  const { helpers } = useHelperDay(org.id, h.today);
   const departing = h.children.filter((c) => c.status === 'departing').length;
   const birthdays = current.filter((c) => birthdayThisWeek(c.dateOfBirth, h.today)).length;
   const toCall = h.absenceTasks.filter((t) => t.status === 'open').length;
   const alerts = [
     h.openConcerns.length > 0 && { warn: true, to: '/hope/children?show=concerns', text: `${h.openConcerns.length} safeguarding ${h.openConcerns.length === 1 ? 'concern is' : 'concerns are'} open` },
     can('followups.manage') && (counts.due > 0 || toCall > 0) && { warn: false, to: '/follow-ups', text: `${Math.max(counts.due, toCall)} ${Math.max(counts.due, toCall) === 1 ? 'guardian' : 'guardians'} to call` },
-    missing > 0 && { warn: true, to: '/hope/children?show=consent', text: `${missing} ${missing === 1 ? 'child has' : 'children have'} consent missing` },
+    helpers.length > 0 && { warn: false, to: '/hope/register', text: `🙋 Helpers here today: ${helpers.map((x) => `${firstNameOf(x.name) || x.name} ${x.t}`).join(', ')}` },
+    missing > 0 && { warn: true, to: '/hope/consent', text: `${missing} ${missing === 1 ? 'child needs' : 'children need'} consent recorded` },
     departing > 0 && { warn: false, to: '/hope/children?show=departing', text: `${departing} ${departing === 1 ? 'child is' : 'children are'} departing` },
     birthdays > 0 && { warn: false, to: '/hope/children?show=birthdays', text: `🎈 ${birthdays} ${birthdays === 1 ? 'birthday' : 'birthdays'} this week` },
   ].filter(Boolean) as { warn: boolean; to: string; text: string }[];

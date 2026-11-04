@@ -5,6 +5,7 @@
  * Pure functions, shared by the app and the tests.
  */
 import { addDays } from './metrics.js';
+import { normalizeCode } from './hope.js';
 
 // ---- The children's register --------------------------------------------------------------------
 
@@ -182,6 +183,8 @@ function columns(rows: readonly (readonly Cell[])[], head: readonly string[]) {
 
 export interface ChildImportRow {
   line: number;
+  /** A code from the sheet (HC-0042), kept when the child is added. */
+  code: string | null;
   name: string;
   gender: string | null;
   dateOfBirth: string | null;
@@ -201,8 +204,10 @@ export interface ChildImportRow {
 }
 
 /** Reads the children from a spreadsheet. Children already on the register (same name) are skipped. */
-export function planChildImport(rows: readonly (readonly Cell[])[], existingNames: readonly string[], today: string): ChildImportRow[] | null {
-  const cols = columns(rows, CHILD_TEMPLATE_HEAD);
+export function planChildImport(rows: readonly (readonly Cell[])[], existingNames: readonly string[], today: string, existingCodes: readonly string[] = []): ChildImportRow[] | null {
+  const cols = columns(rows, [...CHILD_TEMPLATE_HEAD, 'Code']);
+  const takenCodes = new Set(existingCodes);
+  const seenCodes = new Set<string>();
   if (!cols) return null;
   const have = new Set(existingNames.map((n) => n.trim().toLowerCase().replace(/\s+/g, ' ')));
   const seen = new Set<string>();
@@ -217,13 +222,20 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
     const g = key(cols.get(r, 'Gender'));
     const sponsorEmail = clean(cols.get(r, 'Sponsor email'));
     const k = name.toLowerCase();
+    const codeText = clean(cols.get(r, 'Code'));
+    let code = codeText ? normalizeCode(codeText) : null;
+    const codeWarn = codeText && !code ? `code "${codeText}" not read` : code && (takenCodes.has(code) || seenCodes.has(code)) ? `code ${code} is already used, a new one will be given` : '';
+    if (codeWarn) code = null;
+    if (code) seenCodes.add(code);
     const warns = [
+      codeWarn,
       dobText && !dateOfBirth ? `date of birth "${dobText}" not read` : '',
       joinText && !enrolledOn ? `joined on "${joinText}" not read` : '',
       sponsorEmail && !emailOk(sponsorEmail) ? 'sponsor email not saved' : '',
     ].filter(Boolean);
     out.push({
       line: cols.at + 2 + i,
+      code,
       name: name.slice(0, 120),
       gender: g.startsWith('f') || g === 'girl' ? 'Female' : g.startsWith('m') || g === 'boy' ? 'Male' : null,
       dateOfBirth: dateOfBirth && dateOfBirth <= today ? dateOfBirth : null,

@@ -42,6 +42,7 @@ export function registerChild(
   child: { personId: string } | { person: PersonInput },
   guardian: { personId: string } | { person: PersonInput } | null,
   details: ChildDetails,
+  code: string | null = null,
 ) {
   const batch = writeBatch(db);
   let guardianId: string | null = null;
@@ -68,7 +69,9 @@ export function registerChild(
       firstVisitDate: null, gender: child.person.gender ?? null, possibleDuplicateIds: [], customFields: {}, ...createStamps(),
     });
   }
-  batch.set(ref(orgId, 'children', childId), { orgId, code: null, status: 'active', exitedOn: null, ...details, ...createStamps() });
+  batch.set(ref(orgId, 'children', childId), { orgId, code, status: 'active', exitedOn: null, ...details, ...createStamps() });
+  // A code kept from an uploaded sheet is claimed in the same save, so no two children share it.
+  if (code) batch.set(ref(orgId, 'childCodes', code), { orgId, childId });
   return { id: childId, synced: trackWrite(batch.commit()) };
 }
 
@@ -130,8 +133,13 @@ export function importChampions(orgId: string, rows: ChampionImportRow[]) {
 }
 
 /** Adds the children from a spreadsheet, each with their parent as guardian when a parent is named. */
-export function importChildren(orgId: string, rows: ChildImportRow[], today: string) {
+/**
+ * Adds the children from a sheet, keeping the sheet's codes (Andy, 2026-11-04, 4A). onProgress reports how many
+ * have reached the server, so the page can say "Saving 120 of 196".
+ */
+export function importChildren(orgId: string, rows: ChildImportRow[], today: string, onProgress?: (saved: number) => void) {
   const consent = (v: boolean | null): Consent => (v == null ? { given: null, date: null } : { given: v, date: today });
+  let saved = 0;
   return Promise.all(rows.map((r) => {
     const phone = r.parentPhone ? normalizePhone(r.parentPhone) : null;
     const { synced } = registerChild(
@@ -143,9 +151,25 @@ export function importChildren(orgId: string, rows: ChildImportRow[], today: str
         photoConsent: consent(r.photoConsent), guardianConsent: consent(r.guardianConsent),
         sponsorName: r.sponsorName, sponsorPhone: r.sponsorPhone, sponsorEmail: r.sponsorEmail, parentName: r.parentName, parentPhone: r.parentPhone,
       },
+      r.code,
     );
-    return synced;
+    return synced.then(() => { saved += 1; onProgress?.(saved); });
   }));
+}
+
+/**
+ * Records consent for many children at once (Andy, 2026-11-04, 5A). One write per child: the database checks
+ * each child, and a single save of 196 children would be refused for too many checks.
+ */
+export function saveConsents(orgId: string, changes: { childId: string; guardian?: Consent; photo?: Consent }[]) {
+  return Promise.all(changes.map((c) => updateRecord(ref(orgId, 'children', c.childId), {
+    ...(c.guardian ? { guardianConsent: c.guardian } : {}), ...(c.photo ? { photoConsent: c.photo } : {}),
+  })));
+}
+
+/** "I'm here": the time a helper arrived today (Andy, 2026-11-04, 2A). */
+export function markHelperArrived(orgId: string, date: string, uid: string, name: string, time: string) {
+  return trackWrite(setDoc(ref(orgId, 'helperDays', date), { orgId, date, marks: { [uid]: { name: name.slice(0, 120), t: time } }, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
 }
 
 export function saveChildPrivate(orgId: string, childId: string, data: { welfare: string; health: string; home: string }, exists: boolean) {

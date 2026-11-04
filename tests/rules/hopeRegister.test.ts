@@ -105,3 +105,33 @@ describe('clubs', () => {
     await assertSucceeds(getDoc(doc(as('hopeAdmin'), `${O}/clubWins/w1`)));
   });
 });
+
+describe('codes kept from a sheet', () => {
+  it('lets a new child keep a code only when it is claimed in the same save', async () => {
+    const db = as('hopeStaff');
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/c3`), { orgId: 'hope', fullName: 'c3', firstName: 'c3', status: 'child', whatsappConsent: {}, ...stamps }); });
+    const fresh = (code: string | null) => ({ ...child({ code }), ...created('hopeStaff') });
+    await assertFails(setDoc(doc(db, `${O}/children/c3`), fresh('HC-0042')));
+    const b = writeBatch(db);
+    b.set(doc(db, `${O}/children/c3`), fresh('HC-0042'));
+    b.set(doc(db, `${O}/childCodes/HC-0042`), { orgId: 'hope', childId: 'c3' });
+    await assertSucceeds(b.commit());
+    // The same code cannot be claimed twice.
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/c4`), { orgId: 'hope', fullName: 'c4', firstName: 'c4', status: 'child', whatsappConsent: {}, ...stamps }); });
+    const b2 = writeBatch(db);
+    b2.set(doc(db, `${O}/children/c4`), fresh('HC-0042'));
+    b2.set(doc(db, `${O}/childCodes/HC-0042`), { orgId: 'hope', childId: 'c4' });
+    await assertFails(b2.commit());
+    await assertFails(setDoc(doc(db, `${O}/childCodes/bad`), { orgId: 'hope', childId: 'c4' }));
+  });
+});
+
+describe('helpers arriving', () => {
+  it('lets each helper record only their own time', async () => {
+    const at = (uid: string, marks: Record<string, unknown>) => ({ orgId: 'hope', date: '2026-11-07', marks, updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertSucceeds(setDoc(doc(as('hopeStaff'), `${O}/helperDays/2026-11-07`), at('hopeStaff', { hopeStaff: { name: 'Mary', t: '08:42' } }), { merge: true }));
+    await assertSucceeds(setDoc(doc(as('hopeAdmin'), `${O}/helperDays/2026-11-07`), at('hopeAdmin', { hopeAdmin: { name: 'John', t: '09:01' } }), { merge: true }));
+    await assertFails(setDoc(doc(as('hopeAdmin'), `${O}/helperDays/2026-11-07`), at('hopeAdmin', { hopeStaff: { name: 'Mary', t: '10:00' } }), { merge: true }));
+    await assertFails(setDoc(doc(as('hopeAdmin'), `${O}/helperDays/2026-11-07`), at('hopeAdmin', { hopeAdmin: { name: 'John', t: 'soon' } }), { merge: true }));
+  });
+});

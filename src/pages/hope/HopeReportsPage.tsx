@@ -1,3 +1,4 @@
+import { Help } from '../../components/Help';
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { collection, doc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
@@ -55,8 +56,8 @@ function Reports({ org }: { org: Organization }) {
   const open = rows.find((r) => r.id === openId);
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>Reports</h1>{can('people.read') && <Link to="/hope/exports" className="btn">Exports</Link>}</div>
-      <p className="small muted">The monthly report (counts and trends only, no names) is made on the 1st for leadership and donors. The weekly attendance and follow-up report is for the pastor and lists children by code and name.</p>
+      <div className="page-head"><h1>Reports</h1>{can('people.read') && <Link to="/hope/exports" className="btn">⬇︎ Download lists</Link>}</div>
+      <p className="small muted">Make a monthly or weekly report. <Help>The monthly report has numbers only, no names, and is made by itself on the 1st for leaders and donors. The weekly report is for the pastor and lists the children to follow up.</Help></p>
       <section className="card stack">
         <h2>Make a report</h2>
         <div className="segmented" role="radiogroup" aria-label="Report">
@@ -76,7 +77,7 @@ function Reports({ org }: { org: Organization }) {
 
       {open && <ReportView org={org} report={open} />}
 
-      <h2>Archive</h2>
+      <h2>Past reports</h2>
       {loading ? <p className="muted">Loading…</p> : rows.filter((r) => r.audience === 'counts' || pastor).length === 0 ? <div className="card"><p>No reports yet.</p></div> : (
         <ul className="link-list">
           {rows.filter((r) => r.audience === 'counts' || pastor).map((r) => (

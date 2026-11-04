@@ -69,7 +69,7 @@ function Children({ org }: { org: Organization }) {
     <div className="page">
       <div className="page-head">
         <h1>Children</h1>
-        {can('people.write') && <div className="chips"><Link to="/hope/children/import" className="btn">Upload from Excel</Link><Link to="/hope/children/new" className="btn btn-primary">Register a child</Link></div>}
+        {can('people.write') && <div className="chips"><Link to="/hope/children/import" className="btn">⬆︎ Excel</Link><Link to="/hope/children/photos" className="btn">📷 Photos</Link><Link to="/hope/children/new" className="btn btn-primary">Register a child</Link></div>}
       </div>
       <div className="hc-tools">
         <input type="search" className="search" placeholder="Find by name or code, for example HC-0042" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
@@ -96,7 +96,6 @@ function Children({ org }: { org: Organization }) {
                 <span className="small muted">{h.codeOf(c)}{age != null ? ` · ${age} years` : ''}</span>
                 {c.sponsorName && <span className="small">Sponsor: {c.sponsorName}</span>}
                 <span className="hc-flags">
-                  {consentMissing(c) && <span className="badge badge-warn">Consent missing</span>}
                   {c.status === 'departing' && <span className="badge badge-warn">Departing</span>}
                   {c.status === 'exited' && <span className="badge badge-muted">Departed</span>}
                 </span>

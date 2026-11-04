@@ -117,6 +117,15 @@ export function useHopeDays(orgId: string) {
   return { days: useMemo(() => live(rows), [rows]), loading };
 }
 
+/** When each helper arrived, for one day (Andy, 2026-11-04, 2A). */
+export function useHelperDay(orgId: string, date: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const { rows, loading } = useLiveQuery<{ id: string; date: string; marks?: Record<string, { name: string; t: string }> }>(() => (on ? query(col(orgId, 'helperDays'), where('date', '==', date)) : null), [orgId, on, date]);
+  const marks = rows[0]?.marks ?? {};
+  return { helpers: useMemo(() => Object.entries(marks).map(([uid, m]) => ({ uid, ...m })).sort((a, b) => a.t.localeCompare(b.t)), [marks]), loading };
+}
+
 /** The Child Champions and their weekly register. */
 export function useChampions(orgId: string) {
   const { profile } = useAuth();
