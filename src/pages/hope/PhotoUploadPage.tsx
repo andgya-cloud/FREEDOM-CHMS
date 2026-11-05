@@ -2,7 +2,8 @@ import { useState, type ChangeEvent } from 'react';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { saveChildPhoto } from '../../lib/hopeWrites';
+import { saveChildPhoto } from '../../lib/childPhoto';
+import { ApprovePhoto } from '../../components/ApprovePhoto';
 import { normalizeCode } from '../../../functions/src/shared/hope';
 import { HopeGate, useHopePage } from './common';
 import { shrinkPhoto } from './registerParts';
@@ -24,6 +25,7 @@ function PhotoUpload({ org }: { org: Organization }) {
   const toast = useToast();
   const [plan, setPlan] = useState<Match[] | null>(null);
   const [saving, setSaving] = useState<{ done: number; total: number } | null>(null);
+  const [asking, setAsking] = useState(false);
 
   function choose(e: ChangeEvent<HTMLInputElement>) {
     const files = [...(e.target.files ?? [])].filter((f) => f.type.startsWith('image/'));
@@ -42,13 +44,14 @@ function PhotoUpload({ org }: { org: Organization }) {
     }));
   }
 
-  async function add() {
+  // One password from the Director, Andy or Doreen approves the whole batch (Andy, 2026-11-05).
+  async function add(proof: string) {
     const ready = (plan ?? []).filter((m) => m.childId);
     setSaving({ done: 0, total: ready.length });
     let done = 0;
     for (const m of ready) {
       try {
-        await saveChildPhoto(org.id, m.childId!, await shrinkPhoto(m.file));
+        await saveChildPhoto(org.id, m.childId!, await shrinkPhoto(m.file), proof);
       } catch (err) { toast.show(`${m.name}: ${friendlyError(err)}`); }
       done += 1;
       setSaving({ done, total: ready.length });
@@ -91,9 +94,11 @@ function PhotoUpload({ org }: { org: Organization }) {
               <ul className="link-list">{skipped.map((m) => <li key={m.file.name}><div><span className="link-title">{m.file.name}</span><span className="link-detail">{m.why}{m.name !== m.file.name ? ` (${m.name})` : ''}</span></div></li>)}</ul>
             </details>
           )}
-          <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={() => void add()}>Add {ready.length} {ready.length === 1 ? 'photo' : 'photos'}</button>
+          <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={() => setAsking(true)}>Add {ready.length} {ready.length === 1 ? 'photo' : 'photos'}</button>
         </section>
       )}
+      <ApprovePhoto open={asking} orgId={org.id} title={`Add ${ready.length} ${ready.length === 1 ? 'photo' : 'photos'}?`} confirmLabel="Add the photos"
+        onCancel={() => setAsking(false)} onApproved={(proof) => { setAsking(false); void add(proof); }} />
     </div>
   );
 }

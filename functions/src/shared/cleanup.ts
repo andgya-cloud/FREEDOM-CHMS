@@ -11,7 +11,7 @@ import type { OrganizationType } from './organizations.js';
  * Nothing is erased: entries are marked deleted (deletedAt), so totals, ledgers and lists leave them out.
  */
 export const CLEANUP_KINDS = ['person', 'event', 'gift', 'followUp', 'programme', 'group', 'team', 'examSheet', 'examResult', 'inventoryCount', 'payrollStaff', 'payrollRun',
-  'hopeDay', 'championDay', 'clubDay', 'helperDay', 'mealDay', 'hopeFee', 'childNote', 'club', 'champion'] as const;
+  'hopeDay', 'championDay', 'clubDay', 'helperDay', 'mealDay', 'hopeFee', 'childNote', 'club', 'champion', 'childPhoto'] as const;
 export type CleanupKind = (typeof CLEANUP_KINDS)[number];
 
 export const BIN_DAYS = 30;
@@ -33,6 +33,8 @@ export interface KindSpec {
    * stay possible: it is moved into the bin record instead of being marked deleted in place.
    */
   fixedId?: boolean;
+  /** Removed only from its own page (a child's photo), so it is not listed under "Find and remove". */
+  hidden?: boolean;
 }
 
 const PERSON_LINKS: LinkedSpec[] = [
@@ -94,6 +96,8 @@ export const KINDS: Record<CleanupKind, KindSpec> = {
   clubDay: { collection: 'clubDays', label: 'Club register days', orgTypes: HOPE, linked: [], fixedId: true },
   helperDay: { collection: 'helperDays', label: 'Helper arrival days', orgTypes: HOPE, linked: [], fixedId: true },
   mealDay: { collection: 'hopeMeals', label: 'Meals', orgTypes: HOPE, linked: [], fixedId: true },
+  // A child's photo (Andy, 2026-11-05): removing it with the Director's, Andy's or Doreen's password puts it in the Bin.
+  childPhoto: { collection: 'childPhotos', label: 'Child photos', orgTypes: HOPE, linked: [], fixedId: true, hidden: true },
   hopeFee: { collection: 'hopeFees', label: 'School fees paid', orgTypes: HOPE, linked: [] },
   childNote: { collection: 'childNotes', label: 'Welfare and leaving notes', orgTypes: HOPE, linked: [] },
   club: { collection: 'clubs', label: 'Clubs', orgTypes: HOPE, linked: [{ collection: 'clubDays', field: 'clubId', label: 'club register days' }, { collection: 'clubWins', field: 'clubId', label: 'club wins' }] },
@@ -110,7 +114,7 @@ export function kindLabel(kind: CleanupKind, type: OrganizationType | null | und
 }
 
 export function kindsFor(type: OrganizationType | null | undefined): CleanupKind[] {
-  return CLEANUP_KINDS.filter((k) => !KINDS[k].orgTypes || (type && KINDS[k].orgTypes!.includes(type)));
+  return CLEANUP_KINDS.filter((k) => !KINDS[k].hidden && (!KINDS[k].orgTypes || (type && KINDS[k].orgTypes!.includes(type))));
 }
 
 type Data = Record<string, unknown>;
@@ -162,6 +166,8 @@ export function describeEntry(kind: CleanupKind, id: string, d: Data): { label: 
       return { label: s(d.name) || 'Club', detail: join(d.day, d.status === 'paused' ? 'Paused' : '') };
     case 'champion':
       return { label: s(d.name) || 'Champion', detail: join(d.duty, d.status === 'left' ? 'Left' : '') };
+    case 'childPhoto':
+      return { label: `${s(d.childName) || 'Child'} · photo`, detail: '' };
   }
 }
 

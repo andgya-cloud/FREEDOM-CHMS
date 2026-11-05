@@ -114,19 +114,7 @@ export async function saveSponsorList(orgId: string, rows: SponsorRowPlan[], onP
   }
 }
 
-/** Saves the child's photo (a small JPEG) and notes on the child that there is one. Needs photo consent. */
-export function saveChildPhoto(orgId: string, childId: string, photo: string) {
-  const batch = writeBatch(db);
-  batch.set(ref(orgId, 'childPhotos', childId), { orgId, photo, updatedAt: serverTimestamp(), updatedBy: me() });
-  batch.update(ref(orgId, 'children', childId), { hasPhoto: true, updatedAt: serverTimestamp(), updatedBy: me() });
-  return trackWrite(batch.commit());
-}
-export function removeChildPhoto(orgId: string, childId: string) {
-  const batch = writeBatch(db);
-  batch.update(ref(orgId, 'children', childId), { hasPhoto: false, updatedAt: serverTimestamp(), updatedBy: me() });
-  batch.delete(ref(orgId, 'childPhotos', childId));
-  return trackWrite(batch.commit());
-}
+// A child's photo is saved and removed on the server, with an approver's password: see lib/childPhoto.ts.
 
 /**
  * Marks one child (or champion) on a day's register. A merge, so two tablets marking the same Saturday never

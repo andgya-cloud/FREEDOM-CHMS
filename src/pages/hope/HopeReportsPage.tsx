@@ -16,6 +16,7 @@ import { PHOTO_REPORT_EMOJI } from '../../../functions/src/shared/hopePhotos';
 import { shareOrDownload } from '../../lib/givingPdf';
 import type { HopeReportDoc } from '../../../functions/src/shared/hope';
 import type { StoredHopeReport } from '../../state/useHope';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { HopeGate, pct } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -46,7 +47,8 @@ function Reports({ org }: { org: Organization }) {
   const openId = params.get('report') ?? '';
   const { reports } = useHopeReportList(org.id);
   const reader = canReadNotes(profile, org.id);
-  const bin = reader;
+  // Only Andy and Doreen open the Bin (Andy, 2026-11-05).
+  const bin = canKeepAccounts(profile);
   const open = reports.find((r) => r.id === openId);
   if (openId) {
     return (

@@ -23,7 +23,7 @@ const BIN = (orgId: string) => db.collection(`organizations/${orgId}/cleanupBin`
 
 /**
  * Andrew Guya and Doreen clean up any organization. The Hope Centre's Director (Diana) may also remove entries to
- * the Bin, put them back, and remove them from the Bin to Dormant, which only Andy and Doreen see (Andy, 2026-11-05, 6A).
+ * the Bin (Andy, 2026-11-05, 6A); only Andy and Doreen open the Bin and put things back (Andy, 2026-11-05, later).
  */
 async function requireKeeper(caller: Caller, orgId: string): Promise<{ keeper: boolean }> {
   if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You cannot reach this organization.');
@@ -201,6 +201,8 @@ export const cleanupRestore = onCall(CALLABLE, async (request) => {
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   const { keeper } = await requireKeeper(caller, orgId);
+  // Only Andy and Doreen open the Bin (Andy, 2026-11-05); the Director still removes things to it.
+  if (!keeper) throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can open the Bin.');
   if (!Array.isArray(data.binIds) || !data.binIds.length || data.binIds.length > MAX_ITEMS || !data.binIds.every((b) => typeof b === 'string' && b && !b.includes('/'))) {
     throw new HttpsError('invalid-argument', 'Choose what to put back.');
   }
@@ -226,7 +228,12 @@ export const cleanupRestore = onCall(CALLABLE, async (request) => {
       const target = db.doc(`organizations/${orgId}/${entry.refs[0]}`);
       await db.runTransaction(async (tx) => {
         if ((await tx.get(target)).exists) throw new HttpsError('already-exists', `"${entry.label}" has been made again since it was removed, so the old one cannot come back.`);
-        tx.set(target, { ...copy, updatedAt: now, updatedBy: caller.uid });
+        if (entry.kind === 'childPhoto') {
+          // A child's photo comes back on their profile too.
+          const { childName: _n, ...photo } = copy;
+          tx.set(target, { ...photo, updatedAt: now, updatedBy: caller.uid });
+          tx.update(db.doc(`organizations/${orgId}/children/${entry.targetId}`), { hasPhoto: true, updatedAt: now, updatedBy: caller.uid });
+        } else tx.set(target, { ...copy, updatedAt: now, updatedBy: caller.uid });
         tx.update(binRef, { state: 'restored', restoredAt: now, restoredBy: caller.uid, restoredByName: name });
       });
       restored += 1;
@@ -261,6 +268,7 @@ export const cleanupBin = onCall(CALLABLE, async (request) => {
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   const { keeper } = await requireKeeper(caller, orgId);
+  if (!keeper) throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can open the Bin.');
   const director = isDirectorProfile(caller.profile);
   const snaps = (await BIN(orgId).orderBy('deletedAt', 'desc').limit(1000).get()).docs;
   const entries = snaps.map((s) => {

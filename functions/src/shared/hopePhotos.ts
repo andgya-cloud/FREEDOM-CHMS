@@ -139,3 +139,11 @@ export function photoReportWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'day
     `Photos: ${link}`,
   ].join('\n');
 }
+
+/**
+ * Taking, uploading or removing a child's photo needs the password of the Director, Andy or Doreen (Andy, 2026-11-05).
+ * The same three people as those who delete photo reports.
+ */
+export const isPhotoApprover = canDeletePhotoReport;
+/** How long one typed password lasts, so a whole batch of photos can be uploaded with it. */
+export const PHOTO_PROOF_MINUTES = 20;

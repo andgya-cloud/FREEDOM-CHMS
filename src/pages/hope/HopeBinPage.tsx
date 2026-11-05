@@ -5,7 +5,6 @@ import { useToast } from '../../state/ToastContext';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { cleanupError, loadBin, startFresh, type BinRow } from '../../lib/cleanup';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
-import { isHopeDirector } from '../../../functions/src/shared/hopePhotos';
 import { START_FRESH_KINDS, START_FRESH_LABELS, type StartFreshKind } from '../../../functions/src/shared/cleanup';
 import { BinList } from '../settings/CleanupPage';
 import { friendlyError } from '../../lib/errors';
@@ -28,7 +27,8 @@ function Bin({ org }: { org: Organization }) {
   const { profile } = useAuth();
   const toast = useToast();
   const keeper = canKeepAccounts(profile);
-  const allowed = keeper || isHopeDirector(profile, org.id);
+  // Only Andy and Doreen open the Bin (Andy, 2026-11-05); the Director still removes things to it.
+  const allowed = keeper;
   const [tab, setTab] = useState<'bin' | 'dormant' | 'fresh'>('bin');
   const [bin, setBin] = useState<BinRow[] | null>(null);
   const refresh = useCallback(() => {
@@ -36,7 +36,7 @@ function Bin({ org }: { org: Organization }) {
   }, [org.id, toast]);
   useEffect(() => { if (allowed) refresh(); }, [allowed, refresh]);
 
-  if (!allowed) return <div className="page narrow"><h1>Bin</h1><p className="muted">Only the Director, Andrew Guya and Doreen can open the Bin.</p></div>;
+  if (!allowed) return <div className="page narrow"><h1>Bin</h1><p className="muted">Only Andrew Guya and Doreen can open the Bin.</p></div>;
   const inBin = bin?.filter((e) => e.state === 'bin') ?? [];
   const dormant = bin?.filter((e) => e.state === 'forever') ?? [];
   return (

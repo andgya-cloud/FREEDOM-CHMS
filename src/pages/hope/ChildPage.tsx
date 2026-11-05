@@ -7,14 +7,15 @@ import { useChildPhoto, useClubs, useHopeDays } from '../../state/useHope';
 import { memberRate, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { fillMessage, waLink } from '../../../functions/src/shared/hopeMessages';
-import { PasswordConfirm } from '../../components/PasswordConfirm';
 import { ClassChip } from '../../components/Stone';
 import { classOf, hasAllergy, NO_ALLERGIES } from '../../../functions/src/shared/hopeClasses';
 import { NOT_ON_LIST } from '../../../functions/src/shared/hopeSponsorship';
 import { isHopeDirector } from '../../../functions/src/shared/hopePhotos';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
-import { removeChildPhoto, saveChildPhoto, updateChild } from '../../lib/hopeWrites';
+import { updateChild } from '../../lib/hopeWrites';
+import { removeChildPhoto, saveChildPhoto } from '../../lib/childPhoto';
+import { ApprovePhoto } from '../../components/ApprovePhoto';
 import { daysToBirthday, KID_MARK_LABELS, kidHistory, rateFrom, streak, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
 import { Avatar, PctBadge, shrinkPhoto } from './registerParts';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
@@ -64,6 +65,8 @@ function ChildScreen({ org }: { org: Organization }) {
   const [sponsorName, setSponsorName] = useState('');
   const [allergies, setAllergies] = useState('');
   const [askPhoto, setAskPhoto] = useState(false);
+  // A new photo waits for the Director's, Andy's or Doreen's password (Andy, 2026-11-05).
+  const [newPhoto, setNewPhoto] = useState<string | null>(null);
   const [parentName, setParentName] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [leaveNote, setLeaveNote] = useState('');
@@ -109,7 +112,7 @@ function ChildScreen({ org }: { org: Organization }) {
   }
   async function takePhoto(f: File | undefined) {
     if (!f) return;
-    try { saveChildPhoto(org.id, child!.id, await shrinkPhoto(f)).catch((err) => toast.show(friendlyError(err))); toast.show('Photo saved'); }
+    try { setNewPhoto(await shrinkPhoto(f)); }
     catch (err) { toast.show(friendlyError(err)); }
   }
 
@@ -261,8 +264,11 @@ function ChildScreen({ org }: { org: Organization }) {
           )}
         </>
       )}
-      <PasswordConfirm open={askPhoto} title={`Do you want to delete ${name}'s photo?`} onCancel={() => setAskPhoto(false)}
-        onConfirm={() => { setAskPhoto(false); removeChildPhoto(org.id, child.id).catch((err) => toast.show(friendlyError(err))); toast.show('Photo deleted'); }} />
+      <ApprovePhoto open={askPhoto} orgId={org.id} title={`Do you want to delete ${name}'s photo?`} confirmLabel="Yes, delete" danger
+        body="It goes to the Bin. The Director, Andrew Guya or Doreen approves with their password." onCancel={() => setAskPhoto(false)}
+        onApproved={(proof) => { setAskPhoto(false); removeChildPhoto(org.id, child.id, proof).then(() => toast.show('Photo moved to the Bin'), (err: unknown) => toast.show(friendlyError(err))); }} />
+      <ApprovePhoto open={!!newPhoto} orgId={org.id} title={`Save this photo of ${name}?`} confirmLabel="Save the photo" onCancel={() => setNewPhoto(null)}
+        onApproved={(proof) => { const p = newPhoto!; setNewPhoto(null); saveChildPhoto(org.id, child.id, p, proof).then(() => toast.show('Photo saved'), (err: unknown) => toast.show(friendlyError(err))); }} />
       <ConfirmDialog open={!!confirmExit} title={confirmExit === 'exited' ? `Has ${name} left for good?` : `Mark ${name} as departing?`}
         body={confirmExit === 'exited' ? 'They move to Past children and leave the weekly register. Their records are kept, and you can return them to active at any time.' : 'They stay on the register, marked Departing, until they leave.'}
         confirmLabel={confirmExit === 'exited' ? 'Yes, departed' : 'Mark as departing'} danger={confirmExit === 'exited'} onConfirm={leave} onCancel={() => setConfirmExit(null)} />

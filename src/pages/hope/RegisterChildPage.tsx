@@ -4,7 +4,9 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { PersonPicker } from '../../components/PersonPicker';
 import { friendlyError } from '../../lib/errors';
-import { registerChild, saveChildPhoto, type PersonInput } from '../../lib/hopeWrites';
+import { registerChild, type PersonInput } from '../../lib/hopeWrites';
+import { saveChildPhoto } from '../../lib/childPhoto';
+import { ApprovePhoto } from '../../components/ApprovePhoto';
 import { Avatar, shrinkPhoto } from './registerParts';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { normalizePhone } from '../../../functions/src/shared/phone';
@@ -43,14 +45,16 @@ function Register({ org }: { org: Organization }) {
   const [joinClubs, setJoinClubs] = useState<string[]>([]);
   const [photo, setPhoto] = useState<string | null>(null);
   const [photoOk, setPhotoOk] = useState(false);
+  // A photo needs the Director's, Andy's or Doreen's password (Andy, 2026-11-05).
+  const [asking, setAsking] = useState(false);
 
   async function pickPhoto(f: File | undefined) {
     if (!f) return;
     try { setPhoto(await shrinkPhoto(f)); } catch (err) { toast.show(friendlyError(err)); }
   }
 
-  function submit(e: FormEvent) {
-    e.preventDefault();
+  function submit(e?: FormEvent, proof?: string) {
+    e?.preventDefault();
     setError('');
     const name = who.name.trim();
     if (name.length < 2) return setError('Enter the child\'s name.');
@@ -64,6 +68,7 @@ function Register({ org }: { org: Organization }) {
       if (gPhone.trim() && !phone) return setError('The guardian\'s phone number does not look right.');
       guardianTarget = { person: { fullName: guardian.name.trim(), phone, whatsapp: gConsent && phone ? phone : null, whatsappConsent: { given: gConsent && !!phone, date: h.today, recordedBy: profile?.uid ?? null, stoppedAt: null } } };
     }
+    if (photo && photoOk && !proof) { setAsking(true); return; }
     try {
       const { id, synced } = registerChild(
         org.id,
@@ -77,7 +82,8 @@ function Register({ org }: { org: Organization }) {
         },
       );
       synced.catch((err) => toast.show(friendlyError(err)));
-      if (photo && photoOk) saveChildPhoto(org.id, id, photo).catch((err) => toast.show(friendlyError(err)));
+      // The photo is saved once the child is on the server.
+      if (photo && photoOk && proof) synced.then(() => saveChildPhoto(org.id, id, photo, proof)).catch((err: unknown) => toast.show(friendlyError(err)));
       for (const cid of joinClubs) {
         const club = clubs.clubs.find((x) => x.id === cid);
         if (club) updateClub(org.id, cid, { memberIds: [...club.memberIds, id] }).catch((err) => toast.show(friendlyError(err)));
@@ -160,6 +166,8 @@ function Register({ org }: { org: Organization }) {
         {error && <p className="error" role="alert">{error}</p>}
         <button type="submit" className="btn btn-primary btn-block">Register child</button>
       </form>
+      <ApprovePhoto open={asking} orgId={org.id} title="Approve the photo" confirmLabel="Approve and register" onCancel={() => setAsking(false)}
+        onApproved={(proof) => { setAsking(false); submit(undefined, proof); }} />
     </div>
   );
 }

@@ -46,11 +46,11 @@ describe('the new child details', () => {
 });
 
 describe('child photos', () => {
-  it('can be saved only while photo consent is yes', async () => {
+  it('are saved by the server only, with an approver\'s password (v178)', async () => {
     const photo = (uid: string) => ({ orgId: 'hope', photo: JPEG, updatedAt: serverTimestamp(), updatedBy: uid });
-    await assertSucceeds(setDoc(doc(as('hopeStaff'), `${O}/childPhotos/c1`), photo('hopeStaff')));
-    await assertFails(setDoc(doc(as('hopeStaff'), `${O}/childPhotos/c2`), photo('hopeStaff')));
-    await assertFails(setDoc(doc(as('hopeStaff'), `${O}/childPhotos/c1`), { ...photo('hopeStaff'), photo: 'data:text/html;base64,AAAA' }));
+    await assertFails(setDoc(doc(as('hopeStaff'), `${O}/childPhotos/c1`), photo('hopeStaff')));
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/childPhotos/c1`), { orgId: 'hope', photo: JPEG }); });
+    await assertFails(deleteDoc(doc(as('hopeStaff'), `${O}/childPhotos/c1`))); // consent still yes: removing goes through the server
     await assertSucceeds(getDoc(doc(as('hopeStaff'), `${O}/childPhotos/c1`)));
     await assertFails(getDoc(doc(as('admin'), `${O}/childPhotos/c1`))); // another campus
   });

@@ -1207,14 +1207,11 @@ service cloud.firestore {
       // photo consent is "Yes". Removing it deletes it.
       match /childPhotos/{childId} {
         allow read: if hopeRead();
-        allow create, update: if canAccessOrg(orgId) && has('people.write')
-          && request.resource.data.keys().hasOnly(['orgId', 'photo', 'updatedAt', 'updatedBy'])
-          && request.resource.data.orgId == orgId
-          && request.resource.data.photo is string && request.resource.data.photo.size() <= 300000
-          && request.resource.data.photo.matches('^data:image/jpeg;base64,.*')
-          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
-          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/children/$(childId)).data.photoConsent.given == true;
-        allow delete: if canAccessOrg(orgId) && has('people.write');
+        // Saved and removed by the server only, with the Director's, Andy's or Doreen's password (Andy, 2026-11-05).
+        // The phone may delete it only in the same save that takes photo consent away.
+        allow create, update: if false;
+        allow delete: if canAccessOrg(orgId) && has('people.write')
+          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/children/$(childId)).data.get('photoConsent', {}).get('given', false) != true;
       }
 
       // The weekly registers (Andy, 2026-11-04). One record a day, a mark per child or champion.
