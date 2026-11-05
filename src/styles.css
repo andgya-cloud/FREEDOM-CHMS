@@ -2322,3 +2322,55 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .chat-send:disabled { opacity: 0.45; }
 .chat-list .badge { margin-left: 6px; }
 @media (max-width: 760px) { .chat-compose { bottom: 92px; } }
+
+/* v172 Hope Centre (Andy, 2026-11-05): Check in, attendance folders, records, fees paid, meals, bin. */
+.ht-checkin { display: flex; align-items: center; gap: 16px; padding: 18px 22px; border-radius: 20px; text-decoration: none; color: #fff;
+  background: linear-gradient(120deg, #02341b 0%, #038241 55%, #16a058 100%); box-shadow: 0 16px 30px -16px rgba(3, 130, 65, 0.7); }
+.ht-checkin:hover { filter: brightness(1.06); }
+.ht-checkin-ico { font-size: 2rem; width: 56px; height: 56px; display: grid; place-items: center; background: rgba(255, 255, 255, 0.16); border-radius: 16px; }
+.ht-checkin b { display: block; font-size: 1.35rem; letter-spacing: -0.02em; }
+.ht-checkin span span { display: block; opacity: 0.88; font-size: 0.9rem; }
+.ck-reset { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; border-top: 1px dashed var(--line, #dfe5e1); padding-top: 8px; margin-top: 6px; }
+.plain-list { list-style: none; margin: 0; padding: 0; }
+.stack-sm > * + * { margin-top: 4px; }
+.note-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.note-card { border-radius: 14px; padding: 10px 14px; border-left: 4px solid; display: grid; gap: 4px; }
+.note-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.note-top .cleanup-remove { margin-left: auto; padding: 2px 8px; min-height: 0; font-size: 0.8rem; }
+.note-text { margin: 0; white-space: pre-wrap; line-height: 1.5; }
+.note-card .chat-sig { text-align: right; }
+.fee-balance { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.fee-balance > div { background: var(--surface-2, #f4f7f5); border-radius: 14px; padding: 10px 12px; display: grid; gap: 2px; }
+.fee-balance b { font-size: 1.05rem; }
+.fee-balance .warn b { color: #b0301f; }
+.fee-balance .ok b { color: #03733a; }
+.fee-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; width: 100%; }
+.fee-row .grow { min-width: 0; flex: 1; display: grid; }
+.fee-receipt-thumb { height: 56px; border-radius: 8px; border: 1px solid var(--line, #dfe5e1); }
+.fee-receipt-big { display: grid; gap: 8px; justify-items: start; }
+.fee-receipt-big img { max-width: 100%; max-height: 70vh; border-radius: 12px; border: 1px solid var(--line, #dfe5e1); }
+.att-list { margin: 0; padding-left: 1.6em; display: grid; gap: 6px; }
+.att-list li { display: list-item; }
+.att-list li > span.grow { display: inline; }
+.att-list li > span.small { float: right; color: var(--muted); }
+.meal-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.meal-box { display: grid; justify-items: center; gap: 6px; padding: 14px 8px; border-radius: 16px; background: var(--surface-2, #f4f7f5); text-align: center; }
+.meal-ico { font-size: 2rem; }
+.meal-step { display: flex; align-items: center; gap: 4px; }
+.meal-step input { width: 64px; text-align: center; font-size: 1.2rem; font-weight: 700; }
+.meal-step .btn { min-width: 40px; font-size: 1.2rem; padding: 4px 8px; }
+.stack-col { width: 100%; display: flex; flex-direction: column; border-radius: 12px 12px 6px 6px; overflow: hidden; transform-origin: bottom; animation: lav-grow 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both; box-shadow: 0 12px 22px -12px rgba(3, 130, 65, 0.6); }
+.stack-col > i { display: block; min-height: 3px; }
+.stack-key { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; font-size: 0.8rem; color: var(--muted); margin-top: 6px; }
+.stack-key i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+@media (max-width: 560px) {
+  .fee-balance { gap: 6px; }
+  .fee-balance > div { padding: 8px; }
+  .fee-balance b { font-size: 0.9rem; }
+  .fee-balance .small { font-size: 0.7rem; }
+  .fee-row .grow { flex-basis: 100%; }
+  .meal-grid { grid-template-columns: 1fr; }
+  .meal-box { grid-template-columns: auto 1fr auto; justify-items: start; align-items: center; text-align: left; }
+}
+@media (prefers-reduced-motion: reduce) { .stack-col { animation: none; } }
+.note-card .note-top > .cleanup-remove { margin-left: auto; }

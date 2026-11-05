@@ -5,9 +5,10 @@ import { Timestamp, type DocumentReference, type DocumentSnapshot } from 'fireba
 import { db, FieldValue, requireCaller, requireString, type Caller } from './common.js';
 import { verifyPin } from './pettyPins.js';
 import { canAccessOrg, canKeepAccounts, isDirectorProfile } from './shared/permissions.js';
+import { isHopeDirector } from './shared/hopePhotos.js';
 import { localDateKey } from './shared/datetime.js';
 import {
-  BIN_DAYS, KINDS, MAX_ITEMS, MAX_LINKED, daysLeft, describeEntry, isCleanupKind, isOfficial, linkedSummary, looksLikeTest, matchesText,
+  BIN_DAYS, KINDS, MAX_ITEMS, MAX_LINKED, START_FRESH_MAX, daysLeft, describeEntry, isCleanupKind, isOfficial, isStartFreshKind, linkedSummary, looksLikeTest, matchesText,
   type CleanupBinEntry, type CleanupKind,
 } from './shared/cleanup.js';
 
@@ -20,9 +21,15 @@ import {
 const CALLABLE = { invoker: 'public', memory: '512MiB', timeoutSeconds: 120 } as const;
 const BIN = (orgId: string) => db.collection(`organizations/${orgId}/cleanupBin`);
 
-function requireKeeper(caller: Caller, orgId: string) {
-  if (!canKeepAccounts(caller.profile)) throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can clean up entries.');
+/**
+ * Andrew Guya and Doreen clean up any organization. The Hope Centre's Director (Diana) may also remove entries to
+ * the Bin, put them back, and remove them from the Bin to Dormant, which only Andy and Doreen see (Andy, 2026-11-05, 6A).
+ */
+async function requireKeeper(caller: Caller, orgId: string): Promise<{ keeper: boolean }> {
   if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You cannot reach this organization.');
+  if (canKeepAccounts(caller.profile)) return { keeper: true };
+  if (isHopeDirector(caller.profile, orgId) && (await db.doc(`organizations/${orgId}`).get()).get('type') === 'ministry') return { keeper: false };
+  throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can clean up entries.');
 }
 
 const isDeleted = (d: FirebaseFirestore.DocumentData | undefined) => !!d && d.deletedAt != null;
@@ -82,7 +89,7 @@ export const cleanupFind = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  requireKeeper(caller, orgId);
+  await requireKeeper(caller, orgId);
   if (!isCleanupKind(data.kind)) throw new HttpsError('invalid-argument', 'Choose a type of entry.');
   const kind = data.kind;
   const text = typeof data.text === 'string' ? data.text.slice(0, 80) : '';
@@ -93,7 +100,7 @@ export const cleanupFind = onCall(CALLABLE, async (request) => {
   const snaps = (await db.collection(`organizations/${orgId}/${KINDS[kind].collection}`).get()).docs.filter((s) => !isDeleted(s.data()));
   const rows = snaps.map((s) => {
     const d = s.data();
-    const at = millis(d.createdAt);
+    const at = millis(d.createdAt) ?? millis(d.updatedAt);
     return { id: s.id, ...describeEntry(kind, s.id, d), createdAt: at, made: at ? localDateKey(new Date(at)) : '', createdBy: String(d.createdBy ?? ''), official: isOfficial(kind, d) };
   }).filter((r) => matchesText(r.label, r.detail, text)
     && (!from || (r.made && r.made >= from)) && (!to || (r.made && r.made <= to))
@@ -109,7 +116,7 @@ export const cleanupCheck = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  requireKeeper(caller, orgId);
+  await requireKeeper(caller, orgId);
   const items = readItems(data.items);
   const out = [];
   for (const { kind, id } of items) {
@@ -124,8 +131,24 @@ export const cleanupDelete = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  requireKeeper(caller, orgId);
-  const items = readItems(data.items);
+  const { keeper } = await requireKeeper(caller, orgId);
+  // "Start fresh" (Andy, 2026-11-05, 3B): Andy or Doreen clear whole Hope registers, meals, fees or notes before going live.
+  let items: { kind: CleanupKind; id: string }[];
+  if (Array.isArray(data.startFresh)) {
+    if (!keeper) throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can start fresh.');
+    if ((await db.doc(`organizations/${orgId}`).get()).get('type') !== 'ministry') throw new HttpsError('failed-precondition', 'Start fresh is for the Hope Center.');
+    const kinds = [...new Set(data.startFresh)].filter(isStartFreshKind);
+    if (!kinds.length) throw new HttpsError('invalid-argument', 'Tick what to clear.');
+    items = [];
+    for (const kind of kinds) {
+      const snaps = (await db.collection(`organizations/${orgId}/${KINDS[kind].collection}`).get()).docs.filter((s) => !isDeleted(s.data()));
+      items.push(...snaps.map((s) => ({ kind, id: s.id })));
+    }
+    if (items.length > START_FRESH_MAX) throw new HttpsError('resource-exhausted', `That is ${items.length} entries. Please clear one kind at a time.`);
+    if (!items.length) return { removed: 0, binIds: [] };
+  } else {
+    items = readItems(data.items);
+  }
   const reason = typeof data.reason === 'string' ? data.reason.trim().slice(0, 300) : '';
   const checked = [];
   for (const { kind, id } of items) checked.push({ kind, id, ...(await inspect(orgId, kind, id)) });
@@ -177,17 +200,26 @@ export const cleanupRestore = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  requireKeeper(caller, orgId);
+  const { keeper } = await requireKeeper(caller, orgId);
   if (!Array.isArray(data.binIds) || !data.binIds.length || data.binIds.length > MAX_ITEMS || !data.binIds.every((b) => typeof b === 'string' && b && !b.includes('/'))) {
     throw new HttpsError('invalid-argument', 'Choose what to put back.');
   }
   const now = Timestamp.now();
   const name = caller.profile.displayName || caller.email;
+  const dormant = data.to === 'dormant';
   let restored = 0;
   for (const binId of data.binIds as string[]) {
     const binRef = BIN(orgId).doc(binId);
     const entry = (await binRef.get()).data() as (CleanupBinEntry & { deletedAt: Timestamp; bare?: string[] }) | undefined;
     if (!entry || entry.state === 'restored') continue;
+    if (entry.state === 'forever' && !keeper) throw new HttpsError('permission-denied', 'Only Andrew Guya and Doreen can put back what is in Dormant.');
+    // "Remove from the Bin" (6A): it goes to Dormant, kept for good, which only Andy and Doreen see and can put back.
+    if (dormant) {
+      if (entry.state !== 'bin') continue;
+      await binRef.update({ state: 'forever', foreverAt: now, foreverBy: caller.uid, foreverByName: name });
+      restored += 1;
+      continue;
+    }
     if (entry.official && !isDirectorProfile(caller.profile)) throw new HttpsError('permission-denied', `Only Andrew Guya can put back "${entry.label}".`);
     const copy = (entry as { copy?: FirebaseFirestore.DocumentData }).copy;
     if (copy) {
@@ -228,7 +260,7 @@ export const cleanupBin = onCall(CALLABLE, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  requireKeeper(caller, orgId);
+  const { keeper } = await requireKeeper(caller, orgId);
   const director = isDirectorProfile(caller.profile);
   const snaps = (await BIN(orgId).orderBy('deletedAt', 'desc').limit(1000).get()).docs;
   const entries = snaps.map((s) => {
@@ -240,7 +272,8 @@ export const cleanupBin = onCall(CALLABLE, async (request) => {
       restoredAt: millis(d.restoredAt), restoredByName: d.restoredByName ?? null,
     };
   });
-  return { entries: director ? entries : entries.filter((e) => e.state !== 'restored'), isDirector: director, binDays: BIN_DAYS };
+  const shown = director ? entries : entries.filter((e) => e.state !== 'restored' && (keeper || e.state === 'bin'));
+  return { entries: shown, isDirector: director, isKeeper: keeper, binDays: BIN_DAYS };
 });
 
 /** Every night: Recycle Bin entries older than 30 days move to Forever (kept, only Andrew Guya and Doreen see them). */

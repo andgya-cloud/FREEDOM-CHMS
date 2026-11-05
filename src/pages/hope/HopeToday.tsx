@@ -15,7 +15,10 @@ import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon } from '../../components/icons';
 import { PoweredBy } from '../../components/PoweredBy';
-import { DeptBars, HOPE_DONUT_COLOURS, Kpi, Ring, StatusDonut } from '../../components/LavFigures';
+import { DeptBars, HOPE_DONUT_COLOURS, Kpi, Ring, StackBars, StatusDonut } from '../../components/LavFigures';
+import { useHopeMeals } from '../../state/useHope';
+import { canCountMeals, MEAL_EMOJI, MEAL_LABELS, mealMonth, MEALS, mealWeeks } from '../../../functions/src/shared/hopeRecords';
+import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { consentMissing, isCurrentChild, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
 import { birthdayThisWeek, dayTrend, rateFrom, saturdayOnOrBefore } from '../../../functions/src/shared/hopeRegister';
 import { pct, useHopePage } from './common';
@@ -63,7 +66,7 @@ function HelperHome({ org }: { org: Organization }) {
       ) : (
         <button type="button" className="hp-big hp-arrive" onClick={arrived}><span className="hp-ico" aria-hidden="true">🙋</span><span><b>I'm here</b><span>Tap when you arrive</span></span></button>
       )}
-      <Link to="/hope/register" className="hp-big"><span className="hp-ico" aria-hidden="true">🧒</span><span><b>Children's register</b><span>{kids.present ? `${kids.present} here today` : 'Tap each child as they arrive'}</span></span></Link>
+      <Link to="/hope/register?d=today" className="hp-big"><span className="hp-ico" aria-hidden="true">✅</span><span><b>Check in children</b><span>{kids.present ? `${kids.present} here today` : 'Tap each child as they arrive'}</span></span></Link>
       {clubsToday.map((x) => (
         <Link key={x.id} to={`/hope/clubs/${x.id}`} className="hp-big"><span className="hp-ico" aria-hidden="true">{x.emoji || '⭐'}</span><span><b>{x.name}</b><span>{x.time ? `Today at ${x.time}` : 'Meets today'}</span></span></Link>
       ))}
@@ -98,6 +101,10 @@ function LeaderToday({ org }: { org: Organization }) {
   const missing = h.children.filter(consentMissing).length;
   const { helpers } = useHelperDay(org.id, h.today);
   const chats = useChatSummary(org.id);
+  const { meals } = useHopeMeals(org.id);
+  const mealsToday = meals.find((x) => x.date === h.today);
+  const mealCounter = canCountMeals(profile, org.id);
+  const todayKids = rateFrom(Object.values(days.find((d) => d.date === h.today)?.marks ?? {}));
   const departing = h.children.filter((c) => c.status === 'departing').length;
   const birthdays = current.filter((c) => birthdayThisWeek(c.dateOfBirth, h.today)).length;
   const toCall = h.absenceTasks.filter((t) => t.status === 'open').length;
@@ -145,13 +152,20 @@ function LeaderToday({ org }: { org: Organization }) {
   return (
     <div className="page lav-today">
       {isSaturday && marker && (
-        <Link to="/hope/register" className="card ht-saturday">
+        <Link to="/hope/register?d=today" className="card ht-saturday">
           <span className="ht-sat-ico" aria-hidden="true"><AdiaIcon name="register" /></span>
           <span className="ht-sat-text">
             <b>{kids.marked ? 'Carry on with today\'s register' : 'Start today\'s register'}</b>
             <span>{kids.present} of {current.length} checked in{kids.marked ? ` · ${kids.absent} absent · ${kids.excused} excused` : ''}</span>
           </span>
           <span className="ht-sat-meter" aria-hidden="true"><i style={{ width: `${current.length ? Math.min(100, Math.round((kids.present / current.length) * 100)) : 0}%` }} /></span>
+        </Link>
+      )}
+
+      {!(isSaturday && marker) && marker && (
+        <Link to="/hope/register?d=today" className="ht-checkin">
+          <span className="ht-checkin-ico" aria-hidden="true">✅</span>
+          <span><b>Check in</b><span>{todayKids.present ? `${todayKids.present} checked in today` : 'Tap each child as they arrive today'}</span></span>
         </Link>
       )}
 
@@ -191,6 +205,13 @@ function LeaderToday({ org }: { org: Organization }) {
               <span className="lav-ico i2"><AdiaIcon name="people" /></span>
               <b>Champions register</b>
               <span className="lav-sub">{champs.marked ? `${satWord}: ${champs.present} of ${serving} served` : `${satWord}: not marked yet`}</span>
+            </Link>
+          )}
+          {(mealCounter || mealsToday) && (
+            <Link to="/hope/meals" className="card lav-job">
+              <span className="lav-ico i4" aria-hidden="true">🍽️</span>
+              <b>Meals today</b>
+              <span className="lav-sub">{mealsToday ? MEALS.map((k) => `${MEAL_EMOJI[k]} ${mealsToday[k]}`).join('  ') : 'Count breakfast, lunch and fruit'}</span>
             </Link>
           )}
           {can('people.write') && (
@@ -275,6 +296,28 @@ function LeaderToday({ org }: { org: Organization }) {
               </div>
             </section>
 
+            {(() => {
+              const weeks = mealWeeks(meals, h.today, 8);
+              const month = mealMonth(meals, h.today);
+              return (
+                <section className="card lav-panel">
+                  <div className="lav-head"><div><h2>Meals served</h2><p className="lav-sub">Each week, the last 8 weeks</p></div><span className="lav-chip">{month.total} this month</span></div>
+                  {weeks.some((w) => w.breakfast + w.lunch + w.fruit > 0) ? (
+                    <StackBars what="Meals served each week" parts={MEALS.map((m, i) => ({ label: MEAL_LABELS[m], colour: ['#038241', '#c99a3c', '#7fc8a0'][i]! }))}
+                      cols={weeks.map((w) => ({ label: formatDateKey(w.start).replace(/ \d{4}$/, ''), title: `Week of ${formatDateKey(w.start)}`, values: [w.breakfast, w.lunch, w.fruit] }))} />
+                  ) : (
+                    <div className="lav-empty">
+                      <span className="lav-ico i5" aria-hidden="true">🍽️</span>
+                      <b>No meals counted yet</b>
+                      <span>The columns appear once meals are saved.</span>
+                      {mealCounter && <Link to="/hope/meals" className="lav-btn dark small">Count meals</Link>}
+                    </div>
+                  )}
+                  {month.total > 0 && <p className="small muted">This month: {MEALS.map((m) => `${month[m]} ${MEAL_LABELS[m].toLowerCase()}`).join(', ')} over {month.days} {month.days === 1 ? 'day' : 'days'}.</p>}
+                </section>
+              );
+            })()}
+
             <StatusDonut title="Children by age" sub="Ages of the children" noun="children" colours={HOPE_DONUT_COLOURS}
                 rows={AGES.map(([label, f]) => ({ label, value: current.filter((c) => f(ageOf(c.dateOfBirth))).length }))} />
             <StatusDonut title="Children in school" sub="School, as recorded" noun="children" colours={HOPE_DONUT_COLOURS}
@@ -283,6 +326,8 @@ function LeaderToday({ org }: { org: Organization }) {
             <div className="btn-line">
               <Link to="/hope/reports" className="btn btn-quiet">Weekly and monthly reports</Link>
               <Link to="/hope/photos" className="btn btn-quiet">📷 Photo reports</Link>
+              <Link to="/hope/attendance" className="btn btn-quiet">📋 Attendance</Link>
+              <Link to="/hope/meals" className="btn btn-quiet">🍽️ Meals</Link>
             </div>
           </div>
         </details>

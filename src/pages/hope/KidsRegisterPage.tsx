@@ -12,7 +12,8 @@ import { ChampionsPanel } from './ChampionsPage';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
 import { birthdayThisWeek, dayTrend, streak, rateFrom, saturdayOnOrBefore, type KidEntry } from '../../../functions/src/shared/hopeRegister';
-import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { canKeepAccounts, HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { HopeGate, useHopePage } from './common';
 import { Avatar, Delights, nowTime, RegisterCalendar, tick, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
@@ -89,7 +90,11 @@ function KidsRegister({ org }: { org: Organization }) {
   const toast = useToast();
   const { days } = useHopeDays(org.id);
   const photos = useChildPhotos(org.id);
-  const [date, setDate] = useState(() => saturdayOnOrBefore(h.today));
+  const [params] = useSearchParams();
+  // "Check in" opens today, any day of the week (Andy, 2026-11-05, 1A); a day from Reports → Attendance opens that day.
+  const asked = params.get('d');
+  const [date, setDate] = useState(() => (asked === 'today' ? h.today : asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= h.today ? asked : saturdayOnOrBefore(h.today)));
+  const keeper = canKeepAccounts(profile);
   const [pick, setPick] = useState(false);
   const [q, setQ] = useState('');
   const [view, setView] = useState<View>(() => { try { return localStorage.getItem(VIEW_KEY) === 'ticks' ? 'ticks' : 'photos'; } catch { return 'photos'; } });
@@ -147,6 +152,7 @@ function KidsRegister({ org }: { org: Organization }) {
             <span className="small muted">{date === h.today ? formatDateKey(date) : 'Tap "Change day" for another day'}</span></span>
           <button type="button" className="btn btn-quiet" aria-expanded={pick} onClick={() => setPick(!pick)}>{pick ? 'Close' : 'Change day'}</button>
         </div>
+        {keeper && day && <div className="ck-reset"><CleanupButton orgId={org.id} kind="hopeDay" id={date} label="Reset this day" /><span className="small muted">For testing: moves this day's marks to the Bin.</span></div>}
         {pick && <RegisterCalendar value={date} onChange={(d) => { setDate(d); setPick(false); }} marked={markedDays} today={h.today} />}
         <div className="ck-counts" aria-live="polite">
           <span className="ok"><b>{r.present}</b> here</span>
@@ -203,6 +209,7 @@ function KidsRegister({ org }: { org: Organization }) {
                   <span className="grow"><b>{name}</b><span className="small muted">{h.codeOf(c)}{on && e?.t ? ` · came ${e.t}` : e?.s === 'absent' ? ' · absent' : ''}</span></span>
                 </label>
                 <button type="button" className={`chip${e?.s === 'excused' ? ' chip-on' : ''}`} aria-pressed={e?.s === 'excused'} disabled={!canMark} onClick={() => excuse(c.id)}>Excused</button>
+                {keeper && e && <button type="button" className="chip" title="Clear this child's mark (testing)" onClick={() => { markKid(org.id, date, c.id, null).catch(fail); }}>↺ Reset</button>}
                 {e?.s === 'excused' && (
                   <input className="ck-reason" aria-label={`Why ${name} is away`} disabled={!canMark} maxLength={200} defaultValue={e.r ?? ''} key={`${date}${e.r}`} placeholder="Why? Sick, school trip…"
                     onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && reason(c.id, ev.target.value)} />

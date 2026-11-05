@@ -94,6 +94,11 @@ const RegisterChildPage = lazy(() => import('./pages/hope/RegisterChildPage').th
 const ChildPage = lazy(() => import('./pages/hope/ChildPage').then((m) => ({ default: m.ChildPage })));
 const HopeChatsPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.HopeChatsPage })));
 const HopeChatPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.HopeChatPage })));
+const HopeAttendancePage = lazy(() => import('./pages/hope/HopeAttendancePage').then((m) => ({ default: m.HopeAttendancePage })));
+const HopeAttendanceDayPage = lazy(() => import('./pages/hope/HopeAttendancePage').then((m) => ({ default: m.HopeAttendanceDayPage })));
+const HopeRecordsPage = lazy(() => import('./pages/hope/HopeRecordsPage').then((m) => ({ default: m.HopeRecordsPage })));
+const HopeMealsPage = lazy(() => import('./pages/hope/HopeMealsPage').then((m) => ({ default: m.HopeMealsPage })));
+const HopeBinPage = lazy(() => import('./pages/hope/HopeBinPage').then((m) => ({ default: m.HopeBinPage })));
 const HopePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.HopePhotosPage })));
 const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
 const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then((m) => ({ default: m.KidsRegisterPage })));
@@ -243,6 +248,11 @@ function AppRoutes() {
         <Route path="/hope/photos" element={<HopePhotosPage />} />
         <Route path="/hope/chats" element={<HopeChatsPage />} />
         <Route path="/hope/chats/:id" element={<HopeChatPage />} />
+        <Route path="/hope/attendance" element={<HopeAttendancePage />} />
+        <Route path="/hope/attendance/:date" element={<HopeAttendanceDayPage />} />
+        <Route path="/hope/records" element={<HopeRecordsPage />} />
+        <Route path="/hope/meals" element={<HopeMealsPage />} />
+        <Route path="/hope/bin" element={<HopeBinPage />} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
         <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />

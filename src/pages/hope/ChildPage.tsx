@@ -7,7 +7,7 @@ import { useChildPhoto, useChildPrivate, useClubs, useHopeDays } from '../../sta
 import { memberRate, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
-import { addHomeVisit, addReferral, closeReferral, removeChildPhoto, saveChildPhoto, saveChildPrivate, updateChild } from '../../lib/hopeWrites';
+import { addReferral, closeReferral, removeChildPhoto, saveChildPhoto, updateChild } from '../../lib/hopeWrites';
 import { daysToBirthday, KID_MARK_LABELS, kidHistory, rateFrom, streak, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
 import { Avatar, PctBadge, shrinkPhoto } from './registerParts';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
@@ -18,6 +18,7 @@ import {
   type ChildPayment, type ChildProgramme, type Consent, type PayBy, type SchoolStatus,
 } from '../../../functions/src/shared/hope';
 import { ChildChats } from './HopeChatsPage';
+import { ChildNotes, FeesPaid, saveLeavingNote } from './ChildRecords';
 import { HopeGate, useHopePage } from './common';
 import { ConsentField } from './fields';
 import type { Organization } from '../../state/OrgContext';
@@ -89,6 +90,9 @@ function ChildScreen({ org }: { org: Organization }) {
     setConfirmExit(null);
     updateChild(org.id, child!.id, to === 'exited' ? { status: 'exited', exitedOn: h.today, departingNote: leaveNote.trim().slice(0, 500) } : { status: 'departing', departingNote: leaveNote.trim().slice(0, 500) })
       .catch((err) => toast.show(friendlyError(err)));
+    // The leaving note goes to Records too (Andy, 2026-11-05, 4A), dated and signed.
+    saveLeavingNote(org.id, child!.id, `${to === 'exited' ? 'Marked as departed (left for good)' : 'Marked as departing'}${leaveNote.trim() ? `: ${leaveNote.trim().slice(0, 500)}` : '.'}`)
+      .catch(() => { /* offline: the child's own record still has the note */ });
     toast.show(to === 'exited' ? `${name} moved to Past children.` : `${name} is marked as departing.`);
   }
   async function takePhoto(f: File | undefined) {
@@ -124,7 +128,7 @@ function ChildScreen({ org }: { org: Organization }) {
         <div className="hc-profile-main">
           <div className="hc-profile-top">
             <h1>{name}</h1>
-            <CleanupButton orgId={org.id} kind="person" id={child.id} back="/hope/children" />
+            <CleanupButton orgId={org.id} kind="person" id={child.id} back="/hope/children" hope />
           </div>
           <p className="muted">{h.codeOf(child)}{person?.gender ? ` · ${person.gender}` : ''}
             {consentMissing(child) && <span className="badge badge-warn">Consent missing</span>}
@@ -183,6 +187,7 @@ function ChildScreen({ org }: { org: Organization }) {
       </details>
 
       <SchoolFees orgId={org.id} childId={child.id} saved={child.payment ?? null} school={child.school ?? ''} canEdit={canEdit} />
+      <FeesPaid orgId={org.id} childId={child.id} />
 
       <RegisterHistory history={history} rate={rate} />
 
@@ -215,6 +220,8 @@ function ChildScreen({ org }: { org: Organization }) {
 
       <ChildChats org={org} childId={child.id} firstName={person?.firstName ?? 'this child'} />
 
+      <ChildNotes orgId={org.id} childId={child.id} today={h.today} />
+
       {h.pastoral && <PastorSection orgId={org.id} childId={child.id} today={h.today} />}
 
       {canEdit && (
@@ -226,9 +233,9 @@ function ChildScreen({ org }: { org: Organization }) {
           <div className="chips">
             {child.status === 'active' && <button type="button" className="btn" onClick={() => setConfirmExit('departing')}>Mark as departing</button>}
             {child.status !== 'exited' && <button type="button" className="btn btn-quiet danger-text" onClick={() => setConfirmExit('exited')}>Mark as departed</button>}
-            {child.status !== 'active' && <button type="button" className="btn btn-quiet" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null, departingNote: null }).catch((err) => toast.show(friendlyError(err))); }}>Return to active</button>}
+            {child.status !== 'active' && <button type="button" className="btn btn-quiet" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null, departingNote: null }).catch((err) => toast.show(friendlyError(err))); saveLeavingNote(org.id, child.id, 'Returned to active.').catch(() => {}); }}>Return to active</button>}
           </div>
-          <p className="small muted">Departing: in the process of leaving for good. Departed: has left for good and moves to Past children.</p>
+          <p className="small muted">Departing: in the process of leaving for good. Departed: has left for good and moves to Past children. Each change is kept as a dated note in Reports → Records.</p>
           </div>
         </details>
       )}
@@ -260,48 +267,17 @@ function RegisterHistory({ history, rate }: { history: ReturnType<typeof kidHist
   );
 }
 
-/** Welfare notes, home visits and referrals (safeguarding concerns are now conversations). Only the pastor's account can read these. */
+/** Referrals (pastor only). Welfare notes and home visits are now dated notes under "Welfare notes" (Andy, 2026-11-05, 4A). */
 function PastorSection({ orgId, childId, today }: { orgId: string; childId: string; today: string }) {
   const toast = useToast();
   const p = useChildPrivate(orgId, childId);
-  const [welfare, setWelfare] = useState('');
-  const [health, setHealth] = useState('');
-  const [home, setHome] = useState('');
-  const [visitDate, setVisitDate] = useState(today);
-  const [visitNote, setVisitNote] = useState('');
   const [refTo, setRefTo] = useState('');
   const [refReason, setRefReason] = useState('');
   const fail = (err: unknown) => toast.show(friendlyError(err));
-  useEffect(() => {
-    setWelfare(p.private?.welfare ?? ''); setHealth(p.private?.health ?? ''); setHome(p.private?.home ?? '');
-  }, [p.private?.id, p.private?.welfare, p.private?.health, p.private?.home]);
-
   return (
     <details className="card hr-fold">
-      <summary><h2>Welfare (pastor only)</h2><span className="small muted">Notes, visits and referrals</span></summary>
+      <summary><h2>Referrals (pastor only)</h2><span className="small muted">{p.referrals.length ? `${p.referrals.length} logged` : 'Clinic, children\'s office, school'}</span></summary>
       <div className="stack">
-
-      <section className="stack hr-sub">
-        <h3>Welfare notes</h3>
-        <p className="small muted">Other staff cannot see this section.</p>
-        <label className="field"><span>Welfare notes</span><textarea rows={3} maxLength={4000} value={welfare} onChange={(e) => setWelfare(e.target.value)} /></label>
-        <label className="field"><span>Dietary and health flags</span><textarea rows={2} maxLength={2000} value={health} onChange={(e) => setHealth(e.target.value)} /></label>
-        <label className="field"><span>Home circumstances</span><textarea rows={2} maxLength={2000} value={home} onChange={(e) => setHome(e.target.value)} /></label>
-        <button type="button" className="btn align-start" onClick={() => { saveChildPrivate(orgId, childId, { welfare: welfare.trim(), health: health.trim(), home: home.trim() }, !!p.private).catch(fail); toast.show('Saved'); }}>Save</button>
-      </section>
-
-      <section className="stack hr-sub">
-        <h3>Home visits</h3>
-        {p.visits.length > 0 && <ul className="link-list">{p.visits.map((v) => <li key={v.id}><div><span className="link-title">{formatDateKey(v.date)}</span><span className="link-detail">{v.note}</span></div></li>)}</ul>}
-        <div className="field-row">
-          <label className="field"><span>Date</span><input type="date" value={visitDate} max={today} onChange={(e) => setVisitDate(e.target.value)} /></label>
-        </div>
-        <label className="field"><span>What happened</span><textarea rows={2} maxLength={3000} value={visitNote} onChange={(e) => setVisitNote(e.target.value)} /></label>
-        <button type="button" className="btn align-start" disabled={!visitNote.trim() || !visitDate} onClick={() => { addHomeVisit(orgId, childId, visitDate, visitNote).catch(fail); setVisitNote(''); toast.show('Visit logged'); }}>Log the visit</button>
-      </section>
-
-      <section className="stack hr-sub">
-        <h3>Referrals</h3>
         {p.referrals.length > 0 && (
           <ul className="link-list">
             {p.referrals.map((r) => (
@@ -318,7 +294,6 @@ function PastorSection({ orgId, childId, today }: { orgId: string; childId: stri
         <label className="field"><span>Referred to</span><input value={refTo} maxLength={120} onChange={(e) => setRefTo(e.target.value)} placeholder="Clinic, children's office, school…" /></label>
         <label className="field"><span>Why</span><textarea rows={2} maxLength={1000} value={refReason} onChange={(e) => setRefReason(e.target.value)} /></label>
         <button type="button" className="btn align-start" disabled={!refTo.trim()} onClick={() => { addReferral(orgId, childId, { date: today, to: refTo, reason: refReason }).catch(fail); setRefTo(''); setRefReason(''); toast.show('Referral logged'); }}>Log the referral</button>
-      </section>
       </div>
     </details>
   );

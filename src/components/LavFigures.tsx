@@ -103,3 +103,29 @@ export function StatusDonut({ rows, title, sub, noun, colours = DONUT_COLOURS }:
     </section>
   );
 }
+
+/**
+ * Stacked columns, one per week (Andy, 2026-11-05, 12A): each column is the week's meals, split into its parts
+ * (breakfast, lunch, fruit) in their own colours, with the week's total on top and a key underneath.
+ */
+export function StackBars({ cols, parts, what }: { cols: { label: string; title: string; values: number[] }[]; parts: { label: string; colour: string }[]; what: string }) {
+  const totals = cols.map((c) => c.values.reduce((a, b) => a + b, 0));
+  const max = Math.max(1, ...totals) * 1.15;
+  if (totals.every((t) => t === 0)) return <p className="muted small">Nothing recorded yet.</p>;
+  return (
+    <>
+      <div className="lav-bars stack-bars" role="img" aria-label={`${what}: ${cols.map((c, i) => `${c.title} ${totals[i]}`).join(', ')}`}>
+        {cols.map((c, i) => (
+          <div key={c.title} className="lav-bar" title={`${c.title}: ${parts.map((p, j) => `${p.label} ${c.values[j] ?? 0}`).join(', ')}`}>
+            <span className="lav-bar-v">{totals[i]}</span>
+            <span className="stack-col" style={{ height: `${(totals[i]! / max) * 100}%`, animationDelay: `${i * 0.06}s` }}>
+              {parts.map((p, j) => (c.values[j] ? <i key={p.label} style={{ flexGrow: c.values[j], background: p.colour }} /> : null)).reverse()}
+            </span>
+            <span className="lav-bar-l">{c.label}</span>
+          </div>
+        ))}
+      </div>
+      <div className="stack-key">{parts.map((p) => <span key={p.label}><i style={{ background: p.colour }} />{p.label}</span>)}</div>
+    </>
+  );
+}

@@ -10,7 +10,8 @@ import type { OrganizationType } from './organizations.js';
  * Money and official records need the Director (Andy) and his password, with a reason.
  * Nothing is erased: entries are marked deleted (deletedAt), so totals, ledgers and lists leave them out.
  */
-export const CLEANUP_KINDS = ['person', 'event', 'gift', 'followUp', 'programme', 'group', 'team', 'examSheet', 'examResult', 'inventoryCount', 'payrollStaff', 'payrollRun'] as const;
+export const CLEANUP_KINDS = ['person', 'event', 'gift', 'followUp', 'programme', 'group', 'team', 'examSheet', 'examResult', 'inventoryCount', 'payrollStaff', 'payrollRun',
+  'hopeDay', 'championDay', 'clubDay', 'helperDay', 'mealDay', 'hopeFee', 'childNote', 'club', 'champion'] as const;
 export type CleanupKind = (typeof CLEANUP_KINDS)[number];
 
 export const BIN_DAYS = 30;
@@ -54,7 +55,10 @@ const PERSON_LINKS: LinkedSpec[] = [
   { collection: 'childPrivate', field: 'id', label: 'child private details' },
   { collection: 'homeVisits', field: 'childId', label: 'home visits' },
   { collection: 'referrals', field: 'childId', label: 'referrals' },
+  { collection: 'hopeFees', field: 'childId', label: 'fees paid' },
+  { collection: 'childNotes', field: 'childId', label: 'welfare and leaving notes' },
 ];
+const HOPE = ['ministry'] as const;
 
 export const KINDS: Record<CleanupKind, KindSpec> = {
   person: { collection: 'people', label: { default: 'People', college: 'Students', ministry: 'Children and people' }, linked: PERSON_LINKS },
@@ -84,6 +88,16 @@ export const KINDS: Record<CleanupKind, KindSpec> = {
   inventoryCount: { collection: 'inventoryCounts', label: 'Inventory forms', orgTypes: ['college'], linked: [], fixedId: true },
   payrollStaff: { collection: 'payrollStaff', label: 'Payroll staff', orgTypes: ['college'], linked: [] },
   payrollRun: { collection: 'payrollRuns', label: 'Payroll months', orgTypes: ['college'], linked: [], fixedId: true },
+  // The Hope Centre (Andy, 2026-11-05): register days are reset whole; the Bin keeps them so they can come back.
+  hopeDay: { collection: 'hopeDays', label: "Children's register days", orgTypes: HOPE, linked: [], fixedId: true },
+  championDay: { collection: 'championDays', label: 'Champions register days', orgTypes: HOPE, linked: [], fixedId: true },
+  clubDay: { collection: 'clubDays', label: 'Club register days', orgTypes: HOPE, linked: [], fixedId: true },
+  helperDay: { collection: 'helperDays', label: 'Helper arrival days', orgTypes: HOPE, linked: [], fixedId: true },
+  mealDay: { collection: 'hopeMeals', label: 'Meals', orgTypes: HOPE, linked: [], fixedId: true },
+  hopeFee: { collection: 'hopeFees', label: 'School fees paid', orgTypes: HOPE, linked: [] },
+  childNote: { collection: 'childNotes', label: 'Welfare and leaving notes', orgTypes: HOPE, linked: [] },
+  club: { collection: 'clubs', label: 'Clubs', orgTypes: HOPE, linked: [{ collection: 'clubDays', field: 'clubId', label: 'club register days' }, { collection: 'clubWins', field: 'clubId', label: 'club wins' }] },
+  champion: { collection: 'champions', label: 'Child Champions', orgTypes: HOPE, linked: [] },
 };
 
 export function isCleanupKind(v: unknown): v is CleanupKind {
@@ -130,6 +144,24 @@ export function describeEntry(kind: CleanupKind, id: string, d: Data): { label: 
       return { label: s(d.name) || 'Staff', detail: join(d.staffNo, d.jobTitle) };
     case 'payrollRun':
       return { label: `Payroll ${s(d.month) || id}`, detail: join(d.status === 'approved' ? 'Approved' : d.status) };
+    case 'hopeDay':
+    case 'championDay':
+    case 'clubDay':
+    case 'helperDay': {
+      const marks = d.marks && typeof d.marks === 'object' ? Object.keys(d.marks as object).length : 0;
+      const what = kind === 'hopeDay' ? "Children's register" : kind === 'championDay' ? 'Champions register' : kind === 'helperDay' ? 'Helpers arrived' : 'Club register';
+      return { label: `${what} · ${day(d.date) || id}`, detail: `${marks} ${marks === 1 ? 'mark' : 'marks'}` };
+    }
+    case 'mealDay':
+      return { label: `Meals · ${day(d.date) || id}`, detail: join(`Breakfast ${Number(d.breakfast) || 0}`, `Lunch ${Number(d.lunch) || 0}`, `Fruit ${Number(d.fruit) || 0}`) };
+    case 'hopeFee':
+      return { label: `School fees · KES ${(Number(d.amount) || 0).toLocaleString('en-KE')}`, detail: join(day(d.date), d.code, d.byName) };
+    case 'childNote':
+      return { label: `${s(d.childName) || 'Child'} · note`, detail: join(day(d.day), s(d.text).slice(0, 60), d.byName) };
+    case 'club':
+      return { label: s(d.name) || 'Club', detail: join(d.day, d.status === 'paused' ? 'Paused' : '') };
+    case 'champion':
+      return { label: s(d.name) || 'Champion', detail: join(d.duty, d.status === 'left' ? 'Left' : '') };
   }
 }
 
@@ -184,3 +216,13 @@ export interface CleanupBinEntry {
   state: BinState;
   restoredByName?: string | null;
 }
+
+/** What "Start fresh" can clear at the Hope Centre before going live (Andy, 2026-11-05, 3B). Children are never in it. */
+export const START_FRESH_KINDS = ['hopeDay', 'championDay', 'clubDay', 'helperDay', 'mealDay', 'hopeFee', 'childNote'] as const satisfies readonly CleanupKind[];
+export type StartFreshKind = (typeof START_FRESH_KINDS)[number];
+export const START_FRESH_LABELS: Record<StartFreshKind, string> = {
+  hopeDay: "Children's register (every day marked)", championDay: 'Champions register', clubDay: 'Club registers', helperDay: 'Helper arrival times',
+  mealDay: 'Meals counted', hopeFee: 'School fees paid', childNote: 'Welfare and leaving notes',
+};
+export const isStartFreshKind = (v: unknown): v is StartFreshKind => typeof v === 'string' && (START_FRESH_KINDS as readonly string[]).includes(v);
+export const START_FRESH_MAX = 1500;

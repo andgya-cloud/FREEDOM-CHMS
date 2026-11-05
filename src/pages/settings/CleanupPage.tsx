@@ -7,7 +7,7 @@ import { kindLabel, kindsFor, type CleanupKind } from '../../../functions/src/sh
 
 /*
  * Clean-up (Andy, 2026-10-30): Andrew Guya and Doreen find test data and clutter, tick it and remove it to the
- * Recycle Bin; put it back within 30 days, after which it moves to Forever (still only they see it, and it can
+ * Recycle Bin; put it back within 30 days, after which it moves to Dormant (still only they see it, and it can
  * still come back). The Director also sees the deletion register: what was removed, by whom, when and why.
  */
 type Tab = 'find' | 'bin' | 'forever' | 'register';
@@ -39,14 +39,14 @@ export function CleanupPage() {
       <div className="segmented wrap" role="tablist" aria-label="Show">
         <button type="button" className={tab === 'find' ? 'on' : ''} onClick={() => setTab('find')}>Find and remove</button>
         <button type="button" className={tab === 'bin' ? 'on' : ''} onClick={() => setTab('bin')}>Recycle Bin{inBin.length ? ` (${inBin.length})` : ''}</button>
-        <button type="button" className={tab === 'forever' ? 'on' : ''} onClick={() => setTab('forever')}>Forever{forever.length ? ` (${forever.length})` : ''}</button>
+        <button type="button" className={tab === 'forever' ? 'on' : ''} onClick={() => setTab('forever')}>Dormant{forever.length ? ` (${forever.length})` : ''}</button>
         {bin?.isDirector && <button type="button" className={tab === 'register' ? 'on' : ''} onClick={() => setTab('register')}>Register</button>}
       </div>
       {org && tab === 'find' && <FindTab key={org.id} orgId={org.id} type={org.type} onRemoved={refreshBin} />}
-      {org && tab === 'bin' && <BinList orgId={org.id} rows={inBin} loading={!bin} onChange={refreshBin}
-        empty="The Recycle Bin is empty." note="Entries stay here for 30 days, then move to Forever." />}
+      {org && tab === 'bin' && <BinList orgId={org.id} rows={inBin} loading={!bin} onChange={refreshBin} canDormant
+        empty="The Recycle Bin is empty." note="Entries stay here for 30 days, then move to Dormant." />}
       {org && tab === 'forever' && <BinList orgId={org.id} rows={forever} loading={!bin} onChange={refreshBin}
-        empty="Nothing in Forever yet." note="Kept for good. Only Andrew Guya and Doreen see this, and anything here can still be put back." />}
+        empty="Nothing in Dormant yet." note="Kept for good. Only Andrew Guya and Doreen see this, and anything here can still be put back." />}
       {org && tab === 'register' && bin?.isDirector && <Register rows={bin.entries} type={org.type} />}
     </div>
   );
@@ -153,7 +153,7 @@ function FindTab({ orgId, type, onRemoved }: { orgId: string; type: Parameters<t
   );
 }
 
-function BinList({ orgId, rows, loading, onChange, empty, note }: { orgId: string; rows: BinRow[]; loading: boolean; onChange: () => void; empty: string; note: string }) {
+export function BinList({ orgId, rows, loading, onChange, empty, note, canDormant }: { orgId: string; rows: BinRow[]; loading: boolean; onChange: () => void; empty: string; note: string; canDormant?: boolean }) {
   const toast = useToast();
   const [ticked, setTicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
@@ -163,11 +163,12 @@ function BinList({ orgId, rows, loading, onChange, empty, note }: { orgId: strin
   const allTicked = rows.every((r) => ticked.has(r.id));
   const toggle = (id: string) => setTicked((t) => { const n = new Set(t); if (n.has(id)) n.delete(id); else n.add(id); return n; });
 
-  async function putBack() {
+  async function putBack(to?: 'dormant') {
     setBusy(true);
     try {
-      const res = await restoreEntries({ orgId, binIds: [...ticked] });
-      toast.show(res.restored === 1 ? 'Put back, with everything linked to it.' : `${res.restored} entries put back, with everything linked to them.`);
+      const res = await restoreEntries({ orgId, binIds: [...ticked], ...(to ? { to } : {}) });
+      toast.show(to ? `${res.restored === 1 ? 'Moved' : `${res.restored} entries moved`} to Dormant. Only Andrew Guya and Doreen can see or put back what is there.`
+        : res.restored === 1 ? 'Put back, with everything linked to it.' : `${res.restored} entries put back, with everything linked to them.`);
       setTicked(new Set());
       onChange();
     } catch (err) {
@@ -202,7 +203,8 @@ function BinList({ orgId, rows, loading, onChange, empty, note }: { orgId: strin
       {ticked.size > 0 && (
         <div className="cleanup-bar">
           <span>{ticked.size} ticked</span>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void putBack()}>{busy ? 'Putting back…' : 'Put back'}</button>
+          {canDormant && <button type="button" className="btn btn-quiet danger-text" disabled={busy} onClick={() => void putBack('dormant')}>Remove from Bin</button>}
+          <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void putBack()}>{busy ? 'Working…' : 'Put back'}</button>
         </div>
       )}
     </section>
@@ -211,7 +213,7 @@ function BinList({ orgId, rows, loading, onChange, empty, note }: { orgId: strin
 
 function Register({ rows, type }: { rows: BinRow[]; type: Parameters<typeof kindLabel>[1] }) {
   if (!rows.length) return <p className="muted">Nothing has been removed yet.</p>;
-  const state = (r: BinRow) => (r.state === 'restored' ? `Put back by ${r.restoredByName ?? ''} on ${when(r.restoredAt)}` : r.state === 'forever' ? 'In Forever' : 'In the Recycle Bin');
+  const state = (r: BinRow) => (r.state === 'restored' ? `Put back by ${r.restoredByName ?? ''} on ${when(r.restoredAt)}` : r.state === 'forever' ? 'In Dormant' : 'In the Recycle Bin');
   return (
     <section className="stack">
       <p className="small muted">Every removal, newest first. Only you can see this.</p>

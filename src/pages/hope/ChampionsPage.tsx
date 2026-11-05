@@ -11,6 +11,7 @@ import {
   planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
 } from '../../../functions/src/shared/hopeRegister';
 import { useHopePage } from './common';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Avatar, nowTime, PctBadge, RegisterCalendar, SheetPicker, TemplateButtons, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
@@ -70,6 +71,7 @@ function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organizat
         <RegisterCalendar value={date} onChange={setDate} marked={markedDays} today={today} />
         <div className="stack">
           <h2>{formatDateKey(date)}</h2>
+          {day && <CleanupButton orgId={org.id} kind="championDay" id={date} label="Reset this day" />}
           <div className="hr-counts">
             <span><b>{rate.present}</b> came</span>
             <span><b>{Object.values(marks).filter((e) => e.s === 'late').length}</b> late</span>

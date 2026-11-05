@@ -17,8 +17,9 @@ const call = <I, O>(name: string) => async (data: I) => (await httpsCallable<I, 
 export const findEntries = call<{ orgId: string; kind: CleanupKind; text: string; from: string; to: string; testOnly: boolean }, { total: number; rows: FoundRow[] }>('cleanupFind');
 export const checkEntries = call<{ orgId: string; items: Item[] }, { items: CheckedItem[]; isDirector: boolean }>('cleanupCheck');
 export const removeEntries = call<{ orgId: string; items: Item[]; reason: string; proof?: string }, { removed: number; binIds: string[] }>('cleanupDelete');
-export const restoreEntries = call<{ orgId: string; binIds: string[] }, { restored: number }>('cleanupRestore');
-export const loadBin = call<{ orgId: string }, { entries: BinRow[]; isDirector: boolean; binDays: number }>('cleanupBin');
+export const restoreEntries = call<{ orgId: string; binIds: string[]; to?: 'dormant' }, { restored: number }>('cleanupRestore');
+export const loadBin = call<{ orgId: string }, { entries: BinRow[]; isDirector: boolean; isKeeper?: boolean; binDays: number }>('cleanupBin');
+export const startFresh = call<{ orgId: string; items: []; startFresh: string[]; reason: string }, { removed: number; binIds: string[] }>('cleanupDelete');
 
 /** The server's own words when it refuses, otherwise the usual friendly message. */
 export function cleanupError(err: unknown) {

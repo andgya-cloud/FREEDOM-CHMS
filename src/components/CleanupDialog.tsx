@@ -1,10 +1,11 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useToast } from '../state/ToastContext';
 import { checkEntries, cleanupError, removeEntries, type CheckedItem, type Item } from '../lib/cleanup';
 import { passwordProof } from '../lib/pettyPin';
 import { canKeepAccounts } from '../../functions/src/shared/permissions';
+import { isHopeDirector } from '../../functions/src/shared/hopePhotos';
 import { BIN_DAYS, type CleanupKind } from '../../functions/src/shared/cleanup';
 
 /**
@@ -74,7 +75,7 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
               </ul>
             </div>
           )}
-          <p className="small muted">It goes to the Recycle Bin, and putting it back brings back everything linked too. After {BIN_DAYS} days it moves to Forever, which only Andrew Guya and Doreen can see.</p>
+          <p className="small muted">It goes to the Recycle Bin, and putting it back brings back everything linked too. When it is removed from the Bin, or after {BIN_DAYS} days, it moves to Dormant, which only Andrew Guya and Doreen can see and put back.</p>
           {official && (
             <p className={blocked ? 'error' : 'small cleanup-official'}>
               {blocked ? 'This includes money or official records. Only Andrew Guya can remove those.' : 'This includes money or official records, so it needs your password and a reason.'}
@@ -103,20 +104,23 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
   );
 }
 
-/** The Remove button on an entry's own page; only Andrew Guya and Doreen see it. */
-export function CleanupButton({ orgId, kind, id, back }: { orgId: string; kind: CleanupKind; id: string; back: string }) {
+/**
+ * The Remove button on an entry's own page; Andrew Guya and Doreen see it, and on Hope Centre pages (`hope`) the
+ * Director too (Andy, 2026-11-05, 6A). `label` names it, e.g. "Reset this day" on a register (3A, keepers only).
+ */
+export function CleanupButton({ orgId, kind, id, back, hope, label = 'Remove', onDone }: { orgId: string; kind: CleanupKind; id: string; back?: string; hope?: boolean; label?: string; onDone?: () => void }) {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
-  const [items] = useState<Item[]>(() => [{ kind, id }]);
-  if (!orgId || !id || !canKeepAccounts(profile)) return null;
+  const items = useMemo<Item[]>(() => [{ kind, id }], [kind, id]);
+  if (!orgId || !id || !(canKeepAccounts(profile) || (hope && isHopeDirector(profile, orgId)))) return null;
   return (
     <>
       <button type="button" className="btn btn-quiet cleanup-remove no-print" onClick={() => setOpen(true)}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" /></svg>
-        Remove
+        {label}
       </button>
-      <RemoveDialog orgId={orgId} items={items} open={open} onClose={() => setOpen(false)} onDone={() => navigate(back, { replace: true })} />
+      <RemoveDialog orgId={orgId} items={items} open={open} onClose={() => setOpen(false)} onDone={() => { onDone?.(); if (back) navigate(back, { replace: true }); }} />
     </>
   );
 }

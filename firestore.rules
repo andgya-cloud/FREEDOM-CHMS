@@ -1305,6 +1305,22 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // Meals served each day (Andy, 2026-11-05, 9A-11): counts of breakfast, lunch and fruit. Everyone at the centre
+      // sees the counts; the Director (or Andy and Doreen) records them. Reset only through Clean-up (to the Bin).
+      match /hopeMeals/{day} {
+        allow read: if hopeRead();
+        allow create, update: if canAccessOrg(orgId) && (has('team.manage') || has('users.manage') || me().roleId == 'head')
+          && request.resource.data.keys().hasOnly(['orgId', 'date', 'breakfast', 'lunch', 'fruit', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.date == day && isDate(day)
+          && request.resource.data.breakfast is int && request.resource.data.breakfast >= 0 && request.resource.data.breakfast <= 2000
+          && request.resource.data.lunch is int && request.resource.data.lunch >= 0 && request.resource.data.lunch <= 2000
+          && request.resource.data.fruit is int && request.resource.data.fruit >= 0 && request.resource.data.fruit <= 2000
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+        allow delete: if false;
+      }
+      // Welfare and leaving notes, school fees paid, term fees and receipts are read and written only through the
+      // hopeRecords Cloud Function (no rule here means no direct access).
+
       // Welfare notes, dietary and health flags, home circumstances. Pastor only.
       match /childPrivate/{childId} {
         allow read: if canAccessOrg(orgId) && has('pastoral.read');

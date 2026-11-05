@@ -9,12 +9,13 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isCurrentChild, normalizeCode, programmeOf } from '../../../functions/src/shared/hope';
 import { dayTrend, rateFrom, type KidEntry } from '../../../functions/src/shared/hopeRegister';
 import {
-  clubDayOnOrBefore, clubSummary, levelLabel, memberRate, scheduleText, WEEKDAYS, WIN_EMOJI, WIN_KIND_LABELS, WIN_KINDS,
+  clubDayId, clubDayOnOrBefore, clubSummary, levelLabel, memberRate, scheduleText, WEEKDAYS, WIN_EMOJI, WIN_KIND_LABELS, WIN_KINDS,
   type Club, type ClubDay, type WinKind,
 } from '../../../functions/src/shared/hopeClubs';
 import { HopeGate, useHopePage } from './common';
 import { Avatar, PctBadge, RegisterCalendar, tick, TrendCard } from './registerParts';
 import { EMOJIS } from './ClubsPage';
+import { CleanupButton } from '../../components/CleanupDialog';
 import type { Organization } from '../../state/OrgContext';
 
 export function ClubPage() {
@@ -47,6 +48,7 @@ function ClubScreen({ org }: { org: Organization }) {
         <span className="cl-emoji big" aria-hidden="true">{club.emoji || '⭐'}</span>
         <div className="stack">
           <h1>{club.name}{club.status === 'paused' && <span className="badge badge-muted">Paused</span>}</h1>
+          <CleanupButton orgId={org.id} kind="club" id={club.id} back="/hope/clubs" hope />
           <p className="muted">{scheduleText(club) || 'Day and time not set yet'}</p>
           <p className="small">{leaders.length ? `Led by ${leaders.map((x) => x.name).join(', ')}` : 'No champion leader yet'}</p>
         </div>
@@ -95,6 +97,7 @@ function ClubRegister({ org, club, days, h }: { org: Organization; club: Club; d
         <RegisterCalendar value={date} onChange={setDate} marked={marked} today={h.today} />
         <div className="stack">
           <h2>{formatDateKey(date)}</h2>
+          {days.some((d) => d.date === date) && <CleanupButton orgId={org.id} kind="clubDay" id={clubDayId(club.id, date)} label="Reset this day" />}
           <div className="hr-counts"><span><b>{r.present}</b> present</span><span><b>{r.absent}</b> absent</span><span><b>{r.excused}</b> excused</span><span><b>{unmarked.length}</b> not marked</span></div>
           {r.pct != null && <p className="lead">{r.pct}% came</p>}
           {marker && unmarked.length > 0 && Object.keys(marks).length > 0 && (
