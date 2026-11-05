@@ -192,6 +192,7 @@ function KidsRegister({ org }: { org: Organization }) {
       {scan && canMark && <DoorScan onCode={scanned} onClose={() => setScan(false)} />}
       <div className="ck-tools">
         {canMark && !scan && <button type="button" className="btn" onClick={() => setScan(true)}>📷 Scan</button>}
+        {canMark && date === h.today && <Link to="/hope/gate" className="btn">🚪 Gate mode</Link>}
         <input type="search" className="search" placeholder="Find a name or code" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="segmented" role="radiogroup" aria-label="How to mark">
           <button type="button" role="radio" aria-checked={view === 'photos'} className={view === 'photos' ? 'on' : ''} onClick={() => choose('photos')}>🖼️ Photos</button>

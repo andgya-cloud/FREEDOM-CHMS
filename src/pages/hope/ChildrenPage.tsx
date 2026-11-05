@@ -7,12 +7,16 @@ import { downloadFile } from '../../lib/givingPdf';
 import { childrenListExcel, qrCardsPdf } from '../../lib/hopeAttendanceFiles';
 import { canKeepFees, canReadNotes } from '../../../functions/src/shared/hopeRecords';
 import { feesOwing } from '../../lib/hopeRecords';
-import { useChildPhotos, useHopeDays } from '../../state/useHope';
+import { useChildPhotos, useClubs, useHopeDays } from '../../state/useHope';
+import { sponsorUpdatePdf } from '../../lib/sponsorUpdate';
+import { sponsorPage } from './sponsorPages';
 import { ClassChip } from '../../components/Stone';
 import { classLabel, classOf, hasAllergy, HOPE_CLASSES, type HopeClassId } from '../../../functions/src/shared/hopeClasses';
 import { consentMissing, isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
 import { birthdayThisWeek, kidRate, missedSaturdays, streak } from '../../../functions/src/shared/hopeRegister';
 import { HopeGate, useHopePage } from './common';
+import { childWarning, WARNING_LABEL } from '../../../functions/src/shared/hopeWarning';
+const RANK = { green: 0, amber: 1, red: 2 } as const;
 import { ConsentTicks } from './ConsentPage';
 import { Avatar, Delights, PctBadge } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
@@ -21,8 +25,8 @@ export function ChildrenPage() {
   return <HopeGate title="Children">{(org) => <Children org={org} />}</HopeGate>;
 }
 
-type Show = 'current' | 'departing' | 'exited' | 'consent' | 'nosponsor' | 'birthdays' | 'missed' | 'owing' | 'concerns' | 'all' | 'allergies' | 'noclass' | 'notonlist' | `class-${HopeClassId}`;
-type Sort = 'name' | 'age' | 'pct' | 'code';
+type Show = 'red' | 'amber' | 'current' | 'departing' | 'exited' | 'consent' | 'nosponsor' | 'birthdays' | 'missed' | 'owing' | 'concerns' | 'all' | 'allergies' | 'noclass' | 'notonlist' | `class-${HopeClassId}`;
+type Sort = 'name' | 'age' | 'pct' | 'code' | 'need';
 
 /**
  * The children as photo cards (Andy, 2026-11-04, 6A), with one dropdown to choose who is shown and one to sort.
@@ -39,26 +43,31 @@ function Children({ org }: { org: Organization }) {
   const [sort, setSort] = useState<Sort>('name');
   const { days } = useHopeDays(org.id);
   const photos = useChildPhotos(org.id);
+  const clubs = useClubs(org.id);
   const legacy = params.get('consent') === 'missing' ? 'consent' : null;
   const show = ((legacy ?? params.get('show')) || 'current') as Show;
   const [owing, setOwing] = useState<Set<string> | null>(null);
-  useEffect(() => { if (show === 'owing' && !owing && canKeepFees(profile, org.id)) feesOwing(org.id).then((r) => setOwing(new Set(r.owing.map((o) => o.childId))), (err) => toast.show(friendlyError(err))); }, [show, owing, profile, org.id, toast]);
+  useEffect(() => { if (!owing && canKeepFees(profile, org.id)) feesOwing(org.id).then((r) => setOwing(new Set(r.owing.map((o) => o.childId))), (err) => toast.show(friendlyError(err))); }, [owing, profile, org.id, toast]);
   const concernIds = useMemo(() => new Set(h.openConcerns.map((c) => c.childId)), [h.openConcerns]);
 
   // The Show list in three groups (v182, 8A).
   const SHOWS: [string, [Show, string, boolean][]][] = [
     ['Children', [['current', 'Current children', true], ['departing', 'Departing', true], ['exited', 'Past children', true], ['all', 'Everyone', true]]],
     ['Needs something', [
-      ['consent', 'Consent missing', true], ['missed', 'Missed the last 3 Saturdays', true], ['owing', 'Fees still to pay this term', canKeepFees(profile, org.id)],
+      ['red', '🔴 Needs us', true], ['amber', '🟠 Watch', true], ['consent', 'Consent missing', true], ['missed', 'Missed the last 3 Saturdays', true], ['owing', 'Fees still to pay this term', canKeepFees(profile, org.id)],
       ['nosponsor', 'No sponsor yet', true], ['notonlist', 'Not on KE-014', true], ['concerns', 'Safeguarding concern open', h.pastoral],
       ['allergies', 'Allergies', true], ['birthdays', 'Birthdays this week', true],
     ]],
     // The classes by age, each with its stone (Andy, 2026-11-05, 5A).
     ['Classes', [...HOPE_CLASSES.map((k): [Show, string, boolean] => [`class-${k.id}`, classLabel(k), true]), ['noclass', 'No class yet (birth date missing)', true]]],
   ];
+  // The early warning dot (v182, 14A).
+  const warn = (c: (typeof h.children)[number]) => childWarning(c, days, { urgent: concernIds.has(c.id), owing: !!owing?.has(c.id) });
   const fits = (c: (typeof h.children)[number]) => {
     switch (show) {
       case 'current': return isCurrentChild(c);
+      case 'red': return isCurrentChild(c) && warn(c).level === 'red';
+      case 'amber': return isCurrentChild(c) && warn(c).level === 'amber';
       case 'departing': return c.status === 'departing';
       case 'exited': return c.status === 'exited';
       case 'consent': return consentMissing(c);
@@ -81,7 +90,7 @@ function Children({ org }: { org: Organization }) {
     const digits = text.replace(/\D/g, '').replace(/^254/, '0');
     const list = h.children
       .filter(fits)
-      .map((c) => ({ c, name: h.nameOf(c.id), age: h.ageOf(c), rate: kidRate(c.id, days).pct, fire: streak(c.id, days) }))
+      .map((c) => ({ c, name: h.nameOf(c.id), age: h.ageOf(c), rate: kidRate(c.id, days).pct, fire: streak(c.id, days), w: warn(c) }))
       .filter(({ c, name }) => !text || name.toLowerCase().includes(text) || (c.code ?? '').toLowerCase().includes(text) || (!!code && c.code === code)
         || (digits.length >= 4 && (c.parentPhone ?? '').replace(/\D/g, '').replace(/^254/, '0').includes(digits)));
     const by: Record<Sort, (a: (typeof list)[number], b: (typeof list)[number]) => number> = {
@@ -89,6 +98,7 @@ function Children({ org }: { org: Organization }) {
       age: (a, b) => (a.age ?? 99) - (b.age ?? 99) || a.name.localeCompare(b.name),
       pct: (a, b) => (b.rate ?? -1) - (a.rate ?? -1) || a.name.localeCompare(b.name),
       code: (a, b) => (a.c.code ?? 'ZZ').localeCompare(b.c.code ?? 'ZZ'),
+      need: (a, b) => RANK[b.w.level] - RANK[a.w.level] || b.w.reasons.length - a.w.reasons.length || a.name.localeCompare(b.name),
     };
     return list.sort(by[sort]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -100,6 +110,17 @@ function Children({ org }: { org: Organization }) {
       name, code: c.code!, age, klass: classOf(c.dateOfBirth, h.today), allergies: hasAllergy(c.allergies) ? c.allergies! : '', photo: c.photoConsent?.given ? photos.get(c.id) ?? null : null,
     })))); }
     catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
+  }
+
+  // One page per child shown who has a sponsor (v182, 13A).
+  async function sponsorUpdates() {
+    const list = rows.filter(({ c }) => c.status !== 'exited' && (c.sponsorName || c.sponsorship?.sponsorName));
+    if (!list.length) { toast.show('None of the children shown has a sponsor.'); return; }
+    setBusy(true);
+    try {
+      const pages = list.map(({ c, name, age }) => sponsorPage({ child: c, name, age, today: h.today, days, clubs: clubs.clubs, wins: clubs.wins, photo: photos.get(c.id) ?? null }));
+      downloadFile(await sponsorUpdatePdf(org, pages, h.today.slice(0, 4)));
+    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
 
   async function listExcel() {
@@ -125,10 +146,12 @@ function Children({ org }: { org: Organization }) {
               if (v === 'list') void listExcel();
               else if (v === 'cards') void cards();
               else if (v === 'upload') navigate('/hope/upload');
+              else if (v === 'sponsor') void sponsorUpdates();
             }}>
               <option value="" disabled>{busy ? 'Making…' : '⋯ More'}</option>
               {lists && <option value="list">⬇︎ Children list (Excel)</option>}
               <option value="cards">🪪 QR cards (PDF)</option>
+              <option value="sponsor">📄 Sponsor updates (PDF)</option>
               {can('people.write') && <option value="upload">⬆︎ Upload a file or photos</option>}
             </select>
           )}
@@ -144,16 +167,17 @@ function Children({ org }: { org: Organization }) {
         </label>
         <label className="field"><span>Sort by</span>
           <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
-            <option value="name">Name</option><option value="age">Age</option><option value="pct">Attendance %</option><option value="code">Code</option>
+            <option value="name">Name</option><option value="need">Needs us most</option><option value="age">Age</option><option value="pct">Attendance %</option><option value="code">Code</option>
           </select>
         </label>
       </div>
       <p className="small muted">{rows.length} {rows.length === 1 ? 'child' : 'children'}</p>
       {show === 'consent' ? <ConsentTicks org={org} q={q} /> : h.loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="card"><p>No children match. {h.children.length === 0 && 'Register the first child with the button above.'}</p></div> : (
         <ul className="hc-grid">
-          {rows.map(({ c, name, age, rate, fire }) => (
+          {rows.map(({ c, name, age, rate, fire, w }) => (
             <li key={c.id}>
               <Link to={`/hope/children/${c.id}`} className={`card hc-card${c.status !== 'active' ? ` s-${c.status}` : ''}`}>
+                {c.status !== 'exited' && <span className={`hc-dot w-${w.level}`} title={`${WARNING_LABEL[w.level]}${w.reasons.length ? `: ${w.reasons.join('; ')}` : ''}`} aria-label={WARNING_LABEL[w.level]} />}
                 <span className="hc-photo"><Avatar photo={c.photoConsent?.given ? photos.get(c.id) : null} name={name} size={72} /></span>
                 <span className="hc-badges"><Delights birthday={birthdayThisWeek(c.dateOfBirth, h.today)} streak={fire} /><PctBadge pct={rate} /></span>
                 <b className="hc-name">{name}</b>

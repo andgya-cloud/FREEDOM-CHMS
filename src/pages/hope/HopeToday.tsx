@@ -63,6 +63,7 @@ function HelperHome({ org }: { org: Organization }) {
         <button type="button" className="hp-big hp-arrive" onClick={arrived}><span className="hp-ico" aria-hidden="true">🙋</span><span><b>I'm here</b><span>Tap when you arrive</span></span></button>
       )}
       <Link to="/hope/register?d=today" className="hp-big"><span className="hp-ico" aria-hidden="true">✅</span><span><b>Check in children</b><span>{kids.present ? `${kids.present} here today` : 'Tap each child as they arrive'}</span></span></Link>
+      <Link to="/hope/gate" className="hp-big hp-small"><span className="hp-ico" aria-hidden="true">🚪</span><span><b>Gate mode</b><span>Children scan their own cards at the gate</span></span></Link>
       {clubsToday.map((x) => (
         <Link key={x.id} to={`/hope/clubs/${x.id}`} className="hp-big"><span className="hp-ico" aria-hidden="true">{x.emoji || '⭐'}</span><span><b>{x.name}</b><span>{x.time ? `Today at ${x.time}` : 'Meets today'}</span></span></Link>
       ))}

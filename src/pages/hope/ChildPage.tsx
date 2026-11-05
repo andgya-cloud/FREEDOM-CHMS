@@ -21,11 +21,17 @@ import { Avatar, PctBadge, shrinkPhoto } from './registerParts';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { formatPhone } from '../../../functions/src/shared/phone';
 import {
-  consentMissing, hasPayment, NO_PAYMENT, PAY_BY, PAY_BY_LABELS, paymentLine, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
+  consentMissing, hasPayment, isCurrentChild, NO_PAYMENT, PAY_BY, PAY_BY_LABELS, paymentLine, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
   type ChildPayment, type ChildProgramme, type Consent, type PayBy, type SchoolStatus,
 } from '../../../functions/src/shared/hope';
 import { ChildCare, FeesPaid, saveLeavingNote } from './ChildRecords';
-import { canKeepFees } from '../../../functions/src/shared/hopeRecords';
+import { canKeepFees, canReadNotes } from '../../../functions/src/shared/hopeRecords';
+import { sponsorUpdatePdf } from '../../lib/sponsorUpdate';
+import { shareOrDownload } from '../../lib/givingPdf';
+import { sponsorPage } from './sponsorPages';
+import { childWarning, WARNING_DOT, WARNING_LABEL } from '../../../functions/src/shared/hopeWarning';
+import { childJourney } from '../../../functions/src/shared/hopeJourney';
+import { feesOwing, listNotes } from '../../lib/hopeRecords';
 import { HopeGate, useHopePage } from './common';
 import { ConsentField } from './fields';
 import type { Organization } from '../../state/OrgContext';
@@ -76,6 +82,20 @@ function ChildScreen({ org }: { org: Organization }) {
   const clubs = useClubs(org.id);
 
   const [editing, setEditing] = useState(false);
+  // The one-page Sponsor update (v182, 13A).
+  const [sponsorAsk, setSponsorAsk] = useState(false);
+  const [sponsorNote, setSponsorNote] = useState('');
+  const [sponsorBusy, setSponsorBusy] = useState(false);
+  // The early warning (14A) and the Journey strip (15A). Fees and home visits only for those allowed to see them.
+  const keepsFees = canKeepFees(profile, org.id);
+  const readsNotes = canReadNotes(profile, org.id);
+  const [owing, setOwing] = useState(false);
+  const [visits, setVisits] = useState<{ day: string; kind: string }[]>([]);
+  useEffect(() => {
+    if (!childId) return;
+    if (keepsFees) feesOwing(org.id).then((r) => setOwing(r.owing.some((o) => o.childId === childId)), () => { /* the dot simply leaves fees out */ });
+    if (readsNotes) listNotes(org.id, childId).then((r) => setVisits(r.notes.map((n) => ({ day: n.day, kind: n.kind }))), () => { /* the strip simply leaves visits out */ });
+  }, [org.id, childId, keepsFees, readsNotes]);
   function reset() {
     if (!child) return;
     setDob(child.dateOfBirth ?? ''); setSchool(child.school ?? ''); setSchoolClass(child.schoolClass ?? ''); setSchoolStatus(child.schoolStatus); setEnrolledOn(child.enrolledOn ?? '');
@@ -113,6 +133,13 @@ function ChildScreen({ org }: { org: Organization }) {
       .catch(() => { /* offline: the child's own record still has the note */ });
     toast.show(to === 'exited' ? `${name} moved to Past children.` : `${name} is marked as departing.`);
   }
+  async function sponsorPdf() {
+    setSponsorBusy(true);
+    try {
+      const page = sponsorPage({ child: child!, name, age, today: h.today, days, clubs: clubs.clubs, wins: clubs.wins, photo, note: sponsorNote });
+      await shareOrDownload(await sponsorUpdatePdf(org, [page], h.today.slice(0, 4)), `${name}: sponsor update`);
+    } catch (err) { toast.show(friendlyError(err)); } finally { setSponsorBusy(false); }
+  }
   async function takePhoto(f: File | undefined) {
     if (!f) return;
     try { setNewPhoto(await shrinkPhoto(f)); }
@@ -131,6 +158,8 @@ function ChildScreen({ org }: { org: Organization }) {
   const allergic = hasAllergy(child.allergies);
   const sp = child.sponsorship;
   const registered = child.enrolledOn ?? sp?.registeredOn ?? null;
+  const warning = isCurrentChild(child) ? childWarning(child, days, { urgent: h.openConcerns.some((c) => c.childId === child.id), owing }) : null;
+  const journey = childJourney(child, { today: h.today, days, wins: clubs.wins, clubName: (id) => clubs.clubs.find((x) => x.id === id)?.name ?? '', visits: readsNotes ? visits : [] });
 
   return (
     <div className="page narrow">
@@ -165,9 +194,28 @@ function ChildScreen({ org }: { org: Organization }) {
               <span className="small muted align-center">{formatPhone(parentPhoneShown) || parentPhoneShown}</span>
             </div>
           )}
+          {warning && (
+            <details className={`hc-warn w-bg-${warning.level}`}>
+              <summary>{WARNING_DOT[warning.level]} <b>{WARNING_LABEL[warning.level]}</b>{warning.reasons.length ? `: ${warning.reasons[0]}${warning.reasons.length > 1 ? ` and ${warning.reasons.length - 1} more` : ''}` : ''}</summary>
+              {warning.reasons.length > 1 && <ul>{warning.reasons.map((r) => <li key={r}>{r}</li>)}</ul>}
+            </details>
+          )}
           {!parentPhoneShown && !guardian && <p className="notice notice-warn small">No parent contact saved. Tap ✏️ Edit details below to add it, so the child can be followed up.</p>}
         </div>
       </section>
+
+      {journey.length > 0 && (
+        <section className="card hc-journey" aria-label="Journey at Hope">
+          <h2>🧭 Journey at Hope</h2>
+          <ol>
+            {journey.map((j, i) => (
+              <li key={`${j.date}-${i}`} className={j.private ? 'private' : undefined} title={j.private ? 'Only those who read care notes see this' : undefined}>
+                <span className="hc-j-ico" aria-hidden="true">{j.icon}</span><b>{j.text}</b><span className="small muted">{formatDateKey(j.date)}</span>
+              </li>
+            ))}
+          </ol>
+        </section>
+      )}
 
       <div className="segmented hc-tabs" role="tablist" aria-label="About this child">
         {TABS.filter(([k]) => k !== 'fees' || showFees).map(([k, label]) => (
@@ -195,7 +243,17 @@ function ChildScreen({ org }: { org: Organization }) {
             <div><dt>In school?</dt><dd>{SCHOOL_STATUS_LABELS[child.schoolStatus]}</dd></div>
             <div><dt>Attendance</dt><dd><PctBadge pct={rate.pct} /> {fire >= STREAK_SHOWN && <span className="hr-delight hr-streak">🔥{fire} in a row</span>}</dd></div>
           </dl>
-          {canEdit && <button type="button" className="btn align-start" onClick={() => setEditing(true)}>✏️ Edit details</button>}
+          <div className="chips">
+            {canEdit && <button type="button" className="btn" onClick={() => setEditing(true)}>✏️ Edit details</button>}
+            {(canEdit || canReadNotes(profile, org.id)) && <button type="button" className="btn" onClick={() => setSponsorAsk((v) => !v)}>📄 Sponsor update</button>}
+          </div>
+          {sponsorAsk && (
+            <div className="stack ht-done">
+              <label className="field"><span>A note from the Director (optional)</span>
+                <textarea rows={3} maxLength={800} value={sponsorNote} onChange={(e) => setSponsorNote(e.target.value)} placeholder={`${person?.firstName ?? 'This child'} has grown in confidence this term…`} /></label>
+              <button type="button" className="btn btn-primary align-start" disabled={sponsorBusy} onClick={() => void sponsorPdf()}>{sponsorBusy ? 'Making…' : 'Make the PDF'}</button>
+            </div>
+          )}
         </section>
       )}
 

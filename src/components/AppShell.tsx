@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   // A Hope helper sees only Today (their "I'm here" button), the registers and the clubs (Andy, 2026-11-04, 2A).
   const helper = profile?.roleId === HELPER_ROLE_ID;
-  if (helper && !/^\/($|hope\/register|hope\/clubs|hope\/photos|hope\/more|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
+  if (helper && !/^\/($|hope\/register|hope\/gate|hope\/clubs|hope\/photos|hope\/more|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
   // Each person sees only their own work (Andy, 2026-11-01, 8A): an usher Sunday and People, finance Giving and Petty Cash.
