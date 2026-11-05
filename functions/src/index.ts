@@ -30,6 +30,7 @@ export { hopePhotoReports } from './hopePhotos.js';
 export { hopeChats } from './hopeChats.js';
 export { hopeRecords } from './hopeRecords.js';
 export { hopeChildPhoto } from './hopeChildPhoto.js';
+export { hopeChampionEdit } from './hopeChampionEdit.js';
 export { hopeHelperToChampion } from './hopeHelpers.js';
 export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
 export { welcomeCard } from './welcome.js';

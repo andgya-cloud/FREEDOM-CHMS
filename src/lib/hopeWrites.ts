@@ -6,7 +6,7 @@ import { createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { firstName } from '../../functions/src/shared/people';
 import type { Child, ChildPayment, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
-import type { ChampionEntry, ChildImportRow, ChampionImportRow, KidEntry } from '../../functions/src/shared/hopeRegister';
+import type { ChampionEntry, ChildImportRow, KidEntry } from '../../functions/src/shared/hopeRegister';
 import { normalizePhone } from '../../functions/src/shared/phone';
 import { clubDayId, STARTER_CLUBS, type Club, type ClubWin } from '../../functions/src/shared/hopeClubs';
 import type { WhatsAppConsent } from '../state/PeopleContext';
@@ -132,45 +132,15 @@ export function markMany(orgId: string, name: 'hopeDays' | 'championDays', date:
 }
 
 export interface ChampionInput { name: string; phone: string; email: string; duty: string; status: 'active' | 'left'; joinedOn: string | null; weeklyPay?: number | null; monthlyPay?: number | null }
-export function addChampion(orgId: string, input: ChampionInput) {
-  const r = doc(collection(db, 'organizations', orgId, 'champions'));
-  void trackWrite(setDoc(r, { orgId, ...input, ...createStamps() }));
-  return r.id;
-}
-export function updateChampion(orgId: string, id: string, changes: Partial<ChampionInput>) {
-  return updateRecord(ref(orgId, 'champions', id), changes);
-}
-/** Weekly pay and card codes (Andy, 2026-11-05, 8A 11A), several champions at once. */
-export function setChampionFields(orgId: string, changes: Record<string, { weeklyPay?: number | null; monthlyPay?: number | null; code?: string }>) {
+/** QR card codes (v181: details and pay are saved on the server with two signatures, src/lib/championEdit.ts). */
+export function setChampionCodes(orgId: string, codes: Record<string, string>) {
   const batch = writeBatch(db);
-  for (const [id, c] of Object.entries(changes)) batch.update(ref(orgId, 'champions', id), { ...c, updatedAt: serverTimestamp(), updatedBy: me() });
+  for (const [id, code] of Object.entries(codes)) batch.update(ref(orgId, 'champions', id), { code, updatedAt: serverTimestamp(), updatedBy: me() });
   return trackWrite(batch.commit());
 }
-/** An extra allowance for a month (9A). */
-export function addChampionExtra(orgId: string, championId: string, month: string, amount: number, reason: string) {
-  return trackWrite(setDoc(doc(collection(db, 'organizations', orgId, 'championExtras')), { orgId, championId, month, amount: Math.round(amount), reason: reason.trim().slice(0, 200), ...createStamps() }));
-}
-export const removeChampionExtra = (orgId: string, id: string) => softDelete(ref(orgId, 'championExtras', id));
 /** The Director approves a month's pay (10A). */
 export function approveChampionPay(orgId: string, month: string, total: number, count: number, approvedName: string) {
   return trackWrite(setDoc(ref(orgId, 'championPay', month), { orgId, month, total: Math.round(total), count, approvedBy: me(), approvedName: approvedName.slice(0, 120), approvedAt: serverTimestamp() }));
-}
-
-/** Adds new champions and updates the ones already here (Andy, 2026-11-05): phone, email, duty and pay. */
-export function importChampions(orgId: string, rows: ChampionImportRow[]) {
-  const batch = writeBatch(db);
-  const pay = (r: ChampionImportRow) => (r.monthlyPay != null ? { monthlyPay: r.monthlyPay, weeklyPay: null } : r.weeklyPay != null ? { weeklyPay: r.weeklyPay, monthlyPay: null } : {});
-  for (const r of rows) {
-    if (r.updateId) {
-      batch.update(ref(orgId, 'champions', r.updateId), {
-        ...(r.phone ? { phone: r.phone } : {}), ...(r.email ? { email: r.email } : {}), ...(r.duty ? { duty: r.duty } : {}), ...pay(r),
-        updatedAt: serverTimestamp(), updatedBy: me(),
-      });
-      continue;
-    }
-    batch.set(doc(collection(db, 'organizations', orgId, 'champions')), { orgId, name: r.name, phone: r.phone, email: r.email, duty: r.duty, status: 'active', joinedOn: r.joinedOn, ...pay(r), ...createStamps() });
-  }
-  return trackWrite(batch.commit());
 }
 
 /** Adds the children from a spreadsheet, each with their parent as guardian when a parent is named. */

@@ -4,13 +4,15 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useChampions } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
-import { addChampion, addChampionExtra, importChampions, markChampion, markMany, removeChampionExtra, updateChampion, type ChampionInput } from '../../lib/hopeWrites';
+import { markChampion, markMany, type ChampionInput } from '../../lib/hopeWrites';
+import { championChange, saveChampionChanges } from '../../lib/championEdit';
+import { useTwoSignatures } from '../../components/TwoSignatures';
 import { useChampionPay } from '../../state/useHope';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
 import {
   CHAMPION_MARKS, CHAMPION_MARK_LABELS, CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
-  planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark, type ExistingChampion,
+  planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
 } from '../../../functions/src/shared/hopeRegister';
 import { useHopePage } from './common';
 import { CleanupButton } from '../../components/CleanupDialog';
@@ -20,7 +22,7 @@ import { ChampionPay } from './ChampionPay';
 import { DoorScan } from './DoorScan';
 import { qrCardsPdf } from '../../lib/hopeAttendanceFiles';
 import { downloadFile } from '../../lib/givingPdf';
-import { setChampionFields } from '../../lib/hopeWrites';
+import { setChampionCodes } from '../../lib/hopeWrites';
 import { arrivalMark, newChampionCodes } from '../../../functions/src/shared/hopeChampionPay';
 
 
@@ -95,7 +97,7 @@ function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organizat
     setBusy(true);
     try {
       const codes = newChampionCodes(data.champions);
-      if (Object.keys(codes).length) await setChampionFields(org.id, Object.fromEntries(Object.entries(codes).map(([id, code]) => [id, { code }])));
+      if (Object.keys(codes).length) await setChampionCodes(org.id, codes);
       const list = data.champions.filter((c) => c.status === 'active').map((c) => ({ name: c.name, code: c.code || codes[c.id]!, role: c.duty ? `Child Champion · ${c.duty}` : 'Child Champion' }));
       downloadFile(await qrCardsPdf(org, list, 'champion-cards'));
     } catch (err) { fail(err); } finally { setBusy(false); }
@@ -178,6 +180,7 @@ const EMPTY: ChampionInput = { name: '', phone: '', email: '', duty: '', status:
 
 function ChampionList({ org, today, data, manager }: { org: Organization; today: string; data: Data; manager: boolean }) {
   const toast = useToast();
+  const { sign, dialog } = useTwoSignatures(org.id);
   const [editing, setEditing] = useState<string | 'new' | null>(null);
   const [form, setForm] = useState<ChampionInput>(EMPTY);
   const [showLeft, setShowLeft] = useState(false);
@@ -204,9 +207,9 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
   function addExtra() {
     const n = Math.round(Number(extra.amount.replace(/[^\d.]/g, '')));
     if (!editing || editing === 'new' || !(n > 0) || extra.reason.trim().length < 2) { toast.show('Type the amount and the reason.'); return; }
-    addChampionExtra(org.id, editing, month, n, extra.reason).catch((err) => toast.show(friendlyError(err)));
-    setExtra({ amount: '', reason: '' });
-    toast.show('Extra amount added');
+    const id = editing, reason = extra.reason.trim();
+    sign(`Add ${kes(n)} for ${form.name || 'this champion'}.`, (proofs) => saveChampionChanges(org.id, proofs, { addExtras: [{ championId: id, month, amount: n, reason }] })
+      .then(() => { setExtra({ amount: '', reason: '' }); toast.show('Extra amount added'); }));
   }
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -216,12 +219,9 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
       weeklyPay: fixed ? null : n, monthlyPay: fixed ? n : null };
     if (clean.name.length < 2) return setError('Enter the champion\'s name.');
     if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) return setError('The email does not look right.');
-    try {
-      if (editing === 'new') addChampion(org.id, clean);
-      else if (editing) updateChampion(org.id, editing, clean).catch((err) => toast.show(friendlyError(err)));
-      toast.show('Saved');
-      setEditing(null);
-    } catch (err) { toast.show(friendlyError(err)); }
+    const id = editing === 'new' ? undefined : editing ?? undefined;
+    sign(id ? `Change ${clean.name}'s details.` : `Add ${clean.name}.`, (proofs) => saveChampionChanges(org.id, proofs, { champions: [{ ...clean, id }] })
+      .then(() => { toast.show('Saved'); setEditing(null); }));
   }
 
   const formCard = (
@@ -250,7 +250,7 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
           <legend>Extra amounts for {MONTH_NAME}</legend>
           {mine.length > 0 && (
             <ul className="link-list">{mine.map((x) => <li key={x.id}><span className="grow"><b>{kes(x.amount)}</b><span className="small muted">{x.reason}</span></span>
-              <button type="button" className="btn btn-quiet btn-small" onClick={() => removeChampionExtra(org.id, x.id).catch((err) => toast.show(friendlyError(err)))}>Remove</button></li>)}</ul>
+              <button type="button" className="btn btn-quiet btn-small" onClick={() => sign(`Remove ${kes(x.amount)} for ${form.name}.`, (proofs) => saveChampionChanges(org.id, proofs, { removeExtras: [x.id] }).then(() => toast.show('Removed')))}>Remove</button></li>)}</ul>
           )}
           <div className="field-row">
             <label className="field"><span>Amount (KES)</span><input inputMode="numeric" value={extra.amount} placeholder="500" onChange={(e) => setExtra({ ...extra, amount: e.target.value })} /></label>
@@ -267,6 +267,7 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
 
   return (
     <>
+      {dialog}
       {manager && !editing && <button type="button" className="btn btn-primary align-start" onClick={() => open(null)}>Add a champion</button>}
       {editing === 'new' && formCard}
       <label className="check"><input type="checkbox" checked={showLeft} onChange={(e) => setShowLeft(e.target.checked)} /><span>Show champions who no longer serve</span></label>
@@ -295,8 +296,9 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
   );
 }
 
-function ChampionUpload({ org, today, existing, done }: { org: Organization; today: string; existing: ExistingChampion[]; done: () => void }) {
+function ChampionUpload({ org, today, existing, done }: { org: Organization; today: string; existing: Champion[]; done: () => void }) {
   const toast = useToast();
+  const { sign, dialog } = useTwoSignatures(org.id);
   const [plan, setPlan] = useState<ChampionImportRow[] | null>(null);
   const [error, setError] = useState('');
   const ready = plan?.filter((r) => !r.skip) ?? [];
@@ -305,6 +307,7 @@ function ChampionUpload({ org, today, existing, done }: { org: Organization; tod
   const payText = (r: ChampionImportRow) => (r.monthlyPay != null ? `KES ${r.monthlyPay.toLocaleString('en-KE')} a month, fixed` : r.weeklyPay != null ? `KES ${r.weeklyPay.toLocaleString('en-KE')} a week` : '');
   return (
     <section className="card stack">
+      {dialog}
       <h2>Upload champions from Excel or CSV</h2>
       <p className="small">Choose your list: a name column and, if you have them, phone and weekly amount. New names are added; champions already here are updated. Or download a template.</p>
       <TemplateButtons name="Hope-champions-template" head={CHAMPION_TEMPLATE_HEAD} example={CHAMPION_TEMPLATE_EXAMPLE} />
@@ -318,9 +321,14 @@ function ChampionUpload({ org, today, existing, done }: { org: Organization; tod
               : r.updateId ? `Update: ${r.changes.join(' · ')}` : `New · ${[r.phone, r.email, r.duty, payText(r)].filter(Boolean).join(' · ')}`}</span></div></li>)}
           </ul>
           <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={() => {
-            importChampions(org.id, ready).catch((err) => toast.show(friendlyError(err)));
-            toast.show(`${adds} added, ${updates} updated`);
-            setPlan(null); done();
+            const pay = (r: ChampionImportRow) => (r.monthlyPay != null ? { monthlyPay: r.monthlyPay, weeklyPay: null } : r.weeklyPay != null ? { weeklyPay: r.weeklyPay, monthlyPay: null } : {});
+            const champions = ready.map((r) => {
+              const old = r.updateId ? existing.find((x) => x.id === r.updateId) : undefined;
+              if (old) return championChange(old, { ...(r.phone ? { phone: r.phone } : {}), ...(r.email ? { email: r.email } : {}), ...(r.duty ? { duty: r.duty } : {}), ...pay(r) });
+              return { name: r.name, phone: r.phone, email: r.email, duty: r.duty, status: 'active' as const, joinedOn: r.joinedOn, weeklyPay: null, monthlyPay: null, ...pay(r) };
+            });
+            sign(`Save ${ready.length} champions from the list.`, (proofs) => saveChampionChanges(org.id, proofs, { champions })
+              .then(() => { toast.show(`${adds} added, ${updates} updated`); setPlan(null); done(); }));
           }}>Save {ready.length} {ready.length === 1 ? 'champion' : 'champions'}</button>
         </>
       )}

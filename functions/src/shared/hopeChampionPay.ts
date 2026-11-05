@@ -4,7 +4,7 @@
  * 28th and again on the 1st. Champions report at 8:30am and are late after 8:30am; a champion's QR card checks
  * them in at the door with the time.
  */
-import { isInventoryManager } from './permissions.js';
+import { canKeepAccounts, isInventoryManager } from './permissions.js';
 import { isHopeDirector } from './hopePhotos.js';
 import { readChampionPay, saturdayOnOrBefore, type Champion, type ChampionDay, type ChampionMark } from './hopeRegister.js';
 
@@ -107,3 +107,16 @@ export function planPayUpload(rows: readonly (readonly unknown[])[], champions: 
 export function isChampionManager(p: (Parameters<typeof isInventoryManager>[0]) & { orgIds?: string[] } | null | undefined, orgId: string): boolean {
   return isInventoryManager(p) || isHopeDirector(p as Parameters<typeof isHopeDirector>[0], orgId);
 }
+
+/**
+ * Changing a champion's details, appreciation or extra amounts needs two signatures (Andy, 2026-11-05): Andy or
+ * Doreen, and the Director (Diana). Each types their own password on the phone being used.
+ */
+export type ChampionSigner = 'keeper' | 'director';
+export function championSignerRole(p: Parameters<typeof isHopeDirector>[0] & { displayName?: string }, orgId: string): ChampionSigner | null {
+  if (canKeepAccounts(p)) return 'keeper';
+  if (isHopeDirector(p, orgId)) return 'director';
+  return null;
+}
+/** One pair of signatures lasts this long on the phone, so a few changes in a row need signing only once. */
+export const CHAMPION_SIGN_MINUTES = 15;

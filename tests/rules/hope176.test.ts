@@ -47,10 +47,11 @@ describe('v176 Hope', () => {
     }));
   });
   it('lets the Director keep champion pay', async () => {
-    await assertSucceeds(updateDoc(doc(as('director'), `${O}/champions/ch1`), { weeklyPay: 1500, code: 'CC-0001', ...upd('director') }));
-    await assertSucceeds(updateDoc(doc(as('director'), `${O}/champions/ch1`), { weeklyPay: null, monthlyPay: 9000, phone: '0721 995 182', ...upd('director') }));
+    await assertSucceeds(updateDoc(doc(as('director'), `${O}/champions/ch1`), { code: 'CC-0001', ...upd('director') })); // QR codes only (v181)
+    await assertFails(updateDoc(doc(as('director'), `${O}/champions/ch1`), { weeklyPay: 1500, ...upd('director') })); // pay needs two signatures;
+    await assertFails(updateDoc(doc(as('director'), `${O}/champions/ch1`), { weeklyPay: null, monthlyPay: 9000, phone: '0721 995 182', ...upd('director') }));
     await assertFails(updateDoc(doc(as('helper'), `${O}/champions/ch1`), { weeklyPay: 1500, ...upd('helper') }));
-    await assertSucceeds(setDoc(doc(as('director'), `${O}/championExtras/x1`), { orgId: 'hope', championId: 'ch1', month: '2026-11', amount: 300, reason: 'Trip', ...created('director') }));
+    await assertFails(setDoc(doc(as('director'), `${O}/championExtras/x1`), { orgId: 'hope', championId: 'ch1', month: '2026-11', amount: 300, reason: 'Trip', ...created('director') }));
     await assertFails(setDoc(doc(as('helper'), `${O}/championExtras/x2`), { orgId: 'hope', championId: 'ch1', month: '2026-11', amount: 300, reason: 'Trip', ...created('helper') }));
     await assertSucceeds(setDoc(doc(as('director'), `${O}/championPay/2026-11`), { orgId: 'hope', month: '2026-11', total: 1800, count: 1, approvedBy: 'director', approvedName: 'Diana', approvedAt: serverTimestamp() }));
   });

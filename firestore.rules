@@ -1252,9 +1252,14 @@ service cloud.firestore {
       }
       match /champions/{championId} {
         allow read: if hopeRead();
+        // Details, appreciation and extras change only on the server, with two signatures: Andy or Doreen, and the
+        // Director (Andy, 2026-11-05). The phone may add a champion with no amount, and give out QR card codes.
         allow create, update: if champManager() && request.resource.data.orgId == orgId
-          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete())
-          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn', 'weeklyPay', 'monthlyPay', 'code',
+          && (resource == null
+               ? stampedCreate() && freshRecord() && request.resource.data.get('weeklyPay', null) == null
+                 && request.resource.data.get('monthlyPay', null) == null && !('signedBy' in request.resource.data)
+               : stampedUpdate() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code', 'updatedAt', 'updatedBy']))
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn', 'weeklyPay', 'monthlyPay', 'code', 'signedBy',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 2
           && shortText(request.resource.data.phone, 30) && shortText(request.resource.data.email, 120)
@@ -1281,7 +1286,8 @@ service cloud.firestore {
       // Extra allowance for a champion in a month, with a reason (Andy, 2026-11-05, 9A): the Director only.
       match /championExtras/{extraId} {
         allow read: if hopeRead();
-        allow create, update: if champManager() && request.resource.data.orgId == orgId
+        // Added and removed on the server only, with two signatures (Andy, 2026-11-05).
+        allow create, update: if false && champManager() && request.resource.data.orgId == orgId
           && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete()
                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt', 'deletedBy', 'updatedAt', 'updatedBy']))
           && request.resource.data.keys().hasOnly(['orgId', 'championId', 'month', 'amount', 'reason', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])

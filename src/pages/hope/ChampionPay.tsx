@@ -7,7 +7,9 @@ import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
 import { championPayExcel, championPayPdf } from '../../lib/hopeAttendanceFiles';
 import { setPettyPrefill } from '../../lib/pettyPrefill';
-import { addChampionExtra, approveChampionPay, removeChampionExtra, setChampionFields } from '../../lib/hopeWrites';
+import { approveChampionPay } from '../../lib/hopeWrites';
+import { championChange, saveChampionChanges } from '../../lib/championEdit';
+import { useTwoSignatures } from '../../components/TwoSignatures';
 import { monthPay, payMonthReady, planPayUpload, REPORT_TIME } from '../../../functions/src/shared/hopeChampionPay';
 import { formatKes } from '../../../functions/src/shared/hopeRecords';
 import { pettyCashBase } from '../../../functions/src/shared/pettyCash';
@@ -31,6 +33,8 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
   const ready = payMonthReady(today);
   const [month, setMonth] = useState(ready?.month ?? today.slice(0, 7));
   const fail = (err: unknown) => toast.show(friendlyError(err));
+  const { sign, dialog } = useTwoSignatures(org.id);
+  const byId = (id: string) => data.champions.find((c) => c.id === id);
   const report = useMemo(() => monthPay(data.champions, data.days, pay.extras, month), [data.champions, data.days, pay.extras, month]);
   const approved = pay.approved.find((a) => a.id === month);
   const changedSince = approved && approved.total !== report.total;
@@ -63,18 +67,21 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
   function saveWeekly(id: string, value: string) {
     const n = value.trim() === '' ? null : Math.round(Number(value.replace(/[^\d.]/g, '')));
     if (n != null && !Number.isFinite(n)) return;
-    setChampionFields(org.id, { [id]: { weeklyPay: n, monthlyPay: null } }).catch(fail);
+    const c = byId(id);
+    if (!c) return;
+    sign(`Change ${c.name}'s weekly amount.`, (proofs) => saveChampionChanges(org.id, proofs, { champions: [championChange(c, { weeklyPay: n, monthlyPay: null })] }).then(() => toast.show('Saved')));
   }
   function addExtra() {
     const amount = Math.round(Number(extra.amount.replace(/[^\d.]/g, '')));
     if (!extra.championId || !(amount > 0) || extra.reason.trim().length < 2) { toast.show('Choose the champion, the amount and the reason.'); return; }
-    addChampionExtra(org.id, extra.championId, month, amount, extra.reason).catch(fail);
-    setExtra({ championId: '', amount: '', reason: '' });
-    toast.show('Extra allowance added');
+    const add = { championId: extra.championId, month, amount, reason: extra.reason.trim() };
+    sign(`Add ${formatKes(amount)} for ${byId(add.championId)?.name ?? 'the champion'}.`, (proofs) => saveChampionChanges(org.id, proofs, { addExtras: [add] })
+      .then(() => { setExtra({ championId: '', amount: '', reason: '' }); toast.show('Extra allowance added'); }));
   }
 
   return (
     <>
+      {dialog}
       <section className="card stack">
         <div className="card-head">
           <h2>💵 Pay for {MONTH(month)}</h2>
@@ -134,7 +141,7 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
           <ul className="link-list">
             {monthExtras.map((x) => (
               <li key={x.id}><span className="grow"><b>{data.champions.find((c) => c.id === x.championId)?.name ?? 'Champion'}</b><span className="small muted">{formatKes(x.amount)} · {x.reason}</span></span>
-                <button type="button" className="btn btn-quiet btn-small" onClick={() => removeChampionExtra(org.id, x.id).catch(fail)}>Remove</button></li>
+                <button type="button" className="btn btn-quiet btn-small" onClick={() => sign(`Remove ${formatKes(x.amount)}.`, (proofs) => saveChampionChanges(org.id, proofs, { removeExtras: [x.id] }).then(() => toast.show('Removed')))}>Remove</button></li>
             ))}
           </ul>
         )}
@@ -150,8 +157,9 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
             <p><b>{upload.found.length}</b> matched{upload.notFound.length ? `, ${upload.notFound.length} not found: ${upload.notFound.join(', ')}` : ''}.</p>
             <ul className="link-list">{upload.found.map((f) => <li key={f.id}><span className="grow">{f.name}</span><b>{formatKes(f.amount)}{f.monthly ? ' a month, fixed' : ' a week'}</b></li>)}</ul>
             <button type="button" className="btn btn-primary align-start" disabled={!upload.found.length} onClick={() => {
-              setChampionFields(org.id, Object.fromEntries(upload.found.map((f) => [f.id, f.monthly ? { monthlyPay: f.amount, weeklyPay: null } : { weeklyPay: f.amount, monthlyPay: null }]))).catch(fail);
-              toast.show(`${upload.found.length} weekly amounts saved`); setUpload(null);
+              const champions = upload.found.flatMap((f) => { const c = byId(f.id); return c ? [championChange(c, f.monthly ? { monthlyPay: f.amount, weeklyPay: null } : { weeklyPay: f.amount, monthlyPay: null })] : []; });
+              sign(`Save ${champions.length} amounts.`, (proofs) => saveChampionChanges(org.id, proofs, { champions })
+                .then(() => { toast.show(`${champions.length} amounts saved`); setUpload(null); }));
             }}>Save {upload.found.length} amounts</button>
           </>
         )}
