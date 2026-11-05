@@ -109,7 +109,6 @@ function LeaderToday({ org }: { org: Organization }) {
   const departing = h.children.filter((c) => c.status === 'departing').length;
   const toCall = h.absenceTasks.filter((t) => t.status === 'open').length;
   const alerts = [
-    !!chats?.urgent && { warn: true, to: '/hope/chats', text: `🔴 ${chats.urgent} ${chats.urgent === 1 ? 'conversation needs' : 'conversations need'} your URGENT response` },
     !!chats?.unread && chats.unread > (chats.urgent ?? 0) && { warn: false, to: '/hope/chats', text: `💬 ${chats.unread} ${chats.unread === 1 ? 'conversation has' : 'conversations have'} new messages` },
     can('followups.manage') && (counts.due > 0 || toCall > 0) && { warn: false, to: '/follow-ups', text: `${Math.max(counts.due, toCall)} ${Math.max(counts.due, toCall) === 1 ? 'guardian' : 'guardians'} to call` },
     departing > 0 && { warn: false, to: '/hope/children?show=departing', text: `${departing} ${departing === 1 ? 'child is' : 'children are'} departing` },
