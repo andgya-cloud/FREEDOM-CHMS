@@ -4,6 +4,7 @@ import { pettyCashBase } from '../../../functions/src/shared/pettyCash';
 import { canReadNotes } from '../../../functions/src/shared/hopeRecords';
 import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { HopeGate } from './common';
+import { HOPE_PHONE, HOPE_PHONE_E164 } from '../../../functions/src/shared/hopeMessages';
 import type { Organization } from '../../state/OrgContext';
 
 export function HopeMorePage() {
@@ -17,6 +18,7 @@ function More({ org }: { org: Organization }) {
   const petty = !helper && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage'));
   const tiles: [string, string, string, string, boolean][] = [
     [pettyCashBase('ministry'), '💵', 'Petty Cash', 'Ask for cash, sign and close the month', petty],
+    ['/hope/messages', '💬', 'WhatsApp parents', 'One message to many parents, from the Hope phone', can('people.write')],
     ['/hope/meals', '🍽️', 'Meals', 'Breakfast, lunch and fruit served each day', !helper],
     ['/hope/bin', '🗑', 'Bin', 'What was removed, to put back', canReadNotes(profile, org.id)],
     ['/settings', '⚙️', 'Settings', 'Your account, password and the Hope Centre settings', true],
@@ -25,6 +27,12 @@ function More({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <h1>More</h1>
+      <section className="card hope-phone">
+        <span aria-hidden="true">📱</span>
+        <span className="grow"><b>Hope Centre phone</b><span className="small muted">{HOPE_PHONE} · WhatsApp and calls</span></span>
+        <a className="btn btn-quiet btn-small" href={`tel:${HOPE_PHONE_E164}`}>📞 Call</a>
+        <a className="btn btn-quiet btn-small" href={`https://wa.me/${HOPE_PHONE_E164.slice(1)}`} target="_blank" rel="noopener noreferrer">🟢 WhatsApp</a>
+      </section>
       <div className="rp-tiles">
         {tiles.filter((t) => t[4]).map(([to, ico, title, sub]) => (
           <Link key={to} to={to} className="card rp-tile"><span className="rp-ico" aria-hidden="true">{ico}</span><b>{title}</b><span className="small muted">{sub}</span></Link>

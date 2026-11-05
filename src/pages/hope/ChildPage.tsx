@@ -6,6 +6,12 @@ import { useToast } from '../../state/ToastContext';
 import { useChildPhoto, useClubs, useHopeDays } from '../../state/useHope';
 import { memberRate, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
+import { fillMessage, waLink } from '../../../functions/src/shared/hopeMessages';
+import { PasswordConfirm } from '../../components/PasswordConfirm';
+import { ClassChip } from '../../components/Stone';
+import { classOf, hasAllergy, NO_ALLERGIES } from '../../../functions/src/shared/hopeClasses';
+import { isHopeDirector } from '../../../functions/src/shared/hopePhotos';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import { removeChildPhoto, saveChildPhoto, updateChild } from '../../lib/hopeWrites';
 import { daysToBirthday, KID_MARK_LABELS, kidHistory, rateFrom, streak, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
@@ -42,6 +48,8 @@ function ChildScreen({ org }: { org: Organization }) {
   const [params, setParams] = useSearchParams();
   const tab = (TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'about') as Tab;
   const setTab = (t: Tab) => setParams(t === 'about' ? {} : { tab: t }, { replace: true });
+  // The Director captures allergies (Andy, 2026-11-05, 4A); Andy and Doreen may too.
+  const canAllergies = canEdit && (isHopeDirector(profile, org.id) || canKeepAccounts(profile));
   const showFees = canEdit || canKeepFees(profile, org.id) || !!child?.payment;
 
   const [dob, setDob] = useState('');
@@ -53,8 +61,8 @@ function ChildScreen({ org }: { org: Organization }) {
   const [photoConsent, setPhotoConsent] = useState<Consent>({ given: null, date: null });
   const [guardianConsent, setGuardianConsent] = useState<Consent>({ given: null, date: null });
   const [sponsorName, setSponsorName] = useState('');
-  const [sponsorPhone, setSponsorPhone] = useState('');
-  const [sponsorEmail, setSponsorEmail] = useState('');
+  const [allergies, setAllergies] = useState('');
+  const [askPhoto, setAskPhoto] = useState(false);
   const [parentName, setParentName] = useState('');
   const [parentPhone, setParentPhone] = useState('');
   const [leaveNote, setLeaveNote] = useState('');
@@ -67,7 +75,7 @@ function ChildScreen({ org }: { org: Organization }) {
     if (!child) return;
     setDob(child.dateOfBirth ?? ''); setSchool(child.school ?? ''); setSchoolClass(child.schoolClass ?? ''); setSchoolStatus(child.schoolStatus); setEnrolledOn(child.enrolledOn ?? '');
     setProgrammes(child.programmes); setPhotoConsent(child.photoConsent); setGuardianConsent(child.guardianConsent);
-    setSponsorName(child.sponsorName ?? ''); setSponsorPhone(child.sponsorPhone ?? ''); setSponsorEmail(child.sponsorEmail ?? '');
+    setSponsorName(child.sponsorName ?? ''); setAllergies(child.allergies ?? '');
     setParentName(child.parentName ?? ''); setParentPhone(child.parentPhone ?? ''); setLeaveNote(child.departingNote ?? '');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child?.id]);
@@ -82,7 +90,8 @@ function ChildScreen({ org }: { org: Organization }) {
   function save() {
     updateChild(org.id, child!.id, {
       dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolClass: schoolClass.trim().slice(0, 40), schoolStatus, enrolledOn: enrolledOn || null, programmes, photoConsent, guardianConsent,
-      sponsorName: sponsorName.trim().slice(0, 120), sponsorPhone: sponsorPhone.trim().slice(0, 30), sponsorEmail: sponsorEmail.trim().slice(0, 120),
+      sponsorName: sponsorName.trim().slice(0, 120),
+      ...(canAllergies ? { allergies: allergies.trim().slice(0, 300) || null } : {}),
       parentName: parentName.trim().slice(0, 120), parentPhone: parentPhone.trim().slice(0, 30),
     }).catch((err) => toast.show(friendlyError(err)));
     toast.show('Saved');
@@ -111,6 +120,10 @@ function ChildScreen({ org }: { org: Organization }) {
   const parentShown = child.parentName || guardian?.fullName || '';
   const born = child.dateOfBirth ? new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${child.dateOfBirth}T12:00:00Z`)) : null;
   const toBirthday = daysToBirthday(child.dateOfBirth, h.today);
+  const klass = classOf(child.dateOfBirth, h.today);
+  const allergic = hasAllergy(child.allergies);
+  const sp = child.sponsorship;
+  const registered = child.enrolledOn ?? sp?.registeredOn ?? null;
 
   return (
     <div className="page narrow">
@@ -123,16 +136,17 @@ function ChildScreen({ org }: { org: Organization }) {
             <div className="hc-photo-btns">
               <label className="btn btn-quiet" title="Take a photo">📷<span className="sr-only">Take a photo</span><input type="file" hidden accept="image/*" capture="environment" onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
               <label className="btn btn-quiet" title="Upload a photo">⬆︎<span className="sr-only">Upload a photo</span><input type="file" hidden accept="image/*" onChange={(e) => { void takePhoto(e.target.files?.[0]); e.target.value = ''; }} /></label>
-              {photo && <button type="button" className="btn btn-quiet" title="Remove photo" onClick={() => { removeChildPhoto(org.id, child.id).catch((err) => toast.show(friendlyError(err))); }}>✕<span className="sr-only">Remove photo</span></button>}
+              {photo && <button type="button" className="btn btn-quiet" title="Remove photo" onClick={() => setAskPhoto(true)}>✕<span className="sr-only">Remove photo</span></button>}
             </div>
           )}
         </div>
         <div className="hc-profile-main">
           <div className="hc-profile-top">
             <h1>{name}</h1>
-            <CleanupButton orgId={org.id} kind="person" id={child.id} back="/hope/children" hope />
+            <CleanupButton orgId={org.id} kind="person" id={child.id} back="/hope/children" hope label="Delete" title={`Do you want to delete ${name}?`} askPassword />
           </div>
-          <p className="muted">{h.codeOf(child)}{person?.gender ? ` · ${person.gender}` : ''}
+          <p className="muted">{h.codeOf(child)}{person?.gender ? ` · ${person.gender}` : ''} <ClassChip c={klass} />
+            {allergic && <span className="badge badge-warn">⚠️ Allergy: {child.allergies}</span>}
             {consentMissing(child) && <span className="badge badge-warn">Consent missing</span>}
             {child.status === 'departing' && <span className="badge badge-warn">Departing</span>}
             {child.status === 'exited' && <span className="badge badge-muted">Departed{child.exitedOn ? ` ${formatDateKey(child.exitedOn)}` : ''}</span>}
@@ -141,14 +155,20 @@ function ChildScreen({ org }: { org: Organization }) {
             <div><dt>Age</dt><dd>{age != null ? `${age} years` : 'Not known'}</dd></div>
             <div><dt>Birthday</dt><dd>{born ?? 'Not known'}{toBirthday != null && toBirthday <= 7 ? (toBirthday === 0 ? ' 🎈 today!' : ` 🎈 in ${toBirthday} ${toBirthday === 1 ? 'day' : 'days'}`) : ''}</dd></div>
             <div><dt>School</dt><dd>{child.school || 'Not known'}{child.schoolClass ? ` · ${child.schoolClass}` : ''}</dd></div>
-            <div><dt>Sponsor</dt><dd>{child.sponsorName || 'None yet'}{child.sponsorEmail && <> · <a href={`mailto:${child.sponsorEmail}`}>email</a></>}{child.sponsorPhone && <> · <a href={`tel:${child.sponsorPhone}`}>call</a></>}</dd></div>
-            {child.sponsorship && <div><dt>Sponsorship</dt><dd>{child.sponsorship.status || 'On the list'} · {child.sponsorship.childId}</dd></div>}
+            <div><dt>Child ID</dt><dd>{sp?.childId || 'Not on the list yet'}</dd></div>
+            <div><dt>Registration date</dt><dd>{registered ? formatDateKey(registered) : 'Not known'}</dd></div>
+            <div><dt>Programme completion</dt><dd>{sp?.completesOn ? formatDateKey(sp.completesOn) : 'Not known'}</dd></div>
+            <div><dt>Sponsorship status</dt><dd>{sp?.status || 'Not known'}</dd></div>
+            <div><dt>Sponsor</dt><dd>{child.sponsorName || 'None yet'}</dd></div>
+            <div><dt>Sponsor ID</dt><dd>{sp?.sponsorId || 'None'}</dd></div>
+            <div><dt>Allergies</dt><dd>{child.allergies || 'Not recorded'}</dd></div>
             <div><dt>Parent</dt><dd>{guardian ? <Link to={`/people/${org.id}/${guardian.id}`}>{parentShown}</Link> : parentShown || 'Not saved'}</dd></div>
             <div><dt>Attendance</dt><dd><PctBadge pct={rate.pct} /> {fire >= STREAK_SHOWN && <span className="hr-delight hr-streak">🔥{fire} in a row</span>}</dd></div>
           </dl>
           {parentPhoneShown && (
             <div className="chips">
               <a className="btn btn-primary" href={`tel:${parentPhoneShown}`}>📞 Call {parentShown ? parentShown.split(' ')[0] : 'the parent'}</a>
+              <a className="btn" href={waLink(parentPhoneShown, fillMessage('Hello {parent}, ', { parentName: parentShown, children: [{ id: child.id, name }] }))} target="_blank" rel="noopener noreferrer">🟢 WhatsApp</a>
               <span className="small muted align-center">{formatPhone(parentPhoneShown) || parentPhoneShown}</span>
             </div>
           )}
@@ -167,7 +187,7 @@ function ChildScreen({ org }: { org: Organization }) {
         <div className="stack">
         <div className="field-row">
           <label className="field"><span>Date of birth</span><input type="date" disabled={!canEdit} value={dob} max={h.today} onChange={(e) => setDob(e.target.value)} /></label>
-          <label className="field"><span>Joined on</span><input type="date" disabled={!canEdit} value={enrolledOn} max={h.today} onChange={(e) => setEnrolledOn(e.target.value)} /></label>
+          <label className="field"><span>Registration date</span><input type="date" disabled={!canEdit} value={enrolledOn} max={h.today} onChange={(e) => setEnrolledOn(e.target.value)} /></label>
         </div>
         <div className="field-row">
           <label className="field"><span>School</span><input disabled={!canEdit} value={school} maxLength={120} onChange={(e) => setSchool(e.target.value)} /></label>
@@ -185,20 +205,10 @@ function ChildScreen({ org }: { org: Organization }) {
           <label className="field"><span>Parent's contact</span><input disabled={!canEdit} inputMode="tel" value={parentPhone} maxLength={30} onChange={(e) => setParentPhone(e.target.value)} placeholder={guardian?.phone ? formatPhone(guardian.phone) : '0712 345 678'} /></label>
         </div>
         <label className="field"><span>Sponsor's name</span><input disabled={!canEdit} value={sponsorName} maxLength={120} onChange={(e) => setSponsorName(e.target.value)} /></label>
-        <div className="field-row">
-          <label className="field"><span>Sponsor's phone (optional)</span><input disabled={!canEdit} inputMode="tel" value={sponsorPhone} maxLength={30} onChange={(e) => setSponsorPhone(e.target.value)} /></label>
-          <label className="field"><span>Sponsor's email (optional)</span><input disabled={!canEdit} type="email" value={sponsorEmail} maxLength={120} onChange={(e) => setSponsorEmail(e.target.value)} /></label>
-        </div>
-        {child.sponsorship && (
-          <dl className="hc-facts hc-sponsorship" aria-label="From the sponsorship list">
-            <div><dt>Child ID</dt><dd>{child.sponsorship.childId}</dd></div>
-            <div><dt>Status</dt><dd>{child.sponsorship.status || 'Not given'}</dd></div>
-            {child.sponsorship.sponsorId && <div><dt>Sponsor ID</dt><dd>{child.sponsorship.sponsorId}</dd></div>}
-            {child.sponsorship.registeredOn && <div><dt>Registered</dt><dd>{formatDateKey(child.sponsorship.registeredOn)}</dd></div>}
-            {child.sponsorship.completesOn && <div><dt>Completes</dt><dd>{formatDateKey(child.sponsorship.completesOn)}</dd></div>}
-            {child.sponsorship.updatedOn && <div><dt>List of</dt><dd>{formatDateKey(child.sponsorship.updatedOn)}</dd></div>}
-          </dl>
-        )}
+        <label className="field"><span>Allergies{canAllergies ? '' : ' (the Director records these)'}</span>
+          <input disabled={!canAllergies} value={allergies} maxLength={300} onChange={(e) => setAllergies(e.target.value)} placeholder="e.g. Peanuts, milk" />
+        </label>
+        {canAllergies && !allergies && <button type="button" className="btn btn-quiet btn-small align-start" onClick={() => setAllergies(NO_ALLERGIES)}>None known</button>}
         <ConsentField label="Guardian consent to keep this child's details" value={guardianConsent} onChange={setGuardianConsent} today={h.today} disabled={!canEdit} />
         <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
         {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}
@@ -249,6 +259,8 @@ function ChildScreen({ org }: { org: Organization }) {
           )}
         </>
       )}
+      <PasswordConfirm open={askPhoto} title={`Do you want to delete ${name}'s photo?`} onCancel={() => setAskPhoto(false)}
+        onConfirm={() => { setAskPhoto(false); removeChildPhoto(org.id, child.id).catch((err) => toast.show(friendlyError(err))); toast.show('Photo deleted'); }} />
       <ConfirmDialog open={!!confirmExit} title={confirmExit === 'exited' ? `Has ${name} left for good?` : `Mark ${name} as departing?`}
         body={confirmExit === 'exited' ? 'They move to Past children and leave the weekly register. Their records are kept, and you can return them to active at any time.' : 'They stay on the register, marked Departing, until they leave.'}
         confirmLabel={confirmExit === 'exited' ? 'Yes, departed' : 'Mark as departing'} danger={confirmExit === 'exited'} onConfirm={leave} onCancel={() => setConfirmExit(null)} />

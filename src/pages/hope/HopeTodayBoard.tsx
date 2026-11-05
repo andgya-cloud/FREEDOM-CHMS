@@ -9,6 +9,9 @@ import { consentMissing, isCurrentChild } from '../../../functions/src/shared/ho
 import { birthdayThisWeek, missedSaturdays, rateFrom, type HopeDay } from '../../../functions/src/shared/hopeRegister';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { useChats } from './HopeChatsPage';
+import { useChampionPay, useChampions } from '../../state/useHope';
+import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
+import { monthPay, payMonthReady } from '../../../functions/src/shared/hopeChampionPay';
 import type { useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 import type { Club, ClubDay } from '../../../functions/src/shared/hopeClubs';
@@ -148,5 +151,29 @@ export function NeedsUs({ org, h, days }: { org: Organization; h: H; days: HopeD
       </ul>
       {groups.some((g) => g.lines.length > FOLD) && <button type="button" className="btn btn-quiet align-start" onClick={() => setAll((v) => !v)}>{all ? 'Show less' : `Show all ${count}`}</button>}
     </section>
+  );
+}
+
+/**
+ * Champions' pay is ready (Andy, 2026-11-05, 10A): on the 28th to check, and from the 1st as the final report, for the
+ * Director (and admins) only, until it is approved.
+ */
+export function PayReady({ org, today }: { org: Organization; today: string }) {
+  const { profile } = useAuth();
+  const manager = isChampionManager(profile, org.id);
+  const ready = payMonthReady(today);
+  const data = useChampions(manager && ready ? org.id : '');
+  const pay = useChampionPay(org.id, manager && !!ready);
+  if (!manager || !ready || data.loading) return null;
+  const r = monthPay(data.champions, data.days, pay.extras, ready.month);
+  const approved = pay.approved.find((a) => a.id === ready.month);
+  if (!r.total || (approved && approved.total === r.total)) return null;
+  const name = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(new Date(`${ready.month}-15T12:00:00Z`));
+  return (
+    <Link to="/hope/register?w=champions&tab=pay" className="card ht-pay">
+      <span aria-hidden="true">💵</span>
+      <span className="grow"><b>Champions' pay for {name} is {ready.final ? 'ready' : 'ready to check'}</b><span className="small muted">{formatKes(r.total)} for {r.lines.filter((l) => l.total > 0).length} champions. Check and approve it.</span></span>
+      <span aria-hidden="true">›</span>
+    </Link>
   );
 }

@@ -2416,3 +2416,24 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .ht-hero-checkin { margin: 14px 0 10px; max-width: 460px; padding: 14px 18px; }
 .ht-hero-checkin .grow > span { display: block; opacity: 0.9; font-size: 0.9rem; }
 .ht-hero-checkin .ht-sat-meter { display: block; margin-top: 8px; }
+
+/* v175: classes by age with their stones, allergies, WhatsApp parents, champions' pay (Andy, 2026-11-05) */
+.hope-stone { flex: none; vertical-align: middle; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / .25)); }
+.hope-class-chip { display: inline-flex; align-items: center; gap: .3rem; padding: .05rem .55rem .05rem .3rem; border: 1.5px solid; border-radius: 999px; font-size: .82rem; font-weight: 600; background: var(--surface, #fff); white-space: nowrap; vertical-align: middle; }
+.hope-class-chip.none { border-color: var(--border); color: var(--muted); font-weight: 500; padding-left: .55rem; }
+.hc-card .hope-class-chip { align-self: center; }
+.ck-photo { position: relative; }
+.ck-allergy { position: absolute; left: -4px; bottom: -4px; width: 28px; height: 28px; border-radius: 50%; background: #c81e1e; display: grid; place-items: center; font-size: 15px; box-shadow: 0 0 0 2px #fff; }
+.ck-allergy-line { display: block; color: #b91c1c; font-weight: 600; }
+.wa-preview { white-space: pre-wrap; background: #e7fbe6; color: #1f3d1c; border-radius: 10px 10px 10px 2px; padding: .6rem .75rem; }
+.wa-list li { display: flex; align-items: center; gap: .5rem; }
+.wa-list li.sent { opacity: .55; }
+.btn-big { padding: .85rem 1rem; font-size: 1.02rem; text-align: center; }
+.hope-phone { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
+.hope-phone > span:first-child { font-size: 1.6rem; }
+.hope-phone .grow, .ht-pay .grow { display: flex; flex-direction: column; }
+.ht-pay { display: flex; align-items: center; gap: .7rem; text-decoration: none; color: inherit; border-left: 4px solid #e08a00; }
+.ht-pay > span:first-child { font-size: 1.6rem; }
+.cp-table td, .cp-table th { white-space: nowrap; }
+.cp-table td:not(:first-child), .cp-table th:not(:first-child) { text-align: right; }
+.cp-weekly { width: 6.5rem; text-align: right; padding: .3rem .4rem; }

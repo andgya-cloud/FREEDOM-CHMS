@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { normalizeCode } from '../../../functions/src/shared/hope';
+import { normalizeChampionCode } from '../../../functions/src/shared/hopeChampionPay';
 
 type Detector = { detect: (source: HTMLVideoElement) => Promise<{ rawValue: string }[]> };
 type DetectorClass = new (opts: { formats: string[] }) => Detector;
@@ -18,7 +19,7 @@ export function DoorScan({ onCode, onClose }: { onCode: (code: string) => string
   handle.current = onCode;
 
   function take(raw: string) {
-    const code = normalizeCode(/^\s*\d+\s*$/.test(raw) ? `HC-${raw.trim()}` : raw) ?? raw.trim().toUpperCase();
+    const code = normalizeCode(/^\s*\d+\s*$/.test(raw) ? `HC-${raw.trim()}` : raw) ?? normalizeChampionCode(raw) ?? raw.trim().toUpperCase();
     const now = Date.now();
     if ((seen.current.get(code) ?? 0) > now - 4000) return;
     seen.current.set(code, now);
@@ -60,7 +61,7 @@ export function DoorScan({ onCode, onClose }: { onCode: (code: string) => string
       {camera === 'starting' && <p className="small muted">Starting the camera… Allow the camera if the phone asks.</p>}
       {last && <p className={`door-last ${last.ok ? 'ok' : 'bad'}`} aria-live="assertive">{last.text}</p>}
       <form className="field-row" onSubmit={(e) => { e.preventDefault(); if (typed.trim()) { seen.current.clear(); take(typed); setTyped(''); } }}>
-        <label className="field"><span>Or type the code</span><input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="HC-0012" autoCapitalize="characters" /></label>
+        <label className="field"><span>Or type the code</span><input value={typed} onChange={(e) => setTyped(e.target.value)} placeholder="HC-0012 or CC-0003" autoCapitalize="characters" /></label>
         <button type="submit" className="btn align-end" disabled={!typed.trim()}>Check in</button>
       </form>
     </section>

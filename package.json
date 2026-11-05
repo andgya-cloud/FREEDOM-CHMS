@@ -17,6 +17,7 @@
     "icons": "python3 scripts/make-icons.py"
   },
   "dependencies": {
+    "fflate": "^0.8.3",
     "firebase": "^12.19.0",
     "jspdf": "^3.0.4",
     "pdf-lib": "^1.17.1",

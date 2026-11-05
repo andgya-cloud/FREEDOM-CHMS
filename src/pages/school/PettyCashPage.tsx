@@ -9,6 +9,7 @@ import { friendlyError } from '../../lib/errors';
 import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
 import { addReceipt, savePayment, cancelFund, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
+import { takePettyPrefill } from '../../lib/pettyPrefill';
 import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
@@ -386,6 +387,7 @@ function Home({ org }: { org: Organization }) {
 
 interface Line { key: number; description: string; quantity: string; unitPrice: string }
 
+
 /** A typed quantity ("2", "1.5"), or null when it is not a positive number. */
 const parseQuantity = (text: string): number | null => {
   const n = Number(text.replace(/,/g, '').trim());
@@ -401,11 +403,13 @@ function NewRequisition({ org }: { org: Organization }) {
   const { profile } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
-  const [category, setCategory] = useState<PettyCashCategory | ''>('');
+  // A request made ready elsewhere, such as the Child Champions' month pay (Andy, 2026-11-05, 10A).
+  const [prefill] = useState(() => takePettyPrefill(org.id));
+  const [category, setCategory] = useState<PettyCashCategory | ''>((prefill?.category as PettyCashCategory) ?? '');
   const [note, setNote] = useState('');
-  const [lines, setLines] = useState<Line[]>([{ key: 1, description: '', quantity: '1', unitPrice: '' }]);
+  const [lines, setLines] = useState<Line[]>(() => prefill?.lines.length ? prefill.lines.map((l, i) => ({ key: i + 1, ...l })) : [{ key: 1, description: '', quantity: '1', unitPrice: '' }]);
   const [copyFrom, setCopyFrom] = useState('');
-  const [payee, setPayee] = useState('');
+  const [payee, setPayee] = useState(prefill?.payee ?? '');
   const [mpesa, setMpesa] = useState('');
   const parsed = lines.map((l) => {
     const quantity = parseQuantity(l.quantity);

@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
-import { useChildPhotos, useHopeDays } from '../../state/useHope';
+import { useChampions, useChildPhotos, useHopeDays } from '../../state/useHope';
+import { arrivalMark } from '../../../functions/src/shared/hopeChampionPay';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
-import { markKid, markMany } from '../../lib/hopeWrites';
+import { markChampion, markKid, markMany } from '../../lib/hopeWrites';
 import { DoorScan } from './DoorScan';
 import { useClubs } from '../../state/useHope';
 import { clubDayOnOrBefore, scheduleText } from '../../../functions/src/shared/hopeClubs';
@@ -16,6 +17,7 @@ import { birthdayThisWeek, dayTrend, streak, rateFrom, saturdayOnOrBefore, type 
 import { canKeepAccounts, HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { HopeGate, useHopePage } from './common';
+import { hasAllergy } from '../../../functions/src/shared/hopeClasses';
 import { Avatar, Delights, nowTime, RegisterCalendar, tick, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
@@ -91,6 +93,7 @@ function KidsRegister({ org }: { org: Organization }) {
   const toast = useToast();
   const { days } = useHopeDays(org.id);
   const photos = useChildPhotos(org.id);
+  const champs = useChampions(org.id);
   const [params] = useSearchParams();
   // "Check in" opens today, any day of the week (Andy, 2026-11-05, 1A); a day from Reports → Attendance opens that day.
   const asked = params.get('d');
@@ -132,6 +135,17 @@ function KidsRegister({ org }: { org: Organization }) {
   }
   /** A card read at the door (12A): checks the child in, and says who. */
   function scanned(code: string): string {
+    // A Child Champion's card checks them in on their register, late after 8:30am (Andy, 2026-11-05, 11A 12).
+    if (code.startsWith('CC-')) {
+      const x = champs.champions.find((y) => y.code === code);
+      if (!x) return `No champion has the code ${code}.`;
+      const old = champs.days.find((d) => d.date === date)?.marks?.[x.id];
+      if (old && (old.s === 'present' || old.s === 'late')) return `✓ ${x.name} is already checked in${old.in ? ` (${old.in})` : ''}.`;
+      const t = date === h.today ? nowTime() : null;
+      const s = arrivalMark(t);
+      markChampion(org.id, date, x.id, { s, in: t, out: null, duty: x.duty || null, r: null }).catch(fail);
+      return `✓ ${x.name} (champion) checked in${t ? ` at ${t}` : ''}${s === 'late' ? ' · late' : ''}`;
+    }
     const c = h.children.find((x) => x.code === code);
     if (!c) return `No child has the code ${code}.`;
     const name = h.nameOf(c.id);
@@ -202,6 +216,7 @@ function KidsRegister({ org }: { org: Organization }) {
                     <Avatar photo={c.photoConsent?.given ? photos.get(c.id) : null} name={name} size={84} />
                     {on && <span className="ck-mark" aria-hidden="true">✓</span>}
                     <span className="ck-delight"><Delights birthday={birthdayThisWeek(c.dateOfBirth, h.today)} streak={streak(c.id, days)} /></span>
+                    {hasAllergy(c.allergies) && <span className="ck-allergy" title={`Allergy: ${c.allergies}`}>⚠️<span className="sr-only">Allergy: {c.allergies}</span></span>}
                   </span>
                   <b className="ck-first">{first}</b>
                   <span className="ck-rest">{rest.join(' ')}</span>
@@ -221,7 +236,7 @@ function KidsRegister({ org }: { org: Organization }) {
                 <label className="ck-tick">
                   <input type="checkbox" checked={on} disabled={!canMark} onChange={() => toggle(c.id)} />
                   <Avatar photo={c.photoConsent?.given ? photos.get(c.id) : null} name={name} size={44} />
-                  <span className="grow"><b>{name}</b><span className="small muted">{h.codeOf(c)}{on && e?.t ? ` · came ${e.t}` : e?.s === 'absent' ? ' · absent' : ''}</span></span>
+                  <span className="grow"><b>{name}</b><span className="small muted">{h.codeOf(c)}{on && e?.t ? ` · came ${e.t}` : e?.s === 'absent' ? ' · absent' : ''}</span>{hasAllergy(c.allergies) && <span className="small ck-allergy-line">⚠️ Allergy: {c.allergies}</span>}</span>
                 </label>
                 <button type="button" className={`chip${e?.s === 'excused' ? ' chip-on' : ''}`} aria-pressed={e?.s === 'excused'} disabled={!canMark} onClick={() => excuse(c.id)}>Excused</button>
                 {keeper && e && <button type="button" className="chip" title="Clear this child's mark (testing)" onClick={() => { markKid(org.id, date, c.id, null).catch(fail); }}>↺ Reset</button>}

@@ -38,8 +38,6 @@ function Register({ org }: { org: Organization }) {
   const [photoConsent, setPhotoConsent] = useState<Consent>(NO_CONSENT);
   const [guardianConsent, setGuardianConsent] = useState<Consent>(NO_CONSENT);
   const [sponsorName, setSponsorName] = useState('');
-  const [sponsorPhone, setSponsorPhone] = useState('');
-  const [sponsorEmail, setSponsorEmail] = useState('');
   const [error, setError] = useState('');
   const clubs = useClubs(org.id);
   const [joinClubs, setJoinClubs] = useState<string[]>([]);
@@ -59,7 +57,6 @@ function Register({ org }: { org: Organization }) {
     if (who.id && h.children.some((c) => c.id === who.id)) return setError('This child is already on the register.');
     if (dob && dob > h.today) return setError('The date of birth is in the future.');
     if (photo && !photoOk) return setError('Tick that the parent agreed to photos, or remove the photo.');
-    if (sponsorEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(sponsorEmail.trim())) return setError('The sponsor\'s email does not look right.');
     let guardianTarget: { personId: string } | { person: PersonInput } | null = null;
     if (guardian.id) guardianTarget = { personId: guardian.id };
     else if (guardian.name.trim()) {
@@ -75,7 +72,7 @@ function Register({ org }: { org: Organization }) {
         {
           dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolStatus, enrolledOn: enrolledOn || null, programmes,
           photoConsent: photo && photoOk && photoConsent.given !== true ? { given: true, date: h.today } : photoConsent, guardianConsent,
-          sponsorName: sponsorName.trim().slice(0, 120), sponsorPhone: sponsorPhone.trim().slice(0, 30), sponsorEmail: sponsorEmail.trim().slice(0, 120),
+          sponsorName: sponsorName.trim().slice(0, 120),
           parentName: guardian.name.trim().slice(0, 120), parentPhone: (guardian.id ? h.byId(guardian.id)?.phone ?? '' : gPhone.trim()).slice(0, 30),
         },
       );
@@ -143,12 +140,6 @@ function Register({ org }: { org: Organization }) {
 
         <h3>Sponsor</h3>
         <label className="field"><span>Sponsor's name (optional)</span><input value={sponsorName} maxLength={120} onChange={(e) => setSponsorName(e.target.value)} /></label>
-        {sponsorName.trim() && (
-          <div className="field-row">
-            <label className="field"><span>Sponsor's phone (optional)</span><input inputMode="tel" value={sponsorPhone} maxLength={30} onChange={(e) => setSponsorPhone(e.target.value)} /></label>
-            <label className="field"><span>Sponsor's email (optional)</span><input type="email" value={sponsorEmail} maxLength={120} onChange={(e) => setSponsorEmail(e.target.value)} /></label>
-          </div>
-        )}
 
         <h3>Parent or guardian</h3>
         <PersonPicker label="Parent's name" value={guardian} onChange={setGuardian} allowFreeText orgId={org.id} excludeId={who.id ?? undefined} hint="Type a new name, or pick someone already in the system." />

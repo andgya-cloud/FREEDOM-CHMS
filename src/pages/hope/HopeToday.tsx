@@ -9,7 +9,7 @@ import { markHelperArrived, requestAbsenceCheck } from '../../lib/hopeWrites';
 import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { HelperGuide } from './HelperGuide';
 import { useChatSummary } from './HopeChatsPage';
-import { HeroCheckin, LiveBoard, NeedsUs } from './HopeTodayBoard';
+import { HeroCheckin, LiveBoard, NeedsUs, PayReady } from './HopeTodayBoard';
 import { nowTime } from './registerParts';
 import { SceneVideo } from '../../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
@@ -165,6 +165,7 @@ function LeaderToday({ org }: { org: Organization }) {
       {openDay && <LiveBoard org={org} h={h} days={days} helpers={helpers} meals={meals} clubsToday={clubsToday} clubDays={clubs.days} marker={marker} />}
 
       {can('people.read') && <NeedsUs org={org} h={h} days={days} />}
+      <PayReady org={org} today={h.today} />
 
       {alerts.length > 0 && (
         <section className="card ht-alerts" aria-label="Needs your attention">

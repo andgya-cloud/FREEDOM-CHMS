@@ -8,6 +8,7 @@ import { localDateKey } from '../../functions/src/shared/datetime';
 import { activitiesFor } from '../../functions/src/shared/attendance';
 import { hopeMetrics, type Child, type SessionEvent, type SessionRecord } from '../../functions/src/shared/hope';
 import type { Champion, ChampionDay, HopeDay } from '../../functions/src/shared/hopeRegister';
+import type { ChampionExtra } from '../../functions/src/shared/hopeChampionPay';
 import type { Club, ClubDay, ClubWin } from '../../functions/src/shared/hopeClubs';
 import type { MealDay } from '../../functions/src/shared/hopeRecords';
 
@@ -143,6 +144,15 @@ export function useChampions(orgId: string) {
   const days = useLiveQuery<ChampionDay & { id: string }>(() => (on ? col(orgId, 'championDays') : null), [orgId, on]);
   const champions = useMemo(() => live(people.rows).sort((a, b) => a.name.localeCompare(b.name)), [people.rows]);
   return { champions, days: useMemo(() => live(days.rows), [days.rows]), loading: people.loading || days.loading };
+}
+
+/** Champions' extra allowances and the approved months (Andy, 2026-11-05, 9A 10A). */
+export function useChampionPay(orgId: string, enabled = true) {
+  const { profile } = useAuth();
+  const on = enabled && !!orgId && !!profile?.active;
+  const extras = useLiveQuery<ChampionExtra>(() => (on ? col(orgId, 'championExtras') : null), [orgId, on]);
+  const approved = useLiveQuery<{ id: string; month: string; total: number; count: number; approvedName: string; approvedAt?: Timestamp }>(() => (on ? col(orgId, 'championPay') : null), [orgId, on]);
+  return { extras: useMemo(() => live(extras.rows), [extras.rows]), approved: approved.rows };
 }
 
 /** Children's photos, by child id. Only children with photo consent have one. */

@@ -1168,7 +1168,7 @@ service cloud.firestore {
         allow create, update: if orgWrite(orgId, 'people.write')
           && request.resource.data.keys().hasOnly(['orgId', 'code', 'status', 'enrolledOn', 'exitedOn', 'schoolStatus', 'programmes', 'dateOfBirth', 'school',
                'photoConsent', 'guardianConsent', 'sponsorName', 'sponsorPhone', 'sponsorEmail', 'parentName', 'parentPhone', 'departingNote', 'hasPhoto',
-               'schoolClass', 'payment', 'sponsorship', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'schoolClass', 'payment', 'sponsorship', 'allergies', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', childId)
           && (request.resource.data.get('sponsorship', null) == null || (request.resource.data.sponsorship is map
                && request.resource.data.sponsorship.keys().hasOnly(['childId', 'status', 'sponsorId', 'sponsorName', 'registeredOn', 'completesOn', 'centre', 'updatedOn'])
@@ -1184,6 +1184,7 @@ service cloud.firestore {
           && shortText(request.resource.data.get('parentPhone', ''), 30)
           && shortText(request.resource.data.get('departingNote', ''), 500)
           && shortText(request.resource.data.get('schoolClass', ''), 40)
+          && shortText(request.resource.data.get('allergies', ''), 300)
           && validPayment(request.resource.data.get('payment', null))
           && request.resource.data.get('hasPhoto', false) is bool
           && request.resource.data.schoolStatus in ['in_school', 'not_in_school', 'unknown']
@@ -1253,20 +1254,51 @@ service cloud.firestore {
       }
       match /champions/{championId} {
         allow read: if hopeRead();
-        allow create, update: if invManager() && request.resource.data.orgId == orgId
+        allow create, update: if champManager() && request.resource.data.orgId == orgId
           && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete())
-          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn',
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn', 'weeklyPay', 'code',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 2
           && shortText(request.resource.data.phone, 30) && shortText(request.resource.data.email, 120)
           && shortText(request.resource.data.duty, 80)
           && request.resource.data.status in ['active', 'left']
-          && optionalDate(request.resource.data.get('joinedOn', null));
+          && optionalDate(request.resource.data.get('joinedOn', null))
+          && (request.resource.data.get('weeklyPay', null) == null || (request.resource.data.weeklyPay is int
+               && request.resource.data.weeklyPay >= 0 && request.resource.data.weeklyPay <= 1000000))
+          && (request.resource.data.get('code', null) == null || (request.resource.data.code is string && request.resource.data.code.matches('^CC-[0-9]{4,6}$')));
         allow delete: if false;
       }
       match /championDays/{day} {
         allow read: if hopeRead();
-        allow create, update: if invManager() && hopeDayWrite(day);
+        // The Director marks the register; whoever checks people in at the door (attendance) may add a champion's
+        // check-in by their QR card, but not change or remove a mark (Andy, 2026-11-05, 11A).
+        allow create, update: if (champManager() && hopeDayWrite(day))
+          || (canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day)
+              && (resource == null || request.resource.data.marks.diff(resource.data.marks).affectedKeys()
+                   .hasOnly(request.resource.data.marks.diff(resource.data.marks).addedKeys())));
+        allow delete: if false;
+      }
+      // Extra allowance for a champion in a month, with a reason (Andy, 2026-11-05, 9A): the Director only.
+      match /championExtras/{extraId} {
+        allow read: if hopeRead();
+        allow create, update: if champManager() && request.resource.data.orgId == orgId
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete()
+               && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt', 'deletedBy', 'updatedAt', 'updatedBy']))
+          && request.resource.data.keys().hasOnly(['orgId', 'championId', 'month', 'amount', 'reason', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.championId, 128) && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.amount is int && request.resource.data.amount > 0 && request.resource.data.amount <= 1000000
+          && shortText(request.resource.data.reason, 200) && request.resource.data.reason.size() >= 2;
+        allow delete: if false;
+      }
+      // The Director's approval of a month's champion pay (10A).
+      match /championPay/{month} {
+        allow read: if hopeRead();
+        allow create, update: if champManager() && month.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'month', 'total', 'count', 'approvedBy', 'approvedName', 'approvedAt'])
+          && request.resource.data.orgId == orgId && request.resource.data.month == month
+          && request.resource.data.total is int && request.resource.data.count is int
+          && request.resource.data.approvedBy == request.auth.uid && request.resource.data.approvedAt == request.time
+          && shortText(request.resource.data.approvedName, 120);
         allow delete: if false;
       }
 
@@ -1749,6 +1781,10 @@ service cloud.firestore {
       // the department in inventoryCourseIds) fills in its count until the deadline's day ends in Nairobi, or until
       // the day Admin reopened it to, and submits it. Admin and the Principal (and the pastor and Doreen) open
       // counts, set deadlines, reopen late forms and verify them.
+      // The Child Champions and their pay: admins, and the Hope Centre Director (Andy, 2026-11-05, 9A 10A).
+      function champManager() {
+        return invManager() || (canAccessOrg(orgId) && (has('team.manage') || me().roleId == 'head'));
+      }
       function invManager() {
         return canAccessOrg(orgId) && (has('users.manage') || me().roleId in ['admin', 'principal']);
       }

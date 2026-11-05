@@ -92,6 +92,10 @@ export interface Champion {
   duty: string;
   status: 'active' | 'left';
   joinedOn: string | null;
+  /** What they earn for each week they come, in KES (Andy, 2026-11-05, 8A). */
+  weeklyPay?: number | null;
+  /** Their QR card code, CC-0001 (11A). */
+  code?: string | null;
   deletedAt?: unknown;
 }
 

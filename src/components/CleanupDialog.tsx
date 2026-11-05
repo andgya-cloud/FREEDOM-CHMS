@@ -12,7 +12,7 @@ import { BIN_DAYS, type CleanupKind } from '../../functions/src/shared/cleanup';
  * Removing entries to the Recycle Bin (Andy, 2026-10-30). It first shows what will go, including linked
  * records; money and official records need Andrew Guya's password and a reason.
  */
-export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: string; items: Item[]; open: boolean; onClose: () => void; onDone: () => void }) {
+export function RemoveDialog({ orgId, items, open, onClose, onDone, title, askPassword }: { orgId: string; items: Item[]; open: boolean; onClose: () => void; onDone: () => void; title?: string; askPassword?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const toast = useToast();
   const { user } = useAuth();
@@ -39,13 +39,15 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
   }, [open, orgId, items]);
 
   const official = !!checked?.some((c) => c.official);
+  // A child's profile always asks for the password (Andy, 2026-11-05, 1B).
+  const needPassword = official || !!askPassword;
   const blocked = official && !director;
   const linked = checked?.filter((c) => c.linkedText) ?? [];
 
   async function go() {
     setBusy(true);
     try {
-      const proof = official ? await passwordProof(user?.uid ?? '', user?.email ?? '', password) : undefined;
+      const proof = needPassword ? await passwordProof(user?.uid ?? '', user?.email ?? '', password) : undefined;
       const res = await removeEntries({ orgId, items, reason, proof });
       toast.show(`${res.removed === 1 ? 'Moved' : `${res.removed} entries moved`} to the Recycle Bin. You can put ${res.removed === 1 ? 'it' : 'them'} back for ${BIN_DAYS} days.`);
       onClose();
@@ -60,7 +62,7 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
   const n = items.length;
   return (
     <dialog ref={ref} className="dialog" onCancel={(e) => { e.preventDefault(); if (!busy) onClose(); }}>
-      <h2>{n === 1 ? 'Remove this entry?' : `Remove ${n} entries?`}</h2>
+      <h2>{title ?? (n === 1 ? 'Remove this entry?' : `Remove ${n} entries?`)}</h2>
       {problem && <p className="error">{problem}</p>}
       {!checked && !problem && <p className="muted">Checking what is linked…</p>}
       {checked && (
@@ -86,7 +88,7 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
               <input value={reason} maxLength={300} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Test data" disabled={busy} />
             </label>
           )}
-          {official && !blocked && (
+          {needPassword && !blocked && (
             <label className="field"><span>Your password</span>
               <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
             </label>
@@ -96,7 +98,7 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
       <div className="dialog-actions">
         <button type="button" className="btn btn-quiet" onClick={onClose} disabled={busy}>Cancel</button>
         <button type="button" className="btn btn-danger" onClick={() => void go()}
-          disabled={busy || !checked || blocked || (official && (reason.trim().length < 3 || !password))}>
+          disabled={busy || !checked || blocked || (official && reason.trim().length < 3) || (needPassword && !password)}>
           {busy ? 'Removing…' : 'Move to Recycle Bin'}
         </button>
       </div>
@@ -108,7 +110,7 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone }: { orgId: s
  * The Remove button on an entry's own page; Andrew Guya and Doreen see it, and on Hope Centre pages (`hope`) the
  * Director too (Andy, 2026-11-05, 6A). `label` names it, e.g. "Reset this day" on a register (3A, keepers only).
  */
-export function CleanupButton({ orgId, kind, id, back, hope, label = 'Remove', onDone }: { orgId: string; kind: CleanupKind; id: string; back?: string; hope?: boolean; label?: string; onDone?: () => void }) {
+export function CleanupButton({ orgId, kind, id, back, hope, label = 'Remove', onDone, title, askPassword }: { orgId: string; kind: CleanupKind; id: string; back?: string; hope?: boolean; label?: string; onDone?: () => void; title?: string; askPassword?: boolean }) {
   const { profile } = useAuth();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
@@ -120,7 +122,7 @@ export function CleanupButton({ orgId, kind, id, back, hope, label = 'Remove', o
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6" /></svg>
         {label}
       </button>
-      <RemoveDialog orgId={orgId} items={items} open={open} onClose={() => setOpen(false)} onDone={() => { onDone?.(); if (back) navigate(back, { replace: true }); }} />
+      <RemoveDialog orgId={orgId} items={items} title={title} askPassword={askPassword} open={open} onClose={() => setOpen(false)} onDone={() => { onDone?.(); if (back) navigate(back, { replace: true }); }} />
     </>
   );
 }

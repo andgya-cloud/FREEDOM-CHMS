@@ -8,6 +8,8 @@ import { childrenListExcel, qrCardsPdf } from '../../lib/hopeAttendanceFiles';
 import { canKeepFees, canReadNotes } from '../../../functions/src/shared/hopeRecords';
 import { feesOwing } from '../../lib/hopeRecords';
 import { useChildPhotos, useHopeDays } from '../../state/useHope';
+import { ClassChip } from '../../components/Stone';
+import { classLabel, classOf, hasAllergy, HOPE_CLASSES, type HopeClassId } from '../../../functions/src/shared/hopeClasses';
 import { consentMissing, isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
 import { birthdayThisWeek, kidRate, missedSaturdays, streak } from '../../../functions/src/shared/hopeRegister';
 import { HopeGate, useHopePage } from './common';
@@ -18,7 +20,7 @@ export function ChildrenPage() {
   return <HopeGate title="Children">{(org) => <Children org={org} />}</HopeGate>;
 }
 
-type Show = 'current' | 'departing' | 'exited' | 'consent' | 'nosponsor' | 'birthdays' | 'missed' | 'owing' | 'concerns' | 'all';
+type Show = 'current' | 'departing' | 'exited' | 'consent' | 'nosponsor' | 'birthdays' | 'missed' | 'owing' | 'concerns' | 'all' | 'allergies' | 'noclass' | `class-${HopeClassId}`;
 type Sort = 'name' | 'age' | 'pct' | 'code';
 
 /**
@@ -45,7 +47,10 @@ function Children({ org }: { org: Organization }) {
     ['current', 'Current children', true], ['departing', 'Departing', true], ['exited', 'Past children', true],
     ['consent', 'Consent missing', true], ['nosponsor', 'No sponsor yet', true], ['birthdays', 'Birthdays this week', true],
     ['missed', 'Missed the last 3 Saturdays', true], ['owing', 'Fees still to pay this term', canKeepFees(profile, org.id)],
-    ['concerns', 'Safeguarding concern open', h.pastoral], ['all', 'Everyone', true],
+    ['concerns', 'Safeguarding concern open', h.pastoral], ['allergies', 'Allergies', true],
+    // The classes by age, each with its stone (Andy, 2026-11-05, 5A).
+    ...HOPE_CLASSES.map((k): [Show, string, boolean] => [`class-${k.id}`, `Class: ${classLabel(k)}`, true]), ['noclass', 'No class yet (birth date missing)', true],
+    ['all', 'Everyone', true],
   ];
   const fits = (c: (typeof h.children)[number]) => {
     switch (show) {
@@ -58,7 +63,10 @@ function Children({ org }: { org: Organization }) {
       case 'missed': return isCurrentChild(c) && missedSaturdays(c.id, c.enrolledOn, days);
       case 'owing': return isCurrentChild(c) && !!owing?.has(c.id);
       case 'concerns': return concernIds.has(c.id);
-      default: return true;
+      case 'allergies': return isCurrentChild(c) && hasAllergy(c.allergies);
+      case 'noclass': return isCurrentChild(c) && !classOf(c.dateOfBirth, h.today);
+      case 'all': return true;
+      default: return isCurrentChild(c) && `class-${classOf(c.dateOfBirth, h.today)?.id}` === show;
     }
   };
 
@@ -81,7 +89,9 @@ function Children({ org }: { org: Organization }) {
 
   async function cards() {
     setBusy(true);
-    try { downloadFile(await qrCardsPdf(org, rows.filter(({ c }) => !!c.code).map(({ c, name }) => ({ name, code: c.code! })))); }
+    try { downloadFile(await qrCardsPdf(org, rows.filter(({ c }) => !!c.code).map(({ c, name, age }) => ({
+      name, code: c.code!, age, klass: classOf(c.dateOfBirth, h.today), allergies: hasAllergy(c.allergies) ? c.allergies! : '', photo: c.photoConsent?.given ? photos.get(c.id) ?? null : null,
+    })))); }
     catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
 
@@ -130,6 +140,8 @@ function Children({ org }: { org: Organization }) {
                 <span className="hc-badges"><Delights birthday={birthdayThisWeek(c.dateOfBirth, h.today)} streak={fire} /><PctBadge pct={rate} /></span>
                 <b className="hc-name">{name}</b>
                 <span className="small muted">{h.codeOf(c)}{age != null ? ` · ${age} years` : ''}</span>
+                <ClassChip c={classOf(c.dateOfBirth, h.today)} size={16} />
+                {hasAllergy(c.allergies) && <span className="badge badge-warn">⚠️ Allergy</span>}
                 {c.sponsorName && <span className="small">Sponsor: {c.sponsorName}</span>}
                 <span className="hc-flags">
                   {c.status === 'departing' && <span className="badge badge-warn">Departing</span>}

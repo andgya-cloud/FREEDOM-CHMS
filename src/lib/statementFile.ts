@@ -27,6 +27,28 @@ export async function readStatementFile(file: File): Promise<Cell[][]> {
 export async function readSpreadsheetSheets(file: File): Promise<{ name: string; rows: Cell[][] }[]> {
   const name = file.name.toLowerCase();
   if (!name.endsWith('.xlsx')) return [{ name: '', rows: await readStatementFile(file) }];
+  try { return await readSheets(file); }
+  catch (err) {
+    // Reports from other systems (the sponsoring partner's lists) write "inline" text cells; tidy them and read again.
+    if (!/inline string/i.test(err instanceof Error ? err.message : '')) throw err;
+    return readSheets(await tidyInlineStrings(file));
+  }
+}
+
+async function tidyInlineStrings(file: File): Promise<File> {
+  const { unzipSync, zipSync, strFromU8, strToU8 } = await import('fflate');
+  const files = unzipSync(new Uint8Array(await file.arrayBuffer()));
+  for (const path of Object.keys(files)) {
+    if (!/^xl\/worksheets\/.+\.xml$/.test(path)) continue;
+    const xml = strFromU8(files[path]!)
+      .replace(/<c([^>]*?) t="inlineStr"([^>]*?)(\/>|><\/c>)/g, '<c$1$2$3')
+      .replace(/<c([^>]*?) t="inlineStr"([^>]*?)><is>(?:<t[^>]*>([\s\S]*?)<\/t>|<t\/>)<\/is><\/c>/g, (_m, a: string, b: string, t?: string) => `<c${a} t="str"${b}><v>${t ?? ''}</v></c>`);
+    files[path] = strToU8(xml);
+  }
+  return new File([zipSync(files)], file.name, { type: file.type });
+}
+
+async function readSheets(file: File): Promise<{ name: string; rows: Cell[][] }[]> {
   const { default: readXlsxFile, readSheetNames } = await import('read-excel-file');
   const names = await readSheetNames(file);
   const out: { name: string; rows: Cell[][] }[] = [];

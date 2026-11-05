@@ -64,6 +64,8 @@ export interface Child {
   hasPhoto?: boolean;
   /** From the sponsoring partner's monthly list, KE-014 (Andy, 2026-11-05). */
   sponsorship?: ChildSponsorship | null;
+  /** Allergies, written by the Director (Andy, 2026-11-05, 4A); "None known" when checked and there are none. */
+  allergies?: string | null;
   deletedAt?: unknown;
 }
 

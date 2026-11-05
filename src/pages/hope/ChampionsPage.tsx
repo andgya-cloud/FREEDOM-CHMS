@@ -1,11 +1,12 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useChampions } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
 import { addChampion, importChampions, markChampion, markMany, updateChampion, type ChampionInput } from '../../lib/hopeWrites';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { isInventoryManager } from '../../../functions/src/shared/permissions';
+import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
 import {
   CHAMPION_MARKS, CHAMPION_MARK_LABELS, CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
   planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
@@ -14,9 +15,15 @@ import { useHopePage } from './common';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { Avatar, nowTime, PctBadge, RegisterCalendar, SheetPicker, TemplateButtons, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
+import { ChampionPay } from './ChampionPay';
+import { DoorScan } from './DoorScan';
+import { qrCardsPdf } from '../../lib/hopeAttendanceFiles';
+import { downloadFile } from '../../lib/givingPdf';
+import { setChampionFields } from '../../lib/hopeWrites';
+import { arrivalMark, newChampionCodes } from '../../../functions/src/shared/hopeChampionPay';
 
 
-type Tab = 'register' | 'people' | 'upload';
+type Tab = 'register' | 'people' | 'pay' | 'upload';
 
 /**
  * The Child Champions register (Andy, 2026-11-04): the people who teach and serve the Hope Centre children.
@@ -26,9 +33,10 @@ export function ChampionsPanel({ org }: { org: Organization }) {
   const h = useHopePage(org);
   const { profile } = useAuth();
   const c = useChampions(org.id);
-  const manager = isInventoryManager(profile);
-  const [tab, setTab] = useState<Tab>('register');
-  const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'The champions'], ...(manager ? [['upload', 'Upload from Excel'] as [Tab, string]] : [])];
+  const manager = isChampionManager(profile, org.id);
+  const [params] = useSearchParams();
+  const [tab, setTab] = useState<Tab>(() => (params.get('tab') === 'pay' && manager ? 'pay' : 'register'));
+  const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'The champions'], ...(manager ? [['pay', 'Pay'], ['upload', 'Upload from Excel']] as [Tab, string][] : [])];
   return (
     <>
       <div className="chips hr-subtabs" role="tablist">
@@ -36,6 +44,7 @@ export function ChampionsPanel({ org }: { org: Organization }) {
       </div>
       {tab === 'register' && <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} />}
       {tab === 'people' && <ChampionList org={org} today={h.today} data={c} manager={manager} />}
+      {tab === 'pay' && manager && <ChampionPay org={org} today={h.today} data={c} />}
       {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions.map((x) => x.name)} done={() => setTab('people')} />}
     </>
   );
@@ -55,9 +64,12 @@ function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organizat
   const rate = rateFrom(Object.values(marks));
   const totalMinutes = Object.values(marks).reduce((n, e) => n + (minutesBetween(e.in, e.out) ?? 0), 0);
 
-  function mark(x: Champion, s: ChampionMark, extra: Partial<ChampionEntry> = {}) {
+  function mark(x: Champion, s0: ChampionMark, extra: Partial<ChampionEntry> = {}) {
     const old = marks[x.id];
+    let s = s0;
     const there = s === 'present' || s === 'late';
+    // Checking someone in now marks them late after 8:30am (Andy, 2026-11-05, 12).
+    if (s === 'present' && !old && date === today) s = arrivalMark(nowTime());
     const entry: ChampionEntry = {
       s, in: there ? (old?.in ?? (date === today ? nowTime() : null)) : null, out: there ? (old?.out ?? null) : null,
       duty: old?.duty ?? (x.duty || null), r: old?.r ?? null, ...extra,
@@ -65,8 +77,36 @@ function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organizat
     markChampion(org.id, date, x.id, entry).catch(fail);
   }
 
+  const [scan, setScan] = useState(false);
+  const [busy, setBusy] = useState(false);
+  /** A champion's card read at the door (11A): checks them in with the time, late after 8:30am. */
+  function scanned(code: string): string {
+    const x = data.champions.find((c) => c.code === code);
+    if (!x) return `No champion has the code ${code}.`;
+    const e = marks[x.id];
+    if (e && (e.s === 'present' || e.s === 'late')) return `✓ ${x.name} is already checked in${e.in ? ` (${e.in})` : ''}.`;
+    const t = date === today ? nowTime() : null;
+    const s = arrivalMark(t);
+    markChampion(org.id, date, x.id, { s, in: t, out: null, duty: x.duty || null, r: null }).catch(fail);
+    return `✓ ${x.name} checked in${t ? ` at ${t}` : ''}${s === 'late' ? ' · late' : ''}`;
+  }
+  async function cards() {
+    setBusy(true);
+    try {
+      const codes = newChampionCodes(data.champions);
+      if (Object.keys(codes).length) await setChampionFields(org.id, Object.fromEntries(Object.entries(codes).map(([id, code]) => [id, { code }])));
+      const list = data.champions.filter((c) => c.status === 'active').map((c) => ({ name: c.name, code: c.code || codes[c.id]!, role: c.duty ? `Child Champion · ${c.duty}` : 'Child Champion' }));
+      downloadFile(await qrCardsPdf(org, list, 'champion-cards'));
+    } catch (err) { fail(err); } finally { setBusy(false); }
+  }
+
   return (
     <>
+      <div className="chips">
+        <button type="button" className="btn btn-primary" onClick={() => setScan(!scan)}>📷 Scan champion cards</button>
+        {manager && <button type="button" className="btn" disabled={busy} onClick={() => void cards()}>🪪 Champion QR cards</button>}
+      </div>
+      {scan && <DoorScan onCode={scanned} onClose={() => setScan(false)} />}
       <section className="card hr-top">
         <RegisterCalendar value={date} onChange={setDate} marked={markedDays} today={today} />
         <div className="stack">

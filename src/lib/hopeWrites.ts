@@ -144,6 +144,22 @@ export function addChampion(orgId: string, input: ChampionInput) {
 export function updateChampion(orgId: string, id: string, changes: Partial<ChampionInput>) {
   return updateRecord(ref(orgId, 'champions', id), changes);
 }
+/** Weekly pay and card codes (Andy, 2026-11-05, 8A 11A), several champions at once. */
+export function setChampionFields(orgId: string, changes: Record<string, { weeklyPay?: number | null; code?: string }>) {
+  const batch = writeBatch(db);
+  for (const [id, c] of Object.entries(changes)) batch.update(ref(orgId, 'champions', id), { ...c, updatedAt: serverTimestamp(), updatedBy: me() });
+  return trackWrite(batch.commit());
+}
+/** An extra allowance for a month (9A). */
+export function addChampionExtra(orgId: string, championId: string, month: string, amount: number, reason: string) {
+  return trackWrite(setDoc(doc(collection(db, 'organizations', orgId, 'championExtras')), { orgId, championId, month, amount: Math.round(amount), reason: reason.trim().slice(0, 200), ...createStamps() }));
+}
+export const removeChampionExtra = (orgId: string, id: string) => softDelete(ref(orgId, 'championExtras', id));
+/** The Director approves a month's pay (10A). */
+export function approveChampionPay(orgId: string, month: string, total: number, count: number, approvedName: string) {
+  return trackWrite(setDoc(ref(orgId, 'championPay', month), { orgId, month, total: Math.round(total), count, approvedBy: me(), approvedName: approvedName.slice(0, 120), approvedAt: serverTimestamp() }));
+}
+
 export function importChampions(orgId: string, rows: ChampionImportRow[]) {
   const batch = writeBatch(db);
   for (const r of rows) {
