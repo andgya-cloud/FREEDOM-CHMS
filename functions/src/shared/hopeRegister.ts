@@ -335,3 +335,15 @@ export function birthdayThisWeek(dateOfBirth: string | null | undefined, today: 
   const behind = daysToBirthday(dateOfBirth, addDays(today, -3));
   return ahead <= 3 || (behind != null && behind <= 3);
 }
+
+/**
+ * Missed the last `n` Saturdays the register was marked (Andy, 2026-11-05, v173 13A): not checked in on any of
+ * them (absent, or not ticked). Saturdays before the child joined, and excused days, do not count.
+ */
+export function missedSaturdays(childId: string, enrolledOn: string | null | undefined, days: readonly HopeDay[], n = 3): boolean {
+  const sats = days.filter((d) => !d.deletedAt && Object.keys(d.marks ?? {}).length > 0 && saturdayOnOrBefore(d.date) === d.date)
+    .sort((a, b) => b.date.localeCompare(a.date)).slice(0, n);
+  if (sats.length < n) return false;
+  if (enrolledOn && sats[n - 1]!.date < enrolledOn) return false;
+  return sats.every((d) => { const s = d.marks?.[childId]?.s; return !kidCame(s) && s !== 'excused'; });
+}

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { isDocFile, isPhotoFile } from '../../lib/hopePhotos';
 import {
-  chatBoard, chatFile, chatSummary, emailChat, listChats, openChat, sendChatMessage, setChatStatus, startChat,
+  chatBoard, chatFile, chatSummary, emailChat, listChats, openChat, sendChatMessage, setChatStatus,
   type BoardPerson, type ChatList, type StoredChat, type StoredMessage,
 } from '../../lib/hopeChats';
 import { hopeChatPdf } from '../../lib/hopeChatPdf';
@@ -16,7 +16,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate } from './common';
 
-const STATUS_ICON: Record<ChatStatus, string> = { open: '🔴', handling: '🟠', closed: '✅' };
+export const STATUS_ICON: Record<ChatStatus, string> = { open: '🔴', handling: '🟠', closed: '✅' };
 
 /** The urgent banner on Today: conversations not yet opened, and new messages (9A). */
 export function useChatSummary(orgId: string) {
@@ -25,7 +25,7 @@ export function useChatSummary(orgId: string) {
   return s;
 }
 
-function useChats(orgId: string, childId?: string) {
+export function useChats(orgId: string, childId?: string) {
   const [list, setList] = useState<ChatList | null>(null);
   const [error, setError] = useState('');
   const reload = useCallback(() => {
@@ -69,7 +69,7 @@ function Vault({ org }: { org: Organization }) {
   );
 }
 
-function ChatRow({ c, reader, unread }: { c: StoredChat; reader: boolean; unread: boolean }) {
+export function ChatRow({ c, reader, unread }: { c: StoredChat; reader: boolean; unread: boolean }) {
   const body = (
     <>
       <span className="link-title">{STATUS_ICON[c.status]} {c.childName}{c.childCode ? ` · ${c.childCode}` : ''}{unread && <span className="badge badge-warn">New</span>}</span>
@@ -77,38 +77,6 @@ function ChatRow({ c, reader, unread }: { c: StoredChat; reader: boolean; unread
     </>
   );
   return <li>{reader ? <Link to={`/hope/chats/${c.id}`}>{body}</Link> : <div>{body}</div>}</li>;
-}
-
-/** On a child's page: their conversations, and starting one (readers) or raising a worry (staff). */
-export function ChildChats({ org, childId, firstName }: { org: Organization; childId: string; firstName: string }) {
-  const toast = useToast();
-  const { list, reload } = useChats(org.id, childId);
-  const [text, setText] = useState('');
-  const [busy, setBusy] = useState(false);
-  const navigate = useNavigate();
-  const me = useAuth().profile?.uid ?? '';
-  if (!list || (!list.reader && !list.raiser)) return null;
-  const open = list.chats.filter((c) => c.status !== 'closed').length;
-  async function start() {
-    setBusy(true);
-    try {
-      const r = await startChat(org.id, childId, text, !list!.reader);
-      setText('');
-      toast.show(list!.reader ? `Started. ${r.emailed.length ? `${r.emailed.length} were emailed that their urgent response is needed.` : ''}` : 'Sent. The Director and the board have been told it is urgent.');
-      if (list!.reader) navigate(`/hope/chats/${r.id}`); else reload();
-    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
-  }
-  return (
-    <details className="card hr-fold" open={open > 0}>
-      <summary><h2>Worried about {firstName}?</h2><span className="small muted">{list.reader ? (list.chats.length ? `${list.chats.length} ${list.chats.length === 1 ? 'conversation' : 'conversations'}${open ? `, ${open} open` : ''}` : 'Conversations') : 'Tell the Director and the board'}</span></summary>
-      <div className="stack">
-        {list.chats.length > 0 && <ul className="link-list chat-list">{list.chats.map((c) => <ChatRow key={c.id} c={c} reader={list.reader} unread={list.reader && isUnread(c, me)} />)}</ul>}
-        <p className="small">{list.reader ? 'Start a conversation with the Director, the board, Andy and Doreen. They are emailed that their URGENT response is needed.' : <>Write what you saw or heard. <strong>Only the Director, the board, Andy and Doreen will read it</strong>, and they are told it is urgent. Do not talk to others about it.</>}</p>
-        <label className="field"><span>{list.reader ? 'First message' : 'What are you worried about?'}</span><textarea rows={3} maxLength={CHAT_TEXT_MAX} value={text} onChange={(e) => setText(e.target.value)} /></label>
-        <button type="button" className="btn btn-primary align-start" disabled={busy || !text.trim()} onClick={() => void start()}>{busy ? 'Sending…' : list.reader ? 'Start the conversation' : 'Send to the Director and the board'}</button>
-      </div>
-    </details>
-  );
 }
 
 /** One conversation, like a WhatsApp group (3A, 5A, 6A, 7A). */

@@ -9,6 +9,7 @@ import { markHelperArrived, requestAbsenceCheck } from '../../lib/hopeWrites';
 import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { HelperGuide } from './HelperGuide';
 import { useChatSummary } from './HopeChatsPage';
+import { CalmDay, LiveBoard, NeedsUs } from './HopeTodayBoard';
 import { nowTime } from './registerParts';
 import { SceneVideo } from '../../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
@@ -20,7 +21,7 @@ import { useHopeMeals } from '../../state/useHope';
 import { canCountMeals, MEAL_EMOJI, MEAL_LABELS, mealMonth, MEALS, mealWeeks } from '../../../functions/src/shared/hopeRecords';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { consentMissing, isCurrentChild, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
-import { birthdayThisWeek, dayTrend, rateFrom, saturdayOnOrBefore } from '../../../functions/src/shared/hopeRegister';
+import { dayTrend, rateFrom, saturdayOnOrBefore } from '../../../functions/src/shared/hopeRegister';
 import { pct, useHopePage } from './common';
 import { TrendChart } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
@@ -106,16 +107,12 @@ function LeaderToday({ org }: { org: Organization }) {
   const mealCounter = canCountMeals(profile, org.id);
   const todayKids = rateFrom(Object.values(days.find((d) => d.date === h.today)?.marks ?? {}));
   const departing = h.children.filter((c) => c.status === 'departing').length;
-  const birthdays = current.filter((c) => birthdayThisWeek(c.dateOfBirth, h.today)).length;
   const toCall = h.absenceTasks.filter((t) => t.status === 'open').length;
   const alerts = [
     !!chats?.urgent && { warn: true, to: '/hope/chats', text: `🔴 ${chats.urgent} ${chats.urgent === 1 ? 'conversation needs' : 'conversations need'} your URGENT response` },
     !!chats?.unread && chats.unread > (chats.urgent ?? 0) && { warn: false, to: '/hope/chats', text: `💬 ${chats.unread} ${chats.unread === 1 ? 'conversation has' : 'conversations have'} new messages` },
     can('followups.manage') && (counts.due > 0 || toCall > 0) && { warn: false, to: '/follow-ups', text: `${Math.max(counts.due, toCall)} ${Math.max(counts.due, toCall) === 1 ? 'guardian' : 'guardians'} to call` },
-    helpers.length > 0 && { warn: false, to: '/hope/register', text: `🙋 Helpers here today: ${helpers.map((x) => `${firstNameOf(x.name) || x.name} ${x.t}`).join(', ')}` },
-    missing > 0 && { warn: true, to: '/hope/consent', text: `${missing} ${missing === 1 ? 'child needs' : 'children need'} consent recorded` },
     departing > 0 && { warn: false, to: '/hope/children?show=departing', text: `${departing} ${departing === 1 ? 'child is' : 'children are'} departing` },
-    birthdays > 0 && { warn: false, to: '/hope/children?show=birthdays', text: `🎈 ${birthdays} ${birthdays === 1 ? 'birthday' : 'birthdays'} this week` },
   ].filter(Boolean) as { warn: boolean; to: string; text: string }[];
 
   function check() {
@@ -128,6 +125,8 @@ function LeaderToday({ org }: { org: Organization }) {
   const clubsToday = clubs.clubs.filter((x) => x.status === 'active' && x.day === weekday).sort((a, b) => (a.time || '99').localeCompare(b.time || '99'));
   const first = firstNameOf(profile?.displayName);
   const marker = can('attendance.write');
+  // An open day (v173 11A): a Saturday, a day someone was checked in, or a day a club meets.
+  const openDay = isSaturday || todayKids.marked > 0 || clubsToday.length > 0;
   const satWord = isSaturday ? 'Today' : 'Last Saturday';
   const ageOf = (dob: string | null | undefined) => (dob ? Math.floor((Date.parse(h.today) - Date.parse(dob)) / (365.25 * 864e5)) : null);
   const AGES: [string, (a: number | null) => boolean][] = [
@@ -145,29 +144,13 @@ function LeaderToday({ org }: { org: Organization }) {
   const regular = last4.length < 4 ? null : current.length === 0 ? null
     : Math.round((current.filter((c) => last4.filter((d) => ['present', 'departing'].includes(d.marks?.[c.id]?.s ?? '')).length >= 3).length / current.length) * 100);
   const activeClubs = clubs.clubs.filter((x) => x.status === 'active');
-  const groupRows = activeClubs.length
-    ? activeClubs.map((x) => ({ label: x.name.replace(/ (Academy|Club)$/i, ''), title: x.name, value: x.memberIds.length }))
-    : m.byProgramme.map((p) => ({ label: p.name.replace(/ (Academy|Club)$/i, ''), title: p.name, value: p.children }));
+  const groupRows = activeClubs.map((x) => ({ label: x.name.replace(/ (Academy|Club)$/i, ''), title: x.name, value: x.memberIds.length }));
 
   return (
     <div className="page lav-today">
-      {isSaturday && marker && (
-        <Link to="/hope/register?d=today" className="card ht-saturday">
-          <span className="ht-sat-ico" aria-hidden="true"><AdiaIcon name="register" /></span>
-          <span className="ht-sat-text">
-            <b>{kids.marked ? 'Carry on with today\'s register' : 'Start today\'s register'}</b>
-            <span>{kids.present} of {current.length} checked in{kids.marked ? ` · ${kids.absent} absent · ${kids.excused} excused` : ''}</span>
-          </span>
-          <span className="ht-sat-meter" aria-hidden="true"><i style={{ width: `${current.length ? Math.min(100, Math.round((kids.present / current.length) * 100)) : 0}%` }} /></span>
-        </Link>
-      )}
-
-      {!(isSaturday && marker) && marker && (
-        <Link to="/hope/register?d=today" className="ht-checkin">
-          <span className="ht-checkin-ico" aria-hidden="true">✅</span>
-          <span><b>Check in</b><span>{todayKids.present ? `${todayKids.present} checked in today` : 'Tap each child as they arrive today'}</span></span>
-        </Link>
-      )}
+      {openDay ? (
+        <LiveBoard org={org} h={h} days={days} helpers={helpers} meals={meals} clubsToday={clubsToday} clubDays={clubs.days} marker={marker} />
+      ) : <CalmDay h={h} days={days} marker={marker} />}
 
       <section className="card lav-hero">
         <div className="lav-hero-text">
@@ -182,6 +165,8 @@ function LeaderToday({ org }: { org: Organization }) {
         </div>
       </section>
 
+      {can('people.read') && <NeedsUs org={org} h={h} days={days} />}
+
       {alerts.length > 0 && (
         <section className="card ht-alerts" aria-label="Needs your attention">
           <h2>Needs your attention</h2>
@@ -193,7 +178,7 @@ function LeaderToday({ org }: { org: Organization }) {
       <section className="lav-jobs" aria-label="What do you want to do?">
         <h2>What do you want to do?</h2>
         <div className="lav-jobs-grid ht-jobs">
-          {!(isSaturday && marker) && (can('attendance.write') || can('people.read')) && (
+          {!openDay && (can('attendance.write') || can('people.read')) && (
             <Link to="/hope/register" className="card lav-job">
               <span className="lav-ico i1"><AdiaIcon name="register" /></span>
               <b>Children's register</b>
@@ -207,7 +192,7 @@ function LeaderToday({ org }: { org: Organization }) {
               <span className="lav-sub">{champs.marked ? `${satWord}: ${champs.present} of ${serving} served` : `${satWord}: not marked yet`}</span>
             </Link>
           )}
-          {(mealCounter || mealsToday) && (
+          {!openDay && (mealCounter || mealsToday) && (
             <Link to="/hope/meals" className="card lav-job">
               <span className="lav-ico i4" aria-hidden="true">🍽️</span>
               <b>Meals today</b>
@@ -223,23 +208,6 @@ function LeaderToday({ org }: { org: Organization }) {
           )}
         </div>
       </section>
-
-      {clubsToday.length > 0 && (
-        <section className="card ht-clubs" aria-label="Clubs meeting today">
-          <h2>Clubs today</h2>
-          <div className="ht-club-row">
-            {clubsToday.map((x) => {
-              const r = rateFrom(Object.values(clubs.days.find((d) => d.clubId === x.id && d.date === h.today)?.marks ?? {}));
-              return (
-                <Link key={x.id} to={`/hope/clubs/${x.id}`} className="ht-club">
-                  <span className="cl-emoji" aria-hidden="true">{x.emoji || '⭐'}</span>
-                  <span><b>{x.name}</b><span className="small muted">{x.time || 'Time not set'} · {r.marked ? `${r.present} of ${x.memberIds.length} here` : `${x.memberIds.length} members`}</span></span>
-                </Link>
-              );
-            })}
-          </div>
-        </section>
-      )}
 
       {can('people.read') && (
         <details className="lav-figs">

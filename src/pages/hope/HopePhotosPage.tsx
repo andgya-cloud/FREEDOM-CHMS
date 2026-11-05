@@ -14,7 +14,9 @@ import {
   type PhotoFile, type PhotoReportKind,
 } from '../../../functions/src/shared/hopePhotos';
 import type { Organization } from '../../state/OrgContext';
-import { HopeGate } from './common';
+import { HopeGate, useHopePage } from './common';
+import { useClubs } from '../../state/useHope';
+import { WIN_KIND_LABELS } from '../../../functions/src/shared/hopeClubs';
 
 export function HopePhotosPage() {
   return <HopeGate title="Photo reports">{(org) => <Photos org={org} />}</HopeGate>;
@@ -46,12 +48,11 @@ function Photos({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <div className="page-head">
-        <h1>Photo reports</h1>
+        <h1>📷 Photos and wins</h1>
         {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>📷 New report</button>}
       </div>
       <p className="small muted">
         {list?.seesAll ? 'Good news, activities and incidents with photos, sent from the phone.' : 'Only the Director, the board, Andy and Doreen see these reports. You see the ones you sent.'}
-        {' '}<Link to="/hope/reports">Weekly and monthly reports</Link>
       </p>
       {error && <p className="notice notice-warn small">{error}</p>}
 
@@ -86,22 +87,33 @@ function Photos({ org }: { org: Organization }) {
               ))}
             </ul>
           )}
-          {list.deletes && list.deleted.length > 0 && (
-            <details className="card hr-fold">
-              <summary><h2>Deleted</h2><span className="small muted">{list.deleted.length}</span></summary>
-              <ul className="link-list">
-                {list.deleted.map((r) => (
-                  <li key={r.id}><Link to={`/hope/photos?report=${r.id}`}>
-                    <span className="link-title">{PHOTO_REPORT_EMOJI[r.kind]} {r.title}</span>
-                    <span className="link-detail">Deleted by {r.deletedByName} on {formatDateKey(r.deletedOn)}{r.deleteReason ? ` · ${r.deleteReason}` : ''} · sent by {r.senderName}</span>
-                  </Link></li>
-                ))}
-              </ul>
-            </details>
-          )}
         </>
       )}
+      {!making && <ClubWins org={org} />}
     </div>
+  );
+}
+
+/** The clubs' wins (Andy, 2026-11-05, v173 10A): the newest first, each opening its club. Added on the club's Wins tab. */
+function ClubWins({ org }: { org: Organization }) {
+  const { clubs, wins } = useClubs(org.id);
+  const h = useHopePage(org);
+  if (!wins.length) return null;
+  return (
+    <details className="card hr-fold" open>
+      <summary><h2>🏆 Club wins</h2><span className="small muted">{wins.length}</span></summary>
+      <ul className="link-list">
+        {wins.slice(0, 40).map((w) => {
+          const c = clubs.find((x) => x.id === w.clubId);
+          return (
+            <li key={w.id}><Link to={`/hope/clubs/${w.clubId}`}>
+              <span className="link-title">{c?.emoji ?? '🏆'} {w.title}</span>
+              <span className="link-detail">{[formatDateKey(w.date), c?.name, WIN_KIND_LABELS[w.kind], w.childIds.map((id) => h.nameOf(id)).join(', ')].filter(Boolean).join(' · ')}</span>
+            </Link></li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }
 
@@ -229,7 +241,7 @@ function ReportDetail({ org, report, list, onChanged, onClose }: { org: Organiza
 
   async function del() {
     setBusy('delete');
-    try { await deletePhotoReport(org.id, report.id, reason); toast.show('Deleted. It is kept in the Deleted list.'); onChanged(); onClose(); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
+    try { await deletePhotoReport(org.id, report.id, reason); toast.show('Moved to the Bin. It can be put back from Reports → Bin.'); onChanged(); onClose(); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
   }
   async function restore() {
     setBusy('restore');

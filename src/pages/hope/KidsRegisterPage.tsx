@@ -6,6 +6,7 @@ import { useChildPhotos, useHopeDays } from '../../state/useHope';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
 import { markKid, markMany } from '../../lib/hopeWrites';
+import { DoorScan } from './DoorScan';
 import { useClubs } from '../../state/useHope';
 import { clubDayOnOrBefore, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ChampionsPanel } from './ChampionsPage';
@@ -99,6 +100,7 @@ function KidsRegister({ org }: { org: Organization }) {
   const [q, setQ] = useState('');
   const [view, setView] = useState<View>(() => { try { return localStorage.getItem(VIEW_KEY) === 'ticks' ? 'ticks' : 'photos'; } catch { return 'photos'; } });
   const [finishing, setFinishing] = useState(false);
+  const [scan, setScan] = useState(false);
   const canMark = can('attendance.write');
   const helper = profile?.roleId === HELPER_ROLE_ID;
   const fail = (err: unknown) => toast.show(friendlyError(err));
@@ -127,6 +129,17 @@ function KidsRegister({ org }: { org: Organization }) {
     if (here(marks[childId])) { markKid(org.id, date, childId, null).catch(fail); return; }
     tick();
     markKid(org.id, date, childId, { s: 'present', t: date === h.today ? nowTime() : null, r: null }).catch(fail);
+  }
+  /** A card read at the door (12A): checks the child in, and says who. */
+  function scanned(code: string): string {
+    const c = h.children.find((x) => x.code === code);
+    if (!c) return `No child has the code ${code}.`;
+    const name = h.nameOf(c.id);
+    if (here(marks[c.id])) return `✓ ${name} is already checked in${marks[c.id]?.t ? ` (${marks[c.id]!.t})` : ''}.`;
+    tick();
+    const t = date === h.today ? nowTime() : null;
+    markKid(org.id, date, c.id, { s: 'present', t, r: null }).catch(fail);
+    return `✓ ${name} checked in${t ? ` at ${t}` : ''}`;
   }
   function excuse(childId: string) {
     if (!canMark) return;
@@ -162,7 +175,9 @@ function KidsRegister({ org }: { org: Organization }) {
         </div>
       </section>
 
+      {scan && canMark && <DoorScan onCode={scanned} onClose={() => setScan(false)} />}
       <div className="ck-tools">
+        {canMark && !scan && <button type="button" className="btn" onClick={() => setScan(true)}>📷 Scan</button>}
         <input type="search" className="search" placeholder="Find a name or code" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
         <div className="segmented" role="radiogroup" aria-label="How to mark">
           <button type="button" role="radio" aria-checked={view === 'photos'} className={view === 'photos' ? 'on' : ''} onClick={() => choose('photos')}>🖼️ Photos</button>

@@ -6,7 +6,7 @@ import { useChampions, useChildPhotos, useClubs } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
 import { addClubWin, markClub, removeClubWin, updateClub, type ClubInput } from '../../lib/hopeWrites';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { isCurrentChild, normalizeCode, programmeOf } from '../../../functions/src/shared/hope';
+import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
 import { dayTrend, rateFrom, type KidEntry } from '../../../functions/src/shared/hopeRegister';
 import {
   clubDayId, clubDayOnOrBefore, clubSummary, levelLabel, memberRate, scheduleText, WEEKDAYS, WIN_EMOJI, WIN_KIND_LABELS, WIN_KINDS,
@@ -130,23 +130,7 @@ function ClubRegister({ org, club, days, h }: { org: Organization; club: Club; d
         </ul>
       )}
       <TrendCard title="Attendance as time goes" trend={dayTrend(days)} />
-      {club.legacyProgramme && <Earlier org={org} club={club} h={h} />}
     </>
-  );
-}
-
-/** Football, Chess and Music keep the sessions taken before the clubs began (Andy 8A). */
-function Earlier({ org, club, h }: { org: Organization; club: Club; h: H }) {
-  const sessions = h.events.filter((e) => programmeOf(e, [club.legacyProgramme!]) === club.legacyProgramme).sort((a, b) => b.date.localeCompare(a.date));
-  if (!sessions.length) return null;
-  const came = (id: string) => h.records.filter((r) => r.eventId === id && (r.status === 'present' || r.status === 'late')).length;
-  return (
-    <details className="card hr-fold">
-      <summary><h2>Earlier sessions</h2><span className="small muted">{sessions.length} before the club register began</span></summary>
-      <ul className="link-list">
-        {sessions.slice(0, 30).map((e) => <li key={e.id}><Link to={`/attendance/${org.id}/${e.id}`}><span className="link-title">{formatDateKey(e.date)} · {e.name}</span><span className="link-detail">{came(e.id)} came</span></Link></li>)}
-      </ul>
-    </details>
   );
 }
 

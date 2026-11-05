@@ -7,7 +7,7 @@ import type { ChildNote, FeeMethod, FeePayment, MealDay, NoteKind } from '../../
 /** Hope Centre records (Andy, 2026-11-05): notes and fees go through the server, which checks who may see them. */
 export type StoredNote = ChildNote & { id: string };
 export type StoredFee = FeePayment & { id: string };
-type Action = 'notes' | 'addNote' | 'fees' | 'addFee' | 'termFee' | 'receipt';
+type Action = 'owing' | 'notes' | 'addNote' | 'fees' | 'addFee' | 'termFee' | 'receipt';
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: Action }) =>
   httpsCallable<typeof data, R>(functions, 'hopeRecords', { timeout: 120_000 })(data).then((r) => r.data);
 
@@ -15,6 +15,7 @@ export const listNotes = (orgId: string, childId?: string) => call<{ notes: Stor
 export const addNote = (orgId: string, childId: string, kind: NoteKind, text: string, day?: string) => call<{ id: string }>({ orgId, action: 'addNote', childId, kind, text, ...(day ? { day } : {}) });
 
 export interface FeesView { payments: StoredFee[]; termFee: number; termFeeSaved: boolean; today: string }
+export const feesOwing = (orgId: string) => call<{ term: string; owing: { childId: string; left: number; fee: number }[] }>({ orgId, action: 'owing' });
 export const listFees = (orgId: string, childId: string) => call<FeesView>({ orgId, action: 'fees', childId });
 export interface FeeInput { date: string; term: string; amount: number; method: FeeMethod; code: string; note: string; receipt: string | null }
 export const addFee = (orgId: string, childId: string, input: FeeInput) => call<{ id: string }>({ orgId, action: 'addFee', childId, ...input });

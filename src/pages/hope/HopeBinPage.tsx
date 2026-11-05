@@ -8,6 +8,10 @@ import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { isHopeDirector } from '../../../functions/src/shared/hopePhotos';
 import { START_FRESH_KINDS, START_FRESH_LABELS, type StartFreshKind } from '../../../functions/src/shared/cleanup';
 import { BinList } from '../settings/CleanupPage';
+import { friendlyError } from '../../lib/errors';
+import { listPhotoReports, restorePhotoReport, type PhotoList } from '../../lib/hopePhotos';
+import { PHOTO_REPORT_EMOJI } from '../../../functions/src/shared/hopePhotos';
+import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { HopeGate } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -48,10 +52,41 @@ function Bin({ org }: { org: Organization }) {
       )}
       {tab === 'bin' && <BinList orgId={org.id} rows={inBin} loading={!bin} onChange={refresh} canDormant
         empty="The Bin is empty." note="Put it back, or remove it from the Bin. After 30 days it moves to Dormant by itself." />}
+      {tab === 'bin' && <PhotoBin org={org} />}
       {tab === 'dormant' && keeper && <BinList orgId={org.id} rows={dormant} loading={!bin} onChange={refresh}
         empty="Nothing in Dormant." note="Kept for good. Only you and Doreen see this, and anything here can be put back." />}
       {tab === 'fresh' && keeper && <StartFresh org={org} onDone={() => { refresh(); setTab('bin'); }} />}
     </div>
+  );
+}
+
+/** v173 (5A): deleted photo reports are in the one Bin too (they keep their own record, so they are listed here). */
+function PhotoBin({ org }: { org: Organization }) {
+  const toast = useToast();
+  const [list, setList] = useState<PhotoList | null>(null);
+  const [busy, setBusy] = useState('');
+  const load = useCallback(() => { listPhotoReports(org.id).then(setList, () => setList(null)); }, [org.id]);
+  useEffect(() => { load(); }, [load]);
+  if (!list?.deletes || list.deleted.length === 0) return null;
+  async function back(id: string) {
+    setBusy(id);
+    try { await restorePhotoReport(org.id, id); toast.show('Put back in Photo reports.'); load(); }
+    catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
+  }
+  return (
+    <section className="card stack">
+      <h2>📷 Photo reports</h2>
+      <ul className="link-list">
+        {list.deleted.map((r) => (
+          <li key={r.id}><div className="fee-row">
+            <span className="grow"><span className="link-title">{PHOTO_REPORT_EMOJI[r.kind]} {r.title}</span>
+              <span className="link-detail">Removed by {r.deletedByName} on {formatDateKey(r.deletedOn)}{r.deleteReason ? ` · ${r.deleteReason}` : ''} · sent by {r.senderName}</span></span>
+            <Link to={`/hope/photos?report=${r.id}`} className="btn btn-quiet">Open</Link>
+            <button type="button" className="btn" disabled={busy === r.id} onClick={() => void back(r.id)}>↩︎ Put back</button>
+          </div></li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

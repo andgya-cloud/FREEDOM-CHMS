@@ -61,7 +61,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   // A Hope helper sees only Today (their "I'm here" button), the registers and the clubs (Andy, 2026-11-04, 2A).
   const helper = profile?.roleId === HELPER_ROLE_ID;
-  if (helper && !/^\/($|hope\/register|hope\/clubs|hope\/photos|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
+  if (helper && !/^\/($|hope\/register|hope\/clubs|hope\/photos|hope\/more|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
   // Each person sees only their own work (Andy, 2026-11-01, 8A): an usher Sunday and People, finance Giving and Petty Cash.
@@ -105,7 +105,8 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   ) : null;
-  // Freedom Hope Centre's own menu (Andy, 2026-11-04, 1A): Today, Children, Registers, Clubs and Reports. People and
+  // Freedom Hope Centre's own menu (Andy, 2026-11-05, v173 9A): Today, Children, Registers (clubs inside), Reports and More.
+  // Earlier (2026-11-04, 1A): Today, Children, Registers, Clubs and Reports. People and
   // Attendance are folded in (the children are its people; the registers are its attendance).
   const hopeTabs = current?.type === 'ministry' && full ? (
     <nav className="tabbar" aria-label="Main">
@@ -120,32 +121,20 @@ export function AppShell({ children }: { children: ReactNode }) {
         </NavLink>
       )}
       {(can('attendance.write') || can('people.read')) && (
-        <NavLink to="/hope/register" className={({ isActive }) => `tab${isActive || /^\/(hope\/champions|attendance)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
+        <NavLink to="/hope/register" className={({ isActive }) => `tab${isActive || /^\/(hope\/champions|hope\/clubs|attendance)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
           <TabLabel full="Registers" short="Register" />
         </NavLink>
       )}
-      {(can('attendance.write') || can('people.read')) && (
-        <NavLink to="/hope/clubs" className="tab">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.4 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z" /></svg>
-          Clubs
-        </NavLink>
-      )}
  {can('people.read') && !helper && (
-        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos|chats|attendance|records|meals|bin)/.test(location.pathname) ? ' active' : ''}`}>
+        <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos|chats|attendance|records|meals)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
           Reports
         </NavLink>
       )}
-      {pettyAllowed && !helper && (
-        <NavLink to={pettyCashBase('ministry')} className="tab">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
-          <TabLabel full="Petty Cash" short="Cash" />
-        </NavLink>
-      )}
-      <NavLink to="/settings" className="tab">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2" /><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1" /></svg>
-        Settings
+      <NavLink to="/hope/more" className={({ isActive }) => `tab${isActive || /^\/(settings|help|hope\/petty-cash|hope\/bin)/.test(location.pathname) ? ' active' : ''}`}>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
+        More
       </NavLink>
     </nav>
   ) : null;

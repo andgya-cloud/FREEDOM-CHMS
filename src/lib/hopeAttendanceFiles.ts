@@ -70,3 +70,43 @@ export async function attendanceMonthExcel(org: Organization, month: string, lab
   const blob = await writeXlsxFile(rows as never, { columns: [32, 12, ...dates.map(() => 12), 8, 8].map((width) => ({ width })) } as never) as unknown as Blob;
   return new File([blob], `${safe(org.name)}-attendance-${month}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
+
+/** The children list (Andy, 2026-11-05, v173 7A): one row per current child, for the Director, Andy and Doreen. */
+export async function childrenListExcel(org: Organization, today: string, children: { code: string; name: string; gender: string; dob: string; age: string; school: string; cls: string; parent: string; phone: string; sponsor: string; consent: string; status: string }[]): Promise<File> {
+  const head = ['Code', 'Name', 'Gender', 'Date of birth', 'Age', 'School', 'Class', 'Parent', "Parent's contact", 'Sponsor', 'Consent', 'Status'];
+  const rows: Cell[][] = [[bold(`${org.name} · Children · ${formatDateKey(today)}`)], [],
+    head.map(bold),
+    ...children.map((c) => [c.code, c.name, c.gender, c.dob, c.age, c.school, c.cls, c.parent, c.phone, c.sponsor, c.consent, c.status].map(text)),
+    [], [text(`${children.length} children`)], [text(POWERED_BY)]];
+  const blob = await writeXlsxFile(rows as never, { columns: [10, 30, 9, 13, 6, 26, 10, 26, 16, 24, 12, 10].map((width) => ({ width })) } as never) as unknown as Blob;
+  return new File([blob], `${safe(org.name)}-children-${today}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+/**
+ * QR check-in cards (Andy, 2026-11-05, v173 12A): twelve cards to an A4 page, each with the child's QR code (their HC
+ * code), name and code. Cut them out; at the door the phone's camera reads the card and checks the child in.
+ */
+export async function qrCardsPdf(org: Organization, children: { name: string; code: string }[]): Promise<File> {
+  const { default: QRCode } = await import('qrcode');
+  const pdf = await newPdf('a4');
+  const W = pdf.internal.pageSize.getWidth();
+  const cols = 3, rows = 4, mx = 10, my = 12;
+  const cw = (W - mx * 2) / cols, ch = 66;
+  for (let i = 0; i < children.length; i++) {
+    const k = i % (cols * rows);
+    if (i > 0 && k === 0) pdf.addPage();
+    const c = children[i]!;
+    const x = mx + (k % cols) * cw, y = my + Math.floor(k / cols) * ch;
+    pdf.setDrawColor(200, 200, 200); pdf.setLineDashPattern([1, 1], 0); pdf.rect(x + 1, y + 1, cw - 2, ch - 2);
+    const img = await QRCode.toDataURL(c.code, { margin: 1, width: 300, errorCorrectionLevel: 'M', color: { dark: '#0b3d24', light: '#ffffff' } });
+    const q = 38;
+    pdf.addImage(img, 'PNG', x + (cw - q) / 2, y + 4, q, q);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.setTextColor(...INK);
+    pdf.text(pdf.splitTextToSize(c.name, cw - 8).slice(0, 2), x + cw / 2, y + q + 9, { align: 'center' });
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...GREY);
+    pdf.text(`${c.code} · ${org.name}`.slice(0, 48), x + cw / 2, y + ch - 6, { align: 'center' });
+  }
+  pdf.setLineDashPattern([], 0);
+  stampPoweredBy(pdf);
+  return new File([pdf.output('blob')], `${safe(org.name)}-check-in-cards.pdf`, { type: 'application/pdf' });
+}

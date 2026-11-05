@@ -1,15 +1,16 @@
 import { useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
-import { useHopeDays } from '../../state/useHope';
+import { useHopeDays, useHopeMeals } from '../../state/useHope';
+import { useHopeReportList } from './HopeReportsPage';
 import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
 import { attendanceDayExcel, attendanceDayPdf, attendanceMonthExcel, type DayLine } from '../../lib/hopeAttendanceFiles';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { kidCame, KID_MARK_LABELS, rateFrom } from '../../../functions/src/shared/hopeRegister';
-import { canReadNotes } from '../../../functions/src/shared/hopeRecords';
+import { canReadNotes, MEAL_EMOJI, MEAL_LABELS, mealMonth, MEALS } from '../../../functions/src/shared/hopeRecords';
 import { HopeGate, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -35,11 +36,16 @@ function Months({ org }: { org: Organization }) {
   const { days, loading } = useHopeDays(org.id);
   const files = canReadNotes(profile, org.id);
   const marked = useMemo(() => days.filter((d) => Object.keys(d.marks ?? {}).length > 0).sort((a, b) => b.date.localeCompare(a.date)), [days]);
+  const { meals } = useHopeMeals(org.id);
+  const { reports, pastor } = useHopeReportList(org.id);
+  const [params] = useSearchParams();
+  const asked = params.get('month');
   const months = useMemo(() => {
     const m = new Map<string, typeof marked>();
     for (const d of marked) { const k = d.date.slice(0, 7); m.set(k, [...(m.get(k) ?? []), d]); }
-    return [...m.entries()];
-  }, [marked]);
+    for (const x of meals) { const k = x.date.slice(0, 7); if (!m.has(k)) m.set(k, []); }
+    return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0]));
+  }, [marked, meals]);
 
   async function monthExcel(month: string, list: typeof marked) {
     try {
@@ -54,16 +60,30 @@ function Months({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/hope/reports">← Reports</Link></p>
-      <div className="page-head"><h1>📋 Attendance</h1><Link to="/hope/register?d=today" className="btn btn-primary">✅ Check in</Link></div>
-      <p className="muted small">Every day the children's register was marked, in folders by month.</p>
+      <div className="page-head"><h1>📋 Attendance and meals</h1><Link to="/hope/register?d=today" className="btn btn-primary">✅ Check in</Link></div>
+      <p className="muted small">Every register day, the meals served and the month's report, in folders by month.</p>
       {loading || h.loading ? <p className="muted">Loading…</p> : months.length === 0 ? (
         <div className="card"><p>No register has been marked yet. Tap <b>Check in</b> to start today's.</p></div>
       ) : months.map(([month, list], i) => {
         const came = list.reduce((n, d) => n + rateFrom(Object.values(d.marks)).present, 0);
+        const food = mealMonth(meals, `${month}-01`);
+        const mine = reports.filter((r) => r.from.slice(0, 7) === month && (r.audience === 'counts' || pastor));
         return (
-          <details key={month} className="card hr-fold" open={i === 0}>
-            <summary><h2>📁 {monthLabel(month)}</h2><span className="small muted">{list.length} {list.length === 1 ? 'day' : 'days'} · {came} {came === 1 ? 'check-in' : 'check-ins'}</span></summary>
+          <details key={month} className="card hr-fold" open={asked ? asked === month : i === 0}>
+            <summary><h2>📁 {monthLabel(month)}</h2><span className="small muted">{list.length} {list.length === 1 ? 'day' : 'days'} · {came} {came === 1 ? 'check-in' : 'check-ins'}{food.total ? ` · ${food.total} meals` : ''}</span></summary>
             <div className="stack">
+              {food.days > 0 && (
+                <Link to="/hope/meals" className="ck-counts meal-month">
+                  <span>🍽️ <b>{food.total}</b> meals in {food.days} {food.days === 1 ? 'day' : 'days'}</span>
+                  {MEALS.map((k) => <span key={k}>{MEAL_EMOJI[k]} <b>{food[k]}</b> {MEAL_LABELS[k].toLowerCase()}</span>)}
+                </Link>
+              )}
+              {mine.length > 0 && (
+                <ul className="link-list">
+                  {mine.map((r) => <li key={r.id}><Link to={`/hope/reports?report=${r.id}`}><span className="link-title">📄 {r.type === 'weekly' ? 'Weekly report' : 'Month report'}: {r.label}</span>
+                    <span className="link-detail">{r.type === 'weekly' ? 'For the pastor, with the children to follow up' : 'Numbers only, for leaders and donors'}</span></Link></li>)}
+                </ul>
+              )}
               <ul className="link-list">
                 {list.map((d) => {
                   const r = rateFrom(Object.values(d.marks));
@@ -75,7 +95,7 @@ function Months({ org }: { org: Organization }) {
                   );
                 })}
               </ul>
-              {files && <button type="button" className="btn btn-quiet align-start" onClick={() => void monthExcel(month, list)}>⬇︎ {monthLabel(month)} in Excel</button>}
+              {files && list.length > 0 && <button type="button" className="btn btn-quiet align-start" onClick={() => void monthExcel(month, list)}>⬇︎ {monthLabel(month)} in Excel</button>}
             </div>
           </details>
         );

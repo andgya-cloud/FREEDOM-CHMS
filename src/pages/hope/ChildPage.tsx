@@ -1,27 +1,30 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CleanupButton } from '../../components/CleanupDialog';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
-import { useChildPhoto, useChildPrivate, useClubs, useHopeDays } from '../../state/useHope';
+import { useChildPhoto, useClubs, useHopeDays } from '../../state/useHope';
 import { memberRate, scheduleText } from '../../../functions/src/shared/hopeClubs';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { friendlyError } from '../../lib/errors';
-import { addReferral, closeReferral, removeChildPhoto, saveChildPhoto, updateChild } from '../../lib/hopeWrites';
+import { removeChildPhoto, saveChildPhoto, updateChild } from '../../lib/hopeWrites';
 import { daysToBirthday, KID_MARK_LABELS, kidHistory, rateFrom, streak, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
 import { Avatar, PctBadge, shrinkPhoto } from './registerParts';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { formatPhone } from '../../../functions/src/shared/phone';
-import { ATTENDANCE_STATUS_LABELS } from '../../../functions/src/shared/attendance';
 import {
-  consentMissing, hasPayment, MEALS_PROGRAMME, missedInARow, NO_PAYMENT, PAY_BY, PAY_BY_LABELS, paymentLine, programmeOf, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
+  consentMissing, hasPayment, NO_PAYMENT, PAY_BY, PAY_BY_LABELS, paymentLine, SCHOOL_STATUSES, SCHOOL_STATUS_LABELS,
   type ChildPayment, type ChildProgramme, type Consent, type PayBy, type SchoolStatus,
 } from '../../../functions/src/shared/hope';
-import { ChildChats } from './HopeChatsPage';
-import { ChildNotes, FeesPaid, saveLeavingNote } from './ChildRecords';
+import { ChildCare, FeesPaid, saveLeavingNote } from './ChildRecords';
+import { canKeepFees } from '../../../functions/src/shared/hopeRecords';
 import { HopeGate, useHopePage } from './common';
 import { ConsentField } from './fields';
 import type { Organization } from '../../state/OrgContext';
+
+type Tab = 'about' | 'attendance' | 'fees' | 'care';
+/** The child's page as 4 tabs (Andy, 2026-11-05, 1A): About, Attendance, Fees and Care. */
+const TABS: [Tab, string][] = [['about', 'About'], ['attendance', 'Attendance'], ['fees', 'Fees'], ['care', 'Care']];
 
 export function ChildPage() {
   return <HopeGate title="Child">{(org) => <ChildScreen org={org} />}</HopeGate>;
@@ -30,12 +33,16 @@ export function ChildPage() {
 function ChildScreen({ org }: { org: Organization }) {
   const { childId = '' } = useParams();
   const h = useHopePage(org);
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const toast = useToast();
   const child = h.children.find((c) => c.id === childId);
   const person = h.byId(childId);
   const guardian = person?.guardianId ? h.byId(person.guardianId) : undefined;
   const canEdit = can('people.write');
+  const [params, setParams] = useSearchParams();
+  const tab = (TABS.some(([k]) => k === params.get('tab')) ? params.get('tab') : 'about') as Tab;
+  const setTab = (t: Tab) => setParams(t === 'about' ? {} : { tab: t }, { replace: true });
+  const showFees = canEdit || canKeepFees(profile, org.id) || !!child?.payment;
 
   const [dob, setDob] = useState('');
   const [school, setSchool] = useState('');
@@ -65,11 +72,6 @@ function ChildScreen({ org }: { org: Organization }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [child?.id]);
 
-  const recent = useMemo(() => {
-    const byEvent = new Map(h.events.map((e) => [e.id, e]));
-    return h.records.filter((r) => r.personId === childId).map((r) => ({ r, e: byEvent.get(r.eventId) })).filter((x) => x.e)
-      .sort((a, b) => b.e!.date.localeCompare(a.e!.date)).slice(0, 8);
-  }, [h.events, h.records, childId]);
 
   if (!child || (h.peopleLoading && !person)) {
     return <div className="page narrow"><p><Link to="/hope/children">← Children</Link></p><p>{h.loading ? 'Loading…' : 'This child was not found.'}</p></div>;
@@ -153,8 +155,14 @@ function ChildScreen({ org }: { org: Organization }) {
         </div>
       </section>
 
-      <details className="card hr-fold">
-        <summary><h2>Details</h2><span className="small muted">{canEdit ? 'View and edit' : 'View'}</span></summary>
+      <div className="segmented hc-tabs" role="tablist" aria-label="About this child">
+        {TABS.filter(([k]) => k !== 'fees' || showFees).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'about' && (
+        <section className="card">
         <div className="stack">
         <div className="field-row">
           <label className="field"><span>Date of birth</span><input type="date" disabled={!canEdit} value={dob} max={h.today} onChange={(e) => setDob(e.target.value)} /></label>
@@ -184,16 +192,14 @@ function ChildScreen({ org }: { org: Organization }) {
         <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
         {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}
         </div>
-      </details>
+        </section>
+      )}
 
-      <SchoolFees orgId={org.id} childId={child.id} saved={child.payment ?? null} school={child.school ?? ''} canEdit={canEdit} />
-      <FeesPaid orgId={org.id} childId={child.id} />
-
-      <RegisterHistory history={history} rate={rate} />
-
-      <details className="card hr-fold">
-        <summary><h2>Clubs</h2><span className="small muted">{myClubs.length ? myClubs.map((x) => `${x.emoji} ${x.name}`).join(', ') : 'None yet'}</span></summary>
-        <div className="stack">
+      {tab === 'attendance' && (
+        <>
+          <RegisterHistory history={history} rate={rate} />
+          <section className="card stack">
+            <h2>Clubs</h2>
           {myClubs.length > 0 && (
             <ul className="link-list">
               {myClubs.map((x) => { const r = memberRate(child.id, clubs.days.filter((d) => d.clubId === x.id)); return (
@@ -203,31 +209,23 @@ function ChildScreen({ org }: { org: Organization }) {
             </ul>
           )}
           {myClubs.length === 0 && <p className="small muted">Not in a club yet. Add children to a club from the club's Members tab.</p>}
-          <h3>Earlier programme sessions</h3>
-        {child.programmes.filter((p) => p.name.toLowerCase() !== MEALS_PROGRAMME.toLowerCase()).map((p) => {
-          const { missed } = missedInARow(child.id, p.name, h.programmes, h.events, h.records, child.enrolledOn, h.today);
-          return <p key={p.name} className="small"><strong>{p.name}</strong>{p.group ? ` (${p.group})` : ''}{p.level ? ` · ${p.level}` : ''} · {missed === 0 ? 'came to the latest session' : `missed the last ${missed} ${missed === 1 ? 'session' : 'sessions'}`}</p>;
-        })}
-        {recent.length === 0 ? <p className="muted small">No sessions marked for this child yet.</p> : (
-          <ul className="link-list">
-            {recent.map(({ r, e }) => (
-              <li key={r.eventId}><Link to={`/attendance/${org.id}/${e!.id}`}><span className="link-title">{e!.name}</span><span className="link-detail">{formatDateKey(e!.date)} · {ATTENDANCE_STATUS_LABELS[r.status as keyof typeof ATTENDANCE_STATUS_LABELS] ?? r.status} · {programmeOf(e!, h.programmes) ?? ''}</span></Link></li>
-            ))}
-          </ul>
-        )}
-        </div>
-      </details>
+          </section>
+        </>
+      )}
 
-      <ChildChats org={org} childId={child.id} firstName={person?.firstName ?? 'this child'} />
+      {tab === 'fees' && showFees && (
+        <>
+          <SchoolFees orgId={org.id} childId={child.id} saved={child.payment ?? null} school={child.school ?? ''} canEdit={canEdit} />
+          <FeesPaid orgId={org.id} childId={child.id} />
+        </>
+      )}
 
-      <ChildNotes orgId={org.id} childId={child.id} today={h.today} />
-
-      {h.pastoral && <PastorSection orgId={org.id} childId={child.id} today={h.today} />}
-
-      {canEdit && (
-        <details className="card hr-fold">
-          <summary><h2>Leaving the Hope Centre</h2><span className="small muted">Departing or departed</span></summary>
-          <div className="stack">
+      {tab === 'care' && (
+        <>
+          <ChildCare org={org} childId={child.id} firstName={person?.firstName ?? 'this child'} today={h.today} />
+          {canEdit && (
+            <section className="card stack">
+              <h2>Leaving the Hope Centre</h2>
           {child.status !== 'exited' && <label className="field"><span>Reason or note (optional)</span><input value={leaveNote} maxLength={500} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Moving away, finished the programme…" /></label>}
           {child.departingNote && child.status !== 'active' && <p className="small muted">Note: {child.departingNote}</p>}
           <div className="chips">
@@ -236,8 +234,9 @@ function ChildScreen({ org }: { org: Organization }) {
             {child.status !== 'active' && <button type="button" className="btn btn-quiet" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null, departingNote: null }).catch((err) => toast.show(friendlyError(err))); saveLeavingNote(org.id, child.id, 'Returned to active.').catch(() => {}); }}>Return to active</button>}
           </div>
           <p className="small muted">Departing: in the process of leaving for good. Departed: has left for good and moves to Past children. Each change is kept as a dated note in Reports → Records.</p>
-          </div>
-        </details>
+            </section>
+          )}
+        </>
       )}
       <ConfirmDialog open={!!confirmExit} title={confirmExit === 'exited' ? `Has ${name} left for good?` : `Mark ${name} as departing?`}
         body={confirmExit === 'exited' ? 'They move to Past children and leave the weekly register. Their records are kept, and you can return them to active at any time.' : 'They stay on the register, marked Departing, until they leave.'}
@@ -267,38 +266,6 @@ function RegisterHistory({ history, rate }: { history: ReturnType<typeof kidHist
   );
 }
 
-/** Referrals (pastor only). Welfare notes and home visits are now dated notes under "Welfare notes" (Andy, 2026-11-05, 4A). */
-function PastorSection({ orgId, childId, today }: { orgId: string; childId: string; today: string }) {
-  const toast = useToast();
-  const p = useChildPrivate(orgId, childId);
-  const [refTo, setRefTo] = useState('');
-  const [refReason, setRefReason] = useState('');
-  const fail = (err: unknown) => toast.show(friendlyError(err));
-  return (
-    <details className="card hr-fold">
-      <summary><h2>Referrals (pastor only)</h2><span className="small muted">{p.referrals.length ? `${p.referrals.length} logged` : 'Clinic, children\'s office, school'}</span></summary>
-      <div className="stack">
-        {p.referrals.length > 0 && (
-          <ul className="link-list">
-            {p.referrals.map((r) => (
-              <li key={r.id}>
-                <div>
-                  <span className="link-title">{r.to} · {formatDateKey(r.date)} · {r.status === 'open' ? 'open' : 'closed'}</span>
-                  <span className="link-detail">{r.reason}{r.outcome ? ` · Outcome: ${r.outcome}` : ''}</span>
-                  {r.status === 'open' && <button type="button" className="btn btn-quiet" onClick={() => { const o = window.prompt('What was the outcome?') ?? ''; if (o.trim()) closeReferral(orgId, r.id, o).catch(fail); }}>Close with the outcome</button>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        <label className="field"><span>Referred to</span><input value={refTo} maxLength={120} onChange={(e) => setRefTo(e.target.value)} placeholder="Clinic, children's office, school…" /></label>
-        <label className="field"><span>Why</span><textarea rows={2} maxLength={1000} value={refReason} onChange={(e) => setRefReason(e.target.value)} /></label>
-        <button type="button" className="btn align-start" disabled={!refTo.trim()} onClick={() => { addReferral(orgId, childId, { date: today, to: refTo, reason: refReason }).catch(fail); setRefTo(''); setRefReason(''); toast.show('Referral logged'); }}>Log the referral</button>
-      </div>
-    </details>
-  );
-}
-
 /**
  * How the school fees are paid (Andy, 2026-11-04, 8B): Paybill, Till, Send money or Cash, with the number and
  * account ready to copy into M-Pesa.
@@ -323,8 +290,8 @@ function SchoolFees({ orgId, childId, saved, school, canEdit }: { orgId: string;
   const s = saved;
   const numberLabel = p.by === 'send_money' ? 'Phone number' : p.by === 'till' ? 'Till number' : 'Paybill number';
   return (
-    <details className="card hr-fold">
-      <summary><h2>School fees</h2><span className="small muted">{s && hasPayment(s) ? paymentLine(s) || 'Saved' : 'Not saved'}</span></summary>
+    <details className="card hr-fold" open>
+      <summary><h2>How fees are paid</h2><span className="small muted">{s && hasPayment(s) ? paymentLine(s) || 'Saved' : 'Not saved'}</span></summary>
       <div className="stack">
         {s && hasPayment(s) && s.by !== 'cash' && (s.number || s.account) && (
           <div className="fee-box">

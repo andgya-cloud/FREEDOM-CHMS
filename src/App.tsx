@@ -99,6 +99,7 @@ const HopeAttendanceDayPage = lazy(() => import('./pages/hope/HopeAttendancePage
 const HopeRecordsPage = lazy(() => import('./pages/hope/HopeRecordsPage').then((m) => ({ default: m.HopeRecordsPage })));
 const HopeMealsPage = lazy(() => import('./pages/hope/HopeMealsPage').then((m) => ({ default: m.HopeMealsPage })));
 const HopeBinPage = lazy(() => import('./pages/hope/HopeBinPage').then((m) => ({ default: m.HopeBinPage })));
+const HopeMorePage = lazy(() => import('./pages/hope/HopeMorePage').then((m) => ({ default: m.HopeMorePage })));
 const HopePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.HopePhotosPage })));
 const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
 const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then((m) => ({ default: m.KidsRegisterPage })));
@@ -107,7 +108,6 @@ const ClubPage = lazy(() => import('./pages/hope/ClubPage').then((m) => ({ defau
 const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((m) => ({ default: m.ChildImportPage })));
 const PhotoUploadPage = lazy(() => import('./pages/hope/PhotoUploadPage').then((m) => ({ default: m.PhotoUploadPage })));
 const ConsentPage = lazy(() => import('./pages/hope/ConsentPage').then((m) => ({ default: m.ConsentPage })));
-const HopeExportsPage = lazy(() => import('./pages/hope/HopeExportsPage').then((m) => ({ default: m.HopeExportsPage })));
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -253,6 +253,7 @@ function AppRoutes() {
         <Route path="/hope/records" element={<HopeRecordsPage />} />
         <Route path="/hope/meals" element={<HopeMealsPage />} />
         <Route path="/hope/bin" element={<HopeBinPage />} />
+        <Route path="/hope/more" element={<HopeMorePage />} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
         <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
@@ -272,7 +273,7 @@ function AppRoutes() {
         <Route path="/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
         <Route path="/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
         <Route path="/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
-        <Route path="/hope/exports" element={<RequirePermission permission="people.read"><HopeExportsPage /></RequirePermission>} />
+        <Route path="/hope/exports" element={<Navigate to="/hope/children" replace />} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path="/settings/my-password" element={<RequireAccountKeeper><ChangePasswordPage voluntary /></RequireAccountKeeper>} />
         <Route path="/settings/signing-pin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><SigningPinPage /></RequirePermission>} />

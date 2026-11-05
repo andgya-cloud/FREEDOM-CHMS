@@ -46,6 +46,7 @@ export const hopeRecords = onCall({ invoker: 'public', memory: '512MiB', timeout
 
   /** Copies the old welfare boxes and home visits into dated notes, once (4A). The old records are kept as they were. */
   async function moveOld() {
+    await moveReferrals();
     const flag = db.doc(`${base}/hopeMeta/notesMoved`);
     if ((await flag.get()).exists) return;
     const [privates, visits, children, people] = await Promise.all([
@@ -79,6 +80,34 @@ export const hopeRecords = onCall({ invoker: 'public', memory: '512MiB', timeout
     await flag.set({ at: nowIso, by: caller.uid, moved: notes.length });
   }
 
+  /** v173 (3A): the old referrals join the Care timeline as Referral notes, once. The old records are kept. */
+  async function moveReferrals() {
+    const flag = db.doc(`${base}/hopeMeta/referralsMoved`);
+    if ((await flag.get()).exists) return;
+    const [refs, children, people] = await Promise.all([
+      db.collection(`${base}/referrals`).get(), db.collection(`${base}/children`).get(), db.collection(`${base}/people`).get(),
+    ]);
+    const code = new Map(children.docs.map((d) => [d.id, String(d.get('code') ?? '')]));
+    const name = new Map(people.docs.map((d) => [d.id, String(d.get('fullName') ?? 'Child')]));
+    const batch = db.batch();
+    let moved = 0;
+    for (const d of refs.docs) {
+      const childId = String(d.get('childId') ?? '');
+      if (d.get('deletedAt') || !code.has(childId) || moved >= 450) continue;
+      const v = d.get('createdAt');
+      const at = v && typeof v.toDate === 'function' ? (v.toDate() as Date).toISOString() : nowIso;
+      const outcome = String(d.get('outcome') ?? '').trim();
+      const text = [`Referred to ${String(d.get('to') ?? '').trim() || 'someone'}: ${String(d.get('reason') ?? '').trim()}`.replace(/:\s*$/, ''),
+        d.get('status') === 'closed' ? `Outcome: ${outcome || 'closed'}` : 'Still open'].join('. ');
+      const note: ChildNote = { orgId, childId, childName: name.get(childId) ?? 'Child', childCode: code.get(childId) ?? '', kind: 'referral', text: text.slice(0, NOTE_TEXT_MAX),
+        day: String(d.get('date') ?? at.slice(0, 10)), byUid: String(d.get('createdBy') ?? ''), byName: 'Earlier notes', byRole: '', at, fromOld: `ref_${d.id}` };
+      batch.set(db.doc(`${base}/childNotes/old_ref_${d.id}`), note);
+      moved++;
+    }
+    if (moved) await batch.commit();
+    await flag.set({ at: nowIso, by: caller.uid, moved });
+  }
+
   switch (action) {
     case 'notes': {
       if (!canReadNotes(me, orgId)) throw new HttpsError('permission-denied', 'Only the Director, Andrew Guya and Doreen read these notes.');
@@ -103,6 +132,30 @@ export const hopeRecords = onCall({ invoker: 'public', memory: '512MiB', timeout
       const note: ChildNote = { orgId, childId, childName: c.childName, childCode: c.childCode, kind, text, day, byUid: caller.uid, byName: myName, byRole: chatRole(me, orgId), at: nowIso };
       const ref = await db.collection(`${base}/childNotes`).add(note);
       return { id: ref.id };
+    }
+
+    case 'owing': {
+      // v173 (13A): the children with fees still to pay this term, for "Children who need us" on Today.
+      if (!canKeepFees(me, orgId)) throw new HttpsError('permission-denied', 'Only the Director, the accountant, Andrew Guya and Doreen see fees paid.');
+      const today = localDateKey(new Date(), tz);
+      const term = termOf(today);
+      const [children, plans, pays] = await Promise.all([
+        db.collection(`${base}/children`).get(), db.collection(`${base}/hopeFeePlans`).get(),
+        db.collection(`${base}/hopeFees`).where('term', '==', term).get(),
+      ]);
+      const planFee = new Map(plans.docs.map((d) => [d.id, d.get('termFee')]));
+      const paid = new Map<string, number>();
+      for (const d of pays.docs) if (!d.get('deletedAt')) paid.set(String(d.get('childId')), (paid.get(String(d.get('childId'))) ?? 0) + Number(d.get('amount') ?? 0));
+      const owing: { childId: string; left: number; fee: number }[] = [];
+      for (const d of children.docs) {
+        const c = d.data();
+        if (c.deletedAt || c.status === 'exited') continue;
+        const saved = planFee.get(d.id);
+        const fee = typeof saved === 'number' ? saved : feeFromLine((c.payment as { amount?: string } | null)?.amount);
+        const left = fee - (paid.get(d.id) ?? 0);
+        if (fee > 0 && left > 0) owing.push({ childId: d.id, left, fee });
+      }
+      return { term, owing };
     }
 
     case 'fees': {

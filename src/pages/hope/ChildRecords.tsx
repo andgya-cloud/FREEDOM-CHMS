@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { cleanupError } from '../../lib/cleanup';
+import { friendlyError } from '../../lib/errors';
+import { startChat, type StoredChat } from '../../lib/hopeChats';
+import { ChatRow, useChats } from './HopeChatsPage';
+import type { Organization } from '../../state/OrgContext';
 import { addFee, addNote, feeReceipt, listFees, listNotes, setTermFee, type FeesView, type StoredNote } from '../../lib/hopeRecords';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { chatColour, chatTime } from '../../../functions/src/shared/hopeChats';
+import { CHAT_TEXT_MAX, chatColour, chatTime, isUnread } from '../../../functions/src/shared/hopeChats';
 import {
-  canKeepFees, canReadNotes, FEE_METHOD_LABELS, FEE_METHODS, formatKes, NOTE_KIND_EMOJI, NOTE_KIND_LABELS, recentTerms, termBalance, termLabel, termOf,
+  CARE_NOTE_KINDS, canKeepFees, canReadNotes, FEE_METHOD_LABELS, FEE_METHODS, formatKes, NOTE_KIND_EMOJI, NOTE_KIND_LABELS, recentTerms, termBalance, termLabel, termOf,
   type FeeMethod, type NoteKind,
 } from '../../../functions/src/shared/hopeRecords';
 import { shrinkPhoto } from './registerParts';
@@ -29,53 +34,101 @@ export function NoteCard({ n, orgId, onRemoved }: { n: StoredNote; orgId: string
 }
 
 /**
- * Welfare notes on the child's page (Andy, 2026-11-05, 4A 5A): every note is a new dated, signed entry, never
- * overwritten. The Director, Andy and Doreen read and write them; they are also kept in Reports → Records.
+ * The Care tab (Andy, 2026-11-05, v173 3A): one timeline for everything about a child's wellbeing — welfare,
+ * health, home, visit, referral and leaving notes, and the conversations — newest first. The Director, Andy and
+ * Doreen write a note or start an urgent conversation; other staff raise a worry, which only the readers see.
  */
-export function ChildNotes({ orgId, childId, today }: { orgId: string; childId: string; today: string }) {
+export function ChildCare({ org, childId, firstName, today }: { org: Organization; childId: string; firstName: string; today: string }) {
   const { profile } = useAuth();
   const toast = useToast();
-  const reader = canReadNotes(profile, orgId);
-  const [notes, setNotes] = useState<StoredNote[] | null>(null);
+  const navigate = useNavigate();
+  const reader = canReadNotes(profile, org.id);
+  const me = profile?.uid ?? '';
+  const chats = useChats(org.id, childId);
+  const [notes, setNotes] = useState<StoredNote[] | null>(reader ? null : []);
+  const [mode, setMode] = useState<'' | 'note' | 'urgent'>('');
   const [kind, setKind] = useState<NoteKind>('welfare');
   const [text, setText] = useState('');
   const [day, setDay] = useState(today);
   const [busy, setBusy] = useState(false);
-  const load = useCallback(() => { listNotes(orgId, childId).then((r) => setNotes(r.notes), (err) => toast.show(cleanupError(err))); }, [orgId, childId, toast]);
-  const [opened, setOpened] = useState(false);
-  useEffect(() => { if (reader && opened) load(); }, [reader, opened, load]);
-  if (!reader) return null;
+  const load = useCallback(() => { listNotes(org.id, childId).then((r) => setNotes(r.notes), (err) => toast.show(cleanupError(err))); }, [org.id, childId, toast]);
+  useEffect(() => { if (reader) load(); }, [reader, load]);
+  const list = chats.list;
+  const raiser = !reader && !!list?.raiser;
 
-  async function save() {
+  const timeline = useMemo(() => {
+    const rows: { key: string; at: string; note?: StoredNote; chat?: StoredChat }[] = [];
+    for (const n of notes ?? []) rows.push({ key: `n${n.id}`, at: `${n.day}${n.at}`, note: n });
+    for (const c of list?.chats ?? []) rows.push({ key: `c${c.id}`, at: `${c.lastAt.slice(0, 10)}${c.lastAt}`, chat: c });
+    return rows.sort((x, y) => y.at.localeCompare(x.at));
+  }, [notes, list]);
+
+  async function saveNote() {
     setBusy(true);
     try {
-      await addNote(orgId, childId, kind, text.trim(), kind === 'visit' ? day : undefined);
-      setText('');
+      await addNote(org.id, childId, kind, text.trim(), kind === 'visit' || kind === 'referral' ? day : undefined);
+      setText(''); setMode('');
       toast.show('Note saved');
       load();
     } catch (err) { toast.show(cleanupError(err)); }
     finally { setBusy(false); }
   }
+  async function start() {
+    setBusy(true);
+    try {
+      const r = await startChat(org.id, childId, text.trim(), !reader);
+      setText(''); setMode('');
+      toast.show(reader ? `Started. ${r.emailed.length ? `${r.emailed.length} were emailed that their urgent response is needed.` : ''}` : 'Sent. The Director and the board have been told it is urgent.');
+      if (reader) navigate(`/hope/chats/${r.id}`); else chats.reload();
+    } catch (err) { toast.show(friendlyError(err)); }
+    finally { setBusy(false); }
+  }
+
+  if (!reader && !raiser) return <section className="card"><p className="muted small">Only the Director, Andy and Doreen see {firstName}'s care records.</p></section>;
   return (
-    <details className="card hr-fold" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) setOpened(true); }}>
-      <summary><h2>Welfare notes</h2><span className="small muted">Director, Andy and Doreen{notes ? ` · ${notes.length} ${notes.length === 1 ? 'note' : 'notes'}` : ''}</span></summary>
-      <div className="stack">
-        <div className="field-row">
-          <label className="field"><span>Kind of note</span>
-            <select value={kind} onChange={(e) => setKind(e.target.value as NoteKind)}>
-              {(['welfare', 'health', 'home', 'visit'] as NoteKind[]).map((k) => <option key={k} value={k}>{NOTE_KIND_EMOJI[k]} {NOTE_KIND_LABELS[k]}</option>)}
-            </select>
-          </label>
-          {kind === 'visit' && <label className="field"><span>Day of the visit</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>}
+    <section className="card stack">
+      <h2>Care</h2>
+      {mode === '' && (
+        <div className="chips">
+          {reader && <button type="button" className="btn btn-primary" onClick={() => { setMode('note'); setText(''); }}>✍️ Write a note</button>}
+          <button type="button" className="btn btn-danger" onClick={() => { setMode('urgent'); setText(''); }}>🔴 {reader ? 'Urgent: start a conversation' : `Worried about ${firstName}?`}</button>
         </div>
-        <label className="field"><span>Note</span><textarea rows={3} maxLength={4000} value={text} onChange={(e) => setText(e.target.value)} placeholder="What you saw, heard or did" /></label>
-        <button type="button" className="btn btn-primary align-start" disabled={busy || !text.trim()} onClick={() => void save()}>{busy ? 'Saving…' : 'Save note'}</button>
-        <p className="small muted">Notes are never changed once saved, so the record stays true. They are kept in Reports → Records.</p>
-        {notes === null ? <p className="muted small">Loading…</p> : notes.length === 0 ? <p className="muted small">No notes yet.</p> : (
-          <ul className="note-list">{notes.map((n) => <NoteCard key={n.id} n={n} orgId={orgId} onRemoved={load} />)}</ul>
-        )}
-      </div>
-    </details>
+      )}
+      {mode === 'note' && (
+        <div className="stack hr-sub">
+          <div className="field-row">
+            <label className="field"><span>Kind of note</span>
+              <select value={kind} onChange={(e) => setKind(e.target.value as NoteKind)}>
+                {CARE_NOTE_KINDS.map((k) => <option key={k} value={k}>{NOTE_KIND_EMOJI[k]} {NOTE_KIND_LABELS[k]}</option>)}
+              </select>
+            </label>
+            {(kind === 'visit' || kind === 'referral') && <label className="field"><span>{kind === 'visit' ? 'Day of the visit' : 'Day referred'}</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>}
+          </div>
+          <label className="field"><span>Note</span><textarea rows={3} maxLength={4000} value={text} onChange={(e) => setText(e.target.value)} placeholder={kind === 'referral' ? 'Referred to whom, and why' : 'What you saw, heard or did'} /></label>
+          <div className="chips">
+            <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => void saveNote()}>{busy ? 'Saving…' : 'Save note'}</button>
+            <button type="button" className="btn btn-quiet" onClick={() => setMode('')}>Cancel</button>
+          </div>
+          <p className="small muted">Notes are never changed once saved, so the record stays true.</p>
+        </div>
+      )}
+      {mode === 'urgent' && (
+        <div className="stack hr-sub">
+          <p className="small">{reader ? 'Start a conversation with the Director, the board, Andy and Doreen. They are emailed that their URGENT response is needed.' : <>Write what you saw or heard. <strong>Only the Director, the board, Andy and Doreen will read it</strong>, and they are told it is urgent. Do not talk to others about it.</>}</p>
+          <label className="field"><span>{reader ? 'First message' : 'What are you worried about?'}</span><textarea rows={3} maxLength={CHAT_TEXT_MAX} value={text} onChange={(e) => setText(e.target.value)} /></label>
+          <div className="chips">
+            <button type="button" className="btn btn-primary" disabled={busy || !text.trim()} onClick={() => void start()}>{busy ? 'Sending…' : reader ? 'Start the conversation' : 'Send to the Director and the board'}</button>
+            <button type="button" className="btn btn-quiet" onClick={() => setMode('')}>Cancel</button>
+          </div>
+        </div>
+      )}
+      {(notes === null || !list) && !chats.error ? <p className="muted small">Loading…</p> : timeline.length === 0 ? <p className="muted small">Nothing written about {firstName} yet.</p> : (
+        <ul className="note-list">
+          {timeline.map((r) => r.note ? <NoteCard key={r.key} n={r.note} orgId={org.id} onRemoved={load} />
+            : <ChatRow key={r.key} c={r.chat!} reader={!!list?.reader} unread={!!list?.reader && isUnread(r.chat!, me)} />)}
+        </ul>
+      )}
+    </section>
   );
 }
 
@@ -93,7 +146,7 @@ export function FeesPaid({ orgId, childId }: { orgId: string; childId: string })
   const toast = useToast();
   const keeper = canKeepFees(profile, orgId);
   const [view, setView] = useState<FeesView | null>(null);
-  const [opened, setOpened] = useState(false);
+  const [opened, setOpened] = useState(true);
   const [adding, setAdding] = useState(false);
   const [busy, setBusy] = useState(false);
   const [date, setDate] = useState('');
@@ -139,7 +192,7 @@ export function FeesPaid({ orgId, childId }: { orgId: string; childId: string })
   }
 
   return (
-    <details className="card hr-fold" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) setOpened(true); }}>
+    <details className="card hr-fold" open onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) setOpened(true); }}>
       <summary><h2>Fees paid</h2><span className="small muted">{bal ? (bal.fee ? `${termLabel(thisTerm)}: ${formatKes(bal.paid)} of ${formatKes(bal.fee)}` : `${termLabel(thisTerm)}: ${formatKes(bal.paid)} paid`) : 'Each payment, with the balance'}</span></summary>
       {!view ? <p className="muted small">Loading…</p> : (
         <div className="stack">

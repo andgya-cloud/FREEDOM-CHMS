@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cellDate, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
+  cellDate, missedSaturdays, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
   type ChampionDay, type HopeDay,
 } from './hopeRegister';
 
@@ -128,4 +128,20 @@ describe('little delights', async () => {
     expect(birthdayThisWeek('2016-11-10', '2026-11-04')).toBe(false);
     expect(birthdayThisWeek(null, '2026-11-04')).toBe(false);
   });
+});
+
+describe('missedSaturdays (v173)', () => {
+  // 2026-10-17, 10-24, 10-31 are Saturdays; 10-28 is a Wednesday and does not count.
+  const day = (date: string, marks: Record<string, { s: 'present' | 'absent' | 'excused' }>) => ({ date, marks });
+  const days = [
+    day('2026-10-17', { a: { s: 'absent' }, b: { s: 'present' }, c: { s: 'absent' } }),
+    day('2026-10-24', { b: { s: 'absent' }, c: { s: 'excused' } }),
+    day('2026-10-28', { a: { s: 'present' } }),
+    day('2026-10-31', { a: { s: 'absent' }, b: { s: 'absent' } }),
+  ];
+  it('flags a child who missed the last three Saturdays', () => { expect(missedSaturdays('a', null, days)).toBe(true); });
+  it('not if they came on one of them', () => { expect(missedSaturdays('b', null, days)).toBe(false); });
+  it('not if one was excused', () => { expect(missedSaturdays('c', null, days)).toBe(false); });
+  it('not if they joined after the first of them', () => { expect(missedSaturdays('a', '2026-10-20', days)).toBe(false); });
+  it('not before three Saturdays were marked', () => { expect(missedSaturdays('a', null, days.slice(0, 2))).toBe(false); });
 });
