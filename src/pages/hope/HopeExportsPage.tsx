@@ -1,3 +1,4 @@
+import { Help } from '../../components/Help';
 import { useState } from 'react';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -9,11 +10,11 @@ import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { ATTENDANCE_STATUS_LABELS } from '../../../functions/src/shared/attendance';
 import { SCHOOL_STATUS_LABELS } from '../../../functions/src/shared/hope';
-import { HopeGate, HopeNav, useHopePage } from './common';
+import { HopeGate, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
 export function HopeExportsPage() {
-  return <HopeGate title="Exports">{(org) => <Exports org={org} />}</HopeGate>;
+  return <HopeGate title="Download lists">{(org) => <Exports org={org} />}</HopeGate>;
 }
 
 const SCOPES = { register: 'The children register (codes, names, ages, programmes, consent)', attendance: 'Attendance of children (who came to which session)' } as const;
@@ -54,9 +55,8 @@ function Exports({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow">
-      <h1>Exports</h1>
-      <HopeNav />
-      <p className="notice small">Anything that takes children's details out of the system needs the pastor's approval, and every request and download is written to the activity log. Welfare notes and safeguarding records are never exported.</p>
+      <h1>Download lists</h1>
+      <p className="small muted">Ask for a list; the pastor approves it first. <Help>Every request and download is written to the activity log. Welfare notes and safeguarding records are never in a list.</Help></p>
       <section className="card stack">
         <h2>Ask for an export</h2>
         <label className="field"><span>What do you need?</span>

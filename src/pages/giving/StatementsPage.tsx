@@ -78,7 +78,6 @@ function Statements({ org }: { org: Organization }) {
     <div className="page narrow">
       <p><Link to="/giving">← Giving</Link></p>
       <h1>Giving statements</h1>
-      <p className="lead">{org.name}</p>
       <div className="field-row">
         <label className="field"><span>From</span><input type="date" value={from} onChange={(e) => e.target.value && setPeriod([e.target.value, to])} /></label>
         <label className="field"><span>To</span><input type="date" value={to} min={from} onChange={(e) => e.target.value && setPeriod([from, e.target.value])} /></label>

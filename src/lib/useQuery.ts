@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { onSnapshot, type Query } from 'firebase/firestore';
+import { onSnapshot, type DocumentReference, type Query } from 'firebase/firestore';
 import { ESTIMATE } from './firestoreOptions';
 
 /** Live results of a Firestore query (served from the device cache when offline). */
@@ -26,4 +26,25 @@ export function useLiveQuery<T>(makeQuery: () => Query | null, deps: unknown[]):
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return { rows, loading, error };
+}
+
+/** One live document, or null while it is missing. */
+export function useLiveDoc<T>(makeRef: () => DocumentReference | null, deps: unknown[]): { data: T | null; loading: boolean } {
+  const [data, setData] = useState<T | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    const ref = makeRef();
+    if (!ref) {
+      setData(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    return onSnapshot(ref, (snap) => {
+      setData(snap.exists() ? ({ id: snap.id, ...snap.data(ESTIMATE) } as T) : null);
+      setLoading(false);
+    }, () => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return { data, loading };
 }

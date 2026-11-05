@@ -1,4 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
+import { AzBar } from './StudentFinder';
+import { initialOf } from '../lib/studentSearch';
 import { Link } from 'react-router-dom';
 import { usePeople, type Person } from '../state/PeopleContext';
 import { useToast } from '../state/ToastContext';
@@ -33,29 +35,35 @@ interface Props {
   canRecord: boolean;
   /** Without a roster, the list is everyone with the status Student (ADIA classes). */
   roster?: RosterSpec;
+  /** Only the people on the list, with no adding others and no links to their records (a trainer's register). */
+  rosterOnly?: boolean;
+  /** Names from a trainer's class list, in place of People (which a trainer never reads). */
+  names?: Map<string, string>;
 }
 
 /**
  * A class register for ADIA: every student on one screen, one tap each for
  * present, late, absent or excused. Works on a tablet with no internet.
  */
-export function ClassRegister({ org, event, byPerson, canRecord, roster: spec }: Props) {
-  const { people } = usePeople();
+export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, rosterOnly = false, names }: Props) {
+  const { people: everyone } = usePeople();
+  const people = useMemo(() => (names ? [...names].map(([id, fullName]) => ({ id, fullName, orgId: org.id, status: 'student' }) as unknown as Person) : everyone), [names, everyone, org.id]);
   const toast = useToast();
   const saved = useSavedMessage();
   const [filter, setFilter] = useState('');
+  const [letter, setLetter] = useState('');
   const [extraIds, setExtraIds] = useState<string[]>([]);
 
   // The class list: students (or the roster given), plus anyone already marked or added here.
   const roster = useMemo(() => {
     const ids = new Set([...byPerson.keys(), ...extraIds, ...(spec?.ids ?? [])]);
     return people
-      .filter((p) => p.orgId === org.id && ((!spec && p.status === 'student') || ids.has(p.id)))
+      .filter((p) => p.orgId === org.id && ((!spec && !rosterOnly && p.status === 'student') || ids.has(p.id)))
       .sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }, [people, byPerson, extraIds, org.id, spec]);
-  const find = spec?.search ?? matchesSearch;
-  const shown = filter.trim().length >= 2 ? roster.filter((p) => find(p, filter)) : roster;
-  const others = filter.trim().length >= 2
+  }, [people, byPerson, extraIds, org.id, spec, rosterOnly]);
+  const find = rosterOnly ? (p: Person, text: string) => p.fullName.toLowerCase().includes(text.trim().toLowerCase()) : spec?.search ?? matchesSearch;
+  const shown = (filter.trim().length >= 2 ? roster.filter((p) => find(p, filter)) : roster).filter((p) => !letter || initialOf(p.fullName) === letter);
+  const others = !rosterOnly && filter.trim().length >= 2
     ? people.filter((p) => p.orgId === org.id && !roster.includes(p) && find(p, filter)).slice(0, 5)
     : [];
   const statusOf = (p: Person): AttendanceStatus | null => {
@@ -86,7 +94,7 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec }:
         {tally.map(([s, n]) => <span key={s} className={`tally-item mark-${s}`}>{ATTENDANCE_STATUS_LABELS[s]} <strong>{n}</strong></span>)}
         <span className="tally-item">Not marked <strong>{unmarked.length}</strong></span>
       </p>
-      <input type="search" className="search" placeholder={spec ? 'Find someone, or add someone not on the list' : 'Find a student, or add someone not on the list'} aria-label="Find someone" value={filter} onChange={(e) => setFilter(e.target.value)}
+      <input type="search" className="search" placeholder={rosterOnly ? 'Find a student' : spec ? 'Find someone, or add someone not on the list' : 'Find a student, or add someone not on the list'} aria-label="Find someone" value={filter} onChange={(e) => setFilter(e.target.value)}
         onKeyDown={(e) => {
           if (e.key !== 'Enter' || !spec?.checkInOnEnter || !canRecord || filter.trim().length < 2) return;
           e.preventDefault();
@@ -96,7 +104,8 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec }:
             setFilter('');
           } else toast.show(shown.length === 0 ? 'Nobody with that name or code is on this list.' : 'More than one match. Tap the right name.');
         }} />
-      {roster.length === 0 && filter.trim().length < 2 && (spec ? <p className="muted">{spec.empty}</p> : (
+      {roster.length > 8 && <AzBar names={roster.map((p) => p.fullName)} letter={letter} onLetter={setLetter} onAll={letter ? () => setLetter('') : undefined} />}
+      {roster.length === 0 && filter.trim().length < 2 && (rosterOnly ? <p className="muted">No students are on this class list yet.</p> : spec ? <p className="muted">{spec.empty}</p> : (
         <p className="muted">No students yet. Add people with the status Student in <Link to="/people/new">People</Link>, or search above to add someone to this class.</p>
       ))}
       <ul className="row-list register">
@@ -104,10 +113,16 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec }:
           const current = statusOf(p);
           return (
             <li key={p.id} className="row register-row">
-              <Link to={`/people/${org.id}/${p.id}`} className="row-main">
-                <span className="row-title">{p.fullName}</span>
-                {spec?.note?.(p.id) && <span className="row-detail">{spec.note(p.id)}</span>}
-              </Link>
+              {rosterOnly ? (
+                <span className="row-main">
+                  <span className="row-title">{p.fullName}</span>
+                </span>
+              ) : (
+                <Link to={`/people/${org.id}/${p.id}`} className="row-main">
+                  <span className="row-title">{p.fullName}</span>
+                  {spec?.note?.(p.id) && <span className="row-detail">{spec.note(p.id)}</span>}
+                </Link>
+              )}
               <div className="segmented marks" role="group" aria-label={`Mark ${p.fullName}`}>
                 {ATTENDANCE_STATUSES.map((s) => (
                   <button key={s} type="button" disabled={!canRecord} className={`mark-${s} ${current === s ? 'on' : ''}`} aria-pressed={current === s} onClick={() => mark(p, s)}>

@@ -39,15 +39,15 @@ const TOPICS: Topic[] = [
     id: 'school', title: 'ADIA: enrol a student and take class attendance',
     permission: 'people.write',
     body: ['Choose ADIA at the top, then open School. Students → Enrol a student: pick the programme, intake and level, and add a sponsor or guardian with a phone number. The admission number is made for you once you are online.',
-      'For a class, open Attendance, tap the programme name, and mark each student present, late, absent or excused. This works offline on a tablet. The student page shows the attendance percentage, and the overview lists anyone below the alert level.'],
-    link: { to: '/school', label: 'Open School' },
+      'For a class, open Attendance, tap the programme name, and mark each student present, late, absent or excused. This works offline on a tablet. The student page shows the attendance percentage, and Today lists anyone below the alert level.'],
+    link: { to: '/school/students', label: 'Open School' },
   },
   {
     id: 'hope-register', title: 'Hope Center: register a child and take attendance',
     permission: 'people.write',
     body: ['Choose Freedom Hope Center at the top, then open Hope. Register a child: type the name, date of birth, school and the programmes they join, and add a guardian with a phone number. The code (for example HC-0042) is made once you are online.',
       'Consent can be left blank, but the child shows "Consent missing" until the guardian agrees. No photos are stored in the system.',
-      'For Saturday meals, open Hope and tap Saturday meals, then type how many new and returning children came if you are not taking names. For football, chess or music, tap the programme, then tap each name, or type or scan the child\'s code and press Enter. It works offline on a tablet.'],
+      'For the weekly check-in, open Registers. Tap each child\'s photo as they arrive (or use the Tick list), then tap Finish: children without a tick are marked absent. Change day picks another day. The Child Champions register is under Champions, and each club has its own register under Clubs. A child who is leaving is marked on their own page. It works offline on a tablet.'],
     link: { to: '/hope', label: 'Open Hope' },
   },
   {
@@ -55,8 +55,8 @@ const TOPICS: Topic[] = [
     permission: 'people.read',
     body: ['When a child misses three sessions in a row of a programme, a follow-up appears for the guardian. Open it from Follow-ups and use the WhatsApp button; messages always go to the guardian, never to the child.',
       'If you are worried about a child, open their page and tap Raise a safeguarding concern. Only the pastor is told and can read it.',
-      'To take children\'s details out of the system (for a sponsor, for example), open Hope → Exports and ask. The pastor approves, you download once, and it is recorded.'],
-    link: { to: '/hope/exports', label: 'Open Exports' },
+      'To take children\'s details out of the system (for a sponsor, for example), open Reports → Download lists and ask. The pastor approves, you download once, and it is recorded.'],
+    link: { to: '/hope/exports', label: 'Open Download lists' },
   },
   {
     id: 'school-fees', title: 'ADIA: fees, payments and arrears',
@@ -86,7 +86,7 @@ const TOPICS: Topic[] = [
   {
     id: 'shared', title: 'Using a shared phone or computer',
     body: ['Tick "This is a shared device" at sign-in. The app then signs you out by itself after a few minutes of no use.',
-      'Always sign out when you finish: Settings → Sign out.'],
+      'Always sign out when you finish: More, then Settings, then Sign out.'],
   },
   {
     id: 'undelete', title: 'I deleted something by mistake',

@@ -1,3 +1,4 @@
+import type { PersonAbout, SignupMark } from '../../functions/src/shared/familySignup';
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { collection, collectionGroup, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -27,12 +28,23 @@ export interface Person {
   status: PersonStatus;
   firstVisitDate?: string | null;
   gender?: string | null;
+  /** "MM-DD", no year. */
+  birthday?: string | null;
+  /** Optional; orders a family's children (Andy, 2026-11-01). */
+  birthYear?: number | null;
+  /** The day they became a Member, "YYYY-MM-DD" (Andy, 2026-11-02, 5A). */
+  memberSince?: string | null;
+  /** From the family sign-up form, until Andrew or Doreen confirm (Andy, 2026-11-02). */
+  signup?: SignupMark | null;
   householdId?: string | null;
+  familyRole?: 'parent' | 'spouse' | 'child' | null;
   guardianId?: string | null;
   howHeard?: string | null;
   invitedBy?: string | null;
   invitedById?: string | null;
   serviceAttended?: string | null;
+  /** Answers from the family sign-up form: marital status, age range, born again, baptised… (Andy, 2026-11-02). */
+  about?: Partial<PersonAbout> | null;
   customFields?: Record<string, unknown>;
   possibleDuplicateIds?: string[];
   deletedAt: Timestamp | null;

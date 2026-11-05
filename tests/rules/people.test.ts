@@ -20,7 +20,66 @@ describe('people', () => {
   it('lets an admin add and edit people in their own organization only', async () => {
     await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/new1'), { ...person('fcn'), ...created('admin') }));
     await assertFails(setDoc(doc(as('admin'), 'organizations/adia/people/new1'), { ...person('adia'), ...created('admin') }));
-    await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { status: 'regular', updatedAt: serverTimestamp(), updatedBy: 'admin' }));
+    await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { phone: '+254711000222', updatedAt: serverTimestamp(), updatedBy: 'admin' }));
+  });
+
+  it('accepts a birthday as day and month only (Andy, 2026-10-31)', async () => {
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/b1'), { ...person('fcn', { birthday: '05-14' }), ...created('admin') }));
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/b2'), { ...person('fcn', { birthday: null }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/b3'), { ...person('fcn', { birthday: '1990-05-14' }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/b4'), { ...person('fcn', { birthday: '13-01' }), ...created('admin') }));
+  });
+
+  it('accepts a family role, birth year and family names (Andy, 2026-11-01)', async () => {
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/people/f1'), { ...person('fcn', { householdId: 'f1', familyRole: 'parent', birthYear: 1985 }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/f2'), { ...person('fcn', { familyRole: 'uncle' }), ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/people/f3'), { ...person('fcn', { birthYear: '1985' }), ...created('admin') }));
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/households/f1'), { orgId: 'fcn', kind: 'family', name: 'Andrew and Doreen Guya', ...created('admin') }));
+    await assertSucceeds(getDoc(doc(as('admin'), 'organizations/fcn/households/f1')));
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/households/f2'), { orgId: 'fcn', kind: 'family', name: null, weddingDate: '2001-11-03', ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/households/f3'), { orgId: 'fcn', kind: 'family', name: null, weddingDate: '03/11/2001', ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/households/f9'), { orgId: 'fcn', kind: 'other', name: null, ...created('admin') }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/adia/households/f1'), { orgId: 'adia', kind: 'family', name: 'X', ...created('admin') }));
+  });
+
+  it('keeps the birthday card design and who sent each card (Andy, 2026-11-01)', async () => {
+    const design = { orgId: 'fcn', image: 'data:image/jpeg;base64,AAAA', x: 0.5, y: 0.3, color: '#1d3b27' };
+    await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/fcn/cards/birthday'), { ...design, ...created('pastor') }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/cards/other'), { ...design, ...created('pastor') }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/cards/birthday'), { ...design, image: 'data:image/png;base64,AA', ...created('pastor') }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/cards/birthday'), { ...design, x: 2, ...created('pastor') }));
+    await assertSucceeds(getDoc(doc(as('admin'), 'organizations/fcn/cards/birthday')));
+    const mark = { whatsappAt: serverTimestamp(), whatsappBy: 'admin', whatsappByName: 'Admin' };
+    await assertSucceeds(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p1_2026'), { orgId: 'fcn', personId: 'p1', year: 2026, ...mark }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p1_2027'), { orgId: 'fcn', personId: 'p1', year: 2026, ...mark }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p2_2026'), { orgId: 'fcn', personId: 'p2', year: 2026, ...mark, emailAt: serverTimestamp() }));
+    await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/birthdayCards/p3_2026'), { orgId: 'fcn', personId: 'p3', year: 2026, ...mark, whatsappBy: 'pastor' }));
+    await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/fcn/birthdayCards/p1_2026'), { ...mark, whatsappBy: 'pastor' }, { merge: true }));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/birthdayCards/p1_2026'), { year: 2030 }, { merge: true }));
+    await assertSucceeds(getDocs(collection(as('admin'), 'organizations/fcn/birthdayCards')));
+  });
+
+  it('lets only Andrew and Doreen change a status at Freedom Church (Andy, 2026-11-02)', async () => {
+    const change = (uid: string, extra: Record<string, unknown>) => updateDoc(doc(as(uid), 'organizations/fcn/people/p1'), { ...extra, updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertFails(change('admin', { status: 'member', memberSince: '2026-11-02' }));
+    await assertFails(change('pastor', { status: 'inactive' }));
+    await assertFails(change('admin', { memberSince: '2026-11-02' }));
+    await assertSucceeds(change('admin', { fullName: 'Still Allowed' }));
+    await assertSucceeds(change('keeper', { status: 'member', memberSince: '2026-11-02' }));
+    await assertFails(change('keeper', { memberSince: '2/11/2026' }));
+    await assertFails(change('admin', { signup: { claimed: 'member', at: '2026-11-02' } }));
+    await assertSucceeds(change('keeper', { signup: { claimed: 'member', at: '2026-11-02' } }));
+    await assertSucceeds(change('keeper', { signup: null }));
+  });
+
+  it('lets only Andrew and Doreen read family sign-ups, and nobody write them', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'organizations/fcn/signups/s1'), { orgId: 'fcn', state: 'waiting' });
+    });
+    await assertSucceeds(getDoc(doc(as('keeper'), 'organizations/fcn/signups/s1')));
+    await assertFails(getDoc(doc(as('admin'), 'organizations/fcn/signups/s1')));
+    await assertFails(setDoc(doc(as('keeper'), 'organizations/fcn/signups/s2'), { orgId: 'fcn', state: 'waiting' }));
+    await assertSucceeds(updateDoc(doc(as('admin'), 'organizations/fcn/people/p1'), { about: { bornAgain: true }, updatedAt: serverTimestamp(), updatedBy: 'admin' }));
   });
 
   it('keeps each organization’s people apart', async () => {

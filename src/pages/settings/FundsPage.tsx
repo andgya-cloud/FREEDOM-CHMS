@@ -25,12 +25,11 @@ function Funds({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/giving">← Giving</Link></p>
       <div className="page-head">
         <h1>Funds</h1>
         {funds.length > 0 && !editing && <button type="button" className="btn btn-quiet" onClick={() => setEditing('new')}>New fund</button>}
       </div>
-      <p className="lead">{org.name}</p>
       <p className="muted small">Givers on Paybill {PAYBILL_NUMBER} type the fund after the #, for example FCC#Tithes or FCC#Building. The import matches it to a fund by its name or any other spelling listed here, ignoring capitals and a plural "s".</p>
 
       {loading && funds.length === 0 ? <p className="muted">Loading…</p> : funds.length === 0 && !editing ? (
@@ -72,6 +71,7 @@ function FundForm({ org, fund, taken, onDone }: { org: Organization; fund: Fund 
     e.preventDefault();
     const id = fund?.id ?? fundIdFor(name);
     if (name.trim().length < 2) return setError('Enter a name of at least 2 letters.');
+    if (!/[a-z]/i.test(name)) return setError('A fund name needs words, for example Tithes. Put amounts in Record Giving.');
     if (!fund && (id.length < 2 || taken.includes(id))) return setError('There is already a fund with this name.');
     saveFund(org.id, id, { name, aliases: aliases.split(','), active }, !!fund).catch((err) => toast.show(friendlyError(err)));
     toast.show(saved(fund ? 'Fund saved' : `${name.trim()} added`));

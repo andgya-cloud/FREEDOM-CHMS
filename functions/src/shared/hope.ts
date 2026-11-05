@@ -7,8 +7,13 @@ import { addDays } from './metrics.js';
  * the monthly report builder is never given names.
  */
 
-export const CHILD_STATUSES = ['active', 'exited'] as const;
+// Andy, 2026-11-04 (1B): "Departing" is in the process of leaving the Hope Centre for good; "Departed" has left
+// for good and moves to Past children. Departed keeps its old stored value, 'exited'.
+export const CHILD_STATUSES = ['active', 'departing', 'exited'] as const;
 export type ChildStatus = (typeof CHILD_STATUSES)[number];
+export const CHILD_STATUS_LABELS: Record<ChildStatus, string> = { active: 'Active', departing: 'Departing', exited: 'Departed' };
+/** Still coming to the centre: active, or departing but not gone yet. */
+export const isCurrentChild = (c: Pick<Child, 'status' | 'deletedAt'>) => !c.deletedAt && (c.status === 'active' || c.status === 'departing');
 
 export const SCHOOL_STATUSES = ['in_school', 'not_in_school', 'unknown'] as const;
 export type SchoolStatus = (typeof SCHOOL_STATUSES)[number];
@@ -27,6 +32,8 @@ export interface ChildProgramme {
   level: string;
 }
 
+import type { ChildSponsorship } from './hopeSponsorship.js';
+
 export interface Child {
   id: string; // the person's id
   code?: string | null;
@@ -40,7 +47,63 @@ export interface Child {
   programmes: ChildProgramme[];
   photoConsent: Consent;
   guardianConsent: Consent;
+  /** The sponsor (Andy, 4A): a name, with a phone and email if known. */
+  sponsorName?: string | null;
+  sponsorPhone?: string | null;
+  sponsorEmail?: string | null;
+  /** The parent's or guardian's name and phone, as shown on the register. */
+  parentName?: string | null;
+  parentPhone?: string | null;
+  /** The child's class or grade at school (Grade 3, ECDE). */
+  schoolClass?: string | null;
+  /** How the school fees are paid (Andy, 2026-11-04, 8B). */
+  payment?: ChildPayment | null;
+  /** Why the child is leaving, while departing or after. */
+  departingNote?: string | null;
+  /** A photo is kept in childPhotos (only while photo consent is given). */
+  hasPhoto?: boolean;
+  /** From the sponsoring partner's monthly list, KE-014 (Andy, 2026-11-05). */
+  sponsorship?: ChildSponsorship | null;
+  /** Allergies, written by the Director (Andy, 2026-11-05, 4A); "None known" when checked and there are none. */
+  allergies?: string | null;
+  /** The last day someone called the parent about missed Saturdays (v182, 2A), written by the server with the note. */
+  calledOn?: string | null;
+  calledBy?: string | null;
   deletedAt?: unknown;
+}
+
+/** How a child's school fees are paid (Andy, 2026-11-04, 8B): M-Pesa Paybill, Till, Send money, or cash. */
+export const PAY_BY = ['paybill', 'till', 'send_money', 'cash'] as const;
+export type PayBy = (typeof PAY_BY)[number];
+export const PAY_BY_LABELS: Record<PayBy, string> = { paybill: 'Paybill', till: 'Till', send_money: 'Send money', cash: 'Cash' };
+export interface ChildPayment {
+  by: PayBy | null;
+  /** The Paybill or Till number, or the phone money is sent to. */
+  number: string;
+  /** The Paybill account, such as 804212#Miles. */
+  account: string;
+  /** The school, or the person money is sent to. */
+  payTo: string;
+  amount: string;
+  note: string;
+}
+export const NO_PAYMENT: ChildPayment = { by: null, number: '', account: '', payTo: '', amount: '', note: '' };
+/** "Paybill", "M-Pesa till", "send money", "cash" as typed in a sheet. */
+export function readPayBy(text: string): PayBy | null {
+  const k = text.toLowerCase().replace(/[^a-z]/g, '');
+  if (!k) return null;
+  if (k.includes('paybill')) return 'paybill';
+  if (k.includes('till') || k.includes('buygoods')) return 'till';
+  if (k.includes('send') || k.includes('mpesa') || k.includes('phone')) return 'send_money';
+  if (k.includes('cash')) return 'cash';
+  return null;
+}
+export const hasPayment = (p: ChildPayment | null | undefined) => !!p && (p.by != null || !!p.number || !!p.account || !!p.payTo || !!p.amount || !!p.note);
+/** One line to read out or copy: "Paybill 247247 · Account 804212#Miles". */
+export function paymentLine(p: ChildPayment): string {
+  const by = p.by ? PAY_BY_LABELS[p.by] : '';
+  if (p.by === 'cash') return 'Cash';
+  return [p.number ? `${by} ${p.number}`.trim() : by, p.account ? `Account ${p.account}` : ''].filter(Boolean).join(' · ');
 }
 
 /** Codes like HC-0042: short enough to read aloud or type from a card. */
@@ -55,7 +118,7 @@ export function normalizeCode(text: string): string | null {
 }
 
 export const consentMissing = (c: Pick<Child, 'photoConsent' | 'guardianConsent' | 'status' | 'deletedAt'>) =>
-  !c.deletedAt && c.status === 'active' && (!consentOnFile(c.photoConsent) || !consentOnFile(c.guardianConsent));
+  !c.deletedAt && (c.status === 'active' || c.status === 'departing') && (!consentOnFile(c.photoConsent) || !consentOnFile(c.guardianConsent));
 
 // ---- Programmes and sessions -----------------------------------------------------------------
 
@@ -179,7 +242,7 @@ export function monthsBefore(day: string, months: number): string {
 
 export function hopeMetrics(input: HopeInput, period: { from: string; to: string }): HopeMetrics {
   const kids = input.children.filter((c) => !c.deletedAt);
-  const active = kids.filter((c) => c.status === 'active');
+  const active = kids.filter((c) => c.status === 'active' || c.status === 'departing');
   const events = input.events.filter((e) => !e.deletedAt);
   const inPeriod = events.filter((e) => e.date >= period.from && e.date <= period.to);
 
@@ -219,7 +282,7 @@ export function hopeMetrics(input: HopeInput, period: { from: string; to: string
 
   const sixMonthsAgo = monthsBefore(input.today, 6);
   const old = kids.filter((c) => c.enrolledOn && c.enrolledOn <= sixMonthsAgo);
-  const keptSixMonths = old.filter((c) => c.status === 'active' || (c.exitedOn != null && c.exitedOn >= monthsBefore(c.enrolledOn!, -6)));
+  const keptSixMonths = old.filter((c) => c.status !== 'exited' || (c.exitedOn != null && c.exitedOn >= monthsBefore(c.enrolledOn!, -6)));
 
   const known = active.filter((c) => c.schoolStatus !== 'unknown');
   const done = input.absenceTasks.filter((t) => t.status === 'done' && t.outcome !== CAME_BACK);

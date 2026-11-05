@@ -5,6 +5,8 @@ import { isSharedDevice } from '../../lib/useIdleSignOut';
 import { writePref } from '../../lib/storage';
 import { getTheme, setTheme, type ThemeChoice } from '../../lib/theme';
 import { useAppSettings } from '../../state/useAppSettings';
+import { useAuth } from '../../state/AuthContext';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatDateTime } from '../../../functions/src/shared/datetime';
 
 export function DevicePage() {
@@ -18,12 +20,25 @@ export function DevicePage() {
     navigator.storage?.persisted?.().then(setPersisted, () => setPersisted(null));
   }, []);
 
+  const { can, profile } = useAuth();
+  const signs = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const installed = window.matchMedia('(display-mode: standalone)').matches || (navigator as { standalone?: boolean }).standalone === true;
 
   return (
     <div className="page narrow">
       <p><Link to="/settings">← Settings</Link></p>
       <h1>This device</h1>
+
+      {/* Moved here from the Settings list (Andy, 2026-10-31, 6A). */}
+      <ul className="link-list">
+        {signs && (
+          <li><Link to="/settings/signing-pin"><span className="link-title">Signing PIN</span><span className="link-detail">Set or change the PIN used to sign petty cash</span></Link></li>
+        )}
+        {canKeepAccounts(profile) && (
+          <li><Link to="/settings/my-password"><span className="link-title">My password</span><span className="link-detail">Change your own password; it also signs you in on its own</span></Link></li>
+        )}
+        <li><Link to="/help"><span className="link-title">Help</span><span className="link-detail">How to do the everyday jobs</span></Link></li>
+      </ul>
 
       <section className="card">
         <h2>Sync</h2>

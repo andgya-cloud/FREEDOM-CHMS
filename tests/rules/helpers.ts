@@ -32,6 +32,7 @@ export async function seed(env: RulesTestEnvironment) {
       permissions, active: true, ...extra,
     });
     await setDoc(doc(db, 'users/pastor'), user('pastor', PASTOR_PERMS, { allOrgs: true }));
+    await setDoc(doc(db, 'users/keeper'), user('pastor', PASTOR_PERMS, { allOrgs: true, displayName: 'Doreen Guya' }));
     await setDoc(doc(db, 'users/admin'), user('admin', ADMIN_PERMS, { orgIds: ['fcn'] }));
     await setDoc(doc(db, 'users/settingsAdmin'), user('admin', [...ADMIN_PERMS, 'settings.manage'], { orgIds: ['fcn'] }));
     await setDoc(doc(db, 'users/inactive'), user('admin', ADMIN_PERMS, { orgIds: ['fcn'], active: false }));

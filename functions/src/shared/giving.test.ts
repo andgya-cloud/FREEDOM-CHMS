@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  fundNamed,
+  otherFundIdFor,
+  otherGivingFromReference,
+  parseMpesaMessage,
+  tidyFundName,
   formatMoney,
   formatReceiptNumber,
   fundFromReference,
@@ -16,6 +21,7 @@ import {
   STANDARD_FUNDS,
   suggestedMatch,
   type GiftForLedger,
+  pledgeGivenCents,
 } from './giving';
 
 describe('money', () => {
@@ -187,5 +193,51 @@ describe('matching payments to people', () => {
     expect(nameSimilarity('WANJIKU JANE', 'Jane Wanjiku Mwangi')).toBe(1);
     expect(nameSimilarity('JANE ACHIENG', 'Jane Wanjiku')).toBe(0.5);
     expect(phoneMatcher('25')).toBeNull();
+  });
+});
+
+describe('parseMpesaMessage', () => {
+  it('reads the Paybill notification', () => {
+    const m = parseMpesaMessage('QJK3ABCD12 Confirmed. Ksh1,500.00 received from JOHN KAMAU 254712345678 on 31/10/26 at 10:15 AM. Account Number FCC#Tithes. New Utility balance is Ksh20,000.00');
+    expect(m).toEqual({ code: 'QJK3ABCD12', amountCents: 150000, date: '2026-10-31', name: 'JOHN KAMAU', phone: '254712345678', accountRef: 'FCC#Tithes' });
+  });
+  it("reads the giver's own message", () => {
+    const m = parseMpesaMessage('QJK3ABCD13 Confirmed. Ksh500.00 sent to FREEDOM CHURCH NAIROBI for account BUILDING on 1/11/26 at 9:02 AM New M-PESA balance is Ksh1,000.00.');
+    expect(m.code).toBe('QJK3ABCD13');
+    expect(m.amountCents).toBe(50000);
+    expect(m.date).toBe('2026-11-01');
+    expect(m.accountRef).toBe('BUILDING');
+    expect(m.name).toBe('');
+  });
+  it('leaves what it cannot read empty', () => {
+    expect(parseMpesaMessage('hello')).toEqual({ code: null, amountCents: null, date: null, name: '', phone: '', accountRef: '' });
+  });
+});
+
+describe('other giving', () => {
+  it('names and finds kinds of other giving', () => {
+    expect(tidyFundName('  building   fund ')).toBe('Building Fund');
+    expect(otherFundIdFor('Building Fund')).toBe('other_building_fund');
+    expect(fundNamed('missions', [{ id: 'other_mission', name: 'Mission' }])?.id).toBe('other_mission');
+    expect(otherGivingFromReference('FCC#BUILDING')).toBe('Building');
+    expect(otherGivingFromReference('0712345678')).toBeNull();
+  });
+});
+
+describe('pledgeGivenCents', () => {
+  const pledge = { personId: 'p1', fundId: 'building', startDate: '2026-01-01', endDate: '2026-12-31' };
+  it('adds confirmed gifts by the same person to the same fund within the dates', () => {
+    const gifts = [
+      { personId: 'p1', fundId: 'building', date: '2026-02-01', status: 'confirmed', amountCents: 500000 },
+      { personId: 'p1', fundId: 'building', date: '2025-12-31', status: 'confirmed', amountCents: 100 },
+      { personId: 'p1', fundId: 'tithes', date: '2026-02-01', status: 'confirmed', amountCents: 100 },
+      { personId: 'p2', fundId: 'building', date: '2026-02-01', status: 'confirmed', amountCents: 100 },
+      { personId: 'p1', fundId: 'building', date: '2026-03-01', status: 'void', amountCents: 100 },
+      { personId: 'p1', fundId: 'building', date: '2026-04-01', status: 'confirmed', amountCents: 250000 },
+    ];
+    expect(pledgeGivenCents(pledge, gifts)).toBe(750000);
+  });
+  it('counts nothing without a linked person', () => {
+    expect(pledgeGivenCents({ ...pledge, personId: null }, [])).toBe(0);
   });
 });

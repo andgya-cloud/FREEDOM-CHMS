@@ -7,6 +7,10 @@ import { useLiveQuery } from '../lib/useQuery';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import { activitiesFor } from '../../functions/src/shared/attendance';
 import { hopeMetrics, type Child, type SessionEvent, type SessionRecord } from '../../functions/src/shared/hope';
+import type { Champion, ChampionDay, HopeDay } from '../../functions/src/shared/hopeRegister';
+import type { ChampionExtra } from '../../functions/src/shared/hopeChampionPay';
+import type { Club, ClubDay, ClubWin } from '../../functions/src/shared/hopeClubs';
+import type { MealDay } from '../../functions/src/shared/hopeRecords';
 
 export interface ChildRow extends Child { orgId: string; createdAt?: Timestamp }
 export interface ChildPrivate { id: string; welfare: string; health: string; home: string }
@@ -105,4 +109,77 @@ export function useOpenConcerns(orgId: string) {
   const { can, profile } = useAuth();
   const on = !!orgId && !!profile?.active && can('pastoral.read');
   return useLiveQuery<Concern>(() => (on ? query(col(orgId, 'safeguardingConcerns'), where('status', '==', 'open')) : null), [orgId, on]).rows;
+}
+
+/** The children's weekly register: one record a day. */
+export function useHopeDays(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const { rows, loading } = useLiveQuery<HopeDay & { id: string }>(() => (on ? col(orgId, 'hopeDays') : null), [orgId, on]);
+  return { days: useMemo(() => live(rows), [rows]), loading };
+}
+
+/** Meals served each day (Andy, 2026-11-05): counts of breakfast, lunch and fruit. */
+export function useHopeMeals(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const { rows, loading } = useLiveQuery<MealDay & { id: string }>(() => (on ? col(orgId, 'hopeMeals') : null), [orgId, on]);
+  return { meals: useMemo(() => live(rows).sort((a, b) => b.date.localeCompare(a.date)), [rows]), loading };
+}
+
+/** When each helper arrived, for one day (Andy, 2026-11-04, 2A). */
+export function useHelperDay(orgId: string, date: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const { rows, loading } = useLiveQuery<{ id: string; date: string; marks?: Record<string, { name: string; t: string }> }>(() => (on ? query(col(orgId, 'helperDays'), where('date', '==', date)) : null), [orgId, on, date]);
+  const marks = rows[0]?.marks ?? {};
+  return { helpers: useMemo(() => Object.entries(marks).map(([uid, m]) => ({ uid, ...m })).sort((a, b) => a.t.localeCompare(b.t)), [marks]), loading };
+}
+
+/** The Child Champions and their weekly register. */
+export function useChampions(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const people = useLiveQuery<Champion>(() => (on ? col(orgId, 'champions') : null), [orgId, on]);
+  const days = useLiveQuery<ChampionDay & { id: string }>(() => (on ? col(orgId, 'championDays') : null), [orgId, on]);
+  const champions = useMemo(() => live(people.rows).sort((a, b) => a.name.localeCompare(b.name)), [people.rows]);
+  return { champions, days: useMemo(() => live(days.rows), [days.rows]), loading: people.loading || days.loading };
+}
+
+/** Champions' extra allowances and the approved months (Andy, 2026-11-05, 9A 10A). */
+export function useChampionPay(orgId: string, enabled = true) {
+  const { profile } = useAuth();
+  const on = enabled && !!orgId && !!profile?.active;
+  const extras = useLiveQuery<ChampionExtra>(() => (on ? col(orgId, 'championExtras') : null), [orgId, on]);
+  const approved = useLiveQuery<{ id: string; month: string; total: number; count: number; approvedName: string; approvedAt?: Timestamp }>(() => (on ? col(orgId, 'championPay') : null), [orgId, on]);
+  return { extras: useMemo(() => live(extras.rows), [extras.rows]), approved: approved.rows };
+}
+
+/** Children's photos, by child id. Only children with photo consent have one. */
+export function useChildPhotos(orgId: string, enabled = true) {
+  const { profile } = useAuth();
+  const on = enabled && !!orgId && !!profile?.active;
+  const { rows } = useLiveQuery<{ id: string; photo: string }>(() => (on ? col(orgId, 'childPhotos') : null), [orgId, on]);
+  return useMemo(() => new Map(rows.map((r) => [r.id, r.photo])), [rows]);
+}
+export function useChildPhoto(orgId: string, childId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!childId && !!profile?.active;
+  const { rows } = useLiveQuery<{ id: string; photo: string }>(() => (on ? query(col(orgId, 'childPhotos'), where(documentId(), '==', childId)) : null), [orgId, childId, on]);
+  return rows[0]?.photo ?? null;
+}
+
+/** The clubs, every club register day and the wins log. */
+export function useClubs(orgId: string) {
+  const { profile } = useAuth();
+  const on = !!orgId && !!profile?.active;
+  const clubs = useLiveQuery<Club>(() => (on ? col(orgId, 'clubs') : null), [orgId, on]);
+  const days = useLiveQuery<ClubDay & { id: string }>(() => (on ? col(orgId, 'clubDays') : null), [orgId, on]);
+  const wins = useLiveQuery<ClubWin>(() => (on ? col(orgId, 'clubWins') : null), [orgId, on]);
+  return {
+    clubs: useMemo(() => live(clubs.rows).sort((a, b) => a.name.localeCompare(b.name)), [clubs.rows]),
+    days: useMemo(() => live(days.rows), [days.rows]),
+    wins: useMemo(() => live(wins.rows).sort((a, b) => b.date.localeCompare(a.date)), [wins.rows]),
+    loading: clubs.loading,
+  };
 }

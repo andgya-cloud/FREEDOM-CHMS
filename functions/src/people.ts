@@ -41,7 +41,8 @@ export const onPersonWritten = onDocumentWritten('organizations/{orgId}/people/{
     await batch.commit();
   }
 
-  if (created && after.status === 'visitor' && after.deletedAt == null) {
+  // Family sign-ups are not first-time guests, so they get no welcome follow-ups (Andy, 2026-11-02).
+  if (created && after.status === 'visitor' && after.deletedAt == null && after.createdBy !== 'family-signup') {
     const timeZone = ((await db.doc(`organizations/${orgId}`).get()).get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE;
     const now = new Date();
     const task = { personId, personName: (after.fullName as string | undefined) ?? '' };

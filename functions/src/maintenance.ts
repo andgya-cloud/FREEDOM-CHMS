@@ -3,6 +3,7 @@ import { logger } from 'firebase-functions/v2';
 import { Timestamp } from 'firebase-admin/firestore';
 import { db } from './common.js';
 import { DEFAULT_RETENTION_DAYS, retentionDays } from './shared/dataset.js';
+import { keptByCleanup } from './cleanup.js';
 
 export const SOFT_DELETE_RETENTION_DAYS = DEFAULT_RETENTION_DAYS;
 
@@ -20,13 +21,15 @@ export const purgeDeletedRecords = onSchedule(
     const days = retentionDays((await db.doc('settings/retention').get()).get('deletedDays'));
     const cutoff = Timestamp.fromMillis(Date.now() - days * 86_400_000);
     let purged = 0;
+    // Entries removed through Clean-up stay in the Recycle Bin or Forever (Andy, 2026-10-30), so they are never erased here.
+    const kept = await keptByCleanup();
 
     for (const name of PURGE_COLLECTIONS) {
-      const old = await db.collectionGroup(name).where('deletedAt', '<', cutoff).limit(400).get();
+      const old = (await db.collectionGroup(name).where('deletedAt', '<', cutoff).limit(400).get()).docs.filter((d) => !kept.has(d.ref.path));
       const batch = db.batch();
-      old.docs.forEach((d) => batch.delete(d.ref));
-      if (old.size) await batch.commit();
-      purged += old.size;
+      old.forEach((d) => batch.delete(d.ref));
+      if (old.length) await batch.commit();
+      purged += old.length;
     }
 
     const orgs = await db.collection('organizations').where('deletedAt', '<', cutoff).get();

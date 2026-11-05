@@ -1,9 +1,14 @@
-import { collection, doc, serverTimestamp, setDoc, updateDoc, writeBatch } from 'firebase/firestore';
+import type { ChildSponsorship, SponsorRowPlan } from '../../functions/src/shared/hopeSponsorship';
+import { updatePerson } from './peopleWrites';
+import { collection, deleteField, doc, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
 import { auth, db } from '../firebase';
-import { createStamps, updateRecord } from './records';
+import { createStamps, softDelete, updateRecord } from './records';
 import { trackWrite } from './sync';
 import { firstName } from '../../functions/src/shared/people';
-import type { Child, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
+import type { Child, ChildPayment, ChildProgramme, Consent, SchoolStatus } from '../../functions/src/shared/hope';
+import type { ChampionEntry, ChildImportRow, KidEntry } from '../../functions/src/shared/hopeRegister';
+import { normalizePhone } from '../../functions/src/shared/phone';
+import { clubDayId, STARTER_CLUBS, type Club, type ClubWin } from '../../functions/src/shared/hopeClubs';
 import type { WhatsAppConsent } from '../state/PeopleContext';
 
 const ref = (orgId: string, name: string, id: string) => doc(db, 'organizations', orgId, name, id);
@@ -21,6 +26,13 @@ export interface ChildDetails {
   programmes: ChildProgramme[];
   photoConsent: Consent;
   guardianConsent: Consent;
+  sponsorName?: string;
+  sponsorPhone?: string;
+  sponsorEmail?: string;
+  parentName?: string;
+  parentPhone?: string;
+  schoolClass?: string;
+  payment?: ChildPayment | null;
 }
 export interface PersonInput { fullName: string; phone: string | null; whatsapp: string | null; whatsappConsent: WhatsAppConsent; gender?: string | null }
 
@@ -34,6 +46,7 @@ export function registerChild(
   child: { personId: string } | { person: PersonInput },
   guardian: { personId: string } | { person: PersonInput } | null,
   details: ChildDetails,
+  code: string | null = null,
 ) {
   const batch = writeBatch(db);
   let guardianId: string | null = null;
@@ -60,12 +73,115 @@ export function registerChild(
       firstVisitDate: null, gender: child.person.gender ?? null, possibleDuplicateIds: [], customFields: {}, ...createStamps(),
     });
   }
-  batch.set(ref(orgId, 'children', childId), { orgId, code: null, status: 'active', exitedOn: null, ...details, ...createStamps() });
+  batch.set(ref(orgId, 'children', childId), { orgId, code, status: 'active', exitedOn: null, ...details, ...createStamps() });
+  // A code kept from an uploaded sheet is claimed in the same save, so no two children share it.
+  if (code) batch.set(ref(orgId, 'childCodes', code), { orgId, childId });
   return { id: childId, synced: trackWrite(batch.commit()) };
 }
 
-export function updateChild(orgId: string, childId: string, changes: Partial<ChildDetails> & Partial<Pick<Child, 'status' | 'exitedOn'>>) {
+export function updateChild(orgId: string, childId: string, changes: Partial<ChildDetails> & Partial<Pick<Child, 'status' | 'exitedOn' | 'departingNote' | 'hasPhoto'>>) {
+  // Photo consent taken away: the photo goes too, in the same save.
+  if (changes.photoConsent && changes.photoConsent.given !== true) {
+    const batch = writeBatch(db);
+    batch.update(ref(orgId, 'children', childId), { ...changes, hasPhoto: false, updatedAt: serverTimestamp(), updatedBy: me() });
+    batch.delete(ref(orgId, 'childPhotos', childId));
+    return trackWrite(batch.commit());
+  }
   return updateRecord(ref(orgId, 'children', childId), changes);
+}
+
+/**
+ * Saves a sponsorship list upload (Andy, 2026-11-05): each child's sponsorship, the empty fields it fills, and the
+ * gender on the person when it was blank. One child at a time, so a large list keeps within the rules' limits.
+ */
+export async function saveSponsorList(orgId: string, rows: SponsorRowPlan[], onProgress?: (done: number) => void,
+  notOnList: { id: string; sponsorship: ChildSponsorship }[] = []) {
+  let done = 0;
+  // Children not on the list are marked "Not on KE-014" (Andy, 2026-11-05, 5A).
+  for (let i = 0; i < notOnList.length; i += 10) {
+    await Promise.all(notOnList.slice(i, i + 10).map(async (c) => {
+      await updateRecord(ref(orgId, 'children', c.id), { sponsorship: c.sponsorship });
+      onProgress?.(++done);
+    }));
+  }
+  for (let i = 0; i < rows.length; i += 10) {
+    await Promise.all(rows.slice(i, i + 10).map(async (r) => {
+      const { gender, ...fill } = r.fill;
+      await updateRecord(ref(orgId, 'children', r.childId), { ...fill, sponsorship: r.sponsorship });
+      if (gender) await updatePerson(orgId, r.childId, { gender });
+      onProgress?.(++done);
+    }));
+  }
+}
+
+// A child's photo is saved and removed on the server, with an approver's password: see lib/childPhoto.ts.
+
+/**
+ * Marks one child (or champion) on a day's register. A merge, so two tablets marking the same Saturday never
+ * overwrite each other's marks, even offline.
+ */
+function markDay(orgId: string, name: 'hopeDays' | 'championDays', date: string, id: string, entry: DocumentData | null) {
+  return markMany(orgId, name, date, { [id]: entry ?? deleteField() });
+}
+export const markKid = (orgId: string, date: string, childId: string, entry: KidEntry | null) => markDay(orgId, 'hopeDays', date, childId, entry as DocumentData | null);
+export const markChampion = (orgId: string, date: string, championId: string, entry: ChampionEntry | null) => markDay(orgId, 'championDays', date, championId, entry as DocumentData | null);
+
+/** Marks several at once ("Mark the rest absent"). */
+export function markMany(orgId: string, name: 'hopeDays' | 'championDays', date: string, entries: Record<string, unknown>) {
+  return trackWrite(setDoc(ref(orgId, name, date), { orgId, date, marks: entries, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
+}
+
+export interface ChampionInput { name: string; phone: string; email: string; duty: string; status: 'active' | 'left'; joinedOn: string | null; weeklyPay?: number | null; monthlyPay?: number | null }
+/** QR card codes (v181: details and pay are saved on the server with two signatures, src/lib/championEdit.ts). */
+export function setChampionCodes(orgId: string, codes: Record<string, string>) {
+  const batch = writeBatch(db);
+  for (const [id, code] of Object.entries(codes)) batch.update(ref(orgId, 'champions', id), { code, updatedAt: serverTimestamp(), updatedBy: me() });
+  return trackWrite(batch.commit());
+}
+/** The Director approves a month's pay (10A). */
+export function approveChampionPay(orgId: string, month: string, total: number, count: number, approvedName: string) {
+  return trackWrite(setDoc(ref(orgId, 'championPay', month), { orgId, month, total: Math.round(total), count, approvedBy: me(), approvedName: approvedName.slice(0, 120), approvedAt: serverTimestamp() }));
+}
+
+/** Adds the children from a spreadsheet, each with their parent as guardian when a parent is named. */
+/**
+ * Adds the children from a sheet, keeping the sheet's codes (Andy, 2026-11-04, 4A). onProgress reports how many
+ * have reached the server, so the page can say "Saving 120 of 196".
+ */
+export function importChildren(orgId: string, rows: ChildImportRow[], today: string, onProgress?: (saved: number) => void) {
+  const consent = (v: boolean | null): Consent => (v == null ? { given: null, date: null } : { given: v, date: today });
+  let saved = 0;
+  return Promise.all(rows.map((r) => {
+    const phone = r.parentPhone ? normalizePhone(r.parentPhone) : null;
+    const { synced } = registerChild(
+      orgId,
+      { person: { fullName: r.name, phone: null, whatsapp: null, whatsappConsent: { given: false, date: null, recordedBy: null, stoppedAt: null }, gender: r.gender } },
+      r.parentName ? { person: { fullName: r.parentName, phone, whatsapp: null, whatsappConsent: { given: false, date: null, recordedBy: null, stoppedAt: null } } } : null,
+      {
+        dateOfBirth: r.dateOfBirth, school: r.school, schoolStatus: r.school ? 'in_school' : 'unknown', enrolledOn: r.enrolledOn, programmes: [],
+        photoConsent: consent(r.photoConsent), guardianConsent: consent(r.guardianConsent),
+        sponsorName: r.sponsorName, sponsorPhone: r.sponsorPhone, sponsorEmail: r.sponsorEmail, parentName: r.parentName, parentPhone: r.parentPhone,
+        schoolClass: r.schoolClass, payment: r.payment,
+      },
+      r.code,
+    );
+    return synced.then(() => { saved += 1; onProgress?.(saved); });
+  }));
+}
+
+/**
+ * Records consent for many children at once (Andy, 2026-11-04, 5A). One write per child: the database checks
+ * each child, and a single save of 196 children would be refused for too many checks.
+ */
+export function saveConsents(orgId: string, changes: { childId: string; guardian?: Consent; photo?: Consent }[]) {
+  return Promise.all(changes.map((c) => updateRecord(ref(orgId, 'children', c.childId), {
+    ...(c.guardian ? { guardianConsent: c.guardian } : {}), ...(c.photo ? { photoConsent: c.photo } : {}),
+  })));
+}
+
+/** "I'm here": the time a helper arrived today (Andy, 2026-11-04, 2A). */
+export function markHelperArrived(orgId: string, date: string, uid: string, name: string, time: string) {
+  return trackWrite(setDoc(ref(orgId, 'helperDays', date), { orgId, date, marks: { [uid]: { name: name.slice(0, 120), t: time } }, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
 }
 
 export function saveChildPrivate(orgId: string, childId: string, data: { welfare: string; health: string; home: string }, exists: boolean) {
@@ -123,4 +239,58 @@ export function requestAbsenceCheck(orgId: string) {
   const r = doc(collection(db, 'organizations', orgId, 'absenceCheckRequests'));
   void trackWrite(setDoc(r, { orgId, status: 'pending', createdAt: serverTimestamp(), createdBy: me() }));
   return r.id;
+}
+
+// ---- Clubs (Part 2) --------------------------------------------------------------------------------
+
+export type ClubInput = Omit<Club, 'id' | 'deletedAt'>;
+
+export function addClub(orgId: string, input: ClubInput) {
+  const r = doc(collection(db, 'organizations', orgId, 'clubs'));
+  void trackWrite(setDoc(r, { orgId, ...input, ...createStamps() }));
+  return r.id;
+}
+export function updateClub(orgId: string, id: string, changes: Partial<ClubInput>) {
+  return updateRecord(ref(orgId, 'clubs', id), changes);
+}
+
+/**
+ * Makes Andy's eight clubs in one go. Football, Chess and Music start with the children already in those
+ * programmes, and their team or level carried over.
+ */
+export function addStarterClubs(orgId: string, children: readonly Pick<Child, 'id' | 'status' | 'programmes'>[], existing: readonly string[]) {
+  const batch = writeBatch(db);
+  const have = new Set(existing.map((n) => n.toLowerCase()));
+  let n = 0;
+  for (const s of STARTER_CLUBS) {
+    if (have.has(s.name.toLowerCase())) continue;
+    const members = s.legacy ? children.filter((c) => c.status !== 'exited' && c.programmes.some((p) => p.name.toLowerCase() === s.legacy!.toLowerCase())) : [];
+    const levels: Record<string, string> = {};
+    for (const c of members) {
+      const p = c.programmes.find((x) => x.name.toLowerCase() === s.legacy!.toLowerCase())!;
+      const level = [p.group, p.level].filter(Boolean).join(' · ');
+      if (level) levels[c.id] = level.slice(0, 60);
+    }
+    batch.set(doc(collection(db, 'organizations', orgId, 'clubs')), {
+      orgId, name: s.name, emoji: s.emoji, description: '', day: 'Saturday', time: '', endTime: '', place: '', capacity: 0,
+      memberIds: members.map((c) => c.id), leaderIds: [], levels, legacyProgramme: s.legacy, status: 'active', ...createStamps(),
+    });
+    n += 1;
+  }
+  return { added: n, synced: trackWrite(batch.commit()) };
+}
+
+/** Marks children on a club's register for a day (a merge, so two tablets never overwrite each other). */
+export function markClub(orgId: string, clubId: string, date: string, entries: Record<string, KidEntry | null>) {
+  const marks: Record<string, unknown> = {};
+  for (const [id, e] of Object.entries(entries)) marks[id] = e ?? deleteField();
+  return trackWrite(setDoc(ref(orgId, 'clubDays', clubDayId(clubId, date)), { orgId, clubId, date, marks, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
+}
+
+export function addClubWin(orgId: string, input: Omit<ClubWin, 'id' | 'deletedAt'>) {
+  const r = doc(collection(db, 'organizations', orgId, 'clubWins'));
+  return trackWrite(setDoc(r, { orgId, ...input, title: input.title.trim().slice(0, 120), note: input.note.trim().slice(0, 1000), ...createStamps() }));
+}
+export function removeClubWin(orgId: string, id: string) {
+  return softDelete(ref(orgId, 'clubWins', id));
 }

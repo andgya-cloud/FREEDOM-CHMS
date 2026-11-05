@@ -45,7 +45,12 @@ function Summary({ org }: { org: Organization }) {
   }, [org.id, lineKey, online]);
 
   const fundName = (id: string) => (id === 'none' ? 'No fund' : funds.find((f) => f.id === id)?.name ?? id);
-  const fundRows = Object.entries(ledger?.funds ?? {}).filter(([, t]) => t.count !== 0 || t.cents !== 0).sort((a, b) => b[1].cents - a[1].cents);
+  // Tithes, then Offerings, then each kind of other giving under an "Other giving" total (Andy, 2026-10-31, 3A).
+  const isOther = (id: string) => funds.find((f) => f.id === id)?.kind === 'other';
+  const rank = (id: string) => (id === 'tithes' ? 0 : id === 'offerings' ? 1 : isOther(id) ? 3 : 2);
+  const fundRows = Object.entries(ledger?.funds ?? {}).filter(([, t]) => t.count !== 0 || t.cents !== 0).sort((a, b) => rank(a[0]) - rank(b[0]) || b[1].cents - a[1].cents);
+  const otherRows = fundRows.filter(([id]) => isOther(id));
+  const otherTotal = otherRows.reduce((s, [, t]) => ({ count: s.count + t.count, cents: s.cents + t.cents }), { count: 0, cents: 0 });
   const methodRows = GIFT_METHODS.map((m) => [m, ledger?.methods?.[m]] as const).filter(([, t]) => t && (t.count || t.cents));
   const queued = GIFT_METHODS.reduce((s, m) => s + (ledger?.unassigned?.methods?.[m]?.cents ?? 0), 0);
   const queuedCount = GIFT_METHODS.reduce((s, m) => s + (ledger?.unassigned?.methods?.[m]?.count ?? 0), 0);
@@ -72,7 +77,6 @@ function Summary({ org }: { org: Organization }) {
         <h1>{monthLabel(month)}</h1>
         <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print</button>
       </div>
-      <p className="lead">{org.name}</p>
       <label className="field no-print">
         <span>Month</span>
         <input type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
@@ -90,7 +94,9 @@ function Summary({ org }: { org: Organization }) {
           <table className="table">
             <thead><tr><th>Fund</th><th className="num">Gifts</th><th className="num">Amount</th></tr></thead>
             <tbody>
-              {fundRows.map(([id, t]) => <tr key={id}><td>{fundName(id)}</td><td className="num">{t.count}</td><td className="num">{money(t.cents)}</td></tr>)}
+              {fundRows.filter(([id]) => !isOther(id)).map(([id, t]) => <tr key={id}><td>{fundName(id)}</td><td className="num">{t.count}</td><td className="num">{money(t.cents)}</td></tr>)}
+              {otherRows.length > 0 && <tr className="subtotal"><td><strong>Other giving</strong></td><td className="num"><strong>{otherTotal.count}</strong></td><td className="num"><strong>{money(otherTotal.cents)}</strong></td></tr>}
+              {otherRows.map(([id, t]) => <tr key={id}><td className="indent">{fundName(id)}</td><td className="num">{t.count}</td><td className="num">{money(t.cents)}</td></tr>)}
             </tbody>
           </table>
         )}

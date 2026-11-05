@@ -32,7 +32,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 export const CHECK_IN_METHODS = ['staff', 'door', 'register'] as const;
 export type CheckInMethod = (typeof CHECK_IN_METHODS)[number];
 
-export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total'] as const;
+export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations'] as const;
 export type HeadcountKey = (typeof HEADCOUNT_KEYS)[number];
 export type Headcounts = Partial<Record<HeadcountKey, number>>;
 
@@ -43,6 +43,8 @@ export const HEADCOUNT_LABELS: Record<HeadcountKey, string> = {
   new: 'New',
   returning: 'Returning',
   total: 'Total',
+  firstTimers: 'First-time visitors',
+  salvations: 'Salvations',
 };
 
 /** Which counts each kind of gathering asks for. */
@@ -55,6 +57,20 @@ export const HEADCOUNT_FIELDS: Record<EventType, HeadcountKey[]> = {
 };
 
 /**
+ * Extra service figures typed in, especially for past services (Andy, 2026-11-02, 3A). They are not part of the
+ * headcount total: first-timers and salvations are already counted among the adults, teens and children.
+ */
+export const SERVICE_EXTRA_KEYS = ['firstTimers', 'salvations'] as const satisfies readonly HeadcountKey[];
+
+/** 'other' marks a midweek, youth or special service, so Sunday figures stay apart (Andy, 2026-11-02, 5A). */
+export type ServiceKind = 'other' | null;
+
+/** A Sunday service: a service on a Sunday that was not recorded as another service. */
+export function isSundayService(e: { type: string; date: string; serviceKind?: ServiceKind | string | null }): boolean {
+  return e.type === 'service' && e.serviceKind !== 'other' && new Date(`${e.date}T12:00:00Z`).getUTCDay() === 0;
+}
+
+/**
  * Starting lists of programmes, from the brief. Each organization can edit
  * its own list; these are used until it does. Church campuses use their
  * service times instead.
@@ -62,11 +78,13 @@ export const HEADCOUNT_FIELDS: Record<EventType, HeadcountKey[]> = {
 export const DEFAULT_ACTIVITIES: Record<OrganizationType, string[]> = {
   church_campus: [],
   college: ['Food and Beverage Production', 'Dressmaking & Tailoring', 'ICT', 'Beauty Therapy & Cosmetology'],
-  ministry: ['Saturday meals', 'Football academy', 'Chess club', 'Music academy'],
+  ministry: ['Football academy', 'Chess club', 'Music academy'],
 };
 
 export function activitiesFor(org: { type: OrganizationType; activities?: string[] | null }): string[] {
-  return org.activities?.length ? org.activities : DEFAULT_ACTIVITIES[org.type];
+  const list = org.activities?.length ? org.activities : DEFAULT_ACTIVITIES[org.type];
+  // Saturday meals left the Hope Centre's screens (Andy, 2026-11-04, 7B); its old records are kept.
+  return org.type === 'ministry' ? list.filter((a) => a.trim().toLowerCase() !== 'saturday meals') : list;
 }
 
 /** What a new gathering is called for each choice: "Sunday 10:00" becomes "Sunday 10:00 service". */
@@ -162,4 +180,29 @@ export function weeksAttended(records: readonly AttendanceRecord[], now: Date, w
     seen.add(weekContaining(day, timeZone).start.getTime());
   }
   return seen.size;
+}
+
+/**
+ * A church service is typed as a name and a time (Andy, 2026-11-03): "Main service" + "10:00" is saved as
+ * "Main service 10:00". The time is optional, and a name that already ends in a time keeps it.
+ */
+export function serviceName(service: string, time: string): string {
+  const name = service.trim().replace(/\s+/g, ' ');
+  const t = time.trim();
+  if (!name) return '';
+  if (!t || /\b\d{1,2}[:.]\d{2}\b/.test(name)) return name;
+  return `${name} ${t}`;
+}
+
+/** Splits "Main service 10:00" back into the name and the time, for suggestions. */
+export function splitServiceName(name: string): { service: string; time: string } {
+  const m = /^(.*\S)\s+(\d{1,2}:\d{2})$/.exec(name.trim());
+  return m ? { service: m[1]!, time: m[2]!.padStart(5, '0') } : { service: name.trim(), time: '' };
+}
+
+/** A service counts apart from the Sunday totals only when it is one of the organization's "Other services". */
+export function isOtherServiceName(otherServices: string[] | undefined, name: string): boolean {
+  const n = name.trim().toLowerCase();
+  const base = splitServiceName(name).service.toLowerCase();
+  return (otherServices ?? []).some((o) => { const x = o.trim().toLowerCase(); return x === n || x === base; });
 }

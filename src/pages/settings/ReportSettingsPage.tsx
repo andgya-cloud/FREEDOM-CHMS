@@ -53,7 +53,7 @@ export function ReportSettingsPage() {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/reports">← Reports</Link></p>
       <h1>Reports</h1>
       <p className="lead">Weekly reports every Monday at 07:00, monthly reports on the 1st at 07:00.</p>
 

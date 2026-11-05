@@ -1,6 +1,6 @@
 import './options.js';
 
-export { createUser, updateUser, resetUserPassword, changeMyPassword, recordSignIn } from './users.js';
+export { createUser, updateUser, resetUserPassword, deleteUser, changeMyPassword, recordSignIn, listTeam } from './users.js';
 export { auditOrganizations, auditOrganizationData, auditRoles, auditSettings } from './audit.js';
 export { syncRolePermissions } from './roles.js';
 export { onPersonWritten } from './people.js';
@@ -11,5 +11,29 @@ export { syncStaffDirectory, onPipelineWritten, dailyFollowUps } from './followu
 export { onReportRequested, scheduledReports } from './reports.js';
 export { onDataRequested, weeklyBackup } from './data.js';
 export { onStudentCreated, onInvoiceWritten, onFeePaymentWritten, onCertificateCreated, onSchoolReportRequested, scheduledSchoolReports } from './school.js';
+export { onPettyCashCreated } from './pettyCash.js';
+export { closePettyMonth, reopenPettyMonth } from './pettyMonths.js';
+export { setPettyPin, listPettySigners, signWithPin, topUpWithPin, findPasswordAccount } from './pettyPins.js';
+export { pettyBinSign } from './pettyBin.js';
+export { examNotify, listExamTrainers } from './exams.js';
+export { certificateFile } from './certificates.js';
+export { rosterOnStudent, rosterOnPerson } from './rosters.js';
+export { examSheetToLecturer } from './examAssign.js';
+export { commonCourseAccess } from './commonCourses.js';
+export { raisePettyRequest } from './pettyRaise.js';
+export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail, listPettyContacts } from './pettyNotify.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';
+export { inventoryEmail, inventoryReminders } from './inventory.js';
+export { tutorFiles, tutorFileReminders } from './tutorFiles.js';
+export { hopePhotoReports } from './hopePhotos.js';
+export { hopeChats } from './hopeChats.js';
+export { hopeRecords } from './hopeRecords.js';
+export { hopeChildPhoto } from './hopeChildPhoto.js';
+export { hopeChampionEdit } from './hopeChampionEdit.js';
+export { hopeMondaySummary } from './hopeMonday.js';
+export { hopeHelperToChampion } from './hopeHelpers.js';
+export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, cleanupToForever } from './cleanup.js';
+export { welcomeCard } from './welcome.js';
+export { birthdayCards, birthdayTestCard } from './birthdays.js';
+export { familySignup, decideSignup } from './familySignup.js';

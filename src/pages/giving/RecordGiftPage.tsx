@@ -1,28 +1,36 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import type { Organization } from '../../state/OrgContext';
 import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useFunds } from '../../state/useGiving';
-import { giftWithCode, recordGift, type GiftInput } from '../../lib/givingWrites';
+import { addStandardFunds, giftWithCode, recordGift, type GiftInput, type NewFund } from '../../lib/givingWrites';
 import { friendlyError } from '../../lib/errors';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { OrgGate } from '../../components/OrgGate';
 import { PersonPicker } from '../../components/PersonPicker';
-import { GIFT_METHOD_LABELS, GIFT_METHODS, normalizeMpesaCode, parseAmount, PAYBILL_NUMBER, type GiftMethod } from '../../../functions/src/shared/giving';
+import { formatMoney, fundNamed, fundTextFromReference, GIFT_METHOD_LABELS, GIFT_METHODS, normalizeMpesaCode, otherFundIdFor, otherGivingFromReference, parseAmount, parseMpesaMessage, PAYBILL_NUMBER, tidyFundName, titleCaseName, type GiftMethod } from '../../../functions/src/shared/giving';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 
-/** Records one gift: cash, bank, cheque, or an M-Pesa payment typed in from the SMS. */
+/**
+ * Records one gift: cash, bank, cheque, or an M-Pesa payment typed in or pasted from the SMS.
+ * At Freedom Church the fund is Tithes, Offerings, or "Other giving" with its kind typed in, for example
+ * Building Fund; a new kind becomes its own fund so reports show it separately (Andy, 2026-10-31, 1B-6A).
+ */
 export function RecordGiftPage() {
-  return <OrgGate title="Record gift">{(org) => <RecordGift org={org} />}</OrgGate>;
+  return <OrgGate title="Record Giving">{(org) => <RecordGift org={org} />}</OrgGate>;
 }
+
+/** The choice that opens "Kind of giving". */
+const OTHER = '__other';
 
 function RecordGift({ org }: { org: Organization }) {
   const { profile } = useAuth();
-  const { byId } = usePeople();
+  const { byId, people } = usePeople();
   const { active: funds, loading } = useFunds(org.id);
+  const church = org.type === 'church_campus';
   const toast = useToast();
   const saved = useSavedMessage();
   const navigate = useNavigate();
@@ -40,9 +48,53 @@ function RecordGift({ org }: { org: Organization }) {
   const [code, setCode] = useState(prefill?.mpesaCode ?? '');
   const [phone, setPhone] = useState(prefill?.phone ?? '');
   const [notes, setNotes] = useState(prefill?.notes ?? '');
+  const [otherName, setOtherName] = useState('');
+  const [reference, setReference] = useState('');
+  const [bank, setBank] = useState('');
+  const [accountRef, setAccountRef] = useState(prefill?.accountRef ?? '');
+  const [message, setMessage] = useState('');
+  const [filled, setFilled] = useState('');
   const [codeTaken, setCodeTaken] = useState<string | null>(null);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+
+  // Tithes first, Offerings second, then the pastor's other funds; kinds of other giving sit behind "Other giving".
+  const order = (id: string) => (id === 'tithes' ? 0 : id === 'offerings' ? 1 : 2);
+  const mainFunds = funds.filter((f) => f.kind !== 'other').sort((a, b) => order(a.id) - order(b.id) || a.name.localeCompare(b.name));
+  const otherFunds = funds.filter((f) => f.kind === 'other').sort((a, b) => a.name.localeCompare(b.name));
+
+  // Tithes and Offerings are ready without a set-up step at Freedom Church (4A).
+  const started = useRef(false);
+  useEffect(() => {
+    if (!church || loading || started.current) return;
+    const missing = !fundNamed('Tithes', funds) || !fundNamed('Offerings', funds);
+    if (!missing) return;
+    started.current = true;
+    addStandardFunds(org.id, funds.map((f) => f.id)).catch((err) => toast.show(friendlyError(err)));
+  }, [church, loading, funds, org.id, toast]);
+
+  function fillFromMessage() {
+    const m = parseMpesaMessage(message);
+    const got: string[] = [];
+    if (!m.code && !m.amountCents) { setFilled('That doesn’t look like an M-Pesa message. Copy the whole SMS and paste it again.'); return; }
+    setMethod('mpesa'); setCodeTaken(null);
+    if (m.amountCents) { setAmount(String(m.amountCents / 100)); got.push(formatMoney(m.amountCents)); }
+    if (m.code) { setCode(m.code); got.push(m.code); }
+    if (m.date && m.date <= today) { setDate(m.date); got.push(m.date.split('-').reverse().join('/')); }
+    if (m.phone) setPhone(m.phone);
+    const e164 = normalizePhone(m.phone);
+    const person = e164 ? people.find((p) => p.orgId === org.id && (p.phone === e164 || p.whatsapp === e164)) : undefined;
+    if (person) { setGiver({ id: person.id, name: person.fullName }); got.push(person.fullName); }
+    else if (m.name) { setGiver({ id: null, name: titleCaseName(m.name) }); got.push(titleCaseName(m.name)); }
+    if (m.accountRef) {
+      setAccountRef(m.accountRef);
+      const named = fundNamed(fundTextFromReference(m.accountRef), funds);
+      const other = otherGivingFromReference(m.accountRef);
+      if (named) { setFundId(named.id); got.push(named.name); }
+      else if (church && other) { setFundId(OTHER); setOtherName(other); got.push(other); }
+    }
+    setFilled(`Filled in: ${got.join(', ')}. Check the rest, then save.`);
+  }
 
   const cents = parseAmount(amount);
   const mpesaCode = method === 'mpesa' ? normalizeMpesaCode(code) : null;
@@ -59,7 +111,16 @@ function RecordGift({ org }: { org: Organization }) {
     setError('');
     if (!cents) return setError('Enter the amount, for example 1000 or 1,500.50.');
     if (date > today) return setError('The date cannot be in the future.');
-    if (!fundId) return setError('Choose the fund.');
+    if (!fundId) return setError(church ? 'Choose Tithes, Offerings or Other giving.' : 'Choose the fund.');
+    let newFund: NewFund | undefined;
+    let useFundId = fundId;
+    if (fundId === OTHER) {
+      const name = tidyFundName(otherName);
+      if (name.length < 2 || !/[a-z]/i.test(name)) return setError('Type the kind of giving in words, for example Building Fund or Missions. The amount goes in Amount.');
+      const known = fundNamed(name, funds);
+      if (known) useFundId = known.id;
+      else { newFund = { id: otherFundIdFor(name), name }; useFundId = newFund.id; }
+    }
     if (!giver.name.trim()) return setError('Enter who gave, or "Anonymous" for loose offering.');
     if (method === 'mpesa' && !mpesaCode) return setError('Enter the M-Pesa code from the SMS, for example QJK3ABCD12.');
     setSaving(true);
@@ -78,15 +139,15 @@ function RecordGift({ org }: { org: Organization }) {
         phone: normalizePhone(phone) ?? person?.phone ?? null,
         date,
         amountCents: cents,
-        fundId,
+        fundId: useFundId,
         method,
         mpesaCode,
-        accountRef: prefill?.accountRef ?? '',
-        notes,
-      }, profile?.displayName ?? '');
+        accountRef,
+        notes: [reference.trim() && `${method === 'cheque' ? 'Cheque no.' : 'Bank ref.'} ${reference.trim()}`, method === 'cheque' && bank.trim(), notes.trim()].filter(Boolean).join(' · '),
+      }, profile?.displayName ?? '', newFund);
       synced.catch((err) => toast.show(friendlyError(err)));
       toast.show(saved('Gift recorded'));
-      navigate(`/giving/${org.id}/${id}`, { replace: true });
+      navigate(`/giving/${org.id}/${id}`, { replace: true, state: { justSaved: true } });
     } catch (err) {
       setError(friendlyError(err));
     } finally {
@@ -94,10 +155,10 @@ function RecordGift({ org }: { org: Organization }) {
     }
   }
 
-  if (!loading && funds.length === 0) {
+  if (!church && !loading && funds.length === 0) {
     return (
       <div className="page narrow">
-        <h1>Record gift</h1>
+        <h1>Record Giving</h1>
         <p>No funds are set up yet. <Link to="/giving">Back to Giving</Link></p>
       </div>
     );
@@ -106,7 +167,19 @@ function RecordGift({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <p><Link to="/giving">← Giving</Link></p>
-      <h1>Record gift</h1>
+      <h1>Record Giving</h1>
+      <details className="more mpesa-paste">
+        <summary>Paste an M-Pesa message</summary>
+        <div className="form">
+          <label className="field">
+            <span>The M-Pesa SMS, copied whole</span>
+            <textarea rows={4} value={message} onChange={(e) => { setMessage(e.target.value); setFilled(''); }} placeholder="QJK3ABCD12 Confirmed. Ksh1,000.00 received from JOHN KAMAU 254712345678 on 31/10/26 at 10:15 AM. Account Number FCC#Tithes" />
+            <small className="hint">The code, amount, date, giver and Tithes, Offerings or other giving are filled in for you.</small>
+          </label>
+          <button type="button" className="btn align-start" disabled={!message.trim()} onClick={fillFromMessage}>Fill in the form</button>
+          {filled && <p className="small" role="status">{filled}</p>}
+        </div>
+      </details>
       <form className="form" onSubmit={submit} noValidate>
         <fieldset className="field">
           <legend>How was it given?</legend>
@@ -132,12 +205,21 @@ function RecordGift({ org }: { org: Organization }) {
         </div>
 
         <label className="field">
-          <span>Fund</span>
+          <span>{church ? 'Giving' : 'Fund'}</span>
           <select value={fundId} onChange={(e) => setFundId(e.target.value)}>
             <option value="">Choose…</option>
-            {funds.map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            {(church ? mainFunds : funds).map((f) => <option key={f.id} value={f.id}>{f.name}</option>)}
+            {church && <option value={OTHER}>Other giving…</option>}
           </select>
         </label>
+        {fundId === OTHER && (
+          <label className="field">
+            <span>Kind of giving</span>
+            <input list="other-giving" value={otherName} onChange={(e) => setOtherName(e.target.value)} placeholder="For example Building Fund, Missions, Thanksgiving" autoCapitalize="words" />
+            <datalist id="other-giving">{otherFunds.map((f) => <option key={f.id} value={f.name} />)}</datalist>
+            <small className="hint">{otherFunds.length ? 'Pick one used before, or type a new one.' : 'Type it once; next time it is suggested.'}</small>
+          </label>
+        )}
 
         <PersonPicker
           label="Given by"
@@ -166,9 +248,29 @@ function RecordGift({ org }: { org: Organization }) {
           </>
         )}
 
+        {method === 'bank' && (
+          <label className="field">
+            <span>Bank reference</span>
+            <input value={reference} onChange={(e) => setReference(e.target.value)} placeholder="From the bank slip or transfer" />
+          </label>
+        )}
+        {method === 'cheque' && (
+          <div className="field-row">
+            <label className="field">
+              <span>Cheque number</span>
+              <input inputMode="numeric" value={reference} onChange={(e) => setReference(e.target.value)} placeholder="000123" />
+            </label>
+            <label className="field">
+              <span>Bank</span>
+              <input value={bank} onChange={(e) => setBank(e.target.value)} placeholder="For example KCB" />
+            </label>
+          </div>
+        )}
+        {method === 'mpesa' && accountRef && <p className="small muted">Account typed by the giver: {accountRef}</p>}
+
         <label className="field">
           <span>Notes (optional)</span>
-          <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={method === 'cheque' ? 'Cheque number and bank' : method === 'bank' ? 'Bank reference' : ''} />
+          <input value={notes} onChange={(e) => setNotes(e.target.value)} />
         </label>
 
         {error && <p className="error" role="alert">{error}</p>}

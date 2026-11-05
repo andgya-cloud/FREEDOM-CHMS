@@ -1,8 +1,14 @@
-import { defineConfig } from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig({
+export default defineConfig(({ mode }) => {
+  // A live build without the real Firebase key locks everyone out, so refuse to build it.
+  const env = { ...loadEnv(mode, process.cwd()), ...process.env };
+  if (mode === 'production' && env.VITE_USE_EMULATORS !== 'true' && !/^AIza[\w-]{35}$/.test(env.VITE_FIREBASE_API_KEY ?? '')) {
+    throw new Error('The Firebase settings are missing or damaged. Run: sed -n \'/^VITE_/p\' scripts/first-deploy.sh > .env.production.local');
+  }
+  return {
   build: {
     rollupOptions: {
       output: {
@@ -18,10 +24,10 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'logo-mark.png', 'apple-touch-icon.png'],
       manifest: {
-        name: 'Freedom ChMS',
-        short_name: 'Freedom',
+        name: 'Insight-IQ',
+        short_name: 'Insight-IQ',
         description: 'People, attendance, giving and follow-up for Freedom Church.',
         theme_color: '#14284b',
         background_color: '#ffffff',
@@ -44,4 +50,5 @@ export default defineConfig({
       },
     }),
   ],
+};
 });

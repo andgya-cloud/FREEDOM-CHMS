@@ -183,6 +183,10 @@ The visitor welcome, 48-hour check-in, care message and child-absent follow-up c
 
 Meta setup, the script, the test list and decisions are in [docs/stage-11.md](docs/stage-11.md).
 
+## Interface per organization
+
+Freedom Church Nairobi has its own dark, curved interface (header clock, quick-action dock, curved tabs). ADIA and the Hope Center, and the combined view, keep the standard look. The look is chosen per organization type in `src/lib/look.ts`; see [docs/stage-12.md](docs/stage-12.md).
+
 ## Dashboard and reports
 
 Today shows last week's **scorecard**: attendance, first-time visitors, salvations, baptisms, small group and serving rates, giving (for staff with finance reports) and overdue follow-ups. Each number shows how it moved since last week and a year ago, and opens the records behind it.

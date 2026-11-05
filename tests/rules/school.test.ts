@@ -60,12 +60,23 @@ describe('ADIA students', () => {
     await assertSucceeds(setDoc(ref, student('adiaAdmin')));
     await assertFails(setDoc(doc(as('adiaAdmin'), `${O}/students/ghost`), student('adiaAdmin')));
   });
+  it('keeps an admission number from an imported class list only for staff with Settings', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/s3`), { orgId: 'adia', fullName: 'Student Three', firstName: 'Student', status: 'student', whatsappConsent: {}, ...stamps }); });
+    await assertFails(setDoc(doc(as('pastor'), `${O}/students/s3`), student('pastor', { admissionNo: 'x'.repeat(41) })));
+    await assertSucceeds(setDoc(doc(as('pastor'), `${O}/students/s3`), student('pastor', { admissionNo: 'ADIA/045' })));
+  });
   it('lets an admin withdraw a student, but not change the admission number', async () => {
     const ref = doc(as('adiaAdmin'), `${O}/students/s1`);
     await assertFails(updateDoc(ref, { admissionNo: 'ADIA/2026/0002', updatedAt: serverTimestamp(), updatedBy: 'adiaAdmin' }));
     await assertFails(updateDoc(ref, { status: 'graduated', updatedAt: serverTimestamp(), updatedBy: 'adiaAdmin' }));
     await assertSucceeds(updateDoc(ref, { status: 'withdrawn', withdrawnOn: '2026-10-18', updatedAt: serverTimestamp(), updatedBy: 'adiaAdmin' }));
     await assertFails(deleteDoc(ref));
+  });
+  it('lets staff with Settings correct an admission number, changing nothing else', async () => {
+    const ref = doc(as('pastor'), `${O}/students/s1`);
+    await assertFails(updateDoc(ref, { admissionNo: 'ADIA/2026/0009', status: 'withdrawn', updatedAt: serverTimestamp(), updatedBy: 'pastor' }));
+    await assertFails(updateDoc(ref, { admissionNo: '', updatedAt: serverTimestamp(), updatedBy: 'pastor' }));
+    await assertSucceeds(updateDoc(ref, { admissionNo: 'ADIA/2026/0009', updatedAt: serverTimestamp(), updatedBy: 'pastor' }));
   });
   it('keeps identity numbers to the pastor', async () => {
     await assertFails(getDoc(doc(as('adiaAdmin'), `${O}/studentPrivate/s1`)));
@@ -149,5 +160,33 @@ describe('ADIA certificates, outcomes and reports', () => {
     const req = (uid: string) => ({ orgId: 'adia', type: 'weekly', from: '2026-10-12', status: 'pending', createdAt: serverTimestamp(), createdBy: uid });
     await assertFails(setDoc(doc(as('adiaAdmin'), `${O}/schoolReportRequests/r1`), req('adiaAdmin')));
     await assertSucceeds(setDoc(doc(as('adiaDirector'), `${O}/schoolReportRequests/r2`), req('adiaDirector')));
+  });
+});
+
+describe('ADIA principal', () => {
+  const PRINCIPAL_PERMS = ['people.read', 'people.write', 'attendance.write', 'exams.manage', 'school.manage', 'fees.balances'];
+  beforeEach(async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users/flavier'), { email: 'f@example.org', displayName: 'Flavier', roleId: 'principal', extraPermissions: [], orgIds: ['adia'], allOrgs: false, permissions: PRINCIPAL_PERMS, active: true });
+    });
+  });
+  it('sees each fee balance but no invoices, payments, petty cash or payroll', async () => {
+    await assertSucceeds(getDoc(doc(as('flavier'), `${O}/feeBalances/s1`)));
+    await assertSucceeds(getDocs(collection(as('flavier'), `${O}/feeBalances`)));
+    await assertFails(setDoc(doc(as('flavier'), `${O}/feeBalances/s1`), { orgId: 'adia', balanceCents: 0 }));
+    await assertFails(getDoc(doc(as('flavier'), `${O}/invoices/i1`)));
+    await assertFails(getDocs(collection(as('flavier'), `${O}/gifts`)));
+    await assertFails(getDocs(collection(as('flavier'), `${O}/pettyCash`)));
+    await assertFails(getDocs(collection(as('flavier'), `${O}/payrollStaff`)));
+    await assertFails(getDoc(doc(as('flavier'), `${O}/schoolReports/weekly_2026-10-12`)));
+    await assertFails(getDoc(doc(as('flavier'), 'organizations/freedom/people/p1')));
+  });
+  it('gives admission numbers, issues certificates and adds a department, but cannot change a programme', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await setDoc(doc(ctx.firestore(), `${O}/people/s2`), { orgId: 'adia', fullName: 'Student Two', firstName: 'Student', status: 'student', whatsappConsent: {}, ...stamps }); });
+    await assertSucceeds(setDoc(doc(as('flavier'), `${O}/students/s2`), student('flavier', { admissionNo: 'ADIA/2026/0002' })));
+    const cert = { orgId: 'adia', studentId: 's1', courseId: 'ict', issuedOn: '2026-12-10', ...created('flavier') };
+    await assertSucceeds(setDoc(doc(as('flavier'), `${O}/certificates/s1`), cert));
+    await assertSucceeds(setDoc(doc(as('flavier'), `${O}/courses/dress`), { orgId: 'adia', name: 'Dressmaking', levels: [], units: [], timetable: [], active: true, ...created('flavier') }));
+    await assertFails(updateDoc(doc(as('flavier'), `${O}/courses/dress`), { name: 'Tailoring', updatedAt: serverTimestamp(), updatedBy: 'flavier' }));
   });
 });

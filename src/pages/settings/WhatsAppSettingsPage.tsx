@@ -6,6 +6,7 @@ import { saveWhatsAppSettings } from '../../lib/whatsappWrites';
 import { friendlyError } from '../../lib/errors';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { app } from '../../firebase';
+import { PETTY_WA_TEMPLATES } from '../../../functions/src/shared/pettyNotices';
 import { AUTO_TEMPLATES, SEND_MODES, SEND_MODE_LABELS, modeFor, type SendMode, type WhatsAppSettings } from '../../../functions/src/shared/whatsapp';
 
 const REGION = import.meta.env.VITE_FUNCTIONS_REGION || 'africa-south1';
@@ -34,7 +35,7 @@ export function WhatsAppSettingsPage() {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/settings/group/whatsapp">← WhatsApp</Link></p>
       <h1>WhatsApp automation</h1>
       <p className="lead">
         Send welcomes, check-ins and care messages through WhatsApp by themselves. Only people who agreed to WhatsApp are messaged, and a child's
@@ -86,6 +87,18 @@ export function WhatsAppSettingsPage() {
             </label>
             <pre className="small wa-template" style={{ whiteSpace: 'pre-wrap' }}>{t.body}</pre>
             <p className="small muted">Category: {t.category === 'UTILITY' ? 'Utility' : 'Marketing'}. Slots in order: {t.fields.join(', ')}. Example values for Meta: {t.example.join(' / ')}.</p>
+          </div>
+        ))}
+      </section>
+
+      <section className="card stack">
+        <h2>Petty cash notices</h2>
+        <p className="small">These go to petty cash stakeholders by themselves: "please approve" when a request is submitted, a reminder after 24 hours, and "approved" with the signed voucher. Create each in Meta as a <strong>Utility</strong> template with exactly this name and wording. For <strong>petty_cash_approved</strong>, add a <strong>Document</strong> header. Each stakeholder's number is set on their Staff account.</p>
+        {PETTY_WA_TEMPLATES.map((t) => (
+          <div key={t.metaName} className="stack">
+            <h3>{t.metaName}{t.header ? ' (with a Document header)' : ''}</h3>
+            <pre className="small wa-template" style={{ whiteSpace: 'pre-wrap' }}>{t.body}</pre>
+            <p className="small muted">Example values for Meta: {t.example.join(' / ')}.</p>
           </div>
         ))}
       </section>

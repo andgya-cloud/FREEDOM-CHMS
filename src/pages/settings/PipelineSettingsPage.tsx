@@ -54,7 +54,7 @@ export function PipelineSettingsPage() {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/settings/group/people">← People settings</Link></p>
       <h1>Journey stages</h1>
       <p className="muted">The steps a person moves through. The order is a guide: people can skip stages or be in several at once.</p>
       <ol className="row-list stage-list">

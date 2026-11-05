@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { NavLink } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
 import { usePeople } from '../../state/PeopleContext';
@@ -28,27 +28,38 @@ export function SchoolGate({ title, children }: { title: string; children: (org:
   );
 }
 
-/** The row of school sections shown at the top of every ADIA page. */
-export function SchoolNav({ feesAllowed }: { feesAllowed: boolean }) {
+/**
+ * The page title is the "Go to" dropdown (Andy, 2026-10-28, 1A): "Students ▾" opens the other School
+ * pages, so a page has one control at the top instead of a heading plus a separate dropdown.
+ * Programmes moved to Settings (6A); Today and Exam Records are in the side menu.
+ */
+export function SchoolTitle({ feesAllowed, children }: { feesAllowed: boolean; children?: ReactNode }) {
   const { can } = useAuth();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
   const items: [string, string, boolean][] = [
-    ['/school', 'Overview', true], ['/school/students', 'Students', true], ['/school/courses', 'Courses', true],
-    ['/school/results', 'Results', true], ['/school/fees', 'Fees', feesAllowed], ['/school/graduation', 'Graduation', true],
-    ['/school/reports', 'Reports', can('finance.reports')],
+    ['/school/students', 'Students', true], ['/school/fees', 'Fees', feesAllowed],
+    ['/school/graduation', 'Graduation', true], ['/school/reports', 'Reports', can('finance.reports') || can('settings.manage')],
   ];
+  const shown = items.filter((i) => i[2]);
+  const here = shown.find(([to]) => pathname === to || pathname.startsWith(`${to}/`))?.[0] ?? '';
   return (
-    <nav className="chips" aria-label="School">
-      {items.filter((i) => i[2]).map(([to, label]) => (
-        <NavLink key={to} to={to} end={to === '/school'} className={({ isActive }) => `chip${isActive ? ' chip-on' : ''}`}>{label}</NavLink>
-      ))}
-    </nav>
+    <div className="page-head school-head">
+      <h1 className="title-select">
+        <select value={here} aria-label="Go to" onChange={(e) => navigate(e.target.value)}>
+          {!here && <option value="">School</option>}
+          {shown.map(([to, label]) => <option key={to} value={to}>{label}</option>)}
+        </select>
+      </h1>
+      {children}
+    </div>
   );
 }
 
 export function useSchoolPage(org: Organization) {
   const data = useSchool(org.id);
   const { byId, loading: peopleLoading } = usePeople();
-  const nameOf = (id: string) => byId(id)?.fullName ?? (peopleLoading ? '…' : 'Unknown student');
+  const nameOf = (id: string) => byId(id)?.fullName ?? data.rosterNames.get(id) ?? (peopleLoading ? '…' : 'Unknown student');
   const today = localDateKey(new Date(), org.timeZone);
   const courseName = (id: string) => data.courses.find((c) => c.id === id)?.name ?? '';
   const intakeName = (id: string) => data.intakes.find((i) => i.id === id)?.name ?? '';

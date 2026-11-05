@@ -15,6 +15,7 @@ import {
 } from './shared/metrics.js';
 import { isTraining } from './shared/organizations.js';
 import { buildReport, reportFileName, reportPdf, reportsDue, type GivingPart, type PastoralPart, type ReportDoc } from './shared/reports.js';
+import { POWERED_BY, poweredByHtml, stampPoweredBy } from './shared/poweredBy.js';
 
 const SYSTEM = 'system';
 const DAY = 86_400_000;
@@ -59,7 +60,7 @@ export async function loadMetricsInput(orgId: string, period: DayRange, type: Re
   return {
     regularWeeks,
     now: now.getTime(),
-    events: rows(events).filter(until).map((e) => ({ id: e.id, date: e.date, type: e.type, headcounts: e.headcounts ?? null, programId: e.programId ?? null, groupId: e.groupId ?? null })),
+    events: rows(events).filter(until).map((e) => ({ id: e.id, date: e.date, type: e.type, headcounts: e.headcounts ?? null, programId: e.programId ?? null, groupId: e.groupId ?? null, serviceKind: e.serviceKind ?? null })),
     marks: rows(marks).filter(until).map((m) => ({ personId: m.personId, eventId: m.eventId, date: m.date, status: m.status, programId: m.programId ?? null, groupId: m.groupId ?? null })),
     people: rows(people).map((p) => ({ id: p.id, fullName: p.fullName ?? '', status: p.status, firstVisitDate: p.firstVisitDate ?? null })),
     stages: rows(stages).map((s) => ({ personId: s.personId, stageId: s.stageId, status: s.status, date: s.date ?? null })),
@@ -141,6 +142,7 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 
 export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving: GivingPart | null, appUrl: string) {
   const pdf = reportPdf(jsPDF, r, pastoral, giving);
+  stampPoweredBy(pdf);
   const content = Buffer.from(pdf.output('arraybuffer')).toString('base64');
   const kind = r.type === 'weekly' ? 'Weekly' : 'Monthly';
   const h = r.headlines.current;
@@ -158,8 +160,8 @@ export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving:
   ];
   return {
     subject: `${kind} report: ${r.orgName}, ${r.label}`,
-    text: lines.join('\n'),
-    html: lines.map((l) => (l ? `<p style="margin:0 0 6px">${escapeHtml(l)}</p>` : '<br>')).join(''),
+    text: [...lines, '', POWERED_BY].join('\n'),
+    html: lines.map((l) => (l ? `<p style="margin:0 0 6px">${escapeHtml(l)}</p>` : '<br>')).join('') + poweredByHtml(),
     attachments: [{ filename: reportFileName(r, 'pdf'), content, encoding: 'base64', contentType: 'application/pdf' }],
   };
 }

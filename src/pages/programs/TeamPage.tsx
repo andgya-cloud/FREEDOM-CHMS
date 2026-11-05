@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useParams } from 'react-router-dom';
 import { doc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -53,7 +54,10 @@ function TeamView({ org, team }: { org: Organization; team: Team }) {
           <h1>{team.name}</h1>
           <p className="muted">Dream Team{team.leaderName ? ` · led by ${team.leaderName}` : ''}{!team.active ? ' · not active' : ''}</p>
         </div>
-        {canWrite && <button type="button" className="btn" onClick={() => setEditing(true)}>Edit</button>}
+        <div className="cleanup-head-actions">
+          {canWrite && <button type="button" className="btn" onClick={() => setEditing(true)}>Edit</button>}
+          <CleanupButton orgId={org.id} kind="team" id={team.id} back="/programs" />
+        </div>
       </div>
 
       <section className="card">

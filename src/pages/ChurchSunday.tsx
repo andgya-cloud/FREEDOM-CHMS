@@ -1,0 +1,289 @@
+import { collection, query, where } from 'firebase/firestore';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+import { db } from '../firebase';
+import { useAuth } from '../state/AuthContext';
+import { usePeople, type Person } from '../state/PeopleContext';
+import { useDayAttendance, useEvents } from '../state/useAttendance';
+import { useGiftsBetween } from '../state/useGiving';
+import { useLiveQuery } from '../lib/useQuery';
+import { useWaitingSignups } from './people/SignupsPage';
+import { canKeepAccounts } from '../../functions/src/shared/permissions';
+import { markCardSent, useCardDesign, useCardFiles, useCardsSent } from '../lib/birthdayCard';
+import { cardGreeting, cardId } from '../../functions/src/shared/birthdayCard';
+import type { Organization } from '../state/OrgContext';
+import { attended, headcountTotal } from '../../functions/src/shared/attendance';
+import { formatMoney } from '../../functions/src/shared/giving';
+import { birthdayLabel, upcomingBirthdays } from '../../functions/src/shared/people';
+import { coupleNames, familyGroups, familyName, ordinal, yearsMarried } from '../../functions/src/shared/families';
+import { useHouseholds } from '../state/useFamilies';
+import { familyWhatsApp } from '../components/FamilyCard';
+import { formatDateKey, localDateKey, zonedParts } from '../../functions/src/shared/datetime';
+
+const DAY = 86_400_000;
+const keyDaysAgo = (todayKey: string, n: number) => new Date(Date.parse(`${todayKey}T00:00:00Z`) - n * DAY).toISOString().slice(0, 10);
+
+/** Today's date key and, on Sunday or Monday, the Sunday the card is about. */
+export function sundayFor(tz: string, now = new Date()): { today: string; sunday: string | null; isSunday: boolean } {
+  const today = localDateKey(now, tz);
+  const weekday = zonedParts(now, tz).weekday; // 7 = Sunday
+  if (weekday === 7) return { today, sunday: today, isSunday: true };
+  if (weekday === 1) return { today, sunday: keyDaysAgo(today, 1), isSunday: false };
+  return { today, sunday: null, isSunday: false };
+}
+
+/** The most recent Sunday, today included. */
+export function lastSunday(tz: string, now = new Date()): string {
+  const today = localDateKey(now, tz);
+  return keyDaysAgo(today, zonedParts(now, tz).weekday % 7);
+}
+
+interface PipelineRow { personId: string; status: string; deletedAt?: unknown }
+
+/**
+ * Sunday mode and the Sunday summary in one card (Andy, 2026-10-31, 4A 5A). On Sunday it sits above the jobs with
+ * the live count and a big Check in; on Monday it shows yesterday's figures. Either day, one tap sends the summary
+ * to the leaders on WhatsApp from the user's own phone (nothing is sent automatically).
+ */
+/** "Sunday", "Monday"… for a YYYY-MM-DD day. */
+export function weekdayName(day: string): string {
+  return ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][new Date(`${day}T12:00:00Z`).getUTCDay()]!;
+}
+
+export function SundayCard({ org, onSundayPage = false, pick }: { org: Organization; onSundayPage?: boolean; pick?: { day: string; service: string } }) {
+  const { can } = useAuth();
+  const { people } = usePeople();
+  const tz = org.timeZone || 'Africa/Nairobi';
+  const { sunday, isSunday } = sundayFor(tz);
+  // Mid-week the card shows last Sunday, so Today always has it (Andy, 2026-11-01, 4A).
+  // On the Service page it follows the day and service picked there (Andy, 2026-11-03, 4A).
+  const day = pick?.day ?? sunday ?? lastSunday(tz);
+  const yesterday = !pick && !!sunday && !isSunday;
+  const live = isSunday && (!pick || pick.day === sunday);
+  const seeNames = can('people.read') || can('attendance.write');
+  const seeGiving = can('giving.person.read');
+  const seePastoral = can('pastoral.read');
+
+  const { events } = useEvents(day ? org.id : '', day);
+  const { marks } = useDayAttendance(org.id, day, !!day && seeNames);
+  const { gifts } = useGiftsBetween(org.id, day, day, !!day && seeGiving);
+  const salvations = useLiveQuery<PipelineRow>(
+    () => (day && seePastoral
+      ? query(collection(db, 'organizations', org.id, 'pipeline'), where('stageId', '==', 'salvation'), where('date', '==', day))
+      : null),
+    [org.id, day, seePastoral],
+  ).rows.filter((r) => !r.deletedAt && r.status === 'completed');
+
+  if (!day) return null;
+
+  // Each service counts its headcount, or the people checked in when no headcount was typed (as in the reports).
+  const dayServices = events.filter((e) => e.date === day && e.type === 'service' && !e.programId && !e.groupId);
+  const picked = pick?.service ? dayServices.filter((e) => e.name === pick.service) : [];
+  // A Sunday counts its Sunday services only; any other day counts every service held that day (2026-11-03).
+  const isSundayDay = new Date(`${day}T12:00:00Z`).getUTCDay() === 0;
+  const services = picked.length ? picked : isSundayDay ? dayServices.filter((e) => e.serviceKind !== 'other') : dayServices;
+  const checkedIn = new Map<string, number>();
+  for (const m of marks) if (attended(m.status)) checkedIn.set(m.eventId, (checkedIn.get(m.eventId) ?? 0) + 1);
+  const came = services.reduce((sum, e) => sum + (headcountTotal(e.headcounts, 'service') || checkedIn.get(e.id) || 0), 0);
+  // Typed figures count too; the larger of typed and recorded avoids counting anyone twice (Andy, 2026-11-02).
+  const typed = (k: 'firstTimers' | 'salvations') => services.reduce((s, e) => s + (Number(e.headcounts?.[k]) || 0), 0);
+  const firstTimers = Math.max(people.filter((p) => p.orgId === org.id && p.firstVisitDate === day).length, typed('firstTimers'));
+  const givingCents = gifts.filter((g) => g.status !== 'void').reduce((s, g) => s + g.amountCents, 0);
+
+  // "Total count" first (Andy, 2026-11-03, 3A 4A): adults, teens and children.
+  const figures: [string, string][] = [[live ? 'Total count so far' : 'Total count', String(came)], ['First-timers', String(firstTimers)]];
+  if (seePastoral) figures.push(['Salvations', String(Math.max(salvations.length, typed('salvations')))]);
+  if (seeGiving) figures.push(['Giving', formatMoney(givingCents)]);
+
+  const text = [
+    `${org.name}, ${picked.length ? `${pick!.service}, ` : ''}${weekdayName(day)} ${formatDateKey(day)}`,
+    ...figures.map(([k, v]) => `${k === 'Total count so far' ? 'Total count' : k}: ${v}`),
+    'Sent from Insight-IQ',
+  ].join('\n');
+
+  return (
+    <section className={`card sunday-card${live ? ' sunday-live' : ''}`} aria-label="Service figures">
+      <div className="sunday-head">
+        <h2>{pick
+          ? `${picked.length ? pick.service : day === sundayFor(tz).today ? "Today's services" : 'Services'}, ${weekdayName(day)} ${formatDateKey(day)}`
+          : isSunday ? "Today's service" : yesterday ? "Yesterday's service" : `Last Sunday, ${formatDateKey(day)}`}</h2>
+        {live && <span className="sunday-dot">Live</span>}
+      </div>
+      <dl className="sunday-figs">
+        {figures.map(([k, v]) => <div key={k}><dd>{v}</dd><dt>{k}</dt></div>)}
+      </dl>
+      <div className="sunday-actions">
+        {!onSundayPage && (can('attendance.write') || can('people.read')) && <Link className={`btn${isSunday ? ' btn-primary' : ''}`} to="/attendance">{isSunday ? 'Check in' : 'Service page'}</Link>}
+        {!onSundayPage && can('people.write') && <Link className="btn" to="/visitors/new">Add visitor</Link>}
+        <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">Send to leaders on WhatsApp</a>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Birthdays this week (Andy, 2026-10-31, 2A). From 2026-11-01 (1A-7A) each person gets the church's birthday card
+ * with "Dear Mary," on it: "Send card" shares it to WhatsApp from the user's own phone (a child's goes to the parent),
+ * the 7 a.m. job emails it, and "Card sent ✓" shows who sent it so nobody sends it twice.
+ */
+export function BirthdaysCard({ org }: { org: Organization }) {
+  const { can, profile } = useAuth();
+  const { people, byId } = usePeople();
+  const allowed = can('people.read');
+  const tz = org.timeZone || 'Africa/Nairobi';
+  const today = localDateKey(new Date(), tz);
+  const found = allowed ? upcomingBirthdays(people.filter((p) => p.orgId === org.id && p.status !== 'inactive' && !p.deletedAt), today) : [];
+  const { design } = useCardDesign(allowed ? org.id : '');
+  const sent = useCardsSent(org.id, allowed && found.length > 0);
+  const firstOf = (p: Person) => p.firstName || p.fullName.split(' ')[0] || p.fullName;
+  const files = useCardFiles(design, found.map(({ person: p }) => ({ id: p.id, greeting: cardGreeting(firstOf(p)), firstName: firstOf(p) })));
+  const [problem, setProblem] = useState('');
+  if (!found.length) return null;
+
+  const when = (n: number, p: Person) => (n === 0 ? 'Today' : n === 1 ? 'Tomorrow' : birthdayLabel(p.birthday!));
+  const yearOf = (n: number) => Number(keyDaysAgo(today, -n).slice(0, 4));
+  const phoneFor = (p: Person) => {
+    const to = p.status === 'child' && p.guardianId ? byId(p.guardianId) ?? p : p;
+    return to.whatsappConsent?.stoppedAt ? null : (to.whatsapp || null);
+  };
+
+  const send = async (p: Person, year: number, already: boolean) => {
+    setProblem('');
+    const file = files.get(p.id);
+    if (!file) return;
+    const wa = phoneFor(p);
+    try {
+      if (navigator.canShare?.({ files: [file] })) {
+        await navigator.share({ files: [file] });
+      } else {
+        // On a computer: save the card and open their WhatsApp chat, to attach it there.
+        const url = URL.createObjectURL(file);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = file.name;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        if (wa) window.open(`https://wa.me/${wa.replace(/\D/g, '')}`, '_blank', 'noopener');
+      }
+      await markCardSent(org.id, p.id, year, profile?.displayName || 'Staff', already);
+    } catch (err) {
+      if ((err as { name?: string })?.name !== 'AbortError') setProblem('The card could not be shared. Please try again.');
+    }
+  };
+
+  return (
+    <section className="card birthdays-card" aria-label="Birthdays this week">
+      <h2>Birthdays this week</h2>
+      <ul className="row-list">
+        {found.map(({ person: p, daysAway }) => {
+          const year = yearOf(daysAway);
+          const record = sent.get(cardId(p.id, year));
+          const marks = [record?.whatsappByName && `WhatsApp by ${record.whatsappByName.split(' ')[0]}`, record?.emailAt && 'Emailed'].filter(Boolean);
+          return (
+            <li key={p.id} className="birthday-row">
+              <Link to={`/people/${p.orgId}/${p.id}`}><b>{p.fullName}</b> <span className="muted small">{when(daysAway, p)}{p.status === 'child' ? ' · to the parent' : ''}</span></Link>
+              <span className="birthday-actions">
+                {marks.length > 0 && <span className="card-sent small">Card sent ✓ <span className="muted">{marks.join(' · ')}</span></span>}
+                <button type="button" className={`btn btn-small${marks.length ? '' : ' btn-primary'}`} disabled={!files.has(p.id)} onClick={() => void send(p, year, !!record)}>
+                  {marks.length ? 'Send again' : 'Send card'}
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {problem && <p className="error small">{problem}</p>}
+      <p className="muted small">Cards also go by email at 7am on the day to anyone with an email address.</p>
+    </section>
+  );
+}
+
+/** First-timers of the last 7 days, with Add visitor and the QR poster (Andy, 2026-11-01, 3A). */
+export function FirstTimersCard({ org }: { org: Organization }) {
+  const { can } = useAuth();
+  const { people } = usePeople();
+  if (!can('people.read') && !can('people.write')) return null;
+  const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
+  const from = keyDaysAgo(today, 7);
+  const found = people
+    .filter((p) => p.orgId === org.id && !p.deletedAt && p.firstVisitDate && p.firstVisitDate >= from)
+    .sort((a, b) => (b.firstVisitDate ?? '').localeCompare(a.firstVisitDate ?? '') || a.fullName.localeCompare(b.fullName));
+  return (
+    <section className="card first-timers-card" aria-label="First-timers">
+      <div className="card-head">
+        <h2>First-timers this week</h2>
+        {can('people.write') && <Link className="btn btn-primary btn-small" to="/visitors/new">Add visitor</Link>}
+      </div>
+      {found.length === 0 ? <p className="muted">No first-timers in the last 7 days yet.</p> : (
+        <ul className="plain first-timers">
+          {found.map((p) => (
+            <li key={p.id}>
+              <Link to={`/people/${p.orgId}/${p.id}`}><b>{p.fullName}</b> <span className="muted small">{formatDateKey(p.firstVisitDate!)}</span></Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {can('people.write') && <p className="muted small">Visitors can fill in their own card: <Link to="/visitors/qr">QR poster for the door</Link>.</p>}
+    </section>
+  );
+}
+
+/** Wedding anniversaries this week, greeted from the user's own WhatsApp (Andy, 2026-11-01, A). */
+export function AnniversariesCard({ org }: { org: Organization }) {
+  const { can } = useAuth();
+  const { people } = usePeople();
+  const households = useHouseholds(org.id);
+  if (!can('people.read') || households.weddings.size === 0) return null;
+  const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
+  const families = familyGroups(people.filter((p) => p.orgId === org.id && p.status !== 'inactive'));
+  const rows = [...households.weddings].filter(([hid]) => families.has(hid)).map(([hid, date]) => ({ hid, date, birthday: date.slice(5) }));
+  const found = upcomingBirthdays(rows, today);
+  if (!found.length) return null;
+  return (
+    <section className="card birthdays-card" aria-label="Wedding anniversaries this week">
+      <h2>Anniversaries this week</h2>
+      <ul className="row-list">
+        {found.map(({ person: r, daysAway }) => {
+          const members = families.get(r.hid)!;
+          const couple = coupleNames(members);
+          const years = yearsMarried(r.date, today);
+          const wa = familyWhatsApp(members);
+          const text = `Happy wedding anniversary, ${couple}!${years ? ` ${years} years together.` : ''} The ${org.name} family celebrates with you and thanks God for your marriage. May He keep blessing your home.`;
+          const anchor = members[0]!;
+          return (
+            <li key={r.hid} className="birthday-row">
+              <Link to={`/people/${anchor.orgId}/${anchor.id}`}><b>{couple || familyName(members, households.names.get(r.hid))}</b> <span className="muted small">{daysAway === 0 ? 'Today' : daysAway === 1 ? 'Tomorrow' : birthdayLabel(r.birthday)}{years ? ` · ${ordinal(years)} anniversary` : ''}</span></Link>
+              {wa && <a className="btn btn-small" href={`https://wa.me/${wa.whatsapp!.replace(/\D/g, '')}?text=${encodeURIComponent(text)}`} target="_blank" rel="noopener noreferrer">WhatsApp greeting</a>}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+/** "3 new sign-ups to check" from the family sign-up form (Andy, 2026-11-02, 4A). */
+export function SignupsCard({ org }: { org: Organization }) {
+  const { profile } = useAuth();
+  const { people } = usePeople();
+  const keeper = canKeepAccounts(profile);
+  const { rows } = useWaitingSignups(org.id, keeper);
+  if (!keeper) return null;
+  // Forms waiting for approval (Andy, 2026-11-02, 3A), plus anyone still flagged by the earlier form.
+  const older = people.filter((p) => p.orgId === org.id && p.signup && !p.deletedAt).length;
+  // Red while anything waits, black when nothing does (Andy, 2026-11-02).
+  if (rows.length || !older) {
+    return (
+      <Link className={`card signups-card${rows.length ? ' signups-waiting' : ''}`} to="/people/signups">
+        <b>{rows.length ? `${rows.length} family sign-up${rows.length === 1 ? '' : 's'} to approve` : 'No family sign-ups to approve'}</b>
+        <span className="muted small">{rows.length ? 'Nothing reaches People until you or Doreen approve it.' : 'New forms from the family sign-up QR code show here.'}</span>
+      </Link>
+    );
+  }
+  return (
+    <Link className="card signups-card" to="/people?status=signup">
+      <b>{older} new sign-up{older === 1 ? '' : 's'} to check</b>
+      <span className="muted small">Confirm each person&apos;s status on the People page.</span>
+    </Link>
+  );
+}

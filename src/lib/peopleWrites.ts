@@ -2,7 +2,7 @@ import { collection, doc, setDoc, writeBatch, type DocumentData } from 'firebase
 import { db } from '../firebase';
 import { createStamps, updateRecord, updateStamps } from './records';
 import { trackWrite } from './sync';
-import { firstName, pipelineEntryId, type PersonStatus, type StageStatus } from '../../functions/src/shared/people';
+import { firstName, pipelineEntryId, statusChange, type PersonStatus, type StageStatus } from '../../functions/src/shared/people';
 import type { WhatsAppConsent } from '../state/PeopleContext';
 
 export interface NewPersonInput {
@@ -14,7 +14,10 @@ export interface NewPersonInput {
   status: PersonStatus;
   firstVisitDate?: string | null;
   gender?: string | null;
+  birthday?: string | null;
+  birthYear?: number | null;
   householdId?: string | null;
+  familyRole?: 'parent' | 'spouse' | 'child' | null;
   guardianId?: string | null;
   howHeard?: string | null;
   invitedBy?: string | null;
@@ -97,3 +100,14 @@ export function addPrayerRequest(orgId: string, personId: string, text: string) 
 }
 
 export { updateStamps };
+
+/** Changes someone's status, recording the day they became a Member (Andy, 2026-11-02). */
+export function changeStatus(person: { orgId: string; id: string; status: PersonStatus; memberSince?: string | null; signup?: unknown }, next: PersonStatus, todayKey: string) {
+  // Choosing a status also settles a family sign-up's "Says: …" (Andy, 2026-11-02, 2A).
+  return updatePerson(person.orgId, person.id, { ...statusChange(person, next, todayKey), ...(person.signup ? { signup: null } : {}) });
+}
+
+/** Puts a status back exactly as it was, for Undo. */
+export function restoreStatus(person: { orgId: string; id: string; status: PersonStatus; memberSince?: string | null; signup?: unknown }) {
+  return updatePerson(person.orgId, person.id, { status: person.status, memberSince: person.memberSince ?? null, ...(person.signup ? { signup: person.signup } : {}) });
+}

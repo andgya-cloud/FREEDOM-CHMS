@@ -8,6 +8,7 @@ import { Bars, Scorecard, TrendChart } from '../../components/Scorecard';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { formatMoney } from '../../../functions/src/shared/giving';
 import { dueText, reasonLabel, reportCsv, reportFileName, reportPdf, type GivingPart, type PastoralPart } from '../../../functions/src/shared/reports';
+import { stampPoweredBy } from '../../../functions/src/shared/poweredBy';
 
 const day = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`;
 const pct = (v: number | null | undefined) => (v == null ? '–' : `${v}%`);
@@ -57,6 +58,7 @@ export function ReportPage() {
   async function pdfFile() {
     const { jsPDF } = await import('jspdf');
     const pdf = reportPdf(jsPDF, report!, pastoral, giving);
+    stampPoweredBy(pdf);
     return new File([pdf.output('blob')], reportFileName(report!, 'pdf'), { type: 'application/pdf' });
   }
   async function sharePdf() {
@@ -109,9 +111,10 @@ export function ReportPage() {
         <h2>Attendance</h2>
         <table className="report-table">
           <tbody>
-            <tr><td>Total at services</td><td className="num">{s.attendance.total}</td></tr>
+            <tr><td>Total at Sunday services</td><td className="num">{s.attendance.total}</td></tr>
             <tr><td>Adults / teens / children</td><td className="num">{s.attendance.adults} / {s.attendance.teens} / {s.attendance.children}</td></tr>
             <tr><td>Weekly average</td><td className="num">{s.attendance.weeklyAverage ?? '–'}</td></tr>
+            {(s.otherServices?.services ?? 0) > 0 && <tr><td>Other services ({s.otherServices!.services})</td><td className="num">{s.otherServices!.total}</td></tr>}
             <tr><td>4-week average</td><td className="num">{s.averageAttendance.fourWeeks ?? '–'}</td></tr>
             <tr><td>Year-to-date average</td><td className="num">{s.averageAttendance.yearToDate ?? '–'}</td></tr>
             <tr><td>Regular attenders ({report.regularWeeks} or more of the last 8 weeks)</td><td className="num">{s.regularAttenders}</td></tr>

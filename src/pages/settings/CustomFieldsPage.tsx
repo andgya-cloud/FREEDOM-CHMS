@@ -50,7 +50,7 @@ export function CustomFieldsPage() {
 
   return (
     <div className="page narrow">
-      <p><Link to="/settings">← Settings</Link></p>
+      <p><Link to="/settings/group/people">← People settings</Link></p>
       <h1>Extra fields</h1>
       <p className="muted">Add your own fields to every person, such as “Estate” or “Occupation”. Only collect what you need.</p>
       {fields.length === 0 && <p className="muted">No extra fields yet.</p>}

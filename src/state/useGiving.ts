@@ -1,10 +1,12 @@
-import { collection, doc, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
+import { collection, doc, documentId, onSnapshot, query, where, type Timestamp } from 'firebase/firestore';
 import { useEffect, useMemo, useState } from 'react';
 import { db } from '../firebase';
 import { useLiveQuery } from '../lib/useQuery';
 import { ESTIMATE } from '../lib/firestoreOptions';
 import { useAuth } from './AuthContext';
-import type { GiftMethod, GiftStatus, UnassignedReason } from '../../functions/src/shared/giving';
+import { STANDARD_FUNDS, type GiftMethod, type GiftStatus, type UnassignedReason } from '../../functions/src/shared/giving';
+
+const hasWords = (name: string) => /[a-z]/i.test(name);
 
 export interface Fund {
   id: string;
@@ -12,6 +14,8 @@ export interface Fund {
   name: string;
   aliases: string[];
   active: boolean;
+  /** 'other': a kind of other giving named while recording a gift. */
+  kind?: 'other';
   deletedAt: Timestamp | null;
 }
 
@@ -85,8 +89,13 @@ const newestFirst = (a: Gift, b: Gift) => b.date.localeCompare(a.date) || (b.cre
 
 export function useFunds(orgId: string) {
   const { rows, loading } = useLiveQuery<Fund>(() => (orgId ? collection(db, 'organizations', orgId, 'funds') : null), [orgId]);
-  const funds = rows.filter(live).sort((a, b) => a.name.localeCompare(b.name));
-  return { funds, active: funds.filter((f) => f.active), loading };
+  // A number typed into a fund name (Andy saw "7000" in place of Tithes, 2026-10-31): Tithes and Offerings keep their
+  // proper names, and any other fund named only by a number is left out of the choices.
+  const funds = rows
+    .filter(live)
+    .map((f) => (hasWords(f.name) ? f : { ...f, name: STANDARD_FUNDS.find((s) => s.id === f.id)?.name ?? f.name }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  return { funds, active: funds.filter((f) => f.active && hasWords(f.name)), loading };
 }
 
 /** Payments waiting for a person or fund. Everyone who records gifts sees these. */
@@ -184,6 +193,15 @@ export function useLedgerMonth(orgId: string, month: string) {
   return { ledger, loading };
 }
 
+/** The ledger months from `from` to `to` (YYYY-MM, both included), for the dashboards. */
+export function useLedgerMonths(orgId: string, from: string, to: string) {
+  const { rows, loading } = useLiveQuery<LedgerMonth>(
+    () => (orgId ? query(collection(db, 'organizations', orgId, 'ledger'), where(documentId(), '>=', from), where(documentId(), '<=', to)) : null),
+    [orgId, from, to],
+  );
+  return { months: rows, loading };
+}
+
 /** Statement lines imported for a date range, by M-Pesa code. */
 export function useStatementLines(orgId: string, from: string, to: string) {
   const { rows, loading } = useLiveQuery<StatementLine>(
@@ -224,4 +242,28 @@ export function useOpenReviews(orgId: string) {
     [orgId, allowed],
   );
   return rows;
+}
+
+export interface Pledge {
+  id: string;
+  orgId: string;
+  personId: string | null;
+  name: string;
+  fundId: string;
+  amountCents: number;
+  startDate: string;
+  endDate: string | null;
+  notes: string;
+  deletedAt: Timestamp | null;
+}
+
+/** Pledges for people who may see individual giving. */
+export function usePledges(orgId: string) {
+  const { can } = useAuth();
+  const allowed = can('giving.person.read');
+  const { rows, loading } = useLiveQuery<Pledge>(
+    () => (orgId && allowed ? collection(db, 'organizations', orgId, 'pledges') : null),
+    [orgId, allowed],
+  );
+  return { pledges: rows.filter(live).sort((a, b) => a.name.localeCompare(b.name)), loading: allowed && loading };
 }

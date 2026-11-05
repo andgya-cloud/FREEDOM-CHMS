@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { doc } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -17,13 +18,17 @@ import { FollowUpsForPerson } from '../../components/FollowUpsForPerson';
 import { AttendanceForPerson } from '../../components/AttendanceForPerson';
 import { InvolvementForPerson } from '../../components/InvolvementForPerson';
 import { GivingForPerson } from '../../components/GivingForPerson';
-import { PERSON_STATUS_LABELS } from '../../../functions/src/shared/people';
+import { FamilyBox } from '../../components/FamilyBox';
+import { SignupBadge, StatusPicker, useCanChangeStatus } from '../../components/StatusPicker';
+import { PERSON_STATUS_LABELS, birthdayLabel } from '../../../functions/src/shared/people';
 import { formatPhone } from '../../../functions/src/shared/phone';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
+import { aboutLines } from '../../../functions/src/shared/familySignup';
 
 export function PersonPage() {
   const { orgId = '', personId = '' } = useParams();
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { organizations } = useOrg();
   const { byId, people, loading } = usePeople();
   const customFields = useCustomFields();
@@ -31,6 +36,7 @@ export function PersonPage() {
   const navigate = useNavigate();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
+  const canChangeStatus = useCanChangeStatus();
   const person = byId(personId);
   const org = organizations.find((o) => o.id === orgId);
 
@@ -50,6 +56,12 @@ export function PersonPage() {
   const duplicates = (person.possibleDuplicateIds ?? []).map((id) => byId(id)).filter((p) => p && !p.deletedAt);
   const consent = person.whatsappConsent;
   const canWrite = can('people.write');
+  // Call and WhatsApp straight from the page (Andy, 2026-10-31, 1A). A child is reached through the parent.
+  const reach = person.status === 'child' && guardian ? guardian : person;
+  const callPhone = reach.phone || reach.whatsapp || null;
+  const waPhone = reach.whatsappConsent?.stoppedAt ? null : reach.whatsapp || null;
+  // One delete button (7A): Andrew Guya and Doreen have Remove at the top, everyone else Delete at the bottom.
+  const keeper = canKeepAccounts(profile);
 
   function remove() {
     setConfirmDelete(false);
@@ -77,14 +89,18 @@ export function PersonPage() {
       : consent?.given ? `Agreed${consent.date ? ` on ${formatDateKey(consent.date)}` : ''}` : 'Not agreed'],
   ];
   if (person.email) details.push(['Email', <a href={`mailto:${person.email}`}>{person.email}</a>]);
+  if (person.status === 'member' && person.memberSince) details.push(['Member since', formatDateKey(person.memberSince)]);
   if (person.firstVisitDate) details.push(['First visit', formatDateKey(person.firstVisitDate)]);
   if (person.serviceAttended) details.push(['Service attended', person.serviceAttended]);
   if (person.howHeard) details.push(['Heard about us', person.howHeard]);
+  // Tithing shows only to staff who may see giving.
+  for (const l of aboutLines(person.about)) if (l.label !== 'Tithes' || can('giving.person.read')) details.push([l.label, l.value]);
   if (person.invitedBy) {
     const inviter = person.invitedById ? byId(person.invitedById) : undefined;
     details.push(['Invited by', inviter ? <Link to={`/people/${inviter.orgId}/${inviter.id}`}>{inviter.fullName}</Link> : person.invitedBy]);
   }
   if (person.gender) details.push(['Gender', person.gender]);
+  if (person.birthday) details.push(['Birthday', birthdayLabel(person.birthday)]);
   if (guardian) details.push(['Parent or guardian', <Link to={`/people/${guardian.orgId}/${guardian.id}`}>{guardian.fullName}</Link>]);
   for (const f of customFields.filter((c) => c.active)) {
     const v = person.customFields?.[f.id];
@@ -98,10 +114,20 @@ export function PersonPage() {
       <div className="person-head">
         <div>
           <h1>{person.fullName}</h1>
-          <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>
+          {canChangeStatus ? <StatusPicker person={person} /> : <span className={`badge badge-${person.status}`}>{PERSON_STATUS_LABELS[person.status]}</span>}
+          {' '}<SignupBadge person={person} />
           {org && organizations.length > 1 && <span className="muted small"> · {org.name}</span>}
+          {(callPhone || waPhone) && (
+            <div className="contact-buttons no-print">
+              {callPhone && <a className="btn btn-primary" href={`tel:${callPhone}`}>Call</a>}
+              {waPhone && <a className="btn" href={`https://wa.me/${waPhone.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer">WhatsApp</a>}
+            </div>
+          )}
         </div>
-        {canWrite && <Link className="btn" to={`/people/${orgId}/${personId}/edit`}>Edit</Link>}
+        <div className="cleanup-head-actions">
+          {canWrite && <Link className="btn" to={`/people/${orgId}/${personId}/edit`}>Edit</Link>}
+          <CleanupButton orgId={orgId} kind="person" id={personId} back="/people" />
+        </div>
       </div>
 
       {duplicates.length > 0 && (
@@ -129,7 +155,7 @@ export function PersonPage() {
         )}
       </section>
 
-      {(household.length > 0 || children.length > 0) && (
+      {org?.type === 'church_campus' ? <FamilyBox person={person} /> : (household.length > 0 || children.length > 0) && (
         <section className="card">
           <h2>Family</h2>
           <ul className="plain">
@@ -147,7 +173,7 @@ export function PersonPage() {
       {org && can('giving.person.read') && <GivingForPerson org={org} personId={personId} personName={person.fullName} />}
       {can('pastoral.read') && <PastoralSection orgId={orgId} personId={personId} />}
 
-      {canWrite && (
+      {canWrite && !keeper && (
         <button type="button" className="btn btn-quiet danger-text align-start" onClick={() => setConfirmDelete(true)}>Delete {person.firstName || person.fullName}</button>
       )}
 
