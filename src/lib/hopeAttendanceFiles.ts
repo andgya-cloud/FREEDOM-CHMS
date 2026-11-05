@@ -191,7 +191,7 @@ export async function championPayPdf(org: Organization, month: string, lines: Pa
     if (y > h - 24) { pdf.addPage(); y = 20; head(); pdf.setFont('helvetica', 'normal'); }
     pdf.setTextColor(...INK);
     pdf.text(l.name.slice(0, 40), 14, y);
-    pdf.text(l.weeklyPay.toLocaleString('en-KE'), 98, y, { align: 'right' });
+    pdf.text(l.monthlyPay ? `${l.monthlyPay.toLocaleString('en-KE')}/mo` : l.weeklyPay.toLocaleString('en-KE'), 98, y, { align: 'right' });
     pdf.text(String(l.weeks), 114, y, { align: 'right' });
     pdf.text(String(l.late), 128, y, { align: 'right' });
     pdf.text(l.basic.toLocaleString('en-KE'), 150, y, { align: 'right' });
@@ -217,7 +217,7 @@ export async function championPayExcel(org: Organization, month: string, lines: 
   const num = (n: number) => ({ type: Number, value: n });
   const rows: Cell[][] = [[bold(`${org.name} · Child Champions' pay · ${MONTH_NAME(month)}`)], [text(approved ? `Approved by ${approved}` : 'Not yet approved')], [],
     [bold('Name'), bold('Weekly amount (KES)'), bold('Weeks came'), bold('Late'), bold('Basic (KES)'), bold('Extra (KES)'), bold('Extra reason'), bold('Total (KES)')],
-    ...lines.map((l) => [text(l.name), num(l.weeklyPay), num(l.weeks), num(l.late), num(l.basic), num(l.extras), text(l.extraReasons.join('; ')), num(l.total)] as Cell[]),
+    ...lines.map((l) => [text(l.name), l.monthlyPay ? text(`${l.monthlyPay} a month (fixed)`) : num(l.weeklyPay), num(l.weeks), num(l.late), num(l.basic), num(l.extras), text(l.extraReasons.join('; ')), num(l.total)] as Cell[]),
     [], [bold('Total to pay'), text(''), text(''), text(''), text(''), text(''), text(''), num(total) as Cell], [], [text(POWERED_BY)]];
   const blob = await writeXlsxFile(rows as never, { columns: [30, 14, 11, 7, 12, 12, 30, 12].map((width) => ({ width })) } as never) as unknown as Blob;
   return new File([blob], `${safe(org.name)}-champions-pay-${month}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });

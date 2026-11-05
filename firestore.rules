@@ -1254,7 +1254,7 @@ service cloud.firestore {
         allow read: if hopeRead();
         allow create, update: if champManager() && request.resource.data.orgId == orgId
           && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete())
-          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn', 'weeklyPay', 'code',
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'email', 'duty', 'status', 'joinedOn', 'weeklyPay', 'monthlyPay', 'code',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && shortText(request.resource.data.name, 120) && request.resource.data.name.size() >= 2
           && shortText(request.resource.data.phone, 30) && shortText(request.resource.data.email, 120)
@@ -1263,6 +1263,8 @@ service cloud.firestore {
           && optionalDate(request.resource.data.get('joinedOn', null))
           && (request.resource.data.get('weeklyPay', null) == null || (request.resource.data.weeklyPay is int
                && request.resource.data.weeklyPay >= 0 && request.resource.data.weeklyPay <= 1000000))
+          && (request.resource.data.get('monthlyPay', null) == null || (request.resource.data.monthlyPay is int
+               && request.resource.data.monthlyPay >= 0 && request.resource.data.monthlyPay <= 5000000))
           && (request.resource.data.get('code', null) == null || (request.resource.data.code is string && request.resource.data.code.matches('^CC-[0-9]{4,6}$')));
         allow delete: if false;
       }

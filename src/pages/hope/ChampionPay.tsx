@@ -40,7 +40,7 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
   const [extra, setExtra] = useState({ championId: '', amount: '', reason: '' });
   const [busy, setBusy] = useState(false);
   const active = data.champions.filter((c) => c.status === 'active');
-  const noPay = active.filter((c) => !c.weeklyPay).length;
+  const noPay = active.filter((c) => !c.weeklyPay && !c.monthlyPay).length;
 
   async function files(kind: 'pdf' | 'excel') {
     setBusy(true);
@@ -63,7 +63,7 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
   function saveWeekly(id: string, value: string) {
     const n = value.trim() === '' ? null : Math.round(Number(value.replace(/[^\d.]/g, '')));
     if (n != null && !Number.isFinite(n)) return;
-    setChampionFields(org.id, { [id]: { weeklyPay: n } }).catch(fail);
+    setChampionFields(org.id, { [id]: { weeklyPay: n, monthlyPay: null } }).catch(fail);
   }
   function addExtra() {
     const amount = Math.round(Number(extra.amount.replace(/[^\d.]/g, '')));
@@ -102,8 +102,8 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
               {report.lines.map((l) => (
                 <tr key={l.championId}>
                   <td>{l.name}</td>
-                  <td><input className="cp-weekly" inputMode="numeric" aria-label={`${l.name}'s weekly amount`} defaultValue={l.weeklyPay || ''} key={`${l.championId}${l.weeklyPay}`} placeholder="0"
-                    onBlur={(e) => e.target.value.trim() !== String(l.weeklyPay || '') && saveWeekly(l.championId, e.target.value)} /></td>
+                  <td>{l.monthlyPay ? <span title="A fixed amount for the month">{l.monthlyPay.toLocaleString('en-KE')} a month</span> : <input className="cp-weekly" inputMode="numeric" aria-label={`${l.name}'s weekly amount`} defaultValue={l.weeklyPay || ''} key={`${l.championId}${l.weeklyPay}`} placeholder="0"
+                    onBlur={(e) => e.target.value.trim() !== String(l.weeklyPay || '') && saveWeekly(l.championId, e.target.value)} />}</td>
                   <td>{l.weeks}</td>
                   <td>{l.late || ''}</td>
                   <td title={l.extraReasons.join('; ')}>{l.extras ? l.extras.toLocaleString('en-KE') : ''}</td>
@@ -114,7 +114,7 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
             <tfoot><tr><td colSpan={5}><b>Total to pay</b></td><td><b>{report.total.toLocaleString('en-KE')}</b></td></tr></tfoot>
           </table>
         </div>
-        <p className="small muted">A week counts when the champion came on any day that week, on time or late. Champions report at {REPORT_TIME.replace(/^0/, '')}am; after that they are marked late.</p>
+        <p className="small muted">A fixed monthly amount is paid in full each month. A week counts when the champion came on any day that week, on time or late. Champions report at {REPORT_TIME.replace(/^0/, '')}am; after that they are marked late.</p>
       </section>
 
       <section className="card stack">
@@ -148,9 +148,9 @@ export function ChampionPay({ org, today, data }: { org: Organization; today: st
         {upload && (
           <>
             <p><b>{upload.found.length}</b> matched{upload.notFound.length ? `, ${upload.notFound.length} not found: ${upload.notFound.join(', ')}` : ''}.</p>
-            <ul className="link-list">{upload.found.map((f) => <li key={f.id}><span className="grow">{f.name}</span><b>{formatKes(f.amount)}</b></li>)}</ul>
+            <ul className="link-list">{upload.found.map((f) => <li key={f.id}><span className="grow">{f.name}</span><b>{formatKes(f.amount)}{f.monthly ? ' a month, fixed' : ' a week'}</b></li>)}</ul>
             <button type="button" className="btn btn-primary align-start" disabled={!upload.found.length} onClick={() => {
-              setChampionFields(org.id, Object.fromEntries(upload.found.map((f) => [f.id, { weeklyPay: f.amount }]))).catch(fail);
+              setChampionFields(org.id, Object.fromEntries(upload.found.map((f) => [f.id, f.monthly ? { monthlyPay: f.amount, weeklyPay: null } : { weeklyPay: f.amount, monthlyPay: null }]))).catch(fail);
               toast.show(`${upload.found.length} weekly amounts saved`); setUpload(null);
             }}>Save {upload.found.length} amounts</button>
           </>

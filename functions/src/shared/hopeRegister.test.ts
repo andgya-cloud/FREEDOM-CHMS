@@ -105,6 +105,15 @@ describe('uploads', () => {
     expect(plan[0]).toMatchObject({ name: 'Peter Otieno', duty: 'Coach', skip: null });
     expect(plan[1]!.skip).toBe('no name');
   });
+  it('reads Andy\'s champions list and updates champions already here', () => {
+    const rows = [['NAMES', 'CONTACT', 'Appreciation per week'], ['Faith Kimanthi', 724981960, 3000], ['Dorothy Mohat', 721995182, '9000 - fixed'], ['Kevin Kiihu', 796687443, 1500]];
+    const plan = planChampionImport(rows, [{ id: 'k', name: 'Kevin Kiihu', phone: '0796687443', email: '', duty: '', weeklyPay: 1500 }], '2026-11-05')!;
+    expect(plan.map((r) => [r.name, r.phone, r.weeklyPay, r.monthlyPay, r.updateId, r.skip])).toEqual([
+      ['Faith Kimanthi', '0724 981 960', 3000, null, null, null],
+      ['Dorothy Mohat', '0721 995 182', null, 9000, null, null],
+      ['Kevin Kiihu', '0796 687 443', 1500, null, 'k', 'already up to date'],
+    ]);
+  });
 });
 
 describe('little delights', async () => {

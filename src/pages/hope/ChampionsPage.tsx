@@ -9,7 +9,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
 import {
   CHAMPION_MARKS, CHAMPION_MARK_LABELS, CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
-  planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
+  planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark, type ExistingChampion,
 } from '../../../functions/src/shared/hopeRegister';
 import { useHopePage } from './common';
 import { CleanupButton } from '../../components/CleanupDialog';
@@ -45,7 +45,7 @@ export function ChampionsPanel({ org }: { org: Organization }) {
       {tab === 'register' && <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} />}
       {tab === 'people' && <ChampionList org={org} today={h.today} data={c} manager={manager} />}
       {tab === 'pay' && manager && <ChampionPay org={org} today={h.today} data={c} />}
-      {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions.map((x) => x.name)} done={() => setTab('people')} />}
+      {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions} done={() => setTab('people')} />}
     </>
   );
 }
@@ -249,29 +249,33 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
   );
 }
 
-function ChampionUpload({ org, today, existing, done }: { org: Organization; today: string; existing: string[]; done: () => void }) {
+function ChampionUpload({ org, today, existing, done }: { org: Organization; today: string; existing: ExistingChampion[]; done: () => void }) {
   const toast = useToast();
   const [plan, setPlan] = useState<ChampionImportRow[] | null>(null);
   const [error, setError] = useState('');
   const ready = plan?.filter((r) => !r.skip) ?? [];
+  const updates = ready.filter((r) => r.updateId).length;
+  const adds = ready.length - updates;
+  const payText = (r: ChampionImportRow) => (r.monthlyPay != null ? `KES ${r.monthlyPay.toLocaleString('en-KE')} a month, fixed` : r.weeklyPay != null ? `KES ${r.weeklyPay.toLocaleString('en-KE')} a week` : '');
   return (
     <section className="card stack">
       <h2>Upload champions from Excel or CSV</h2>
-      <p className="small">1. Download a template. 2. Fill in one champion per row. 3. Choose the file and check the list.</p>
+      <p className="small">Choose your list: a name column and, if you have them, phone and weekly amount. New names are added; champions already here are updated. Or download a template.</p>
       <TemplateButtons name="Hope-champions-template" head={CHAMPION_TEMPLATE_HEAD} example={CHAMPION_TEMPLATE_EXAMPLE} />
       <SheetPicker onRows={(rows) => { const p = planChampionImport(rows, existing, today); setError(p ? '' : 'No "Name" column was found. Use the template\'s headings.'); setPlan(p); }} />
       {error && <p className="error" role="alert">{error}</p>}
       {plan && (
         <>
-          <p><b>{ready.length}</b> to add{plan.length > ready.length ? `, ${plan.length - ready.length} skipped` : ''}.</p>
+          <p><b>{adds}</b> to add, <b>{updates}</b> to update{plan.length > ready.length ? `, ${plan.length - ready.length} unchanged or skipped` : ''}.</p>
           <ul className="link-list">
-            {plan.slice(0, 100).map((r) => <li key={r.line}><div><span className="link-title">{r.name || `Row ${r.line}`}</span><span className="link-detail">{r.skip ? `Skipped: ${r.skip}` : [r.duty, r.phone, r.email].filter(Boolean).join(' · ') || 'Will add'}</span></div></li>)}
+            {plan.slice(0, 150).map((r) => <li key={r.line}><div><span className="link-title">{r.name || `Row ${r.line}`}</span><span className="link-detail">{r.skip ? (r.skip === 'already up to date' ? 'Already up to date' : `Skipped: ${r.skip}`)
+              : r.updateId ? `Update: ${r.changes.join(' · ')}` : `New · ${[r.phone, r.email, r.duty, payText(r)].filter(Boolean).join(' · ')}`}</span></div></li>)}
           </ul>
           <button type="button" className="btn btn-primary align-start" disabled={!ready.length} onClick={() => {
             importChampions(org.id, ready).catch((err) => toast.show(friendlyError(err)));
-            toast.show(`${ready.length} ${ready.length === 1 ? 'champion' : 'champions'} added`);
+            toast.show(`${adds} added, ${updates} updated`);
             setPlan(null); done();
-          }}>Add {ready.length} {ready.length === 1 ? 'champion' : 'champions'}</button>
+          }}>Save {ready.length} {ready.length === 1 ? 'champion' : 'champions'}</button>
         </>
       )}
     </section>

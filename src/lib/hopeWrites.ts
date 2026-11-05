@@ -141,7 +141,7 @@ export function updateChampion(orgId: string, id: string, changes: Partial<Champ
   return updateRecord(ref(orgId, 'champions', id), changes);
 }
 /** Weekly pay and card codes (Andy, 2026-11-05, 8A 11A), several champions at once. */
-export function setChampionFields(orgId: string, changes: Record<string, { weeklyPay?: number | null; code?: string }>) {
+export function setChampionFields(orgId: string, changes: Record<string, { weeklyPay?: number | null; monthlyPay?: number | null; code?: string }>) {
   const batch = writeBatch(db);
   for (const [id, c] of Object.entries(changes)) batch.update(ref(orgId, 'champions', id), { ...c, updatedAt: serverTimestamp(), updatedBy: me() });
   return trackWrite(batch.commit());
@@ -156,10 +156,19 @@ export function approveChampionPay(orgId: string, month: string, total: number, 
   return trackWrite(setDoc(ref(orgId, 'championPay', month), { orgId, month, total: Math.round(total), count, approvedBy: me(), approvedName: approvedName.slice(0, 120), approvedAt: serverTimestamp() }));
 }
 
+/** Adds new champions and updates the ones already here (Andy, 2026-11-05): phone, email, duty and pay. */
 export function importChampions(orgId: string, rows: ChampionImportRow[]) {
   const batch = writeBatch(db);
+  const pay = (r: ChampionImportRow) => (r.monthlyPay != null ? { monthlyPay: r.monthlyPay, weeklyPay: null } : r.weeklyPay != null ? { weeklyPay: r.weeklyPay, monthlyPay: null } : {});
   for (const r of rows) {
-    batch.set(doc(collection(db, 'organizations', orgId, 'champions')), { orgId, name: r.name, phone: r.phone, email: r.email, duty: r.duty, status: 'active', joinedOn: r.joinedOn, ...createStamps() });
+    if (r.updateId) {
+      batch.update(ref(orgId, 'champions', r.updateId), {
+        ...(r.phone ? { phone: r.phone } : {}), ...(r.email ? { email: r.email } : {}), ...(r.duty ? { duty: r.duty } : {}), ...pay(r),
+        updatedAt: serverTimestamp(), updatedBy: me(),
+      });
+      continue;
+    }
+    batch.set(doc(collection(db, 'organizations', orgId, 'champions')), { orgId, name: r.name, phone: r.phone, email: r.email, duty: r.duty, status: 'active', joinedOn: r.joinedOn, ...pay(r), ...createStamps() });
   }
   return trackWrite(batch.commit());
 }

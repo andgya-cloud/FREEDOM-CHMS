@@ -33,6 +33,11 @@ describe('Champion pay', () => {
   });
   it('reads the weekly amounts sheet', () => {
     const r = planPayUpload([['Name', 'Weekly amount'], ['Ann Wanjiru', 'KES 1,500'], ['Nobody', 200], ['Ben', '']], [ch('a', 'Ann Wanjiru', 0), ch('b', 'Ben', 0)]);
-    expect(r).toEqual({ found: [{ id: 'a', name: 'Ann Wanjiru', amount: 1500 }], notFound: ['Nobody', 'Ben (no amount)'] });
+    expect(r).toEqual({ found: [{ id: 'a', name: 'Ann Wanjiru', amount: 1500, monthly: false }], notFound: ['Nobody', 'Ben (no amount)'] });
+  });
+  it('reads "9000 - fixed" as a fixed monthly amount, paid whatever the weeks', () => {
+    const r = planPayUpload([['NAMES', 'Appreciation per week'], ['Dorothy Mohat', '9000 - fixed']], [ch('d', 'Dorothy Mohat', 0)]);
+    expect(r!.found).toEqual([{ id: 'd', name: 'Dorothy Mohat', amount: 9000, monthly: true }]);
+    expect(monthPay([{ ...ch('d', 'Dorothy Mohat', 0), monthlyPay: 9000 }], [], [], '2026-11').total).toBe(9000);
   });
 });

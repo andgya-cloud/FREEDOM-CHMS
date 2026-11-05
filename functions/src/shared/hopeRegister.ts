@@ -6,6 +6,7 @@
  */
 import { addDays } from './metrics.js';
 import { normalizeCode, readPayBy, type ChildPayment } from './hope.js';
+import { formatPhone, normalizePhone } from './phone.js';
 
 // ---- The children's register --------------------------------------------------------------------
 
@@ -96,6 +97,8 @@ export interface Champion {
   weeklyPay?: number | null;
   /** Their QR card code, CC-0001 (11A). */
   code?: string | null;
+  /** A fixed amount for the month whatever the weeks, in KES ("9000 - fixed" on Andy's list, 2026-11-05). */
+  monthlyPay?: number | null;
   deletedAt?: unknown;
 }
 
@@ -141,8 +144,8 @@ type Cell = string | number | Date | null | undefined;
 
 export const CHILD_TEMPLATE_HEAD = ['Name', 'Gender', 'Date of birth', 'School', 'Class', 'Sponsor name', 'Sponsor phone', 'Sponsor email', 'Parent name', 'Parent phone', 'Joined on', 'Photo consent', 'Guardian consent', 'Pay by', 'Pay number', 'Account', 'Pay to', 'Amount', 'Payment note'];
 export const CHILD_TEMPLATE_EXAMPLE = ['Faith Akinyi', 'Female', '2016-05-14', 'Kibera Primary', 'Grade 4', 'John Smith', '', 'john@example.org', 'Mary Atieno', '0712345678', '2025-01-11', 'Yes', 'Yes', 'Paybill', '247247', '804212#Faith', 'Kibera Primary', 'KES 1,500', ''];
-export const CHAMPION_TEMPLATE_HEAD = ['Name', 'Phone', 'Email', 'Duty', 'Joined on'];
-export const CHAMPION_TEMPLATE_EXAMPLE = ['Peter Otieno', '0722345678', 'peter@example.org', 'Football coach', '2025-03-01'];
+export const CHAMPION_TEMPLATE_HEAD = ['Name', 'Phone', 'Email', 'Duty', 'Joined on', 'Weekly amount'];
+export const CHAMPION_TEMPLATE_EXAMPLE = ['Peter Otieno', '0722345678', 'peter@example.org', 'Football coach', '2025-03-01', '1200'];
 
 const clean = (v: Cell) => (v instanceof Date ? v.toISOString().slice(0, 10) : v == null ? '' : String(v)).replace(/\s+/g, ' ').trim();
 const key = (v: Cell) => clean(v).toLowerCase().replace(/[^a-z]/g, '');
@@ -168,12 +171,14 @@ const emailOk = (e: string) => !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 /** Finds the header row (the first with a "Name" column) and maps each column by its heading. */
 function columns(rows: readonly (readonly Cell[])[], head: readonly string[]) {
   const wanted = head.map(key);
-  const at = rows.findIndex((r) => r.some((c) => key(c) === 'name' || key(c) === 'fullname' || key(c) === 'childsname'));
+  const at = rows.findIndex((r) => r.some((c) => ['name', 'names', 'fullname', 'fullnames', 'childsname', 'championname', 'championsname'].includes(key(c))));
   if (at < 0) return null;
   const map: Record<string, number> = {};
   rows[at]!.forEach((c, i) => {
     let k = key(c);
-    if (k === 'fullname' || k === 'childsname' || k === 'childname') k = 'name';
+    if (['fullname', 'fullnames', 'names', 'childsname', 'childname', 'championname', 'championsname'].includes(k)) k = 'name';
+    if (wanted.includes('weeklyamount') && /appreciation|weekly|perweek|allowance|amount|pay/.test(k)) k = 'weeklyamount';
+    if (wanted.includes('phone') && ['contact', 'contacts', 'phonenumber', 'mobile', 'telephone', 'tel', 'phoneno'].includes(k)) k = 'phone';
     if (k === 'dob' || k === 'birthday') k = 'dateofbirth';
     if (k === 'sponsor' || k === 'sponsorsname') k = 'sponsorname';
     if (k === 'parent' || k === 'parentsname' || k === 'guardianname' || k === 'guardian') k = 'parentname';
@@ -277,26 +282,70 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
   return out;
 }
 
-export interface ChampionImportRow { line: number; name: string; phone: string; email: string; duty: string; joinedOn: string | null; skip: string | null }
+export interface ChampionImportRow {
+  line: number; name: string; phone: string; email: string; duty: string; joinedOn: string | null;
+  /** What they earn each week they come, or a fixed amount for the month ("9000 - fixed"); null when the sheet has none. */
+  weeklyPay: number | null; monthlyPay: number | null;
+  /** An existing champion this row updates (Andy, 2026-11-05: the list updates the champions already here). */
+  updateId: string | null;
+  /** What the update changes, for the check list. */
+  changes: string[];
+  skip: string | null;
+}
+export type ExistingChampion = Pick<Champion, 'id' | 'name' | 'phone' | 'email' | 'duty' | 'weeklyPay' | 'monthlyPay'>;
 
-export function planChampionImport(rows: readonly (readonly Cell[])[], existingNames: readonly string[], today: string): ChampionImportRow[] | null {
+const nameWords = (n: string) => n.toLowerCase().replace(/[^a-z ]/g, ' ').split(' ').filter(Boolean);
+/** The same person: the same words, or the same first and last word. */
+export function sameChampion(a: string, b: string): boolean {
+  const x = nameWords(a), y = nameWords(b);
+  if (!x.length || !y.length) return false;
+  return x.join(' ') === y.join(' ') || (x.length > 1 && y.length > 1 && x[0] === y[0] && x[x.length - 1] === y[y.length - 1]);
+}
+/** "1200" is weekly; "9000 - fixed" (or "a month") is a fixed amount for the month. */
+export function readChampionPay(v: Cell): { weekly: number | null; monthly: number | null } {
+  const t = clean(v);
+  const n = Number(t.replace(/,/g, '').match(/\d+(\.\d+)?/)?.[0] ?? NaN);
+  if (!t || !Number.isFinite(n)) return { weekly: null, monthly: null };
+  return /fixed|month/i.test(t) ? { weekly: null, monthly: Math.round(n) } : { weekly: Math.round(n), monthly: null };
+}
+const tidyPhone = (v: Cell) => { const t = clean(v); const p = normalizePhone(t); return p ? formatPhone(p) : t; };
+
+/**
+ * Reads the champions sheet. New names are added; a champion already here is updated with the sheet's phone,
+ * email, duty and pay (Andy's "contacts and appreciation" list, 2026-11-05).
+ */
+export function planChampionImport(rows: readonly (readonly Cell[])[], existing: readonly ExistingChampion[], today: string): ChampionImportRow[] | null {
   const cols = columns(rows, CHAMPION_TEMPLATE_HEAD);
   if (!cols) return null;
-  const have = new Set(existingNames.map((n) => n.trim().toLowerCase()));
   const seen = new Set<string>();
   const out: ChampionImportRow[] = [];
+  const kes = (n: number) => `KES ${n.toLocaleString('en-KE')}`;
   rows.slice(cols.at + 1).forEach((r, i) => {
     const name = clean(cols.get(r, 'Name'));
     if (!name && r.every((c) => !clean(c))) return;
     const email = clean(cols.get(r, 'Email'));
     const joined = cellDate(cols.get(r, 'Joined on'));
-    const k = name.toLowerCase();
-    out.push({
-      line: cols.at + 2 + i, name: name.slice(0, 120), phone: clean(cols.get(r, 'Phone')).slice(0, 30), email: emailOk(email) ? email.slice(0, 120) : '',
+    const pay = readChampionPay(cols.get(r, 'Weekly amount'));
+    const k = nameWords(name).join(' ');
+    const row: ChampionImportRow = {
+      line: cols.at + 2 + i, name: name.slice(0, 120), phone: tidyPhone(cols.get(r, 'Phone')).slice(0, 30), email: emailOk(email) ? email.slice(0, 120) : '',
       duty: clean(cols.get(r, 'Duty')).slice(0, 80), joinedOn: joined && joined <= today ? joined : null,
-      skip: name.length < 2 ? 'no name' : have.has(k) ? 'already a champion' : seen.has(k) ? 'listed twice' : null,
-    });
+      weeklyPay: pay.weekly, monthlyPay: pay.monthly, updateId: null, changes: [],
+      skip: name.length < 2 ? 'no name' : seen.has(k) ? 'listed twice' : null,
+    };
     seen.add(k);
+    const was = row.skip ? undefined : existing.find((c) => sameChampion(c.name, name));
+    if (was) {
+      row.updateId = was.id;
+      const samePhone = (normalizePhone(was.phone) ?? was.phone) === (normalizePhone(row.phone) ?? row.phone);
+      if (row.phone && !samePhone) row.changes.push(`phone ${row.phone}`);
+      if (row.email && row.email.toLowerCase() !== (was.email || '').toLowerCase()) row.changes.push(`email ${row.email}`);
+      if (row.duty && row.duty !== was.duty) row.changes.push(`duty ${row.duty}`);
+      if (row.weeklyPay != null && (row.weeklyPay !== (was.weeklyPay ?? null) || was.monthlyPay)) row.changes.push(`${kes(row.weeklyPay)} a week`);
+      if (row.monthlyPay != null && row.monthlyPay !== (was.monthlyPay ?? null)) row.changes.push(`${kes(row.monthlyPay)} a month, fixed`);
+      if (!row.changes.length) row.skip = 'already up to date';
+    }
+    out.push(row);
   });
   return out;
 }
