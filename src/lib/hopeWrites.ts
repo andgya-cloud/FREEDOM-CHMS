@@ -131,7 +131,7 @@ export function markMany(orgId: string, name: 'hopeDays' | 'championDays', date:
   return trackWrite(setDoc(ref(orgId, name, date), { orgId, date, marks: entries, updatedAt: serverTimestamp(), updatedBy: me() }, { merge: true }));
 }
 
-export interface ChampionInput { name: string; phone: string; email: string; duty: string; status: 'active' | 'left'; joinedOn: string | null }
+export interface ChampionInput { name: string; phone: string; email: string; duty: string; status: 'active' | 'left'; joinedOn: string | null; weeklyPay?: number | null; monthlyPay?: number | null }
 export function addChampion(orgId: string, input: ChampionInput) {
   const r = doc(collection(db, 'organizations', orgId, 'champions'));
   void trackWrite(setDoc(r, { orgId, ...input, ...createStamps() }));

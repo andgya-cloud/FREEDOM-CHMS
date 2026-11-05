@@ -2437,3 +2437,8 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .cp-table td, .cp-table th { white-space: nowrap; }
 .cp-table td:not(:first-child), .cp-table th:not(:first-child) { text-align: right; }
 .cp-weekly { width: 6.5rem; text-align: right; padding: .3rem .4rem; }
+/* Extra amounts inside the Edit champion box (Andy, 2026-11-05). */
+.cp-extras { border: 1px solid var(--border, #dfe6e0); border-radius: 12px; padding: .75rem 1rem 1rem; margin: 0; }
+.cp-extras legend { font-weight: 600; padding: 0 .35rem; }
+.cp-extras .link-list li { display: flex; align-items: center; gap: .75rem; padding: .4rem .6rem; }
+.cp-extras .grow { display: flex; flex-direction: column; flex: 1; }

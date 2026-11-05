@@ -4,7 +4,8 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useChampions } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
-import { addChampion, importChampions, markChampion, markMany, updateChampion, type ChampionInput } from '../../lib/hopeWrites';
+import { addChampion, addChampionExtra, importChampions, markChampion, markMany, removeChampionExtra, updateChampion, type ChampionInput } from '../../lib/hopeWrites';
+import { useChampionPay } from '../../state/useHope';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
 import {
@@ -182,15 +183,37 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
   const [showLeft, setShowLeft] = useState(false);
   const [error, setError] = useState('');
   const rows = data.champions.filter((x) => showLeft || x.status === 'active');
+  // Appreciation per week, or a fixed amount a month, and this month's extra amounts (Andy, 2026-11-05).
+  const pay = useChampionPay(org.id);
+  const month = today.slice(0, 7);
+  const [amount, setAmount] = useState('');
+  const [fixed, setFixed] = useState(false);
+  const [extra, setExtra] = useState({ amount: '', reason: '' });
+  const mine = pay.extras.filter((x) => x.championId === editing && x.month === month);
+  const kes = (n: number) => `KES ${n.toLocaleString('en-KE')}`;
+  const MONTH_NAME = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(new Date(`${month}-15T12:00:00Z`));
 
   function open(x: Champion | null) {
     setError('');
     setEditing(x ? x.id : 'new');
     setForm(x ? { name: x.name, phone: x.phone, email: x.email, duty: x.duty, status: x.status, joinedOn: x.joinedOn } : { ...EMPTY, joinedOn: today });
+    setFixed(!!x?.monthlyPay);
+    setAmount(x?.monthlyPay ? String(x.monthlyPay) : x?.weeklyPay ? String(x.weeklyPay) : '');
+    setExtra({ amount: '', reason: '' });
+  }
+  function addExtra() {
+    const n = Math.round(Number(extra.amount.replace(/[^\d.]/g, '')));
+    if (!editing || editing === 'new' || !(n > 0) || extra.reason.trim().length < 2) { toast.show('Type the amount and the reason.'); return; }
+    addChampionExtra(org.id, editing, month, n, extra.reason).catch((err) => toast.show(friendlyError(err)));
+    setExtra({ amount: '', reason: '' });
+    toast.show('Extra amount added');
   }
   function submit(e: FormEvent) {
     e.preventDefault();
-    const clean = { ...form, name: form.name.trim().slice(0, 120), phone: form.phone.trim().slice(0, 30), email: form.email.trim().slice(0, 120), duty: form.duty.trim().slice(0, 80), joinedOn: form.joinedOn || null };
+    const n = amount.trim() === '' ? null : Math.round(Number(amount.replace(/[^\d.]/g, '')));
+    if (n != null && !Number.isFinite(n)) return setError('The appreciation amount does not look right.');
+    const clean = { ...form, name: form.name.trim().slice(0, 120), phone: form.phone.trim().slice(0, 30), email: form.email.trim().slice(0, 120), duty: form.duty.trim().slice(0, 80), joinedOn: form.joinedOn || null,
+      weeklyPay: fixed ? null : n, monthlyPay: fixed ? n : null };
     if (clean.name.length < 2) return setError('Enter the champion\'s name.');
     if (clean.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean.email)) return setError('The email does not look right.');
     try {
@@ -213,6 +236,29 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
         <label className="field"><span>Usual duty</span><input value={form.duty} maxLength={80} placeholder="Football coach, teacher, kitchen…" onChange={(e) => setForm({ ...form, duty: e.target.value })} /></label>
         <label className="field"><span>Joined on</span><input type="date" value={form.joinedOn ?? ''} max={today} onChange={(e) => setForm({ ...form, joinedOn: e.target.value || null })} /></label>
       </div>
+      <div className="field-row">
+        <label className="field"><span>Appreciation (KES)</span><input inputMode="numeric" value={amount} placeholder="1200" onChange={(e) => setAmount(e.target.value)} /></label>
+        <label className="field"><span>Paid</span>
+          <select value={fixed ? 'month' : 'week'} onChange={(e) => setFixed(e.target.value === 'month')}>
+            <option value="week">Per week they come</option>
+            <option value="month">Fixed, per month</option>
+          </select>
+        </label>
+      </div>
+      {editing && editing !== 'new' && (
+        <fieldset className="stack cp-extras">
+          <legend>Extra amounts for {MONTH_NAME}</legend>
+          {mine.length > 0 && (
+            <ul className="link-list">{mine.map((x) => <li key={x.id}><span className="grow"><b>{kes(x.amount)}</b><span className="small muted">{x.reason}</span></span>
+              <button type="button" className="btn btn-quiet btn-small" onClick={() => removeChampionExtra(org.id, x.id).catch((err) => toast.show(friendlyError(err)))}>Remove</button></li>)}</ul>
+          )}
+          <div className="field-row">
+            <label className="field"><span>Amount (KES)</span><input inputMode="numeric" value={extra.amount} placeholder="500" onChange={(e) => setExtra({ ...extra, amount: e.target.value })} /></label>
+            <label className="field"><span>Reason</span><input maxLength={200} value={extra.reason} placeholder="Transport for the trip, extra day…" onChange={(e) => setExtra({ ...extra, reason: e.target.value })} /></label>
+          </div>
+          <button type="button" className="btn align-start" onClick={addExtra}>+ Add extra amount</button>
+        </fieldset>
+      )}
       {editing !== 'new' && <label className="check"><input type="checkbox" checked={form.status === 'left'} onChange={(e) => setForm({ ...form, status: e.target.checked ? 'left' : 'active' })} /><span>No longer serving (kept in the records)</span></label>}
       {error && <p className="error" role="alert">{error}</p>}
       <div className="chips"><button type="submit" className="btn btn-primary">Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(null)}>Cancel</button></div>
@@ -234,7 +280,7 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
                   <Avatar name={x.name} />
                   <div>
                     <span className="link-title">{x.name}{x.status === 'left' && <span className="badge badge-muted">No longer serving</span>}</span>
-                    <span className="link-detail">{[x.duty, x.phone, x.email].filter(Boolean).join(' · ') || 'No details yet'}</span>
+                    <span className="link-detail">{[x.duty, x.phone, x.email, x.monthlyPay ? `${kes(x.monthlyPay)} a month` : x.weeklyPay ? `${kes(x.weeklyPay)} a week` : ''].filter(Boolean).join(' · ') || 'No details yet'}</span>
                     <span className="link-detail">{s.rate.marked ? `${s.rate.present} of ${s.rate.present + s.rate.absent} days · ${s.late} late · ${s.hours} hours served` : 'Not marked yet'}</span>
                   </div>
                   <PctBadge pct={s.rate.pct} />
