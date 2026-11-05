@@ -2412,3 +2412,7 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .door-last { font-size: 1.15rem; font-weight: 600; padding: 12px 14px; border-radius: 12px; margin: 0; }
 .door-last.ok { background: rgba(22, 160, 88, 0.14); color: #0a6b38; }
 .door-last.bad { background: rgba(200, 60, 60, 0.12); color: #9b2222; }
+/* Check in right under the greeting (Andy, 2026-11-05) */
+.ht-hero-checkin { margin: 14px 0 10px; max-width: 460px; padding: 14px 18px; }
+.ht-hero-checkin .grow > span { display: block; opacity: 0.9; font-size: 0.9rem; }
+.ht-hero-checkin .ht-sat-meter { display: block; margin-top: 8px; }

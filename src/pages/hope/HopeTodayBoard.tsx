@@ -20,18 +20,16 @@ type H = ReturnType<typeof useHopePage>;
  * helpers here, the meals and the clubs meeting today. Once children are checked in, the meals are one tap:
  * "28 children here. Serve 28 breakfasts, lunches and fruit?"
  */
-export function LiveBoard({ org, h, days, helpers, meals, clubsToday, clubDays, marker }: {
+export function LiveBoard({ org, h, days, helpers, meals, clubsToday, clubDays }: {
   org: Organization; h: H; days: HopeDay[]; helpers: { uid: string; name: string; t: string }[]; meals: (MealDay & { id: string })[];
-  clubsToday: Club[]; clubDays: ClubDay[]; marker: boolean;
+  clubsToday: Club[]; clubDays: ClubDay[]; marker?: boolean;
 }) {
   const { profile } = useAuth();
   const toast = useToast();
-  const current = h.children.filter(isCurrentChild).length;
   const kids = rateFrom(Object.values(days.find((d) => d.date === h.today)?.marks ?? {}));
   const today = meals.find((m) => m.date === h.today);
   const counter = canCountMeals(profile, org.id);
   const [skip, setSkip] = useState(false);
-  const share = current ? Math.min(100, Math.round((kids.present / current) * 100)) : 0;
 
   function serve() {
     try {
@@ -42,12 +40,6 @@ export function LiveBoard({ org, h, days, helpers, meals, clubsToday, clubDays, 
 
   return (
     <section className="card ht-live" aria-label="Today, live">
-      <Link to="/hope/register?d=today" className="ht-live-main">
-        <span className="ht-checkin-ico" aria-hidden="true">✅</span>
-        <span className="grow"><b>{marker ? (kids.marked ? 'Carry on checking in' : 'Check in') : 'Children here'}</b>
-          <span>{kids.present} of {current} children here{kids.absent ? ` · ${kids.absent} absent` : ''}{kids.excused ? ` · ${kids.excused} excused` : ''}</span></span>
-        <span className="ht-sat-meter" aria-hidden="true"><i style={{ width: `${share}%` }} /></span>
-      </Link>
       <div className="ht-live-stats">
         <Link to="/hope/register?d=today"><span aria-hidden="true">👧</span><b>{kids.present}</b><span>children here</span></Link>
         <Link to="/hope/register?w=champions"><span aria-hidden="true">🙋</span><b>{helpers.length}</b><span>{helpers.length ? helpers.map((x) => x.name.split(' ')[0]).join(', ') : 'helpers here'}</span></Link>
@@ -69,21 +61,27 @@ export function LiveBoard({ org, h, days, helpers, meals, clubsToday, clubDays, 
   );
 }
 
-/** Other days (11A): a calm line about last Saturday and the next one, with a small Check in for a weekday visit. */
-export function CalmDay({ h, days, marker }: { h: H; days: HopeDay[]; marker: boolean }) {
+/**
+ * Check in, right under the greeting (Andy, 2026-11-05). On an open day it shows how many are here; on other days
+ * a calm line about last Saturday and the next one.
+ */
+export function HeroCheckin({ h, days, marker, openDay }: { h: H; days: HopeDay[]; marker: boolean; openDay: boolean }) {
+  const current = h.children.filter(isCurrentChild).length;
+  const kids = rateFrom(Object.values(days.find((d) => d.date === h.today)?.marks ?? {}));
   const last = [...days].filter((d) => Object.keys(d.marks ?? {}).length > 0 && d.date < h.today).sort((a, b) => b.date.localeCompare(a.date))[0];
   const r = last ? rateFrom(Object.values(last.marks)) : null;
   const dow = new Date(`${h.today}T12:00:00Z`).getUTCDay();
-  const toSat = (6 - dow + 7) % 7 || 7;
+  const toSat = (6 - dow + 7) % 7;
+  const calm = `${last && r ? `${formatDateKey(last.date)}: ${r.present} came. ` : ''}${toSat ? `Saturday is in ${toSat} ${toSat === 1 ? 'day' : 'days'}.` : ''}`;
+  const sub = openDay || kids.marked ? `${kids.present} of ${current} children here${kids.absent ? ` · ${kids.absent} absent` : ''}` : `A quiet day. ${calm}`;
+  const share = current ? Math.min(100, Math.round((kids.present / current) * 100)) : 0;
+  if (!marker) return <p className="small muted ht-hero-calm">{sub}</p>;
   return (
-    <section className="card ht-calm">
-      <span className="ht-calm-ico" aria-hidden="true">🌿</span>
-      <span className="grow">
-        <b>A quiet day at the centre</b>
-        <span className="small muted">{last && r ? `${formatDateKey(last.date)}: ${r.present} came${r.pct != null ? ` (${r.pct}%)` : ''}. ` : ''}Saturday is in {toSat} {toSat === 1 ? 'day' : 'days'}.</span>
-      </span>
-      {marker && <Link to="/hope/register?d=today" className="btn">✅ Check in</Link>}
-    </section>
+    <Link to="/hope/register?d=today" className="ht-checkin ht-hero-checkin">
+      <span className="ht-checkin-ico" aria-hidden="true">✅</span>
+      <span className="grow"><b>{kids.marked ? 'Carry on checking in' : 'Check in'}</b><span>{sub}</span>
+        {(openDay || kids.marked > 0) && <span className="ht-sat-meter" aria-hidden="true"><i style={{ width: `${share}%` }} /></span>}</span>
+    </Link>
   );
 }
 

@@ -9,7 +9,7 @@ import { markHelperArrived, requestAbsenceCheck } from '../../lib/hopeWrites';
 import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { HelperGuide } from './HelperGuide';
 import { useChatSummary } from './HopeChatsPage';
-import { CalmDay, LiveBoard, NeedsUs } from './HopeTodayBoard';
+import { HeroCheckin, LiveBoard, NeedsUs } from './HopeTodayBoard';
 import { nowTime } from './registerParts';
 import { SceneVideo } from '../../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
@@ -147,15 +147,13 @@ function LeaderToday({ org }: { org: Organization }) {
 
   return (
     <div className="page lav-today">
-      {openDay ? (
-        <LiveBoard org={org} h={h} days={days} helpers={helpers} meals={meals} clubsToday={clubsToday} clubDays={clubs.days} marker={marker} />
-      ) : <CalmDay h={h} days={days} marker={marker} />}
-
       <section className="card lav-hero">
         <div className="lav-hero-text">
           <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }).format(new Date())}</span>
           <h1 className="lav-greet">{timeGreeting(tz)}{first ? `, ${first}` : ''}</h1>
           <p className="lav-org"><em>{org.name}</em></p>
+          {/* Check in sits right under the greeting (Andy, 2026-11-05). */}
+          <HeroCheckin h={h} days={days} marker={marker} openDay={openDay} />
           <p>{h.loading ? '' : current.length ? `${current.length} ${current.length === 1 ? 'child' : 'children'} and ${serving} ${serving === 1 ? 'champion' : 'champions'}.` : 'Register the first child to start.'}</p>
         </div>
         <div className="lav-scene">
@@ -163,6 +161,8 @@ function LeaderToday({ org }: { org: Organization }) {
           <FirstRunChecklist variant="scene" />
         </div>
       </section>
+
+      {openDay && <LiveBoard org={org} h={h} days={days} helpers={helpers} meals={meals} clubsToday={clubsToday} clubDays={clubs.days} marker={marker} />}
 
       {can('people.read') && <NeedsUs org={org} h={h} days={days} />}
 
