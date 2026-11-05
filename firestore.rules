@@ -1171,7 +1171,8 @@ service cloud.firestore {
                'schoolClass', 'payment', 'sponsorship', 'allergies', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', childId)
           && (request.resource.data.get('sponsorship', null) == null || (request.resource.data.sponsorship is map
-               && request.resource.data.sponsorship.keys().hasOnly(['childId', 'status', 'sponsorId', 'sponsorName', 'registeredOn', 'completesOn', 'centre', 'updatedOn'])
+               && request.resource.data.sponsorship.keys().hasOnly(['childId', 'status', 'sponsorId', 'sponsorName', 'registeredOn', 'completesOn', 'centre', 'updatedOn', 'listName'])
+               && shortText(request.resource.data.sponsorship.get('listName', ''), 120)
                && shortText(request.resource.data.sponsorship.childId, 20) && shortText(request.resource.data.sponsorship.status, 80)
                && shortText(request.resource.data.sponsorship.sponsorId, 30) && shortText(request.resource.data.sponsorship.sponsorName, 120)
                && shortText(request.resource.data.sponsorship.centre, 120)

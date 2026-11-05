@@ -20,7 +20,7 @@ export function ChildrenPage() {
   return <HopeGate title="Children">{(org) => <Children org={org} />}</HopeGate>;
 }
 
-type Show = 'current' | 'departing' | 'exited' | 'consent' | 'nosponsor' | 'birthdays' | 'missed' | 'owing' | 'concerns' | 'all' | 'allergies' | 'noclass' | `class-${HopeClassId}`;
+type Show = 'current' | 'departing' | 'exited' | 'consent' | 'nosponsor' | 'birthdays' | 'missed' | 'owing' | 'concerns' | 'all' | 'allergies' | 'noclass' | 'notonlist' | `class-${HopeClassId}`;
 type Sort = 'name' | 'age' | 'pct' | 'code';
 
 /**
@@ -45,7 +45,7 @@ function Children({ org }: { org: Organization }) {
 
   const SHOWS: [Show, string, boolean][] = [
     ['current', 'Current children', true], ['departing', 'Departing', true], ['exited', 'Past children', true],
-    ['consent', 'Consent missing', true], ['nosponsor', 'No sponsor yet', true], ['birthdays', 'Birthdays this week', true],
+    ['consent', 'Consent missing', true], ['nosponsor', 'No sponsor yet', true], ['notonlist', 'Not on KE-014', true], ['birthdays', 'Birthdays this week', true],
     ['missed', 'Missed the last 3 Saturdays', true], ['owing', 'Fees still to pay this term', canKeepFees(profile, org.id)],
     ['concerns', 'Safeguarding concern open', h.pastoral], ['allergies', 'Allergies', true],
     // The classes by age, each with its stone (Andy, 2026-11-05, 5A).
@@ -59,6 +59,7 @@ function Children({ org }: { org: Organization }) {
       case 'exited': return c.status === 'exited';
       case 'consent': return consentMissing(c);
       case 'nosponsor': return isCurrentChild(c) && !c.sponsorName;
+      case 'notonlist': return isCurrentChild(c) && !c.sponsorship?.childId;
       case 'birthdays': return isCurrentChild(c) && birthdayThisWeek(c.dateOfBirth, h.today);
       case 'missed': return isCurrentChild(c) && missedSaturdays(c.id, c.enrolledOn, days);
       case 'owing': return isCurrentChild(c) && !!owing?.has(c.id);

@@ -1,4 +1,4 @@
-import type { SponsorRowPlan } from '../../functions/src/shared/hopeSponsorship';
+import type { ChildSponsorship, SponsorRowPlan } from '../../functions/src/shared/hopeSponsorship';
 import { updatePerson } from './peopleWrites';
 import { collection, deleteField, doc, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
 import { auth, db } from '../firebase';
@@ -94,8 +94,16 @@ export function updateChild(orgId: string, childId: string, changes: Partial<Chi
  * Saves a sponsorship list upload (Andy, 2026-11-05): each child's sponsorship, the empty fields it fills, and the
  * gender on the person when it was blank. One child at a time, so a large list keeps within the rules' limits.
  */
-export async function saveSponsorList(orgId: string, rows: SponsorRowPlan[], onProgress?: (done: number) => void) {
+export async function saveSponsorList(orgId: string, rows: SponsorRowPlan[], onProgress?: (done: number) => void,
+  notOnList: { id: string; sponsorship: ChildSponsorship }[] = []) {
   let done = 0;
+  // Children not on the list are marked "Not on KE-014" (Andy, 2026-11-05, 5A).
+  for (let i = 0; i < notOnList.length; i += 10) {
+    await Promise.all(notOnList.slice(i, i + 10).map(async (c) => {
+      await updateRecord(ref(orgId, 'children', c.id), { sponsorship: c.sponsorship });
+      onProgress?.(++done);
+    }));
+  }
   for (let i = 0; i < rows.length; i += 10) {
     await Promise.all(rows.slice(i, i + 10).map(async (r) => {
       const { gender, ...fill } = r.fill;

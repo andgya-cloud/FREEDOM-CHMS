@@ -36,6 +36,15 @@ describe('v176 Hope', () => {
       sponsorship: { childId: 'C467370', status: 'Sponsored', sponsorId: '691874', sponsorName: 'Josh', registeredOn: '2023-10-09', completesOn: '2034-11-30', centre: 'KE-014 Freedom Shujaa Hope Center', updatedOn: '2026-11-05' },
       sponsorName: 'Josh', ...upd('director'),
     }));
+    // v177: the name as KE-014 spells it, and the "Not on KE-014" mark.
+    await assertSucceeds(updateDoc(doc(as('director'), `${O}/children/c1`), {
+      sponsorship: { childId: 'C467370', status: 'Sponsored', sponsorId: '691874', sponsorName: 'Josh', registeredOn: '2023-10-09', completesOn: '2034-11-30', centre: 'KE-014', updatedOn: '2026-11-05', listName: 'Abdi R. Kibugi' },
+      ...upd('director'),
+    }));
+    await assertSucceeds(updateDoc(doc(as('director'), `${O}/children/c1`), {
+      sponsorship: { childId: '', status: 'Not on KE-014', sponsorId: '', sponsorName: '', registeredOn: null, completesOn: null, centre: 'KE-014', updatedOn: '2026-11-05' },
+      ...upd('director'),
+    }));
   });
   it('lets the Director keep champion pay', async () => {
     await assertSucceeds(updateDoc(doc(as('director'), `${O}/champions/ch1`), { weeklyPay: 1500, code: 'CC-0001', ...upd('director') }));

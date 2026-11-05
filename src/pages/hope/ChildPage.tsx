@@ -10,6 +10,7 @@ import { fillMessage, waLink } from '../../../functions/src/shared/hopeMessages'
 import { PasswordConfirm } from '../../components/PasswordConfirm';
 import { ClassChip } from '../../components/Stone';
 import { classOf, hasAllergy, NO_ALLERGIES } from '../../../functions/src/shared/hopeClasses';
+import { NOT_ON_LIST } from '../../../functions/src/shared/hopeSponsorship';
 import { isHopeDirector } from '../../../functions/src/shared/hopePhotos';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
@@ -155,7 +156,8 @@ function ChildScreen({ org }: { org: Organization }) {
             <div><dt>Age</dt><dd>{age != null ? `${age} years` : 'Not known'}</dd></div>
             <div><dt>Birthday</dt><dd>{born ?? 'Not known'}{toBirthday != null && toBirthday <= 7 ? (toBirthday === 0 ? ' 🎈 today!' : ` 🎈 in ${toBirthday} ${toBirthday === 1 ? 'day' : 'days'}`) : ''}</dd></div>
             <div><dt>School</dt><dd>{child.school || 'Not known'}{child.schoolClass ? ` · ${child.schoolClass}` : ''}</dd></div>
-            <div><dt>Child ID</dt><dd>{sp?.childId || 'Not on the list yet'}</dd></div>
+            <div><dt>Child ID</dt><dd>{sp?.childId || (sp?.status === NOT_ON_LIST ? NOT_ON_LIST : 'Not on the list yet')}</dd></div>
+            {sp?.listName && sp.listName.toLowerCase() !== name.toLowerCase() && <div><dt>Name on KE-014</dt><dd>{sp.listName}</dd></div>}
             <div><dt>Registration date</dt><dd>{registered ? formatDateKey(registered) : 'Not known'}</dd></div>
             <div><dt>Programme completion</dt><dd>{sp?.completesOn ? formatDateKey(sp.completesOn) : 'Not known'}</dd></div>
             <div><dt>Sponsorship status</dt><dd>{sp?.status || 'Not known'}</dd></div>
