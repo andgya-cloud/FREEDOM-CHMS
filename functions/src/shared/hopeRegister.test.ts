@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cellDate, missedSaturdays, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
+  cellDate, missedSaturdays, needsCall, whatFile, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
   type ChampionDay, type HopeDay,
 } from './hopeRegister';
 
@@ -153,4 +153,22 @@ describe('missedSaturdays (v173)', () => {
   it('not if one was excused', () => { expect(missedSaturdays('c', null, days)).toBe(false); });
   it('not if they joined after the first of them', () => { expect(missedSaturdays('a', '2026-10-20', days)).toBe(false); });
   it('not before three Saturdays were marked', () => { expect(missedSaturdays('a', null, days.slice(0, 2))).toBe(false); });
+});
+
+describe('v182', () => {
+  const day = (date: string, s: string) => ({ id: date, orgId: 'o', date, marks: { k1: { s }, k2: { s: 'present' } } }) as never;
+  const days = [day('2026-10-17', 'absent'), day('2026-10-24', 'absent'), day('2026-10-31', 'absent')];
+  it('lists a child to call until the parent is called after the latest Saturday', () => {
+    expect(needsCall({ id: 'k1', enrolledOn: '2026-01-01' }, days)).toBe(true);
+    expect(needsCall({ id: 'k1', enrolledOn: '2026-01-01', calledOn: '2026-11-02' }, days)).toBe(false);
+    expect(needsCall({ id: 'k1', enrolledOn: '2026-01-01', calledOn: '2026-10-25' }, days)).toBe(true);
+    expect(needsCall({ id: 'k2', enrolledOn: '2026-01-01' }, days)).toBe(false);
+  });
+  it('tells what a spreadsheet is from its headings', () => {
+    expect(whatFile([['Child Registration List'], ['Child ID', 'Name', 'Sponsor']])).toBe('sponsors');
+    expect(whatFile([['NAMES', 'CONTACT', 'Appreciation per week']])).toBe('champions');
+    expect(whatFile([['Name', 'Phone', 'Email', 'Duty']])).toBe('champions');
+    expect(whatFile([['Name', 'Gender', 'Date of birth', 'School']])).toBe('children');
+    expect(whatFile([['Item', 'Price']])).toBe(null);
+  });
 });

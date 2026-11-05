@@ -391,6 +391,10 @@ service cloud.firestore {
       function shortText(v, max) {
         return v is string && v.size() <= max;
       }
+      // Text that may also be cleared (v182: a child's allergies, departing note and the like can be null).
+      function optText(v, max) {
+        return v == null || shortText(v, max);
+      }
       function existsInOrg(collection, id) {
         return existsAfter(/databases/$(database)/documents/organizations/$(orgId)/$(collection)/$(id));
       }
@@ -1168,8 +1172,10 @@ service cloud.firestore {
         allow create, update: if orgWrite(orgId, 'people.write')
           && request.resource.data.keys().hasOnly(['orgId', 'code', 'status', 'enrolledOn', 'exitedOn', 'schoolStatus', 'programmes', 'dateOfBirth', 'school',
                'photoConsent', 'guardianConsent', 'sponsorName', 'sponsorPhone', 'sponsorEmail', 'parentName', 'parentPhone', 'departingNote', 'hasPhoto',
-               'schoolClass', 'payment', 'sponsorship', 'allergies', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'schoolClass', 'payment', 'sponsorship', 'allergies', 'calledOn', 'calledBy', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', childId)
+          // v182: the server writes calledOn/calledBy with a "Called the parent" note; a save keeps them.
+          && optionalDate(request.resource.data.get('calledOn', null)) && optText(request.resource.data.get('calledBy', null), 120)
           && (request.resource.data.get('sponsorship', null) == null || (request.resource.data.sponsorship is map
                && request.resource.data.sponsorship.keys().hasOnly(['childId', 'status', 'sponsorId', 'sponsorName', 'registeredOn', 'completesOn', 'centre', 'updatedOn', 'listName'])
                && shortText(request.resource.data.sponsorship.get('listName', ''), 120)
@@ -1178,21 +1184,21 @@ service cloud.firestore {
                && shortText(request.resource.data.sponsorship.centre, 120)
                && optionalDate(request.resource.data.sponsorship.get('registeredOn', null)) && optionalDate(request.resource.data.sponsorship.get('completesOn', null))))
           && request.resource.data.status in ['active', 'departing', 'exited']
-          && shortText(request.resource.data.get('sponsorName', ''), 120)
-          && shortText(request.resource.data.get('sponsorPhone', ''), 30)
-          && shortText(request.resource.data.get('sponsorEmail', ''), 120)
-          && shortText(request.resource.data.get('parentName', ''), 120)
-          && shortText(request.resource.data.get('parentPhone', ''), 30)
-          && shortText(request.resource.data.get('departingNote', ''), 500)
-          && shortText(request.resource.data.get('schoolClass', ''), 40)
-          && shortText(request.resource.data.get('allergies', ''), 300)
+          && optText(request.resource.data.get('sponsorName', null), 120)
+          && optText(request.resource.data.get('sponsorPhone', null), 30)
+          && optText(request.resource.data.get('sponsorEmail', null), 120)
+          && optText(request.resource.data.get('parentName', null), 120)
+          && optText(request.resource.data.get('parentPhone', null), 30)
+          && optText(request.resource.data.get('departingNote', null), 500)
+          && optText(request.resource.data.get('schoolClass', null), 40)
+          && optText(request.resource.data.get('allergies', null), 300)
           && validPayment(request.resource.data.get('payment', null))
           && request.resource.data.get('hasPhoto', false) is bool
           && request.resource.data.schoolStatus in ['in_school', 'not_in_school', 'unknown']
           && optionalDate(request.resource.data.get('enrolledOn', null))
           && optionalDate(request.resource.data.get('exitedOn', null))
           && optionalDate(request.resource.data.get('dateOfBirth', null))
-          && shortText(request.resource.data.get('school', ''), 120)
+          && optText(request.resource.data.get('school', null), 120)
           && listOf(request.resource.data.programmes, 8)
           && validConsent(request.resource.data.photoConsent)
           && validConsent(request.resource.data.guardianConsent)

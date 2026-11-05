@@ -1,4 +1,5 @@
-import { useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useState, type ChangeEvent, type ReactNode } from 'react';
+import { takeSheet } from '../../lib/pendingUpload';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { monthGrid, shiftMonth, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
 import { LineChart } from '../../components/charts';
@@ -121,8 +122,14 @@ export function TemplateButtons({ name, head, example }: { name: string; head: s
 }
 
 /** Choose an Excel (.xlsx) or CSV file; every sheet's rows are handed back together. */
-export function SheetPicker({ onRows, children }: { onRows: (rows: (string | number | Date | null)[][], fileName: string) => void; children?: ReactNode }) {
+export function SheetPicker({ onRows, children, kind, ready = true }: { onRows: (rows: (string | number | Date | null)[][], fileName: string) => void; children?: ReactNode; kind?: string; ready?: boolean }) {
   const [error, setError] = useState('');
+  // A file chosen on the one Upload page opens here already read (v182, 7A).
+  useEffect(() => {
+    const held = kind && ready ? takeSheet(kind) : null;
+    if (held) onRows(held.rows, held.fileName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [kind, ready]);
   async function choose(e: ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     e.target.value = '';

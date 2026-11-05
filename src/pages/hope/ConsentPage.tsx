@@ -5,26 +5,22 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { saveConsents } from '../../lib/hopeWrites';
 import { consentMissing } from '../../../functions/src/shared/hope';
-import { HopeGate, useHopePage } from './common';
+import { useHopePage } from './common';
 import { Avatar } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
-export function ConsentPage() {
-  return <HopeGate title="Consent">{(org) => <Consent org={org} />}</HopeGate>;
-}
 
 type Tick = { guardian: boolean; photo: boolean };
 
 /**
  * Record consent for many children at once (Andy, 2026-11-04, 5A): tick the parents who agreed, then Save. Only
- * the children still missing a consent are listed.
+ * the children still missing a consent are listed. Shown on Children under Show → Consent missing (v182, 10A).
  */
-function Consent({ org }: { org: Organization }) {
+export function ConsentTicks({ org, q }: { org: Organization; q: string }) {
   const h = useHopePage(org);
   const { can } = useAuth();
   const toast = useToast();
   const [ticks, setTicks] = useState<Record<string, Tick>>({});
-  const [q, setQ] = useState('');
   const canEdit = can('people.write');
 
   const rows = useMemo(() => h.children.filter(consentMissing)
@@ -58,13 +54,10 @@ function Consent({ org }: { org: Organization }) {
   }
 
   return (
-    <div className="page narrow">
-      <p><Link to="/">← Today</Link></p>
-      <h1>Consent</h1>
+    <div className="stack">
       <p className="small muted">Tick what each parent agreed to, then tap Save.</p>
       {h.loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="card"><p>✅ Every child's consent is recorded.</p></div> : (
         <>
-          <input type="search" className="search" placeholder="Find a name or code" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
           {canEdit && (
             <div className="chips">
               <button type="button" className="btn btn-quiet" onClick={() => all('guardian')}>Tick all: keep details</button>

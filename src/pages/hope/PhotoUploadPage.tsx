@@ -1,4 +1,5 @@
-import { useState, type ChangeEvent } from 'react';
+import { useEffect, useState, type ChangeEvent } from 'react';
+import { takePhotos } from '../../lib/pendingUpload';
 import { Link } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
@@ -28,8 +29,19 @@ function PhotoUpload({ org }: { org: Organization }) {
   const [asking, setAsking] = useState(false);
 
   function choose(e: ChangeEvent<HTMLInputElement>) {
-    const files = [...(e.target.files ?? [])].filter((f) => f.type.startsWith('image/'));
+    const files = [...(e.target.files ?? [])];
     e.target.value = '';
+    plan_(files);
+  }
+  // Photos chosen on the one Upload page (v182, 7A) open here already matched.
+  useEffect(() => {
+    if (h.loading || h.peopleLoading) return;
+    const held = takePhotos();
+    if (held) plan_(held);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [h.loading, h.peopleLoading]);
+  function plan_(all: File[]) {
+    const files = all.filter((f) => f.type.startsWith('image/'));
     const byName = new Map(h.children.map((c) => [plain(h.nameOf(c.id)), c]));
     const used = new Set<string>();
     setPlan(files.map((file) => {

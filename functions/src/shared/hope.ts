@@ -66,6 +66,9 @@ export interface Child {
   sponsorship?: ChildSponsorship | null;
   /** Allergies, written by the Director (Andy, 2026-11-05, 4A); "None known" when checked and there are none. */
   allergies?: string | null;
+  /** The last day someone called the parent about missed Saturdays (v182, 2A), written by the server with the note. */
+  calledOn?: string | null;
+  calledBy?: string | null;
   deletedAt?: unknown;
 }
 

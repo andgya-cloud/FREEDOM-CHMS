@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
@@ -13,6 +13,7 @@ import { classLabel, classOf, hasAllergy, HOPE_CLASSES, type HopeClassId } from 
 import { consentMissing, isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
 import { birthdayThisWeek, kidRate, missedSaturdays, streak } from '../../../functions/src/shared/hopeRegister';
 import { HopeGate, useHopePage } from './common';
+import { ConsentTicks } from './ConsentPage';
 import { Avatar, Delights, PctBadge } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
@@ -32,8 +33,9 @@ function Children({ org }: { org: Organization }) {
   const toast = useToast();
   const lists = canReadNotes(profile, org.id);
   const [busy, setBusy] = useState(false);
+  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
-  const [q, setQ] = useState('');
+  const q = params.get('q') ?? '';
   const [sort, setSort] = useState<Sort>('name');
   const { days } = useHopeDays(org.id);
   const photos = useChildPhotos(org.id);
@@ -43,14 +45,16 @@ function Children({ org }: { org: Organization }) {
   useEffect(() => { if (show === 'owing' && !owing && canKeepFees(profile, org.id)) feesOwing(org.id).then((r) => setOwing(new Set(r.owing.map((o) => o.childId))), (err) => toast.show(friendlyError(err))); }, [show, owing, profile, org.id, toast]);
   const concernIds = useMemo(() => new Set(h.openConcerns.map((c) => c.childId)), [h.openConcerns]);
 
-  const SHOWS: [Show, string, boolean][] = [
-    ['current', 'Current children', true], ['departing', 'Departing', true], ['exited', 'Past children', true],
-    ['consent', 'Consent missing', true], ['nosponsor', 'No sponsor yet', true], ['notonlist', 'Not on KE-014', true], ['birthdays', 'Birthdays this week', true],
-    ['missed', 'Missed the last 3 Saturdays', true], ['owing', 'Fees still to pay this term', canKeepFees(profile, org.id)],
-    ['concerns', 'Safeguarding concern open', h.pastoral], ['allergies', 'Allergies', true],
+  // The Show list in three groups (v182, 8A).
+  const SHOWS: [string, [Show, string, boolean][]][] = [
+    ['Children', [['current', 'Current children', true], ['departing', 'Departing', true], ['exited', 'Past children', true], ['all', 'Everyone', true]]],
+    ['Needs something', [
+      ['consent', 'Consent missing', true], ['missed', 'Missed the last 3 Saturdays', true], ['owing', 'Fees still to pay this term', canKeepFees(profile, org.id)],
+      ['nosponsor', 'No sponsor yet', true], ['notonlist', 'Not on KE-014', true], ['concerns', 'Safeguarding concern open', h.pastoral],
+      ['allergies', 'Allergies', true], ['birthdays', 'Birthdays this week', true],
+    ]],
     // The classes by age, each with its stone (Andy, 2026-11-05, 5A).
-    ...HOPE_CLASSES.map((k): [Show, string, boolean] => [`class-${k.id}`, `Class: ${classLabel(k)}`, true]), ['noclass', 'No class yet (birth date missing)', true],
-    ['all', 'Everyone', true],
+    ['Classes', [...HOPE_CLASSES.map((k): [Show, string, boolean] => [`class-${k.id}`, classLabel(k), true]), ['noclass', 'No class yet (birth date missing)', true]]],
   ];
   const fits = (c: (typeof h.children)[number]) => {
     switch (show) {
@@ -74,10 +78,12 @@ function Children({ org }: { org: Organization }) {
   const rows = useMemo(() => {
     const text = q.trim().toLowerCase();
     const code = normalizeCode(q);
+    const digits = text.replace(/\D/g, '').replace(/^254/, '0');
     const list = h.children
       .filter(fits)
       .map((c) => ({ c, name: h.nameOf(c.id), age: h.ageOf(c), rate: kidRate(c.id, days).pct, fire: streak(c.id, days) }))
-      .filter(({ c, name }) => !text || name.toLowerCase().includes(text) || (c.code ?? '').toLowerCase().includes(text) || (!!code && c.code === code));
+      .filter(({ c, name }) => !text || name.toLowerCase().includes(text) || (c.code ?? '').toLowerCase().includes(text) || (!!code && c.code === code)
+        || (digits.length >= 4 && (c.parentPhone ?? '').replace(/\D/g, '').replace(/^254/, '0').includes(digits)));
     const by: Record<Sort, (a: (typeof list)[number], b: (typeof list)[number]) => number> = {
       name: (a, b) => a.name.localeCompare(b.name),
       age: (a, b) => (a.age ?? 99) - (b.age ?? 99) || a.name.localeCompare(b.name),
@@ -113,16 +119,27 @@ function Children({ org }: { org: Organization }) {
       <div className="page-head">
         <h1>Children</h1>
         <div className="chips">
-          {lists && <button type="button" className="btn" disabled={busy || !rows.length} onClick={() => void listExcel()}>⬇︎ Children list</button>}
-          {(lists || can('people.write')) && <button type="button" className="btn" disabled={busy || !rows.length} onClick={() => void cards()} title="Cards with a QR code to check children in at the door">🪪 QR cards</button>}
-          {can('people.write') && <><Link to="/hope/children/import" className="btn">⬆︎ Excel</Link><Link to="/hope/children/sponsors" className="btn">🤝 Sponsorship list</Link><Link to="/hope/children/photos" className="btn">📷 Photos</Link><Link to="/hope/children/new" className="btn btn-primary">Register a child</Link></>}
+          {(lists || can('people.write')) && (
+            <select className="hc-more" aria-label="More" value="" disabled={busy || !rows.length} onChange={(e) => {
+              const v = e.target.value;
+              if (v === 'list') void listExcel();
+              else if (v === 'cards') void cards();
+              else if (v === 'upload') navigate('/hope/upload');
+            }}>
+              <option value="" disabled>{busy ? 'Making…' : '⋯ More'}</option>
+              {lists && <option value="list">⬇︎ Children list (Excel)</option>}
+              <option value="cards">🪪 QR cards (PDF)</option>
+              {can('people.write') && <option value="upload">⬆︎ Upload a file or photos</option>}
+            </select>
+          )}
+          {can('people.write') && <Link to="/hope/children/new" className="btn btn-primary">Register a child</Link>}
         </div>
       </div>
+      {q && <p className="chips"><span className="chip chip-on">Search: {q}</span><button type="button" className="btn btn-quiet btn-small" onClick={() => { params.delete('q'); setParams(params, { replace: true }); }}>✕ Clear</button></p>}
       <div className="hc-tools">
-        <input type="search" className="search" placeholder="Find by name or code, for example HC-0042" aria-label="Find a child" value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="field"><span>Show</span>
           <select value={show} onChange={(e) => setParams(e.target.value === 'current' ? {} : { show: e.target.value }, { replace: true })}>
-            {SHOWS.filter((s) => s[2]).map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+            {SHOWS.map(([group, list]) => <optgroup key={group} label={group}>{list.filter((x) => x[2]).map(([k, label]) => <option key={k} value={k}>{label}</option>)}</optgroup>)}
           </select>
         </label>
         <label className="field"><span>Sort by</span>
@@ -132,7 +149,7 @@ function Children({ org }: { org: Organization }) {
         </label>
       </div>
       <p className="small muted">{rows.length} {rows.length === 1 ? 'child' : 'children'}</p>
-      {h.loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="card"><p>No children match. {h.children.length === 0 && 'Register the first child with the button above.'}</p></div> : (
+      {show === 'consent' ? <ConsentTicks org={org} q={q} /> : h.loading ? <p className="muted">Loading…</p> : rows.length === 0 ? <div className="card"><p>No children match. {h.children.length === 0 && 'Register the first child with the button above.'}</p></div> : (
         <ul className="hc-grid">
           {rows.map(({ c, name, age, rate, fire }) => (
             <li key={c.id}>

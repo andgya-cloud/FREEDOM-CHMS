@@ -18,7 +18,6 @@ function More(_: { org: Organization }) {
   const tiles: [string, string, string, string, boolean][] = [
     [pettyCashBase('ministry'), '💵', 'Petty Cash', 'Ask for cash, sign and close the month', petty],
     ['/hope/messages', '💬', 'WhatsApp parents', 'One message to many parents, from the Hope phone', can('people.write')],
-    ['/hope/meals', '🍽️', 'Meals', 'Breakfast, lunch and fruit served each day', !helper],
     ['/hope/bin', '🗑', 'Bin', 'What was removed, to put back', canKeepAccounts(profile)],
     ['/settings', '⚙️', 'Settings', 'Your account, password and the Hope Centre settings', true],
     ['/help', '❓', 'Help', 'How each page works', true],

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { cleanupError } from '../../lib/cleanup';
@@ -7,14 +7,19 @@ import { listNotes, type StoredNote } from '../../lib/hopeRecords';
 import { canReadNotes, NOTE_KIND_EMOJI, NOTE_KIND_LABELS, NOTE_KINDS, type NoteKind } from '../../../functions/src/shared/hopeRecords';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { NoteCard } from './ChildRecords';
-import { ChatRow, useChats } from './HopeChatsPage';
+import { ChatRow, useChats, Vault } from './HopeChatsPage';
 import type { StoredChat } from '../../lib/hopeChats';
 import { isUnread } from '../../../functions/src/shared/hopeChats';
 import { HopeGate } from './common';
 import type { Organization } from '../../state/OrgContext';
 
+/**
+ * One Care page (v182, 5A): the notes and conversations together. The Director, Andy and Doreen see every note and
+ * conversation by child; the board sees the conversations; other staff see the worries they raised.
+ */
 export function HopeRecordsPage() {
-  return <HopeGate title="Records">{(org) => <Records org={org} />}</HopeGate>;
+  const { profile } = useAuth();
+  return <HopeGate title="Care">{(org) => (canReadNotes(profile, org.id) ? <Records org={org} /> : <Vault org={org} />)}</HopeGate>;
 }
 
 /**
@@ -27,7 +32,11 @@ function Records({ org }: { org: Organization }) {
   const reader = canReadNotes(profile, org.id);
   const [notes, setNotes] = useState<StoredNote[] | null>(null);
   const [q, setQ] = useState('');
-  const [kind, setKind] = useState<NoteKind | 'chat' | ''>('');
+  const [params] = useSearchParams();
+  type Kind = NoteKind | 'chat' | 'chat:open' | 'chat:handling' | 'chat:closed' | '';
+  const [kind, setKind] = useState<Kind>(params.get('show') === 'chats' ? 'chat' : '');
+  const chatOnly = kind.startsWith('chat');
+  const chatStatus = kind.startsWith('chat:') ? kind.slice(5) : '';
   const load = useCallback(() => { listNotes(org.id).then((r) => setNotes(r.notes), (err) => toast.show(cleanupError(err))); }, [org.id, toast]);
   useEffect(() => { if (reader) load(); }, [reader, load]);
   const chats = useChats(org.id).list;
@@ -43,34 +52,42 @@ function Records({ org }: { org: Organization }) {
       return f;
     };
     for (const n of notes ?? []) {
-      if (kind === 'chat' || (kind && n.kind !== kind)) continue;
+      if (chatOnly || (kind && n.kind !== kind)) continue;
       if (text && !`${n.childName} ${n.childCode} ${n.text} ${n.byName}`.toLowerCase().includes(text)) continue;
       const f = folder(n.childId, n.childName, n.childCode);
       f.notes.push(n);
       if (n.day > f.latest) f.latest = n.day;
     }
     for (const c of chats?.chats ?? []) {
-      if (kind && kind !== 'chat') continue;
+      if (kind && !chatOnly) continue;
+      if (chatStatus && c.status !== chatStatus) continue;
       if (text && !`${c.childName} ${c.childCode} ${c.lastText}`.toLowerCase().includes(text)) continue;
       const f = folder(c.childId, c.childName, c.childCode);
       f.chats.push(c);
       if (c.lastAt.slice(0, 10) > f.latest) f.latest = c.lastAt.slice(0, 10);
     }
     return [...m.values()].sort((a, b) => a.childName.localeCompare(b.childName));
-  }, [notes, chats, q, kind]);
+  }, [notes, chats, q, kind, chatOnly, chatStatus]);
 
-  if (!reader) return <div className="page narrow"><h1>Records</h1><p className="muted">Only the Director, Andrew Guya and Doreen can open the records.</p></div>;
+  if (!reader) return null;
   return (
     <div className="page narrow">
       <p><Link to="/hope/reports">← Reports</Link></p>
-      <div className="page-head"><h1>🔒 Care records</h1><Link to="/hope/chats" className="btn btn-quiet">All conversations</Link></div>
+      <h1>🔒 Care</h1>
       <p className="muted small">Every note and conversation about each child, in a folder per child. Write a note or start a conversation on the child's Care tab.</p>
       <div className="ck-tools">
         <input type="search" className="search" placeholder="Find a child, code or word" aria-label="Find" value={q} onChange={(e) => setQ(e.target.value)} />
-        <select aria-label="Kind of note" value={kind} onChange={(e) => setKind(e.target.value as NoteKind | 'chat' | '')}>
+        <select aria-label="Show" value={kind} onChange={(e) => setKind(e.target.value as Kind)}>
           <option value="">Everything</option>
-          <option value="chat">🔒 Conversations</option>
+          <optgroup label="Conversations">
+            <option value="chat">All conversations</option>
+            <option value="chat:open">🔴 Open</option>
+            <option value="chat:handling">🟠 Being handled</option>
+            <option value="chat:closed">✅ Closed</option>
+          </optgroup>
+          <optgroup label="Notes">
           {NOTE_KINDS.map((k) => <option key={k} value={k}>{NOTE_KIND_EMOJI[k]} {NOTE_KIND_LABELS[k]}</option>)}
+          </optgroup>
         </select>
       </div>
       {notes === null ? <p className="muted">Loading…</p> : folders.length === 0 ? <div className="card"><p className="muted">{notes.length || chats?.chats.length ? 'Nothing matches.' : 'No notes yet.'}</p></div> : folders.map((f) => {

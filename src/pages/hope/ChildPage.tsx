@@ -75,14 +75,16 @@ function ChildScreen({ org }: { org: Organization }) {
   const { days } = useHopeDays(org.id);
   const clubs = useClubs(org.id);
 
-  useEffect(() => {
+  const [editing, setEditing] = useState(false);
+  function reset() {
     if (!child) return;
     setDob(child.dateOfBirth ?? ''); setSchool(child.school ?? ''); setSchoolClass(child.schoolClass ?? ''); setSchoolStatus(child.schoolStatus); setEnrolledOn(child.enrolledOn ?? '');
     setProgrammes(child.programmes); setPhotoConsent(child.photoConsent); setGuardianConsent(child.guardianConsent);
     setSponsorName(child.sponsorName ?? ''); setAllergies(child.allergies ?? '');
     setParentName(child.parentName ?? ''); setParentPhone(child.parentPhone ?? ''); setLeaveNote(child.departingNote ?? '');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [child?.id]);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { reset(); setEditing(false); }, [child?.id]);
 
 
   if (!child || (h.peopleLoading && !person)) {
@@ -99,6 +101,7 @@ function ChildScreen({ org }: { org: Organization }) {
       parentName: parentName.trim().slice(0, 120), parentPhone: parentPhone.trim().slice(0, 30),
     }).catch((err) => toast.show(friendlyError(err)));
     toast.show('Saved');
+    setEditing(false);
   }
   function leave() {
     const to = confirmExit!;
@@ -155,6 +158,25 @@ function ChildScreen({ org }: { org: Organization }) {
             {child.status === 'departing' && <span className="badge badge-warn">Departing</span>}
             {child.status === 'exited' && <span className="badge badge-muted">Departed{child.exitedOn ? ` ${formatDateKey(child.exitedOn)}` : ''}</span>}
           </p>
+          {parentPhoneShown && (
+            <div className="chips">
+              <a className="btn btn-primary" href={`tel:${parentPhoneShown}`}>📞 Call {parentShown ? parentShown.split(' ')[0] : 'the parent'}</a>
+              <a className="btn" href={waLink(parentPhoneShown, fillMessage('Hello {parent}, ', { parentName: parentShown, children: [{ id: child.id, name }] }))} target="_blank" rel="noopener noreferrer">🟢 WhatsApp</a>
+              <span className="small muted align-center">{formatPhone(parentPhoneShown) || parentPhoneShown}</span>
+            </div>
+          )}
+          {!parentPhoneShown && !guardian && <p className="notice notice-warn small">No parent contact saved. Tap ✏️ Edit details below to add it, so the child can be followed up.</p>}
+        </div>
+      </section>
+
+      <div className="segmented hc-tabs" role="tablist" aria-label="About this child">
+        {TABS.filter(([k]) => k !== 'fees' || showFees).map(([k, label]) => (
+          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'about' && !editing && (
+        <section className="card stack">
           <dl className="hc-facts">
             <div><dt>Age</dt><dd>{age != null ? `${age} years` : 'Not known'}</dd></div>
             <div><dt>Birthday</dt><dd>{born ?? 'Not known'}{toBirthday != null && toBirthday <= 7 ? (toBirthday === 0 ? ' 🎈 today!' : ` 🎈 in ${toBirthday} ${toBirthday === 1 ? 'day' : 'days'}`) : ''}</dd></div>
@@ -168,26 +190,16 @@ function ChildScreen({ org }: { org: Organization }) {
             <div><dt>Sponsor ID</dt><dd>{sp?.sponsorId || 'None'}</dd></div>
             <div><dt>Allergies</dt><dd>{child.allergies || 'Not recorded'}</dd></div>
             <div><dt>Parent</dt><dd>{guardian ? <Link to={`/people/${org.id}/${guardian.id}`}>{parentShown}</Link> : parentShown || 'Not saved'}</dd></div>
+            <div><dt>Guardian consent</dt><dd>{consentText(child.guardianConsent)}</dd></div>
+            <div><dt>Photo consent</dt><dd>{consentText(child.photoConsent)}</dd></div>
+            <div><dt>In school?</dt><dd>{SCHOOL_STATUS_LABELS[child.schoolStatus]}</dd></div>
             <div><dt>Attendance</dt><dd><PctBadge pct={rate.pct} /> {fire >= STREAK_SHOWN && <span className="hr-delight hr-streak">🔥{fire} in a row</span>}</dd></div>
           </dl>
-          {parentPhoneShown && (
-            <div className="chips">
-              <a className="btn btn-primary" href={`tel:${parentPhoneShown}`}>📞 Call {parentShown ? parentShown.split(' ')[0] : 'the parent'}</a>
-              <a className="btn" href={waLink(parentPhoneShown, fillMessage('Hello {parent}, ', { parentName: parentShown, children: [{ id: child.id, name }] }))} target="_blank" rel="noopener noreferrer">🟢 WhatsApp</a>
-              <span className="small muted align-center">{formatPhone(parentPhoneShown) || parentPhoneShown}</span>
-            </div>
-          )}
-          {!parentPhoneShown && !guardian && <p className="notice notice-warn small">No parent contact saved. Add it under Details so the child can be followed up.</p>}
-        </div>
-      </section>
+          {canEdit && <button type="button" className="btn align-start" onClick={() => setEditing(true)}>✏️ Edit details</button>}
+        </section>
+      )}
 
-      <div className="segmented hc-tabs" role="tablist" aria-label="About this child">
-        {TABS.filter(([k]) => k !== 'fees' || showFees).map(([k, label]) => (
-          <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setTab(k)}>{label}</button>
-        ))}
-      </div>
-
-      {tab === 'about' && (
+      {tab === 'about' && editing && (
         <section className="card">
         <div className="stack">
         <div className="field-row">
@@ -216,9 +228,32 @@ function ChildScreen({ org }: { org: Organization }) {
         {canAllergies && !allergies && <button type="button" className="btn btn-quiet btn-small align-start" onClick={() => setAllergies(NO_ALLERGIES)}>None known</button>}
         <ConsentField label="Guardian consent to keep this child's details" value={guardianConsent} onChange={setGuardianConsent} today={h.today} disabled={!canEdit} />
         <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
-        {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}
+        <div className="chips">
+          <button type="button" className="btn btn-primary" onClick={save}>Save changes</button>
+          <button type="button" className="btn btn-quiet" onClick={() => { reset(); setEditing(false); }}>Cancel</button>
+        </div>
         </div>
         </section>
+      )}
+
+      {tab === 'about' && !editing && (
+        <>
+          {canEdit && (
+            <details className="card hr-fold">
+              <summary><h2>Leaving the Hope Centre</h2><span className="small muted">Departing or departed</span></summary>
+              <div className="stack">
+          {child.status !== 'exited' && <label className="field"><span>Reason or note (optional)</span><input value={leaveNote} maxLength={500} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Moving away, finished the programme…" /></label>}
+          {child.departingNote && child.status !== 'active' && <p className="small muted">Note: {child.departingNote}</p>}
+          <div className="chips">
+            {child.status === 'active' && <button type="button" className="btn" onClick={() => setConfirmExit('departing')}>Mark as departing</button>}
+            {child.status !== 'exited' && <button type="button" className="btn btn-quiet danger-text" onClick={() => setConfirmExit('exited')}>Mark as departed</button>}
+            {child.status !== 'active' && <button type="button" className="btn btn-quiet" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null, departingNote: null }).catch((err) => toast.show(friendlyError(err))); saveLeavingNote(org.id, child.id, 'Returned to active.').catch(() => {}); }}>Return to active</button>}
+          </div>
+          <p className="small muted">Departing: in the process of leaving for good. Departed: has left for good and moves to Past children. Each change is kept as a dated note in Reports → Care.</p>
+              </div>
+            </details>
+          )}
+        </>
       )}
 
       {tab === 'attendance' && (
@@ -249,19 +284,6 @@ function ChildScreen({ org }: { org: Organization }) {
       {tab === 'care' && (
         <>
           <ChildCare org={org} childId={child.id} firstName={person?.firstName ?? 'this child'} today={h.today} />
-          {canEdit && (
-            <section className="card stack">
-              <h2>Leaving the Hope Centre</h2>
-          {child.status !== 'exited' && <label className="field"><span>Reason or note (optional)</span><input value={leaveNote} maxLength={500} onChange={(e) => setLeaveNote(e.target.value)} placeholder="Moving away, finished the programme…" /></label>}
-          {child.departingNote && child.status !== 'active' && <p className="small muted">Note: {child.departingNote}</p>}
-          <div className="chips">
-            {child.status === 'active' && <button type="button" className="btn" onClick={() => setConfirmExit('departing')}>Mark as departing</button>}
-            {child.status !== 'exited' && <button type="button" className="btn btn-quiet danger-text" onClick={() => setConfirmExit('exited')}>Mark as departed</button>}
-            {child.status !== 'active' && <button type="button" className="btn btn-quiet" onClick={() => { updateChild(org.id, child.id, { status: 'active', exitedOn: null, departingNote: null }).catch((err) => toast.show(friendlyError(err))); saveLeavingNote(org.id, child.id, 'Returned to active.').catch(() => {}); }}>Return to active</button>}
-          </div>
-          <p className="small muted">Departing: in the process of leaving for good. Departed: has left for good and moves to Past children. Each change is kept as a dated note in Reports → Records.</p>
-            </section>
-          )}
         </>
       )}
       <ApprovePhoto open={askPhoto} orgId={org.id} title={`Do you want to delete ${name}'s photo?`} confirmLabel="Yes, delete" danger
@@ -361,4 +383,9 @@ function SchoolFees({ orgId, childId, saved, school, canEdit }: { orgId: string;
       </div>
     </details>
   );
+}
+
+function consentText(c: Consent): string {
+  if (c.given == null) return 'Not on file yet';
+  return `${c.given ? 'Yes, agreed' : 'No, declined'}${c.date ? ` (${formatDateKey(c.date)})` : ''}`;
 }

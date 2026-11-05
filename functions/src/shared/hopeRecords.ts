@@ -15,14 +15,16 @@ const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
 
 // ── Notes ────────────────────────────────────────────────────────────────────────────────────────────────
 
-export type NoteKind = 'welfare' | 'health' | 'home' | 'visit' | 'referral' | 'leaving';
-export const NOTE_KINDS: NoteKind[] = ['welfare', 'health', 'home', 'visit', 'referral', 'leaving'];
+export type NoteKind = 'welfare' | 'health' | 'home' | 'visit' | 'referral' | 'leaving' | 'call';
+export const NOTE_KINDS: NoteKind[] = ['welfare', 'health', 'home', 'visit', 'referral', 'leaving', 'call'];
+/** Notes anyone who changes a child's details may write: leaving, and "Called the parent" after missed Saturdays (v182 2A). */
+export const STAFF_NOTE_KINDS: NoteKind[] = ['leaving', 'call'];
 /** The kinds written from the Care tab (leaving notes come from marking a child departing). */
 export const CARE_NOTE_KINDS: NoteKind[] = ['welfare', 'health', 'home', 'visit', 'referral'];
 export const NOTE_KIND_LABELS: Record<NoteKind, string> = {
-  welfare: 'Welfare', health: 'Health and diet', home: 'Home circumstances', visit: 'Home visit', referral: 'Referral', leaving: 'Leaving',
+  welfare: 'Welfare', health: 'Health and diet', home: 'Home circumstances', visit: 'Home visit', referral: 'Referral', leaving: 'Leaving', call: 'Called the parent',
 };
-export const NOTE_KIND_EMOJI: Record<NoteKind, string> = { welfare: '💛', health: '🩺', home: '🏠', visit: '🚶', referral: '🏥', leaving: '👋' };
+export const NOTE_KIND_EMOJI: Record<NoteKind, string> = { welfare: '💛', health: '🩺', home: '🏠', visit: '🚶', referral: '🏥', leaving: '👋', call: '📞' };
 export const isNoteKind = (v: unknown): v is NoteKind => typeof v === 'string' && (NOTE_KINDS as string[]).includes(v);
 export const NOTE_TEXT_MAX = 4000;
 

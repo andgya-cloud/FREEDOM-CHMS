@@ -11,6 +11,7 @@ import { CleanupButton } from '../../components/CleanupDialog';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { kidCame, KID_MARK_LABELS, rateFrom } from '../../../functions/src/shared/hopeRegister';
 import { canReadNotes, MEAL_EMOJI, MEAL_LABELS, mealMonth, MEALS } from '../../../functions/src/shared/hopeRecords';
+import { MealCounter } from './HopeMealsPage';
 import { HopeGate, useHopePage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -73,10 +74,10 @@ function Months({ org }: { org: Organization }) {
             <summary><h2>📁 {monthLabel(month)}</h2><span className="small muted">{list.length} {list.length === 1 ? 'day' : 'days'} · {came} {came === 1 ? 'check-in' : 'check-ins'}{food.total ? ` · ${food.total} meals` : ''}</span></summary>
             <div className="stack">
               {food.days > 0 && (
-                <Link to="/hope/meals" className="ck-counts meal-month">
+                <div className="ck-counts meal-month">
                   <span>🍽️ <b>{food.total}</b> meals in {food.days} {food.days === 1 ? 'day' : 'days'}</span>
                   {MEALS.map((k) => <span key={k}>{MEAL_EMOJI[k]} <b>{food[k]}</b> {MEAL_LABELS[k].toLowerCase()}</span>)}
-                </Link>
+                </div>
               )}
               {mine.length > 0 && (
                 <ul className="link-list">
@@ -105,8 +106,9 @@ function Months({ org }: { org: Organization }) {
 }
 
 function Day({ org }: { org: Organization }) {
-  const { date = '' } = useParams();
+  const { date: asked = '' } = useParams();
   const h = useHopePage(org);
+  const date = asked === 'today' ? h.today : asked;
   const { profile } = useAuth();
   const toast = useToast();
   const { days, loading } = useHopeDays(org.id);
@@ -156,6 +158,7 @@ function Day({ org }: { org: Organization }) {
           <AttList title="Departed" rows={other} detail={(l) => l.entry ? KID_MARK_LABELS[l.entry.s] : ''} />
         </>
       )}
+      {/^\d{4}-\d{2}-\d{2}$/.test(date) && date <= h.today && <MealCounter org={org} date={date} />}
     </div>
   );
 }

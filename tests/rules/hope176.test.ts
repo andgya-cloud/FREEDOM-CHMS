@@ -46,6 +46,12 @@ describe('v176 Hope', () => {
       ...upd('director'),
     }));
   });
+  it('keeps a child editable after the parent was called (v182)', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => { await updateDoc(doc(ctx.firestore(), `${O}/children/c1`), { calledOn: '2026-11-05', calledBy: 'Diana' }); });
+    await assertSucceeds(updateDoc(doc(as('director'), `${O}/children/c1`), { school: 'Kibera Primary', ...upd('director') }));
+    await assertSucceeds(updateDoc(doc(as('director'), `${O}/children/c1`), { allergies: null, departingNote: null, ...upd('director') }));
+    await assertFails(updateDoc(doc(as('director'), `${O}/children/c1`), { allergies: 5, ...upd('director') }));
+  });
   it('lets the Director keep champion pay', async () => {
     await assertSucceeds(updateDoc(doc(as('director'), `${O}/champions/ch1`), { code: 'CC-0001', ...upd('director') })); // QR codes only (v181)
     await assertFails(updateDoc(doc(as('director'), `${O}/champions/ch1`), { weeklyPay: 1500, ...upd('director') })); // pay needs two signatures;

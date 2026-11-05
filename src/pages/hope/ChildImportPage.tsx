@@ -66,7 +66,7 @@ function ChildImport({ org }: { org: Organization }) {
       <section className="card stack">
         <p className="small">Fill in the template, one child per row, then choose the file.</p>
         <TemplateButtons name="Hope-children-template" head={CHILD_TEMPLATE_HEAD} example={CHILD_TEMPLATE_EXAMPLE} />
-        <SheetPicker onRows={(rows, name) => {
+        <SheetPicker kind="children" ready={!h.loading && !h.peopleLoading} onRows={(rows, name) => {
           // The partner's Child Registration List (KE-014) belongs on the Sponsorship list page (Andy, 2026-11-05).
           if (rows.some((r) => r.some((c) => String(c ?? '').trim().toLowerCase() === 'child id'))) {
             setFileName(name); setPlan(null); setSponsorList(true); setError(''); return;

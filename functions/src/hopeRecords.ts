@@ -4,7 +4,7 @@ import { canAccessOrg } from './shared/permissions.js';
 import { localDateKey } from './shared/datetime.js';
 import { chatRole } from './shared/hopeChats.js';
 import {
-  canAddLeavingNote, canKeepFees, canReadNotes, feeFromLine, isFeeMethod, isNoteKind, isTerm, NOTE_TEXT_MAX, termOf,
+  canAddLeavingNote, STAFF_NOTE_KINDS, canKeepFees, canReadNotes, feeFromLine, isFeeMethod, isNoteKind, isTerm, NOTE_TEXT_MAX, termOf,
   type ChildNote, type FeePayment, type NoteKind,
 } from './shared/hopeRecords.js';
 
@@ -123,7 +123,7 @@ export const hopeRecords = onCall({ invoker: 'public', memory: '512MiB', timeout
     case 'addNote': {
       const kind = data.kind;
       if (!isNoteKind(kind)) throw new HttpsError('invalid-argument', 'Please choose the kind of note.');
-      if (kind === 'leaving' ? !canAddLeavingNote(me, orgId) : !canReadNotes(me, orgId)) throw new HttpsError('permission-denied', 'You cannot add this note.');
+      if (STAFF_NOTE_KINDS.includes(kind) ? !canAddLeavingNote(me, orgId) : !canReadNotes(me, orgId)) throw new HttpsError('permission-denied', 'You cannot add this note.');
       const childId = childIdOf(data.childId);
       const text = requireString(data.text, 'the note', { max: NOTE_TEXT_MAX });
       const today = localDateKey(new Date(), tz);
@@ -131,6 +131,8 @@ export const hopeRecords = onCall({ invoker: 'public', memory: '512MiB', timeout
       const c = await childOf(childId);
       const note: ChildNote = { orgId, childId, childName: c.childName, childCode: c.childCode, kind, text, day, byUid: caller.uid, byName: myName, byRole: chatRole(me, orgId), at: nowIso };
       const ref = await db.collection(`${base}/childNotes`).add(note);
+      // v182 (2A): the child leaves "Missed the last 3 Saturdays" once the parent has been called.
+      if (kind === 'call') await db.doc(`${base}/children/${childId}`).update({ calledOn: day, calledBy: myName });
       return { id: ref.id };
     }
 

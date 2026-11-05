@@ -92,12 +92,10 @@ const SchoolSettingsPage = lazy(() => import('./pages/school/SchoolSettingsPage'
 const ChildrenPage = lazy(() => import('./pages/hope/ChildrenPage').then((m) => ({ default: m.ChildrenPage })));
 const RegisterChildPage = lazy(() => import('./pages/hope/RegisterChildPage').then((m) => ({ default: m.RegisterChildPage })));
 const ChildPage = lazy(() => import('./pages/hope/ChildPage').then((m) => ({ default: m.ChildPage })));
-const HopeChatsPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.HopeChatsPage })));
 const HopeChatPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.HopeChatPage })));
 const HopeAttendancePage = lazy(() => import('./pages/hope/HopeAttendancePage').then((m) => ({ default: m.HopeAttendancePage })));
 const HopeAttendanceDayPage = lazy(() => import('./pages/hope/HopeAttendancePage').then((m) => ({ default: m.HopeAttendanceDayPage })));
 const HopeRecordsPage = lazy(() => import('./pages/hope/HopeRecordsPage').then((m) => ({ default: m.HopeRecordsPage })));
-const HopeMealsPage = lazy(() => import('./pages/hope/HopeMealsPage').then((m) => ({ default: m.HopeMealsPage })));
 const HopeBinPage = lazy(() => import('./pages/hope/HopeBinPage').then((m) => ({ default: m.HopeBinPage })));
 const HopeMorePage = lazy(() => import('./pages/hope/HopeMorePage').then((m) => ({ default: m.HopeMorePage })));
 const HopePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.HopePhotosPage })));
@@ -109,7 +107,7 @@ const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((
 const HopeMessagesPage = lazy(() => import('./pages/hope/HopeMessagesPage').then((m) => ({ default: m.HopeMessagesPage })));
 const SponsorListPage = lazy(() => import('./pages/hope/SponsorListPage').then((m) => ({ default: m.SponsorListPage })));
 const PhotoUploadPage = lazy(() => import('./pages/hope/PhotoUploadPage').then((m) => ({ default: m.PhotoUploadPage })));
-const ConsentPage = lazy(() => import('./pages/hope/ConsentPage').then((m) => ({ default: m.ConsentPage })));
+const HopeUploadPage = lazy(() => import('./pages/hope/HopeUploadPage').then((m) => ({ default: m.HopeUploadPage })));
 
 export function App() {
   const { user, profile, loading, signOut } = useAuth();
@@ -162,6 +160,12 @@ export function App() {
     </Routes>
     </Suspense>
   );
+}
+
+/** v182 (4A): meals are counted on the day's page. Old links to /hope/meals?d= open that day. */
+function MealsMoved() {
+  const d = new URLSearchParams(useLocation().search).get('d');
+  return <Navigate to={d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? `/hope/attendance/${d}#meals` : '/hope/attendance/today#meals'} replace />;
 }
 
 function AppRoutes() {
@@ -241,8 +245,9 @@ function AppRoutes() {
         <Route path="/hope/children/import" element={<RequirePermission permission="people.write"><ChildImportPage /></RequirePermission>} />
         <Route path="/hope/messages" element={<RequirePermission permission="people.write"><HopeMessagesPage /></RequirePermission>} />
         <Route path="/hope/children/sponsors" element={<RequirePermission permission="people.write"><SponsorListPage /></RequirePermission>} />
+        <Route path="/hope/upload" element={<RequirePermission permission="people.write"><HopeUploadPage /></RequirePermission>} />
         <Route path="/hope/children/photos" element={<RequirePermission permission="people.write"><PhotoUploadPage /></RequirePermission>} />
-        <Route path="/hope/consent" element={<RequirePermission permission="people.read"><ConsentPage /></RequirePermission>} />
+        <Route path="/hope/consent" element={<Navigate to="/hope/children?show=consent" replace />} />
         <Route path="/hope/register" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><KidsRegisterPage /></RequirePermission>} />
         <Route path="/hope/clubs" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ClubsPage /></RequirePermission>} />
         <Route path="/hope/clubs/:clubId" element={<RequirePermission anyOf={['people.read', 'attendance.write']}><ClubPage /></RequirePermission>} />
@@ -250,12 +255,12 @@ function AppRoutes() {
         <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
         {/* Who sees which photo report is checked by the server (Andy, 2026-11-04, 3A): board members without Hope work open it from the email link. */}
         <Route path="/hope/photos" element={<HopePhotosPage />} />
-        <Route path="/hope/chats" element={<HopeChatsPage />} />
+        <Route path="/hope/chats" element={<Navigate to="/hope/records?show=chats" replace />} />
         <Route path="/hope/chats/:id" element={<HopeChatPage />} />
         <Route path="/hope/attendance" element={<HopeAttendancePage />} />
         <Route path="/hope/attendance/:date" element={<HopeAttendanceDayPage />} />
         <Route path="/hope/records" element={<HopeRecordsPage />} />
-        <Route path="/hope/meals" element={<HopeMealsPage />} />
+        <Route path="/hope/meals" element={<MealsMoved />} />
         <Route path="/hope/bin" element={<HopeBinPage />} />
         <Route path="/hope/more" element={<HopeMorePage />} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />

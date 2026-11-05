@@ -18,6 +18,7 @@ import type { HopeReportDoc } from '../../../functions/src/shared/hope';
 import type { StoredHopeReport } from '../../state/useHope';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { HopeGate, pct } from './common';
+import { HopeFigures } from './HopeFigures';
 import type { Organization } from '../../state/OrgContext';
 
 export function HopeReportsPage() {
@@ -42,7 +43,7 @@ export function useHopeReportList(orgId: string) {
  * opens from its month's folder under Attendance and meals, so there is no form to fill in.
  */
 function Reports({ org }: { org: Organization }) {
-  const { profile } = useAuth();
+  const { profile, can } = useAuth();
   const [params] = useSearchParams();
   const openId = params.get('report') ?? '';
   const { reports } = useHopeReportList(org.id);
@@ -60,12 +61,12 @@ function Reports({ org }: { org: Organization }) {
   }
   const tiles: [string, string, string, string][] = [
     ['/hope/attendance', '📋', 'Attendance and meals', 'Every register day and the meals served, in folders by month, with each month\'s report'],
-    [reader ? '/hope/records' : '/hope/chats', '🔒', 'Care records', reader ? 'Notes and conversations about each child' : 'The worries you raised'],
+    ['/hope/records', '🔒', 'Care', reader ? 'Notes and conversations about each child' : 'Conversations and the worries you raised'],
     ['/hope/photos', '📷', 'Photos and wins', 'Photo reports and the clubs\' wins'],
     ...(bin ? [['/hope/bin', '🗑', 'Bin', 'What was removed, to put back'] as [string, string, string, string]] : []),
   ];
   return (
-    <div className="page narrow">
+    <div className="page lav-today">
       <h1>Reports</h1>
       <div className="rp-tiles">
         {tiles.map(([to, ico, title, sub]) => (
@@ -73,6 +74,12 @@ function Reports({ org }: { org: Organization }) {
         ))}
       </div>
       <p className="small muted">The month's report, with numbers only, is made by itself on the 1st. <Help>It opens from its month in Attendance and meals. The weekly report for the pastor, with the children to follow up, is there too.</Help></p>
+      {can('people.read') && (
+        <section className="stack" aria-label="Figures">
+          <h2>📊 Figures</h2>
+          <HopeFigures org={org} />
+        </section>
+      )}
     </div>
   );
 }

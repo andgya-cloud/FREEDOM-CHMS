@@ -35,12 +35,8 @@ export function useChats(orgId: string, childId?: string) {
   return { list, error, reload };
 }
 
-/** The vault (8A): every conversation about a child, searchable, with an Open/Being handled/Closed filter. */
-export function HopeChatsPage() {
-  return <HopeGate title="Conversations">{(org) => <Vault org={org} />}</HopeGate>;
-}
-
-function Vault({ org }: { org: Organization }) {
+/** The vault (8A): every conversation about a child, searchable, with an Open/Being handled/Closed filter. Shown on the Care page (v182, 5A) to the board and staff. */
+export function Vault({ org }: { org: Organization }) {
   const { list, error } = useChats(org.id);
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<ChatStatus | 'all'>('all');
@@ -49,7 +45,8 @@ function Vault({ org }: { org: Organization }) {
     && (!q.trim() || `${c.childName} ${c.childCode}`.toLowerCase().includes(q.trim().toLowerCase())));
   return (
     <div className="page narrow">
-      <div className="page-head"><h1>🔒 Conversations</h1><Link to="/hope/reports" className="btn">Reports</Link></div>
+      <p><Link to="/hope/reports">← Reports</Link></p>
+      <h1>🔒 Care</h1>
       <p className="small muted">{list?.reader === false ? 'The worries you raised, and whether they are being dealt with. Only the Director, the board, Andy and Doreen read the conversations.' : 'Every conversation about a child, kept for the record. Only the Director, the board, Andy and Doreen can open them.'}</p>
       {error && <p className="notice notice-warn small">{error}</p>}
       <label className="field"><span>Find a child</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or HC code" /></label>
@@ -129,14 +126,14 @@ function Chat({ org }: { org: Organization }) {
     } catch (err) { toast.show(friendlyError(err)); } finally { setSending(''); }
   }
 
-  if (error && !data) return <div className="page narrow"><p className="notice notice-warn">{error}</p><Link to="/hope/chats" className="btn">Back to conversations</Link></div>;
+  if (error && !data) return <div className="page narrow"><p className="notice notice-warn">{error}</p><Link to="/hope/records?show=chats" className="btn">Back to Care</Link></div>;
   if (!data) return <div className="page narrow"><p className="muted">Loading…</p></div>;
   const c = data.chat;
   let lastDay = '';
   return (
     <div className="page narrow chat-page">
       <header className="card chat-head">
-        <Link to="/hope/chats" className="btn btn-quiet btn-small" aria-label="Back to conversations">‹</Link>
+        <Link to="/hope/records?show=chats" className="btn btn-quiet btn-small" aria-label="Back to Care">‹</Link>
         <div className="chat-title">
           <b><Link to={`/hope/children/${c.childId}`}>{c.childName}</Link>{c.childCode ? ` · ${c.childCode}` : ''}</b>
           <span className="small muted">{STATUS_ICON[c.status]} {CHAT_STATUS_LABELS[c.status]}{c.status === 'closed' && c.closedByName ? ` by ${c.closedByName}` : ''} · Director, board, Andy and Doreen</span>

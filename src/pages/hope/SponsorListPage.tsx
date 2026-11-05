@@ -73,7 +73,7 @@ function SponsorList({ org }: { org: Organization }) {
       <h1>Sponsorship list</h1>
       <p className="muted small">Upload the monthly Child Registration List (KE-014) as it comes. Each child is found by name and birth date. The list is taken as right for the birth date, gender, registration date and sponsor; our spelling of names is kept.</p>
       <section className="card stack">
-        <SheetPicker onRows={read} />
+        <SheetPicker kind="sponsors" onRows={read} />
         {error && <p className="notice notice-warn small">{error}</p>}
       </section>
       {plan && (

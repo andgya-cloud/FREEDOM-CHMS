@@ -400,3 +400,33 @@ export function missedSaturdays(childId: string, enrolledOn: string | null | und
   if (enrolledOn && sats[n - 1]!.date < enrolledOn) return false;
   return sats.every((d) => { const s = d.marks?.[childId]?.s; return !kidCame(s) && s !== 'excused'; });
 }
+
+/**
+ * A child to call (v182, 2A): missed the last 3 Saturdays marked, and nobody has called the parent since the
+ * latest of them. One list for following up absent children.
+ */
+export function needsCall(child: { id: string; enrolledOn: string | null; calledOn?: string | null }, days: readonly HopeDay[]): boolean {
+  if (!missedSaturdays(child.id, child.enrolledOn, days)) return false;
+  const latest = days.filter((d) => !d.deletedAt && Object.keys(d.marks ?? {}).length > 0 && saturdayOnOrBefore(d.date) === d.date)
+    .reduce((m, d) => (d.date > m ? d.date : m), '');
+  return !(child.calledOn && child.calledOn >= latest);
+}
+
+export type HopeFileKind = 'sponsors' | 'champions' | 'children';
+/**
+ * What a spreadsheet is (v182, 7A), from its headings in the first rows: the partner's KE-014 list (Child ID),
+ * a champions list (Duty, Appreciation, Weekly amount, Contact), or a children list (Date of birth, Parent, School).
+ */
+export function whatFile(rows: readonly (readonly Cell[])[]): HopeFileKind | null {
+  const key = (c: Cell) => clean(c).toLowerCase().replace(/[^a-z]/g, '');
+  for (const r of rows.slice(0, 15)) {
+    const k = new Set(r.map(key).filter(Boolean));
+    if (k.size < 2) continue;
+    if (k.has('childid')) return 'sponsors';
+    const has = (...xs: string[]) => xs.some((x) => [...k].some((h) => h.includes(x)));
+    if (has('appreciation', 'duty', 'weeklyamount', 'weekly')) return 'champions';
+    if (has('dateofbirth', 'birth', 'dob', 'parent', 'guardian', 'school', 'consent')) return 'children';
+    if (has('name', 'names') && has('contact', 'phone')) return 'champions';
+  }
+  return null;
+}

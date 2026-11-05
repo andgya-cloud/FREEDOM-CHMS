@@ -38,7 +38,7 @@ export function ChampionsPanel({ org }: { org: Organization }) {
   const c = useChampions(org.id);
   const manager = isChampionManager(profile, org.id);
   const [params] = useSearchParams();
-  const [tab, setTab] = useState<Tab>(() => (params.get('tab') === 'pay' && manager ? 'pay' : 'register'));
+  const [tab, setTab] = useState<Tab>(() => (manager && (params.get('tab') === 'pay' || params.get('tab') === 'upload') ? params.get('tab') as Tab : 'register'));
   const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'The champions'], ...(manager ? [['pay', 'Pay'], ['upload', 'Upload from Excel']] as [Tab, string][] : [])];
   return (
     <>
@@ -48,7 +48,7 @@ export function ChampionsPanel({ org }: { org: Organization }) {
       {tab === 'register' && <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} />}
       {tab === 'people' && <ChampionList org={org} today={h.today} data={c} manager={manager} />}
       {tab === 'pay' && manager && <ChampionPay org={org} today={h.today} data={c} />}
-      {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions} done={() => setTab('people')} />}
+      {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions} ready={!c.loading} done={() => setTab('people')} />}
     </>
   );
 }
@@ -296,7 +296,7 @@ function ChampionList({ org, today, data, manager }: { org: Organization; today:
   );
 }
 
-function ChampionUpload({ org, today, existing, done }: { org: Organization; today: string; existing: Champion[]; done: () => void }) {
+function ChampionUpload({ org, today, existing, ready: loaded, done }: { org: Organization; today: string; existing: Champion[]; ready: boolean; done: () => void }) {
   const toast = useToast();
   const { sign, dialog } = useTwoSignatures(org.id);
   const [plan, setPlan] = useState<ChampionImportRow[] | null>(null);
@@ -311,7 +311,7 @@ function ChampionUpload({ org, today, existing, done }: { org: Organization; tod
       <h2>Upload champions from Excel or CSV</h2>
       <p className="small">Choose your list: a name column and, if you have them, phone and weekly amount. New names are added; champions already here are updated. Or download a template.</p>
       <TemplateButtons name="Hope-champions-template" head={CHAMPION_TEMPLATE_HEAD} example={CHAMPION_TEMPLATE_EXAMPLE} />
-      <SheetPicker onRows={(rows) => { const p = planChampionImport(rows, existing, today); setError(p ? '' : 'No "Name" column was found. Use the template\'s headings.'); setPlan(p); }} />
+      <SheetPicker kind="champions" ready={loaded} onRows={(rows) => { const p = planChampionImport(rows, existing, today); setError(p ? '' : 'No "Name" column was found. Use the template\'s headings.'); setPlan(p); }} />
       {error && <p className="error" role="alert">{error}</p>}
       {plan && (
         <>
