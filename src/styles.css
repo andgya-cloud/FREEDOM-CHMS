@@ -1706,7 +1706,9 @@ details.card.fold-card { padding-top: 14px; padding-bottom: 14px; }
 .look-aurora .lav-hero .lav-org em { background: linear-gradient(120deg, #02341b 0%, #038241 50%, #16a058 80%, #4fd18f 100%); -webkit-background-clip: text; background-clip: text; }
 .look-cockpit .lav-scene { background: url('/church-scene.jpg') center / cover no-repeat, #0b0f0c; }
 .look-aurora .lav-scene { background: url('/hope-intro.jpg') center / cover no-repeat, #0a0f18; }
-/* The Hope video itself is now framed like ADIA's crest (Andy, 2026-11-05), so no zoom is needed here. */
+/* The Hope logo sits small in its video; zoom it so it shows as big as the ADIA crest (Andy, 2026-11-04). */
+.look-aurora .lav-scene { background-size: auto 160%; background-position: 50% 56%; }
+.look-aurora .lav-scene .lav-scene-media { transform: scale(1.6); transform-origin: 50% 56%; }
 .look-cockpit .lav-scene .lav-scene-media, .look-aurora .lav-scene .lav-scene-media { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; z-index: 0; }
 .look-cockpit .lav-scene::after, .look-aurora .lav-scene::after { content: ''; position: absolute; inset: 0; z-index: 0; pointer-events: none; background: linear-gradient(180deg, rgba(5, 15, 9, 0) 40%, rgba(5, 15, 9, 0.45) 100%); }
 .look-cockpit .lav-scene .lav-tag, .look-cockpit .lav-scene .lav-steps, .look-aurora .lav-scene .lav-tag, .look-aurora .lav-scene .lav-steps { z-index: 1; }
