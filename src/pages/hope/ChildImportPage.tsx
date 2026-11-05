@@ -21,6 +21,7 @@ function ChildImport({ org }: { org: Organization }) {
   const [plan, setPlan] = useState<ChildImportRow[] | null>(null);
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
+  const [sponsorList, setSponsorList] = useState(false);
   const [all, setAll] = useState(false);
   const ready = plan?.filter((r) => !r.skip) ?? [];
   const shown = plan ? (all ? plan : plan.slice(0, 60)) : [];
@@ -66,12 +67,23 @@ function ChildImport({ org }: { org: Organization }) {
         <p className="small">Fill in the template, one child per row, then choose the file.</p>
         <TemplateButtons name="Hope-children-template" head={CHILD_TEMPLATE_HEAD} example={CHILD_TEMPLATE_EXAMPLE} />
         <SheetPicker onRows={(rows, name) => {
+          // The partner's Child Registration List (KE-014) belongs on the Sponsorship list page (Andy, 2026-11-05).
+          if (rows.some((r) => r.some((c) => String(c ?? '').trim().toLowerCase() === 'child id'))) {
+            setFileName(name); setPlan(null); setSponsorList(true); setError(''); return;
+          }
+          setSponsorList(false);
           const p = planChildImport(rows, h.children.map((c) => h.nameOf(c.id)), h.today, h.children.map((c) => c.code ?? '').filter(Boolean));
           setFileName(name);
           setError(p ? '' : 'No "Name" column was found. Use the template\'s headings in the first row.');
           setPlan(p);
         }} />
         {error && <p className="error" role="alert">{error}</p>}
+        {sponsorList && (
+          <div className="notice notice-warn stack">
+            <p><b>This is the KE-014 sponsorship list</b>, not a list of new children. It updates the children already here with their Child ID, sponsor and dates.</p>
+            <Link to="/hope/children/sponsors" className="btn btn-primary align-start">🤝 Open the Sponsorship list page</Link>
+          </div>
+        )}
       </section>
 
       {plan && (
