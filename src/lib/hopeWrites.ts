@@ -1,3 +1,5 @@
+import type { SponsorRowPlan } from '../../functions/src/shared/hopeSponsorship';
+import { updatePerson } from './peopleWrites';
 import { collection, deleteField, doc, serverTimestamp, setDoc, updateDoc, writeBatch, type DocumentData } from 'firebase/firestore';
 import { auth, db } from '../firebase';
 import { createStamps, softDelete, updateRecord } from './records';
@@ -86,6 +88,22 @@ export function updateChild(orgId: string, childId: string, changes: Partial<Chi
     return trackWrite(batch.commit());
   }
   return updateRecord(ref(orgId, 'children', childId), changes);
+}
+
+/**
+ * Saves a sponsorship list upload (Andy, 2026-11-05): each child's sponsorship, the empty fields it fills, and the
+ * gender on the person when it was blank. One child at a time, so a large list keeps within the rules' limits.
+ */
+export async function saveSponsorList(orgId: string, rows: SponsorRowPlan[], onProgress?: (done: number) => void) {
+  let done = 0;
+  for (let i = 0; i < rows.length; i += 10) {
+    await Promise.all(rows.slice(i, i + 10).map(async (r) => {
+      const { gender, ...fill } = r.fill;
+      await updateRecord(ref(orgId, 'children', r.childId), { ...fill, sponsorship: r.sponsorship });
+      if (gender) await updatePerson(orgId, r.childId, { gender });
+      onProgress?.(++done);
+    }));
+  }
 }
 
 /** Saves the child's photo (a small JPEG) and notes on the child that there is one. Needs photo consent. */

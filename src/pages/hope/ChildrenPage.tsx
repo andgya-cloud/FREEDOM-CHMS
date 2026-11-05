@@ -104,7 +104,7 @@ function Children({ org }: { org: Organization }) {
         <div className="chips">
           {lists && <button type="button" className="btn" disabled={busy || !rows.length} onClick={() => void listExcel()}>⬇︎ Children list</button>}
           {(lists || can('people.write')) && <button type="button" className="btn" disabled={busy || !rows.length} onClick={() => void cards()} title="Cards with a QR code to check children in at the door">🪪 QR cards</button>}
-          {can('people.write') && <><Link to="/hope/children/import" className="btn">⬆︎ Excel</Link><Link to="/hope/children/photos" className="btn">📷 Photos</Link><Link to="/hope/children/new" className="btn btn-primary">Register a child</Link></>}
+          {can('people.write') && <><Link to="/hope/children/import" className="btn">⬆︎ Excel</Link><Link to="/hope/children/sponsors" className="btn">🤝 Sponsorship list</Link><Link to="/hope/children/photos" className="btn">📷 Photos</Link><Link to="/hope/children/new" className="btn btn-primary">Register a child</Link></>}
         </div>
       </div>
       <div className="hc-tools">

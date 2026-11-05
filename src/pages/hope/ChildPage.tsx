@@ -142,6 +142,7 @@ function ChildScreen({ org }: { org: Organization }) {
             <div><dt>Birthday</dt><dd>{born ?? 'Not known'}{toBirthday != null && toBirthday <= 7 ? (toBirthday === 0 ? ' 🎈 today!' : ` 🎈 in ${toBirthday} ${toBirthday === 1 ? 'day' : 'days'}`) : ''}</dd></div>
             <div><dt>School</dt><dd>{child.school || 'Not known'}{child.schoolClass ? ` · ${child.schoolClass}` : ''}</dd></div>
             <div><dt>Sponsor</dt><dd>{child.sponsorName || 'None yet'}{child.sponsorEmail && <> · <a href={`mailto:${child.sponsorEmail}`}>email</a></>}{child.sponsorPhone && <> · <a href={`tel:${child.sponsorPhone}`}>call</a></>}</dd></div>
+            {child.sponsorship && <div><dt>Sponsorship</dt><dd>{child.sponsorship.status || 'On the list'} · {child.sponsorship.childId}</dd></div>}
             <div><dt>Parent</dt><dd>{guardian ? <Link to={`/people/${org.id}/${guardian.id}`}>{parentShown}</Link> : parentShown || 'Not saved'}</dd></div>
             <div><dt>Attendance</dt><dd><PctBadge pct={rate.pct} /> {fire >= STREAK_SHOWN && <span className="hr-delight hr-streak">🔥{fire} in a row</span>}</dd></div>
           </dl>
@@ -188,6 +189,16 @@ function ChildScreen({ org }: { org: Organization }) {
           <label className="field"><span>Sponsor's phone (optional)</span><input disabled={!canEdit} inputMode="tel" value={sponsorPhone} maxLength={30} onChange={(e) => setSponsorPhone(e.target.value)} /></label>
           <label className="field"><span>Sponsor's email (optional)</span><input disabled={!canEdit} type="email" value={sponsorEmail} maxLength={120} onChange={(e) => setSponsorEmail(e.target.value)} /></label>
         </div>
+        {child.sponsorship && (
+          <dl className="hc-facts hc-sponsorship" aria-label="From the sponsorship list">
+            <div><dt>Child ID</dt><dd>{child.sponsorship.childId}</dd></div>
+            <div><dt>Status</dt><dd>{child.sponsorship.status || 'Not given'}</dd></div>
+            {child.sponsorship.sponsorId && <div><dt>Sponsor ID</dt><dd>{child.sponsorship.sponsorId}</dd></div>}
+            {child.sponsorship.registeredOn && <div><dt>Registered</dt><dd>{formatDateKey(child.sponsorship.registeredOn)}</dd></div>}
+            {child.sponsorship.completesOn && <div><dt>Completes</dt><dd>{formatDateKey(child.sponsorship.completesOn)}</dd></div>}
+            {child.sponsorship.updatedOn && <div><dt>List of</dt><dd>{formatDateKey(child.sponsorship.updatedOn)}</dd></div>}
+          </dl>
+        )}
         <ConsentField label="Guardian consent to keep this child's details" value={guardianConsent} onChange={setGuardianConsent} today={h.today} disabled={!canEdit} />
         <ConsentField label="Consent to take and keep photos" value={photoConsent} onChange={setPhotoConsent} today={h.today} disabled={!canEdit} />
         {canEdit && <button type="button" className="btn btn-primary align-start" onClick={save}>Save changes</button>}

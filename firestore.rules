@@ -1168,8 +1168,14 @@ service cloud.firestore {
         allow create, update: if orgWrite(orgId, 'people.write')
           && request.resource.data.keys().hasOnly(['orgId', 'code', 'status', 'enrolledOn', 'exitedOn', 'schoolStatus', 'programmes', 'dateOfBirth', 'school',
                'photoConsent', 'guardianConsent', 'sponsorName', 'sponsorPhone', 'sponsorEmail', 'parentName', 'parentPhone', 'departingNote', 'hasPhoto',
-               'schoolClass', 'payment', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+               'schoolClass', 'payment', 'sponsorship', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('people', childId)
+          && (request.resource.data.get('sponsorship', null) == null || (request.resource.data.sponsorship is map
+               && request.resource.data.sponsorship.keys().hasOnly(['childId', 'status', 'sponsorId', 'sponsorName', 'registeredOn', 'completesOn', 'centre', 'updatedOn'])
+               && shortText(request.resource.data.sponsorship.childId, 20) && shortText(request.resource.data.sponsorship.status, 80)
+               && shortText(request.resource.data.sponsorship.sponsorId, 30) && shortText(request.resource.data.sponsorship.sponsorName, 120)
+               && shortText(request.resource.data.sponsorship.centre, 120)
+               && optionalDate(request.resource.data.sponsorship.get('registeredOn', null)) && optionalDate(request.resource.data.sponsorship.get('completesOn', null))))
           && request.resource.data.status in ['active', 'departing', 'exited']
           && shortText(request.resource.data.get('sponsorName', ''), 120)
           && shortText(request.resource.data.get('sponsorPhone', ''), 30)

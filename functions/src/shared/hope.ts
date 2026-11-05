@@ -32,6 +32,8 @@ export interface ChildProgramme {
   level: string;
 }
 
+import type { ChildSponsorship } from './hopeSponsorship.js';
+
 export interface Child {
   id: string; // the person's id
   code?: string | null;
@@ -60,6 +62,8 @@ export interface Child {
   departingNote?: string | null;
   /** A photo is kept in childPhotos (only while photo consent is given). */
   hasPhoto?: boolean;
+  /** From the sponsoring partner's monthly list, KE-014 (Andy, 2026-11-05). */
+  sponsorship?: ChildSponsorship | null;
   deletedAt?: unknown;
 }
 
