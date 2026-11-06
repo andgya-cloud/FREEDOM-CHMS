@@ -2604,74 +2604,60 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .st-approvals h3 { margin: 0; }
 .st-approval { display: flex; align-items: center; gap: 10px; }
 .st-approval .grow { flex: 1; min-width: 0; }
-/* v196 Needs you: urgent banner, colour tiles, Celebrate strip, pills (Andy 1A-7A) */
-.nu { --nu-red: #dc2626; --nu-gold: #b7791f; --nu-blue: #2563eb; --nu-pink: #db2777; --nu-violet: #7c3aed; display: flex; flex-direction: column; gap: 14px; }
+/* v198 Needs you, clean like the Figures cards (Andy 1A-7A): white cards, each kind's colour only as the outline and icon */
+.nu { --nu-red: #d32f2f; --nu-gold: #b7791f; --nu-blue: #2563eb; --nu-pink: #db2777; --nu-violet: #7c3aed; display: flex; flex-direction: column; gap: 18px; }
 .nu-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 .nu-head h2 { margin: 0; }
 .nu-pills { display: flex; gap: 6px; flex-wrap: wrap; }
-.nu-pill { border: 1px solid var(--border); background: transparent; color: inherit; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .88rem; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
-.nu-pill span { font-size: .78rem; opacity: .7; font-variant-numeric: tabular-nums; }
+.nu-pill { border: 1px solid var(--border); background: #fff; color: inherit; border-radius: 999px; padding: 5px 12px; font: inherit; font-size: .86rem; cursor: pointer; display: inline-flex; gap: 6px; align-items: center; }
+.nu-pill span { font-size: .76rem; opacity: .65; font-variant-numeric: tabular-nums; }
 .nu-pill.on { background: #038241; border-color: #038241; color: #fff; }
 .nu-pill.on span { opacity: .9; }
-.nu-pill-urgent.on { background: var(--nu-red); border-color: var(--nu-red); }
-.nu-pill-money.on { background: var(--nu-gold); border-color: var(--nu-gold); }
-.nu-pill-children.on { background: var(--nu-blue); border-color: var(--nu-blue); }
-.nu-ico { width: 38px; height: 38px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--nu-c, #038241); background: color-mix(in srgb, var(--nu-c, #038241) 12%, transparent); }
-.nu-ico-urgent, .nu-urgent .nu-ico { --nu-c: var(--nu-red); }
-.nu-ico-unread { --nu-c: var(--nu-violet); }
-.nu-ico-pay, .nu-ico-fees { --nu-c: var(--nu-gold); }
-.nu-ico-missed, .nu-ico-consent, .nu-ico-departing { --nu-c: var(--nu-blue); }
-.nu-ico-birthday { --nu-c: var(--nu-pink); }
-/* Urgent banner */
-.nu-urgent { border-radius: 16px; padding: 14px; color: #fff; background: linear-gradient(135deg, #b91c1c, #ef4444); box-shadow: 0 10px 24px -14px rgba(185, 28, 28, .8); display: flex; flex-direction: column; gap: 10px; }
-.nu-urgent-top { display: flex; align-items: center; gap: 14px; }
-.nu-urgent-top .grow b { display: block; font-size: 1.08rem; }
-.nu-urgent-top .grow span { display: block; font-size: .88rem; opacity: .9; }
-.nu-faces { display: inline-flex; flex: none; }
-.nu-faces > span { margin-left: -12px; border-radius: 50%; box-shadow: 0 0 0 2px #dc2626; display: inline-flex; }
+.nu-card { --nu-c: #038241; background: #fff; border-radius: 22px; border: 1.5px solid color-mix(in srgb, var(--nu-c) 70%, transparent); box-shadow: 0 0 0 1px rgba(0, 0, 0, .03), 0 6px 16px -8px rgba(0, 0, 0, .28), 0 0 12px rgba(0, 0, 0, .05); padding: 20px 22px; color: var(--text); text-decoration: none; }
+.nu-c-red { --nu-c: var(--nu-red); } .nu-c-gold { --nu-c: var(--nu-gold); } .nu-c-blue { --nu-c: var(--nu-blue); } .nu-c-pink { --nu-c: var(--nu-pink); } .nu-c-violet { --nu-c: var(--nu-violet); }
+.nu-ico { width: 34px; height: 34px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex: none; color: var(--nu-c, #038241); background: color-mix(in srgb, var(--nu-c, #038241) 10%, transparent); }
+.nu-ico svg { width: 18px; height: 18px; }
+/* Urgent */
+.nu-urgent { display: flex; flex-direction: column; gap: 12px; }
+.nu-urgent-top { display: flex; align-items: center; gap: 12px; }
+.nu-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--nu-red); flex: none; box-shadow: 0 0 0 5px color-mix(in srgb, var(--nu-red) 15%, transparent); }
+.nu-urgent-top .grow b { display: block; font-size: 1.05rem; }
+.nu-urgent-top em { font-style: normal; color: var(--nu-red); }
+.nu-urgent-top .grow span { display: block; font-size: .86rem; color: var(--muted); }
+.nu-urgent-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.nu-urgent-list li + li { border-top: 1px solid var(--border); }
+.nu-urgent-list a { display: flex; align-items: center; gap: 12px; padding: 10px 4px; color: inherit; text-decoration: none; border-radius: 12px; }
+.nu-urgent-list a:hover { background: color-mix(in srgb, var(--nu-red) 5%, transparent); }
+.nu-urgent-list .grow { min-width: 0; overflow: hidden; }
+.nu-urgent-list .grow b { font-weight: 600; margin-right: 10px; }
+.nu-urgent-list .grow span { font-size: .86rem; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nu-go { margin-left: auto; font-size: 1.2rem; color: var(--muted); }
+/* Tiles: four across, the same height, like Figures */
+.nu-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; }
+.nu-tile { display: flex; flex-direction: column; gap: 4px; min-height: 196px; transition: transform .2s, box-shadow .2s; }
+.nu-tile:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px rgba(0, 0, 0, .03), 0 16px 30px -14px rgba(0, 0, 0, .4); }
+.nu-tile-top { display: flex; align-items: center; gap: 10px; }
+.nu-label { font-size: .82rem; font-weight: 600; color: var(--muted); line-height: 1.25; }
+.nu-big { font-size: 2rem; font-weight: 800; letter-spacing: -.03em; line-height: 1.1; margin-top: 10px; color: var(--text); font-variant-numeric: tabular-nums; }
+.nu-sub { font-size: .82rem; color: var(--muted); min-height: 1.1em; }
+.nu-faces { display: inline-flex; align-items: center; margin-top: 8px; }
+.nu-faces > span { margin-left: -8px; border-radius: 50%; box-shadow: 0 0 0 2px #fff; display: inline-flex; }
 .nu-faces > span:first-child { margin-left: 0; }
-.nu-urgent-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.nu-urgent-list a { display: flex; align-items: center; gap: 10px; padding: 7px 10px; border-radius: 10px; background: rgba(255, 255, 255, .14); color: #fff; text-decoration: none; }
-.nu-urgent-list a:hover { background: rgba(255, 255, 255, .22); }
-.nu-urgent-list .grow b { font-weight: 600; margin-right: 8px; }
-.nu-urgent-list .grow span { font-size: .85rem; opacity: .85; }
-.nu-go { margin-left: auto; font-size: 1.2rem; opacity: .8; }
-/* Tiles */
-.nu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
-.nu-tile { --nu-c: #038241; position: relative; display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 16px; border: 1px solid color-mix(in srgb, var(--nu-c) 22%, transparent); background: linear-gradient(160deg, color-mix(in srgb, var(--nu-c) 7%, transparent), transparent 60%); overflow: hidden; }
-.nu-tile::before { content: ''; position: absolute; inset: 0 auto 0 0; width: 4px; background: var(--nu-c); }
-.nu-tile.nu-money { --nu-c: var(--nu-gold); }
-.nu-tile.nu-children { --nu-c: var(--nu-blue); }
-.nu-tile.nu-urgent { --nu-c: var(--nu-violet); }
-.nu-tile-top { display: flex; gap: 12px; align-items: flex-start; }
-.nu-tile-top .grow > * { display: block; }
-.nu-big { font-size: 1.75rem; line-height: 1.1; font-weight: 700; color: var(--nu-c); font-variant-numeric: tabular-nums; }
-.nu-label { font-weight: 600; }
-.nu-sub { font-size: .82rem; color: var(--muted); }
-.nu-names { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.nu-names li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-.nu-names li > a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; color: inherit; text-decoration: none; padding: 4px; border-radius: 10px; }
-.nu-names li > a:hover { background: color-mix(in srgb, var(--nu-c) 8%, transparent); }
-.nu-names .grow { min-width: 0; }
-.nu-names .grow > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nu-names .grow b { font-weight: 600; font-size: .93rem; }
-.nu-names .grow span { font-size: .8rem; color: var(--muted); }
-.nu-acts { display: inline-flex; gap: 4px; }
-.nu-act { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--border); background: transparent; color: inherit; display: inline-flex; align-items: center; justify-content: center; text-decoration: none; font-size: .72rem; font-weight: 700; cursor: pointer; padding: 0; }
-.nu-act .nu-ico { width: 30px; height: 30px; background: transparent; }
-.nu-act .nu-ico svg { width: 16px; height: 16px; }
-.nu-wa { color: #128c4a; }
-.nu-open { margin-top: auto; align-self: flex-start; font-weight: 600; font-size: .9rem; color: var(--nu-c, #038241); text-decoration: none; padding: 6px 12px; border-radius: 999px; background: color-mix(in srgb, var(--nu-c, #038241) 10%, transparent); }
-.nu-open:hover { background: color-mix(in srgb, var(--nu-c, #038241) 18%, transparent); }
+.nu-more { width: 30px; height: 30px; align-items: center; justify-content: center; font-size: .72rem; font-weight: 700; color: var(--muted); background: #f1f3f2; }
+.nu-open { margin-top: auto; padding-top: 10px; font-weight: 600; font-size: .88rem; color: var(--nu-c, #038241); text-decoration: none; }
 /* Celebrate */
-.nu-celebrate { --nu-c: var(--nu-pink); border-radius: 16px; padding: 14px; background: linear-gradient(120deg, #fdf2f8, #fef3c7); border: 1px solid #fbcfe8; display: flex; flex-direction: column; gap: 10px; }
+.nu-celebrate { display: flex; flex-direction: column; gap: 12px; }
 .nu-celebrate-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.nu-celebrate-head > span:not(.nu-ico) { color: #9d174d; font-size: .9rem; }
-.nu-celebrate-head .nu-open { margin: 0 0 0 auto; }
-.nu-celebrate-list { list-style: none; margin: 0; padding: 6px 6px 4px; display: flex; gap: 14px; overflow-x: auto; }
-.nu-celebrate-list a { display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none; color: #831843; font-size: .85rem; font-weight: 600; min-width: 60px; }
-.nu-celebrate-list .hr-avatar { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #f9a8d4; }
-@media (max-width: 560px) { .nu-grid { grid-template-columns: 1fr; } .nu-head { align-items: flex-start; } .nu-urgent-list .grow > * { display: block; } }
+.nu-celebrate-head > span:not(.nu-ico) { color: var(--muted); font-size: .88rem; }
+.nu-celebrate-head .nu-open { margin: 0 0 0 auto; padding: 0; }
+.nu-celebrate-list { list-style: none; margin: 0; padding: 4px; display: flex; gap: 18px; overflow-x: auto; }
+.nu-celebrate-list a { display: flex; flex-direction: column; align-items: center; gap: 6px; text-decoration: none; color: var(--text); font-size: .84rem; font-weight: 600; min-width: 56px; }
+.nu-celebrate-list .hr-avatar { box-shadow: 0 0 0 2px #fff, 0 0 0 3.5px color-mix(in srgb, var(--nu-pink) 60%, transparent); }
+@media (max-width: 1100px) { .nu-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .nu-grid { gap: 12px; } .nu-tile { min-height: 170px; padding: 16px; } .nu-big { font-size: 1.5rem; } .nu-urgent-list .grow > * { display: block; } }
+/* Call, WhatsApp and Done on the Missed list (v198, 6A) */
+.hc-grid li { display: flex; flex-direction: column; gap: 6px; }
+.hc-acts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; margin: 0; }
 /* v197 conversations about a child, in the Photos and wins glass room */
 .chat-room .chat-kid { width: 44px; height: 44px; border-radius: 50%; overflow: hidden; flex: none; display: inline-flex; align-items: center; justify-content: center; background: rgb(255 255 255 / 0.2); color: #fff; font-weight: 700; text-decoration: none; box-shadow: 0 0 0 2px rgb(255 255 255 / 0.7); }
 .chat-room .chat-kid img { width: 100%; height: 100%; object-fit: cover; }
@@ -2679,5 +2665,3 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .chat-sev .st-chip.sev-low.on { background: #2f9e5b; border-color: #2f9e5b; color: #fff; }
 .chat-sev .st-chip.sev-medium.on { background: #d08a12; border-color: #d08a12; color: #fff; }
 .chat-sev .st-chip.sev-high.on { background: #c62828; border-color: #c62828; color: #fff; }
-.nu-urgent-list .grow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nu-urgent-list .grow { min-width: 0; overflow: hidden; }

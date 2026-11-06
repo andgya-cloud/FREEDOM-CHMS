@@ -18,6 +18,7 @@ import { HopeGate, useHopePage } from './common';
 import { childWarning, WARNING_LABEL } from '../../../functions/src/shared/hopeWarning';
 const RANK = { green: 0, amber: 1, red: 2 } as const;
 import { ConsentTicks } from './ConsentPage';
+import { MissedActions } from './HopeTodayBoard';
 import { Avatar, Delights, PctBadge } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 
@@ -190,6 +191,7 @@ function Children({ org }: { org: Organization }) {
                   {c.status === 'exited' && <span className="badge badge-muted">Departed</span>}
                 </span>
               </Link>
+              {show === 'missed' && <MissedActions orgId={org.id} child={c} name={name} />}
             </li>
           ))}
         </ul>

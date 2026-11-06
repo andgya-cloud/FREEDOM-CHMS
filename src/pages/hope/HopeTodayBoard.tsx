@@ -90,7 +90,7 @@ export function HeroCheckin({ h, days, marker, openDay }: { h: H; days: HopeDay[
   );
 }
 
-type Line = { key: string; who: string; why: string; to: string; childId?: string; tel?: string; wa?: string; call?: { childId: string; name: string } };
+type Line = { key: string; who: string; why: string; to: string; childId?: string };
 type Family = 'urgent' | 'money' | 'children';
 type Group = { reason: string; family: Family; more: string; lines: Line[]; big?: string; label?: string; sub?: string };
 
@@ -113,6 +113,7 @@ function NeedIcon({ name }: { name: string }) {
   );
 }
 
+const COLOUR_OF: Record<string, string> = { unread: 'violet', pay: 'gold', fees: 'gold', missed: 'blue', consent: 'blue', departing: 'blue' };
 const FAMILY_OF: Record<string, Family> = { urgent: 'urgent', unread: 'urgent', pay: 'money', fees: 'money', missed: 'children', consent: 'children', departing: 'children', birthday: 'children' };
 const TILE_LABEL: Record<string, string> = { unread: 'New messages', pay: "Champions' pay", fees: 'Fees still to pay', missed: 'Missed 3 Saturdays', consent: 'Consent missing', departing: 'Departing' };
 const TILE_SUB: Record<string, string> = { unread: 'Open Care to read them', fees: 'This term', missed: 'Call or WhatsApp the parents', consent: 'Record it on their page', departing: 'Say goodbye well' };
@@ -125,21 +126,14 @@ const PILLS: { id: 'all' | Family; label: string }[] = [{ id: 'all', label: 'All
  */
 export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; days: HopeDay[]; unread?: number }) {
   const { profile } = useAuth();
-  const toast = useToast();
   const reader = canReadNotes(profile, org.id);
   const fees = canKeepFees(profile, org.id);
-  const caller = canAddLeavingNote(profile, org.id);
   const chats = useChats(org.id).list;
   const pay = usePayReady(org, h.today);
   const photos = useChildPhotos(org.id);
   const [owing, setOwing] = useState<{ childId: string; left: number }[]>([]);
   const [pill, setPill] = useState<'all' | Family>('all');
-  const [done, setDone] = useState<{ childId: string; name: string } | null>(null);
-  const [note, setNote] = useState('');
-  const [hidden, setHidden] = useState<string[]>([]);
   useEffect(() => { if (fees) feesOwing(org.id).then((r) => setOwing(r.owing), () => setOwing([])); }, [fees, org.id]);
-  const missedText = MESSAGE_TEMPLATES.find((t) => t.id === 'missed')?.text ?? 'Hello {parent}, we have missed {child} at the Hope Centre.';
-
   const { urgent, groups } = useMemo(() => {
     const current = h.children.filter(isCurrentChild);
     const name = (id: string) => h.nameOf(id);
@@ -161,15 +155,8 @@ export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; day
     const add = (g: Omit<Group, 'family'>) => { if (g.lines.length) out.push({ ...g, family: FAMILY_OF[g.reason]! }); };
     if (unread && unread > urgentCount) add({ reason: 'unread', more: '/hope/records?show=chats', big: String(unread), lines: [{ key: 'unread', who: `${unread === 1 ? 'A conversation has' : `${unread} conversations have`} new messages`, why: '', to: '/hope/records?show=chats' }] });
     if (pay) add({ reason: 'pay', more: '/hope/register?w=champions&tab=pay', big: pay.amount, label: pay.label, sub: pay.sub, lines: [{ key: 'pay', who: pay.title, why: pay.why, to: '/hope/register?w=champions&tab=pay' }] });
-    add({ reason: 'missed', more: '/hope/children?show=missed', lines: current.filter((c) => needsCall(c, days) && !hidden.includes(c.id)).map((c) => {
-      const n = name(c.id);
-      const phone = c.parentPhone || undefined;
-      return {
-        key: `m${c.id}`, childId: c.id, who: n, why: c.parentName ? `Parent: ${c.parentName}` : '', to: `/hope/children/${c.id}?tab=attendance`, tel: phone,
-        wa: phone ? waLink(phone, fillMessage(missedText, { parentName: c.parentName || '', children: [{ id: c.id, name: n }] })) : undefined,
-        call: caller ? { childId: c.id, name: n } : undefined,
-      };
-    }) });
+    add({ reason: 'missed', more: '/hope/children?show=missed', lines: current.filter((c) => needsCall(c, days)).map((c) => ({
+      key: `m${c.id}`, childId: c.id, who: name(c.id), why: '', to: `/hope/children/${c.id}?tab=attendance` })) });
     if (fees) {
       const ids = new Set(current.map((c) => c.id));
       add({ reason: 'fees', more: '/hope/children?show=owing', lines: owing.filter((o) => ids.has(o.childId)).map((o) => ({
@@ -182,16 +169,7 @@ export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; day
     add({ reason: 'birthday', more: '/hope/children?show=birthdays', lines: current.filter((c) => birthdayThisWeek(c.dateOfBirth, h.today)).map((c) => ({
       key: `b${c.id}`, childId: c.id, who: name(c.id), why: '', to: `/hope/children/${c.id}` })) });
     return { urgent, groups: out };
-  }, [h, days, reader, chats, fees, owing, unread, pay, caller, hidden, missedText]);
-
-  function saveCall() {
-    if (!done) return;
-    const d = done;
-    addNote(org.id, d.childId, 'call', note.trim() || 'Called the parent about the missed Saturdays.')
-      .then(() => toast.show(`Saved. ${d.name} is off the list.`), (err) => { setHidden((x) => x.filter((id) => id !== d.childId)); toast.show(friendlyError(err)); });
-    setHidden((x) => [...x, d.childId]);
-    setDone(null); setNote('');
-  }
+  }, [h, days, reader, chats, fees, owing, unread, pay]);
 
   const tiles = groups.filter((g) => g.reason !== 'birthday');
   const birthdays = groups.find((g) => g.reason === 'birthday');
@@ -202,12 +180,12 @@ export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; day
   const face = (l: Line, size = 32) => <Avatar photo={l.childId ? photos.get(l.childId) : null} name={l.who} size={size} />;
 
   return (
-    <section className="card ht-needs nu" aria-label="Needs you">
+    <section className="ht-needs nu" aria-label="Needs you">
       <div className="nu-head">
         <h2>Needs you</h2>
         <div className="nu-pills" role="radiogroup" aria-label="Show">
           {PILLS.filter((p) => p.id === 'all' || sizeOf(p.id) > 0).map((p) => (
-            <button key={p.id} type="button" role="radio" aria-checked={pill === p.id} className={`nu-pill nu-pill-${p.id}${pill === p.id ? ' on' : ''}`} onClick={() => setPill(p.id)}>
+            <button key={p.id} type="button" role="radio" aria-checked={pill === p.id} className={`nu-pill${pill === p.id ? ' on' : ''}`} onClick={() => setPill(p.id)}>
               {p.label} <span>{p.id === 'all' ? total : sizeOf(p.id)}</span>
             </button>
           ))}
@@ -215,13 +193,13 @@ export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; day
       </div>
 
       {show('urgent') && urgent.length > 0 && (
-        <div className="nu-urgent">
+        <div className="nu-card nu-c-red nu-urgent">
           <div className="nu-urgent-top">
-            <span className="nu-faces" aria-hidden="true">{urgent.slice(0, 4).map((l) => <span key={l.key}>{face(l, 40)}</span>)}</span>
-            <span className="grow"><b>{urgent.length === 1 ? '1 child has' : `${urgent.length} children have`} an urgent conversation</b><span>Not yet handled. Tap a child to open it.</span></span>
+            <span className="nu-dot" aria-hidden="true" />
+            <span className="grow"><b>{urgent.length === 1 ? '1 child has an ' : `${urgent.length} children have an `}<em>urgent</em> conversation</b><span>Not yet handled. Tap a child to open it.</span></span>
           </div>
           <ul className="nu-urgent-list">
-            {urgent.map((l) => <li key={l.key}><Link to={l.to}>{face(l, 28)}<span className="grow"><b>{l.who}</b><span>{l.why}</span></span><span className="nu-go" aria-hidden="true">›</span></Link></li>)}
+            {urgent.map((l) => <li key={l.key}><Link to={l.to}>{face(l, 34)}<span className="grow"><b>{l.who}</b><span>{l.why}</span></span><span className="nu-go" aria-hidden="true">›</span></Link></li>)}
           </ul>
         </div>
       )}
@@ -229,50 +207,68 @@ export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; day
       {tiles.some((g) => show(g.family)) && (
         <div className="nu-grid">
           {tiles.filter((g) => show(g.family)).map((g) => (
-            <article key={g.reason} className={`nu-tile nu-${g.family}`}>
-              <div className="nu-tile-top">
-                <NeedIcon name={g.reason} />
-                <span className="grow"><b className="nu-big">{g.big ?? g.lines.length}</b><span className="nu-label">{g.label ?? TILE_LABEL[g.reason]}</span>{(g.sub ?? TILE_SUB[g.reason]) && <span className="nu-sub">{g.sub ?? TILE_SUB[g.reason]}</span>}</span>
-              </div>
+            <Link key={g.reason} to={g.more} className={`nu-card nu-tile nu-c-${COLOUR_OF[g.reason]}`}>
+              <span className="nu-tile-top"><NeedIcon name={g.reason} /><span className="nu-label">{g.label ?? TILE_LABEL[g.reason]}</span></span>
+              <b className="nu-big">{g.big ?? g.lines.length}</b>
+              <span className="nu-sub">{g.sub ?? TILE_SUB[g.reason] ?? ''}</span>
               {g.reason !== 'unread' && g.reason !== 'pay' && (
-                <ul className="nu-names">
-                  {g.lines.slice(0, 2).map((l) => (
-                    <li key={l.key}>
-                      <Link to={l.to}>{face(l)}<span className="grow"><b>{l.who}</b>{l.why && <span>{l.why}</span>}</span></Link>
-                      {(l.tel || l.call) && (
-                        <span className="nu-acts">
-                          {l.tel && <a className="nu-act" href={`tel:${l.tel}`} aria-label={`Call ${l.who}'s parent`} title="Call"><NeedIcon name="missed" /></a>}
-                          {l.wa && <a className="nu-act nu-wa" href={l.wa} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${l.who}'s parent`} title="WhatsApp">WA</a>}
-                          {l.call && <button type="button" className="nu-act" onClick={() => { setDone(l.call!); setNote(''); }} aria-label={`Mark ${l.who} as called`} title="Done">✓</button>}
-                        </span>
-                      )}
-                      {done && l.call && done.childId === l.call.childId && (
-                        <div className="ht-done stack">
-                          <label className="field"><span>What did the parent say? (optional)</span>
-                            <input value={note} maxLength={500} autoFocus onChange={(e) => setNote(e.target.value)} placeholder="He was sick, coming back on Saturday" /></label>
-                          <div className="chips"><button type="button" className="btn btn-primary btn-small" onClick={saveCall}>Save</button><button type="button" className="btn btn-quiet btn-small" onClick={() => setDone(null)}>Cancel</button></div>
-                        </div>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <span className="nu-faces" aria-label={g.lines.slice(0, 3).map((l) => l.who).join(', ')}>
+                  {g.lines.slice(0, 3).map((l) => <span key={l.key}>{face(l, 30)}</span>)}
+                  {g.lines.length > 3 && <span className="nu-more">+{g.lines.length - 3}</span>}
+                </span>
               )}
-              <Link to={g.more} className="nu-open">{g.reason === 'pay' ? 'Check and approve' : g.lines.length > 2 ? `Open all ${g.lines.length}` : 'Open'} <span aria-hidden="true">›</span></Link>
-            </article>
+              <span className="nu-open">{g.reason === 'pay' ? 'Check and approve' : g.lines.length > 1 ? `Open all ${g.lines.length}` : 'Open'} ›</span>
+            </Link>
           ))}
         </div>
       )}
 
       {show('children') && birthdays && (
-        <div className="nu-celebrate">
+        <div className="nu-card nu-c-pink nu-celebrate">
           <div className="nu-celebrate-head"><NeedIcon name="birthday" /><b>Celebrate</b><span>{birthdays.lines.length === 1 ? '1 birthday' : `${birthdays.lines.length} birthdays`} this week</span>
-            <Link to={birthdays.more} className="nu-open">See all <span aria-hidden="true">›</span></Link></div>
+            <Link to={birthdays.more} className="nu-open">See all ›</Link></div>
           <ul className="nu-celebrate-list">
-            {birthdays.lines.map((l) => <li key={l.key}><Link to={l.to}>{face(l, 52)}<span>{l.who.split(' ')[0]}</span></Link></li>)}
+            {birthdays.lines.map((l) => <li key={l.key}><Link to={l.to}>{face(l, 48)}<span>{l.who.split(' ')[0]}</span></Link></li>)}
           </ul>
         </div>
       )}
     </section>
+  );
+}
+
+/**
+ * Call, WhatsApp "We missed you" and Done for a child who missed the last 3 Saturdays (v198, 6A): on the Children
+ * page's "Missed the last 3 Saturdays" list, so Today stays clean. Done keeps a short note of what the parent said.
+ */
+export function MissedActions({ orgId, child, name }: { orgId: string; child: { id: string; parentPhone?: string | null; parentName?: string | null }; name: string }) {
+  const { profile } = useAuth();
+  const toast = useToast();
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  const [called, setCalled] = useState(false);
+  const caller = canAddLeavingNote(profile, orgId);
+  const phone = child.parentPhone || '';
+  const missedText = MESSAGE_TEMPLATES.find((t) => t.id === 'missed')?.text ?? 'Hello {parent}, we have missed {child} at the Hope Centre.';
+  const wa = phone ? waLink(phone, fillMessage(missedText, { parentName: child.parentName || '', children: [{ id: child.id, name }] })) : '';
+  function save() {
+    addNote(orgId, child.id, 'call', note.trim() || 'Called the parent about the missed Saturdays.')
+      .then(() => toast.show(`Saved. ${name} is off the Today list.`), (err) => { setCalled(false); toast.show(friendlyError(err)); });
+    setCalled(true); setOpen(false); setNote('');
+  }
+  if (called) return <p className="small muted hc-acts">✓ Called</p>;
+  return (
+    <div className="hc-acts">
+      {phone ? <a className="btn btn-quiet btn-small" href={`tel:${phone}`} aria-label={`Call ${name}'s parent`}>📞 Call</a> : <span className="small muted">No parent phone</span>}
+      {wa && <a className="btn btn-quiet btn-small" href={wa} target="_blank" rel="noopener noreferrer" aria-label={`WhatsApp ${name}'s parent`}>WhatsApp</a>}
+      {caller && <button type="button" className="btn btn-quiet btn-small" onClick={() => setOpen(!open)}>✓ Done</button>}
+      {open && (
+        <div className="ht-done stack">
+          <label className="field"><span>What did the parent say? (optional)</span>
+            <input value={note} maxLength={500} autoFocus onChange={(e) => setNote(e.target.value)} placeholder="He was sick, coming back on Saturday" /></label>
+          <div className="chips"><button type="button" className="btn btn-primary btn-small" onClick={save}>Save</button><button type="button" className="btn btn-quiet btn-small" onClick={() => setOpen(false)}>Cancel</button></div>
+        </div>
+      )}
+    </div>
   );
 }
 
