@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useToast } from '../state/ToastContext';
 import { checkEntries, cleanupError, removeEntries, type CheckedItem, type Item } from '../lib/cleanup';
-import { passwordProof } from '../lib/pettyPin';
+import { myOwnProof, passwordProof } from '../lib/pettyPin';
+import { isDirectorProfile } from '../../functions/src/shared/permissions';
 import { canKeepAccounts } from '../../functions/src/shared/permissions';
 import { isHopeDirector } from '../../functions/src/shared/hopePhotos';
 import { BIN_DAYS, type CleanupKind } from '../../functions/src/shared/cleanup';
@@ -15,7 +16,9 @@ import { BIN_DAYS, type CleanupKind } from '../../functions/src/shared/cleanup';
 export function RemoveDialog({ orgId, items, open, onClose, onDone, title, askPassword }: { orgId: string; items: Item[]; open: boolean; onClose: () => void; onDone: () => void; title?: string; askPassword?: boolean }) {
   const ref = useRef<HTMLDialogElement>(null);
   const toast = useToast();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  // Andy removes anything with no password (2026-11-06).
+  const andy = isDirectorProfile(profile);
   const [checked, setChecked] = useState<CheckedItem[] | null>(null);
   const [director, setDirector] = useState(false);
   const [problem, setProblem] = useState('');
@@ -40,14 +43,14 @@ export function RemoveDialog({ orgId, items, open, onClose, onDone, title, askPa
 
   const official = !!checked?.some((c) => c.official);
   // A child's profile always asks for the password (Andy, 2026-11-05, 1B).
-  const needPassword = official || !!askPassword;
+  const needPassword = (official || !!askPassword) && !andy;
   const blocked = official && !director;
   const linked = checked?.filter((c) => c.linkedText) ?? [];
 
   async function go() {
     setBusy(true);
     try {
-      const proof = needPassword ? await passwordProof(user?.uid ?? '', user?.email ?? '', password) : undefined;
+      const proof = andy ? await myOwnProof() : needPassword ? await passwordProof(user?.uid ?? '', user?.email ?? '', password) : undefined;
       const res = await removeEntries({ orgId, items, reason, proof });
       toast.show(`${res.removed === 1 ? 'Moved' : `${res.removed} entries moved`} to the Recycle Bin. You can put ${res.removed === 1 ? 'it' : 'them'} back for ${BIN_DAYS} days.`);
       onClose();

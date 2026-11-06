@@ -2,6 +2,7 @@ import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'no
 import { promisify } from 'node:util';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { auth, db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
+import { proofAge } from './directorProof.js';
 import { canAccessOrg, canKeepAccounts, isPettyTitle } from './shared/permissions.js';
 import { PETTY_CASH_ORG_TYPES, canTopUpAlone, checkPin, fundStatusAfter, fundSummary, parseAmountCents, PIN_LOCK_MINUTES, PIN_MAX_TRIES, REQUEST_SIGNATURES_NEEDED, waitingForAccountant, DIRECTOR_LIMIT_CENTS, directorSigned, overDirectorLimit, waitingForDirector, type PettyCashSignature } from './shared/pettyCash.js';
 import { ACCOUNTANT_TITLE } from './shared/permissions.js';
@@ -189,7 +190,7 @@ export async function verifyPin(uid: string, pin: string) {
   if (pin.startsWith(TOKEN_PREFIX)) {
     const t = await auth.verifyIdToken(pin.slice(TOKEN_PREFIX.length)).catch(() => null);
     // The proof must be this person's and freshly made by typing their password.
-    if (!t || Date.now() / 1000 - t.auth_time > 300 || !(await sameSigner(uid, t.uid, t.email))) throw new HttpsError('permission-denied', 'That password could not be confirmed. Please type it again.');
+    if (!t || (await proofAge(t)) > 300 || !(await sameSigner(uid, t.uid, t.email))) throw new HttpsError('permission-denied', 'That password could not be confirmed. Please type it again.');
     return;
   }
   const ref = db.doc(`pettyPins/${uid}`);

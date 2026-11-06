@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
-import { passwordProof } from '../lib/pettyPin';
+import { myOwnProof, passwordProof } from '../lib/pettyPin';
+import { isDirectorProfile } from '../../functions/src/shared/permissions';
 import { friendlyError } from '../lib/errors';
 import { listPhotoApprovers, type PhotoApprover } from '../lib/childPhoto';
 
@@ -13,7 +14,9 @@ export function ApprovePhoto({ open, orgId, title, body, confirmLabel = 'Approve
   onApproved: (proof: string) => void; onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  // Andy approves with one tap, no password (2026-11-06).
+  const andy = isDirectorProfile(profile);
   const [people, setPeople] = useState<PhotoApprover[] | null>(null);
   const [who, setWho] = useState('');
   const [password, setPassword] = useState('');
@@ -33,9 +36,13 @@ export function ApprovePhoto({ open, orgId, title, body, confirmLabel = 'Approve
   }, [open, orgId, people, user]);
 
   async function go() {
-    const p = people?.find((x) => x.uid === who);
-    if (!p) { setError('Choose who is approving.'); return; }
     setBusy(true); setError('');
+    if (andy) {
+      try { onApproved(await myOwnProof()); } catch (err) { setError(friendlyError(err)); } finally { setBusy(false); }
+      return;
+    }
+    const p = people?.find((x) => x.uid === who);
+    if (!p) { setBusy(false); setError('Choose who is approving.'); return; }
     try { onApproved(await passwordProof(p.uid, p.emails, password)); }
     catch { setError('That password is not right. Try again.'); }
     finally { setBusy(false); }
@@ -44,8 +51,8 @@ export function ApprovePhoto({ open, orgId, title, body, confirmLabel = 'Approve
     <dialog ref={ref} className="dialog" onCancel={(e) => { e.preventDefault(); if (!busy) onCancel(); }}>
       <h2>{title}</h2>
       <p className="small">{body ?? 'The Director, Andrew Guya or Doreen approves this with their password.'}</p>
-      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (password) void go(); }}>
-        <label className="field"><span>Who is approving</span>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (password || andy) void go(); }}>
+        {!andy && <><label className="field"><span>Who is approving</span>
           <select value={who} onChange={(e) => setWho(e.target.value)} disabled={busy || !people}>
             <option value="" disabled>{people ? 'Choose…' : 'Loading…'}</option>
             {people?.map((p) => <option key={p.uid} value={p.uid}>{p.name}</option>)}
@@ -53,11 +60,11 @@ export function ApprovePhoto({ open, orgId, title, body, confirmLabel = 'Approve
         </label>
         <label className="field"><span>Their password</span>
           <input type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
-        </label>
+        </label></>}
         {error && <p className="error">{error}</p>}
         <div className="dialog-actions">
           <button type="button" className="btn btn-quiet" onClick={onCancel} disabled={busy}>Cancel</button>
-          <button type="submit" className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} disabled={busy || !password || !who}>{busy ? 'Checking…' : confirmLabel}</button>
+          <button type="submit" className={`btn ${danger ? 'btn-danger' : 'btn-primary'}`} disabled={busy || (!andy && (!password || !who))}>{busy ? 'Checking…' : confirmLabel}</button>
         </div>
       </form>
     </dialog>

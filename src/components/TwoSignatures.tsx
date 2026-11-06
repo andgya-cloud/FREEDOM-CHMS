@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useToast } from '../state/ToastContext';
-import { passwordProof } from '../lib/pettyPin';
+import { myOwnProof, passwordProof } from '../lib/pettyPin';
+import { useAuth } from '../state/AuthContext';
+import { isDirectorProfile } from '../../functions/src/shared/permissions';
 import { friendlyError } from '../lib/errors';
 import { forgetSignatures, keepSignatures, keptSignatures, listChampionSigners, type ChampionSignerRow } from '../lib/championEdit';
 import { CHAMPION_SIGN_MINUTES } from '../../functions/src/shared/hopeChampionPay';
@@ -14,12 +16,16 @@ type Run = (proofs: [string, string]) => Promise<unknown>;
  */
 export function useTwoSignatures(orgId: string) {
   const toast = useToast();
+  // Andy alone signs, with no password (2026-11-06): the save goes straight through.
+  const { profile } = useAuth();
+  const andy = isDirectorProfile(profile);
   const [ask, setAsk] = useState<{ what: string; run: Run } | null>(null);
   const sign = useCallback((what: string, run: Run) => {
+    if (andy) { myOwnProof().then((p) => run([p, ''])).catch((err) => toast.show(friendlyError(err))); return; }
     const k = keptSignatures(orgId);
     if (k) { run(k.proofs).catch((err) => { forgetSignatures(); toast.show(friendlyError(err)); }); return; }
     setAsk({ what, run });
-  }, [orgId, toast]);
+  }, [orgId, toast, andy]);
   const dialog = <SignDialog orgId={orgId} ask={ask} onDone={() => setAsk(null)} />;
   return { sign, dialog };
 }

@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { auth, db, requireCaller, requireString, type UserProfile } from './common.js';
+import { isAndy, proofAge } from './directorProof.js';
 import { contactEmail } from './pettyContacts.js';
 import { CHAMPION_SIGN_MINUTES, championSignerRole, isChampionManager, type ChampionSigner } from './shared/hopeChampionPay.js';
 
@@ -41,17 +42,20 @@ export const hopeChampionEdit = onCall({ invoker: 'public', memory: '512MiB', ti
   if (data.action !== 'save') throw new HttpsError('invalid-argument', 'Unknown action.');
 
   // The two signatures: two different people, one Andy or Doreen and one the Director, each typed in the last minutes.
-  const proofs = Array.isArray(data.proofs) ? data.proofs.slice(0, 2) : [];
+  const proofs = (Array.isArray(data.proofs) ? data.proofs.slice(0, 2) : []).filter((p) => p !== '');
   const signers: { uid: string; name: string; role: ChampionSigner }[] = [];
   for (const p of proofs) {
     const token = typeof p === 'string' && p.startsWith('idtoken:') ? await auth.verifyIdToken(p.slice(8)).catch(() => null) : null;
-    if (!token || Date.now() / 1000 - token.auth_time > (CHAMPION_SIGN_MINUTES + 5) * 60) throw new HttpsError('permission-denied', 'A password could not be confirmed. Please sign again.');
+    if (!token || (await proofAge(token)) > (CHAMPION_SIGN_MINUTES + 5) * 60) throw new HttpsError('permission-denied', 'A password could not be confirmed. Please sign again.');
     const u = (await db.doc(`users/${token.uid}`).get()).data() as UserProfile | undefined;
     const role = u && u.active !== false ? championSignerRole(u, orgId) : null;
     if (!role) throw new HttpsError('permission-denied', 'Only Andy or Doreen and the Director can sign.');
     signers.push({ uid: token.uid, name: u!.displayName || u!.email, role });
   }
-  if (signers.length !== 2 || signers[0]!.uid === signers[1]!.uid || !signers.some((s) => s.role === 'keeper') || !signers.some((s) => s.role === 'director')) {
+  // Andy alone is enough (Andy, 2026-11-06: full rights, no second signature for him).
+  const andyAlone = signers.length >= 1 && (await isAndy(signers[0]!.uid));
+  if (andyAlone) signers.splice(1);
+  else if (signers.length !== 2 || signers[0]!.uid === signers[1]!.uid || !signers.some((s) => s.role === 'keeper') || !signers.some((s) => s.role === 'director')) {
     throw new HttpsError('permission-denied', 'Two signatures are needed: Andy or Doreen, and the Director.');
   }
   const signedBy = signers.map((s) => s.name).join(' and ');

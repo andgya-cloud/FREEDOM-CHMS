@@ -3,9 +3,9 @@ import { PasswordInput } from '../../components/PasswordInput';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
 import { friendlyError } from '../../lib/errors';
-import { listPettySigners, passwordProof, type PettySigner } from '../../lib/pettyPin';
+import { listPettySigners, myOwnProof, passwordProof, type PettySigner } from '../../lib/pettyPin';
 import { Link } from 'react-router-dom';
-import { canKeepAccounts } from '../../../functions/src/shared/permissions';
+import { canKeepAccounts, isDirectorProfile } from '../../../functions/src/shared/permissions';
 
 /**
  * Another stakeholder signs on this device: they pick their name and type their own signing PIN
@@ -44,8 +44,10 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
   const lockedOut = (s: PettySigner) => directorMode && director(s) && s.uid !== user?.uid;
   const iAmDirector = directorMode && choices.some((s) => director(s) && s.uid === user?.uid);
   // The Director signed in here is chosen for him, and signs with one tap.
-  const chosen = choices.find((s) => s.uid === (uid || (iAmDirector || !keeper ? user?.uid : '')) && !lockedOut(s));
-  const noSecret = !!chosen && iAmDirector && chosen.uid === user?.uid;
+  const chosen = choices.find((s) => s.uid === (uid || (iAmDirector || !keeper || isDirectorProfile(profile) ? user?.uid : '')) && !lockedOut(s));
+  // Andy signs as himself with no PIN or password anywhere (2026-11-06); his account makes the proof.
+  const andySelf = !!chosen && isDirectorProfile(profile) && chosen.uid === user?.uid;
+  const noSecret = andySelf || (!!chosen && iAmDirector && chosen.uid === user?.uid);
   function done(name: string) {
     setUid(''); setPin('');
     toast.show(name);
@@ -55,7 +57,7 @@ export function PettySignBox({ label: title, orgId, fundOnly = false, topUpOnly 
     setBusy(true);
     try {
       if (noSecret) {
-        done(await sign(chosen.uid, ''));
+        done(await sign(chosen.uid, iAmDirector ? '' : await myOwnProof()));
       } else {
         // Four to six digits is a PIN; anything else is their Insight-IQ password.
         const secret = pin.trim();

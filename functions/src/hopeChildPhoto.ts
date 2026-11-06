@@ -1,6 +1,7 @@
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { Timestamp } from 'firebase-admin/firestore';
 import { auth, db, requireCaller, requireString, type UserProfile } from './common.js';
+import { proofAge } from './directorProof.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { contactEmail } from './pettyContacts.js';
 import { isPhotoApprover, PHOTO_PROOF_MINUTES } from './shared/hopePhotos.js';
@@ -41,7 +42,7 @@ export const hopeChildPhoto = onCall({ invoker: 'public', memory: '512MiB', time
   // Whose password was typed: it must be one of the three, and typed in the last few minutes.
   const proof = typeof data.proof === 'string' && data.proof.startsWith('idtoken:') ? data.proof.slice(8) : '';
   const token = proof ? await auth.verifyIdToken(proof).catch(() => null) : null;
-  if (!token || Date.now() / 1000 - token.auth_time > PHOTO_PROOF_MINUTES * 60) throw new HttpsError('permission-denied', 'The password could not be confirmed. Please type it again.');
+  if (!token || (await proofAge(token)) > PHOTO_PROOF_MINUTES * 60) throw new HttpsError('permission-denied', 'The password could not be confirmed. Please type it again.');
   const approver = (await db.doc(`users/${token.uid}`).get()).data() as UserProfile | undefined;
   if (!approver || approver.active === false || !isPhotoApprover(approver, orgId)) throw new HttpsError('permission-denied', 'Only the Director, Andrew Guya or Doreen can approve a photo.');
   const approverName = approver.displayName || approver.email;

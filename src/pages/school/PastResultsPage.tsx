@@ -6,6 +6,7 @@ import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useSchool } from '../../state/useSchool';
 import { useAllExamSheets, useExamAccess, useExamCohorts, useExamSettings, type ExamSheetRow } from '../../state/useExams';
+import { useIsAndy } from '../../lib/andy';
 import { closedNow, confirmPassword, createExamSheet, logExam, saveExamCohort, savePastTotals } from '../../lib/examWrites';
 import { friendlyError } from '../../lib/errors';
 import { openedInThisTab, rememberOpened } from '../../lib/pastOpen';
@@ -107,6 +108,7 @@ function PastResults({ orgId }: { orgId: string }) {
   useEffect(() => { setTyped({}); setErrors({}); }, [cohort, chosen?.key]);
   const valueOf = (id: string) => typed[id] ?? (totalOnly ? markText(existing[id]?.final) : '');
 
+  const andy = useIsAndy();
   const [password, setPassword] = useState('');
   const [opening, setOpening] = useState(false);
   const [openError, setOpenError] = useState('');
@@ -115,7 +117,7 @@ function PastResults({ orgId }: { orgId: string }) {
     setOpening(true);
     setOpenError('');
     try {
-      await confirmPassword(password);
+      if (!andy) await confirmPassword(password);
       await saveExamCohort(orgId, cohort, !!info, { closed: false, reopenedAt: closedNow(), reopenedByName: myName, autoCloseAt: Timestamp.fromMillis(Date.now() + OPEN_FOR_MS) });
       opened.current = cohort;
       rememberOpened({ orgId, cohort });
@@ -181,10 +183,10 @@ function PastResults({ orgId }: { orgId: string }) {
       {closed ? (
         <form className="card form narrow-block" onSubmit={open}>
           <h2>{cohort} is closed</h2>
-          <p className="muted">Type your password to open it for typing. It closes again by itself when you leave this page.</p>
-          <label className="field"><span>Your password</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          <p className="muted">{andy ? 'Open it for typing.' : 'Type your password to open it for typing.'} It closes again by itself when you leave this page.</p>
+          {!andy && <label className="field"><span>Your password</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>}
           {openError && <p className="error" role="alert">{openError}</p>}
-          <button type="submit" className="btn btn-primary" disabled={opening || !password}>{opening ? 'Opening…' : `Open ${cohort}`}</button>
+          <button type="submit" className="btn btn-primary" disabled={opening || (!password && !andy)}>{opening ? 'Opening…' : `Open ${cohort}`}</button>
         </form>
       ) : !chosen ? (
         <p className="muted">No courses are set up yet. Add the course list under Exam Records → Setup.</p>

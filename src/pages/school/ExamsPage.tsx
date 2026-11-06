@@ -4,6 +4,7 @@ import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
+import { useIsAndy } from '../../lib/andy';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import {
@@ -285,14 +286,15 @@ function ClassLine({ org, cohort, closed, graduationDate, closedByName, today, o
 function ReopenCohort({ org, cohort, onDone }: { org: Organization; cohort: string; onDone: () => void }) {
   const a = useExamAccess();
   const toast = useToast();
+  const andy = useIsAndy();
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   async function reopen(e: FormEvent) {
     e.preventDefault();
-    if (!password) return;
+    if (!password && !andy) return;
     setBusy(true);
     try {
-      await confirmPassword(password);
+      if (!andy) await confirmPassword(password);
       await saveExamCohort(org.id, cohort, true, { closed: false, reopenedByName: a.myName.slice(0, 120), reopenedAt: closedNow() });
       void logExam(org.id, { action: 'reopen', cohort, sheetId: null, detail: `${cohort} reopened`, byName: a.myName });
       toast.show(`${cohort} is open again. Close it in Setup when you are done.`);
@@ -301,8 +303,8 @@ function ReopenCohort({ org, cohort, onDone }: { org: Organization; cohort: stri
   }
   return (
     <form className="row-actions no-print" onSubmit={(e) => void reopen(e)}>
-      <label className="field"><span>Your password</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
-      <button type="submit" className="btn btn-primary align-end" disabled={busy || !password}>{busy ? 'Checking…' : 'Reopen'}</button>
+      {!andy && <label className="field"><span>Your password</span><input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>}
+      <button type="submit" className="btn btn-primary align-end" disabled={busy || (!password && !andy)}>{busy ? 'Checking…' : 'Reopen'}</button>
       <button type="button" className="btn btn-quiet align-end" onClick={onDone}>Cancel</button>
     </form>
   );

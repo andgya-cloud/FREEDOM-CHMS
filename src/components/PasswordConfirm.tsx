@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../state/AuthContext';
 import { passwordProof } from '../lib/pettyPin';
+import { isDirectorProfile } from '../../functions/src/shared/permissions';
 
 /**
  * "Do you want to delete?" with the person's own password (Andy, 2026-11-05, 1B), so nothing on a child's
@@ -10,7 +11,9 @@ export function PasswordConfirm({ open, title, body, confirmLabel = 'Yes, delete
   open: boolean; title: string; body?: string; confirmLabel?: string; onConfirm: () => void; onCancel: () => void;
 }) {
   const ref = useRef<HTMLDialogElement>(null);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  // Andy confirms with one tap, no password (2026-11-06).
+  const andy = isDirectorProfile(profile);
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -22,6 +25,7 @@ export function PasswordConfirm({ open, title, body, confirmLabel = 'Yes, delete
   }, [open]);
   async function go() {
     setBusy(true); setError('');
+    if (andy) { setBusy(false); onConfirm(); return; }
     try { await passwordProof(user?.uid ?? '', user?.email ?? '', password); onConfirm(); }
     catch { setError('That password is not right. Try again.'); }
     finally { setBusy(false); }
@@ -30,14 +34,14 @@ export function PasswordConfirm({ open, title, body, confirmLabel = 'Yes, delete
     <dialog ref={ref} className="dialog" onCancel={(e) => { e.preventDefault(); if (!busy) onCancel(); }}>
       <h2>{title}</h2>
       {body && <p>{body}</p>}
-      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (password) void go(); }}>
-        <label className="field"><span>Your password</span>
+      <form className="stack" onSubmit={(e) => { e.preventDefault(); if (password || andy) void go(); }}>
+        {!andy && <label className="field"><span>Your password</span>
           <input type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} disabled={busy} />
-        </label>
+        </label>}
         {error && <p className="error">{error}</p>}
         <div className="dialog-actions">
           <button type="button" className="btn btn-quiet" onClick={onCancel} disabled={busy}>No</button>
-          <button type="submit" className="btn btn-danger" disabled={busy || !password}>{busy ? 'Checking…' : confirmLabel}</button>
+          <button type="submit" className="btn btn-danger" disabled={busy || (!password && !andy)}>{busy ? 'Checking…' : confirmLabel}</button>
         </div>
       </form>
     </dialog>

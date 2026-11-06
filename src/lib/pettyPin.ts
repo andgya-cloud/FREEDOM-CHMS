@@ -116,3 +116,13 @@ export async function closePettyMonth(orgId: string, month: string, signerUid: s
 export async function reopenPettyMonth(orgId: string, month: string, reason: string) {
   await httpsCallable(functions, 'reopenPettyMonth')({ orgId, month, reason });
 }
+
+/**
+ * Andy needs no password anywhere (Andy, 2026-11-06, "No password for me at all"): his own signed-in account makes
+ * the proof. The server accepts it only from Andrew Guya's pastor account.
+ */
+export async function myOwnProof(): Promise<string> {
+  const me = auth.currentUser;
+  if (!me) throw Object.assign(new Error('Please sign in again.'), { code: 'auth/invalid-credential' });
+  return `idtoken:${await me.getIdToken(true)}`;
+}
