@@ -33,6 +33,8 @@ export interface ChildDetails {
   parentPhone?: string;
   schoolClass?: string;
   payment?: ChildPayment | null;
+  /** The KE-014 facts, also typed by hand on the child's page (Andy, 2026-11-06). */
+  sponsorship?: ChildSponsorship | null;
 }
 export interface PersonInput { fullName: string; phone: string | null; whatsapp: string | null; whatsappConsent: WhatsAppConsent; gender?: string | null }
 

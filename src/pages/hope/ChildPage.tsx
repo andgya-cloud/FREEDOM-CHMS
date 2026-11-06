@@ -14,6 +14,7 @@ import { isHopeDirector } from '../../../functions/src/shared/hopePhotos';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import { updateChild } from '../../lib/hopeWrites';
+import { updatePerson } from '../../lib/peopleWrites';
 import { removeChildPhoto, saveChildPhoto } from '../../lib/childPhoto';
 import { ApprovePhoto } from '../../components/ApprovePhoto';
 import { daysToBirthday, KID_MARK_LABELS, kidHistory, rateFrom, streak, STREAK_SHOWN } from '../../../functions/src/shared/hopeRegister';
@@ -70,6 +71,13 @@ function ChildScreen({ org }: { org: Organization }) {
   const [guardianConsent, setGuardianConsent] = useState<Consent>({ given: null, date: null });
   const [sponsorName, setSponsorName] = useState('');
   const [allergies, setAllergies] = useState('');
+  // Name, gender and the KE-014 facts can be corrected by hand too (Andy, 2026-11-06).
+  const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState('');
+  const [spChildId, setSpChildId] = useState('');
+  const [spSponsorId, setSpSponsorId] = useState('');
+  const [spStatus, setSpStatus] = useState('');
+  const [spCompletes, setSpCompletes] = useState('');
   const [askPhoto, setAskPhoto] = useState(false);
   // A new photo waits for the Director's, Andy's or Doreen's password (Andy, 2026-11-05).
   const [newPhoto, setNewPhoto] = useState<string | null>(null);
@@ -102,6 +110,9 @@ function ChildScreen({ org }: { org: Organization }) {
     setProgrammes(child.programmes); setPhotoConsent(child.photoConsent); setGuardianConsent(child.guardianConsent);
     setSponsorName(child.sponsorName ?? ''); setAllergies(child.allergies ?? '');
     setParentName(child.parentName ?? ''); setParentPhone(child.parentPhone ?? ''); setLeaveNote(child.departingNote ?? '');
+    setFullName(person?.fullName ?? ''); setGender(person?.gender ?? '');
+    setSpChildId(child.sponsorship?.childId ?? ''); setSpSponsorId(child.sponsorship?.sponsorId ?? '');
+    setSpStatus(child.sponsorship?.status ?? ''); setSpCompletes(child.sponsorship?.completesOn ?? '');
   }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { reset(); setEditing(false); }, [child?.id]);
@@ -114,12 +125,25 @@ function ChildScreen({ org }: { org: Organization }) {
   const age = h.ageOf(child);
 
   function save() {
+    const was = child!.sponsorship;
+    const spNext = {
+      childId: spChildId.trim().slice(0, 20), sponsorId: spSponsorId.trim().slice(0, 30), status: spStatus.trim().slice(0, 80),
+      completesOn: spCompletes || null, sponsorName: sponsorName.trim().slice(0, 120),
+      registeredOn: was?.registeredOn ?? null, centre: was?.centre ?? '', updatedOn: h.today, ...(was?.listName ? { listName: was.listName } : {}),
+    };
+    const spChanged = spNext.childId !== (was?.childId ?? '') || spNext.sponsorId !== (was?.sponsorId ?? '') || spNext.status !== (was?.status ?? '')
+      || spNext.completesOn !== (was?.completesOn ?? null);
     updateChild(org.id, child!.id, {
       dateOfBirth: dob || null, school: school.trim().slice(0, 120), schoolClass: schoolClass.trim().slice(0, 40), schoolStatus, enrolledOn: enrolledOn || null, programmes, photoConsent, guardianConsent,
       sponsorName: sponsorName.trim().slice(0, 120),
       ...(canAllergies ? { allergies: allergies.trim().slice(0, 300) || null } : {}),
       parentName: parentName.trim().slice(0, 120), parentPhone: parentPhone.trim().slice(0, 30),
+      ...(spChanged ? { sponsorship: spNext } : {}),
     }).catch((err) => toast.show(friendlyError(err)));
+    const nameNext = fullName.trim().replace(/\s+/g, ' ').slice(0, 120);
+    if (person && ((nameNext && nameNext !== person.fullName) || gender !== (person.gender ?? ''))) {
+      updatePerson(org.id, child!.id, { ...(nameNext ? { fullName: nameNext } : {}), gender: gender || null }).catch((err) => toast.show(friendlyError(err)));
+    }
     toast.show('Saved');
     setEditing(false);
   }
@@ -244,7 +268,7 @@ function ChildScreen({ org }: { org: Organization }) {
             <div><dt>Attendance</dt><dd><PctBadge pct={rate.pct} /> {fire >= STREAK_SHOWN && <span className="hr-delight hr-streak">🔥{fire} in a row</span>}</dd></div>
           </dl>
           <div className="chips">
-            {canEdit && <button type="button" className="btn" onClick={() => setEditing(true)}>✏️ Edit details</button>}
+            {canEdit && <button type="button" className="btn" onClick={() => { reset(); setEditing(true); }}>✏️ Edit details</button>}
             {(canEdit || canReadNotes(profile, org.id)) && <button type="button" className="btn" onClick={() => setSponsorAsk((v) => !v)}>📄 Sponsor update</button>}
           </div>
           {sponsorAsk && (
@@ -260,6 +284,15 @@ function ChildScreen({ org }: { org: Organization }) {
       {tab === 'about' && editing && (
         <section className="card">
         <div className="stack">
+        <div className="field-row">
+          <label className="field"><span>Full name</span><input disabled={!canEdit} value={fullName} maxLength={120} onChange={(e) => setFullName(e.target.value)} /></label>
+          <label className="field"><span>Gender</span>
+            <select disabled={!canEdit} value={gender} onChange={(e) => setGender(e.target.value)}>
+              <option value="">Not recorded</option><option>Female</option><option>Male</option>
+              {gender && gender !== 'Female' && gender !== 'Male' && <option>{gender}</option>}
+            </select>
+          </label>
+        </div>
         <div className="field-row">
           <label className="field"><span>Date of birth</span><input type="date" disabled={!canEdit} value={dob} max={h.today} onChange={(e) => setDob(e.target.value)} /></label>
           <label className="field"><span>Registration date</span><input type="date" disabled={!canEdit} value={enrolledOn} max={h.today} onChange={(e) => setEnrolledOn(e.target.value)} /></label>
@@ -278,6 +311,14 @@ function ChildScreen({ org }: { org: Organization }) {
         <div className="field-row">
           <label className="field"><span>Parent's name</span><input disabled={!canEdit} value={parentName} maxLength={120} onChange={(e) => setParentName(e.target.value)} placeholder={guardian?.fullName ?? ''} /></label>
           <label className="field"><span>Parent's contact</span><input disabled={!canEdit} inputMode="tel" value={parentPhone} maxLength={30} onChange={(e) => setParentPhone(e.target.value)} placeholder={guardian?.phone ? formatPhone(guardian.phone) : '0712 345 678'} /></label>
+        </div>
+        <div className="field-row">
+          <label className="field"><span>Child ID (KE-014)</span><input disabled={!canEdit} value={spChildId} maxLength={20} onChange={(e) => setSpChildId(e.target.value)} placeholder="C467370" /></label>
+          <label className="field"><span>Sponsor ID</span><input disabled={!canEdit} value={spSponsorId} maxLength={30} onChange={(e) => setSpSponsorId(e.target.value)} /></label>
+        </div>
+        <div className="field-row">
+          <label className="field"><span>Sponsorship status</span><input disabled={!canEdit} value={spStatus} maxLength={80} onChange={(e) => setSpStatus(e.target.value)} placeholder="Sponsored" /></label>
+          <label className="field"><span>Programme completion</span><input type="date" disabled={!canEdit} value={spCompletes} onChange={(e) => setSpCompletes(e.target.value)} /></label>
         </div>
         <label className="field"><span>Sponsor's name</span><input disabled={!canEdit} value={sponsorName} maxLength={120} onChange={(e) => setSponsorName(e.target.value)} /></label>
         <label className="field"><span>Allergies{canAllergies ? '' : ' (the Director records these)'}</span>
