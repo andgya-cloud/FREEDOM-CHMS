@@ -1,9 +1,13 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
-import { MAX_PHOTO_FILES, PHOTO_FILE_MAX_BYTES, type PhotoFile, type PhotoReport, type PhotoReportKind } from '../../functions/src/shared/hopePhotos';
+import {
+  MAX_PHOTO_FILES, PHOTO_FILE_MAX_BYTES, STORY_DOC_MAX_BYTES, STORY_PART_BYTES, STORY_VIDEO_MAX_BYTES,
+  type IncidentDetails, type PhotoFile, type PhotoReport, type PhotoReportKind, type StoryMessage,
+} from '../../functions/src/shared/hopePhotos';
 
 export type StoredPhotoReport = PhotoReport & { id: string };
-type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'board' | 'email';
+export type StoredStoryMessage = StoryMessage & { id: string };
+type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'board' | 'email' | 'people' | 'messages' | 'uploadPart' | 'uploadDone' | 'say' | 'edit' | 'unsay' | 'decision' | 'package';
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: Action }) =>
   httpsCallable<typeof data, R>(functions, 'hopePhotoReports', { timeout: 120_000 })(data).then((r) => r.data);
 
@@ -55,7 +59,80 @@ export async function shrinkForUpload(f: File): Promise<Blob> {
   return f;
 }
 
-export interface NewPhotoReport { kind: PhotoReportKind; title: string; day: string; text: string; reportId?: string | null }
+export interface NewPhotoReport { kind: PhotoReportKind; title: string; day: string; text: string; reportId?: string | null; incident?: IncidentDetails | null }
+
+/** Photos, videos and documents for a conversation (3A): JPG, PNG, HEIC, WebP, MP4, MOV, PDF, Word, Excel, PowerPoint. */
+export const isVideoFile = (f: File) => f.type.startsWith('video/') || /\.(mp4|m4v|mov|webm|3gp)$/i.test(f.name);
+export const isOfficeFile = (f: File) => /\.(pdf|docx?|xlsx?|pptx?)$/i.test(f.name);
+export const isStoryFile = (f: File) => isPhotoFile(f) || isVideoFile(f) || isOfficeFile(f);
+export const STORY_ACCEPT = 'image/*,video/*,.heic,.heif,.mp4,.mov,.m4v,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx';
+
+/** Photos are made smaller on the phone; a video up to 50 MB and a document up to 10 MB go as they are. */
+export async function prepareStoryFile(f: File): Promise<Blob> {
+  if (isPhotoFile(f)) return shrinkForUpload(f);
+  if (isVideoFile(f)) {
+    if (f.size > STORY_VIDEO_MAX_BYTES) throw new Error(`${f.name} is larger than 50 MB. Please send a shorter video.`);
+    return f;
+  }
+  if (!isOfficeFile(f)) throw new Error(`${f.name}: please choose photos, videos, PDF, Word, Excel or PowerPoint files.`);
+  if (f.size > STORY_DOC_MAX_BYTES) throw new Error(`${f.name} is larger than 10 MB.`);
+  return f;
+}
+
+/** Sends one file in parts of 5 MB (a 50 MB video is ten parts), then joins them on the server. */
+async function uploadStoryFile(orgId: string, id: string, f: File, onPart?: (frac: number) => void): Promise<PhotoFile> {
+  const blob = await prepareStoryFile(f);
+  const parts = Math.max(1, Math.ceil(blob.size / STORY_PART_BYTES));
+  let upload: string | undefined;
+  for (let i = 0; i < parts; i++) {
+    onPart?.(i / parts);
+    const r = await call<{ upload: string }>({ orgId, action: 'uploadPart', id, index: i, part: await toBase64(blob.slice(i * STORY_PART_BYTES, (i + 1) * STORY_PART_BYTES)), ...(upload ? { upload } : {}) });
+    upload = r.upload;
+  }
+  const name = blob === f ? f.name : f.name.replace(/\.[a-z0-9]+$/i, '.jpg');
+  const { file } = await call<{ file: PhotoFile }>({ orgId, action: 'uploadDone', id, upload, parts, name });
+  onPart?.(1);
+  return file;
+}
+
+async function uploadAll(orgId: string, id: string, files: File[], progress?: (done: number, of: number) => void) {
+  const up: PhotoFile[] = [];
+  const failed: string[] = [];
+  for (let i = 0; i < files.length; i++) {
+    progress?.(i, files.length);
+    try { up.push(await uploadStoryFile(orgId, id, files[i]!)); } catch (err) { failed.push(`${files[i]!.name}${err instanceof Error ? ` (${err.message})` : ''}`); }
+  }
+  progress?.(files.length, files.length);
+  return { up, failed };
+}
+
+/** Starts a conversation (1A): the report and its opening photos. The others get an email; WhatsApp is one tap after. */
+export async function startStory(orgId: string, input: NewPhotoReport, files: File[], progress: (done: number, of: number) => void): Promise<{ id: string; emailed: string[]; failed: string[] }> {
+  if (files.length > MAX_PHOTO_FILES) throw new Error(`Up to ${MAX_PHOTO_FILES} files per message.`);
+  for (const f of files) if (!isStoryFile(f)) throw new Error(`${f.name}: please choose photos, videos, PDF, Word, Excel or PowerPoint files.`);
+  const { id, emailed } = await call<{ id: string; emailed: string[] }>({ orgId, action: 'create', ...input, reportId: input.reportId ?? null, incident: input.incident ?? null });
+  const { up, failed } = await uploadAll(orgId, id, files, progress);
+  if (up.length) await call({ orgId, action: 'say', id, opening: true, files: up });
+  return { id, emailed: emailed ?? [], failed };
+}
+
+export interface StoryOpen { report: StoredPhotoReport; messages: StoredStoryMessage[]; me: string; writes: boolean; keeps: boolean; packages: boolean; seesAll: boolean; deletes: boolean; now: number }
+export const openStory = (orgId: string, id: string) => call<StoryOpen>({ orgId, action: 'messages', id });
+/** A reply, with its photos, videos or files. */
+export async function sayInStory(orgId: string, id: string, text: string, files: File[], progress?: (done: number, of: number) => void) {
+  const { up, failed } = await uploadAll(orgId, id, files, progress);
+  if (failed.length && !up.length && !text.trim()) throw new Error(failed.join(', '));
+  await call({ orgId, action: 'say', id, text, files: up });
+  return failed;
+}
+export const editStoryMessage = (orgId: string, id: string, messageId: string, text: string) => call({ orgId, action: 'edit', id, messageId, text });
+export const unsayStoryMessage = (orgId: string, id: string, messageId: string) => call({ orgId, action: 'unsay', id, messageId });
+export const markDecision = (orgId: string, id: string, messageId: string, on: boolean) => call({ orgId, action: 'decision', id, messageId, on });
+export const saveStorySummary = (orgId: string, id: string, summary: string) => call({ orgId, action: 'package', id, summary });
+export const storyPeople = (orgId: string) => call<{ people: BoardPerson[] }>({ orgId, action: 'people' }).then((r) => r.people);
+export async function emailStoryPdf(orgId: string, id: string, names: string[], pdf: File) {
+  return call<{ sentTo: string[] }>({ orgId, action: 'email', id, names, pdf: await toBase64(pdf) }).then((r) => r.sentTo);
+}
 
 /** Sends the report, then each file one by one (so a slow phone connection only has one file to carry at a time). */
 export async function sendPhotoReport(orgId: string, input: NewPhotoReport, files: File[], progress: (done: number, of: number) => void): Promise<{ id: string; failed: string[] }> {
@@ -89,8 +166,13 @@ export function photoFile(orgId: string, id: string, f: PhotoFile): Promise<File
   const k = `${orgId}/${id}/${f.key}`;
   let p = cache.get(k);
   if (!p) {
-    p = call<{ name: string; contentType: string; file: string }>({ orgId, action: 'file', id, key: f.key })
-      .then((r) => new File([Uint8Array.from(atob(r.file), (c) => c.charCodeAt(0))], r.name, { type: r.contentType }));
+    p = (async () => {
+      const bin = (b64: string) => Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
+      const first = await call<{ name: string; contentType: string; file: string; parts?: number }>({ orgId, action: 'file', id, key: f.key });
+      const chunks: Uint8Array<ArrayBuffer>[] = [bin(first.file)];
+      for (let i = 1; i < (first.parts ?? 1); i++) chunks.push(bin((await call<{ file: string }>({ orgId, action: 'file', id, key: f.key, part: i })).file));
+      return new File(chunks, first.name, { type: first.contentType });
+    })();
     p.catch(() => cache.delete(k));
     cache.set(k, p);
   }
@@ -111,4 +193,3 @@ export const deletePhotoReport = (orgId: string, id: string, reason: string) => 
 export const restorePhotoReport = (orgId: string, id: string) => call({ orgId, action: 'restore', id });
 export interface BoardPerson { name: string; hasEmail: boolean; phone: string }
 export const loadBoard = (orgId: string) => call<{ people: BoardPerson[] }>({ orgId, action: 'board' }).then((r) => r.people);
-export const emailPhotoReport = (orgId: string, id: string, names: string[]) => call<{ sentTo: string[] }>({ orgId, action: 'email', id, names }).then((r) => r.sentTo);

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canDeletePhotoReport, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, photoFileName, photoFileTypeOf, photoReportEmail, photoReportWhatsApp,
+  canEditMessage, canPackageStory, canUnsay, canWriteInStory, cleanIncident, incidentRows, storyStartEmail, storyStartWhatsApp, storyTimeline, storyTint,
 } from './hopePhotos';
 
 const HOPE = 'hope1';
@@ -59,5 +60,74 @@ describe('Hope photo files (4A)', () => {
     expect(e.subject).toBe('Incident: A fall (Freedom Hope Center)');
     expect(e.text).toContain('1 file is attached.');
     expect(photoReportWhatsApp(r, 'https://x/y', (k) => k)).toContain('*Incident: A fall*');
+  });
+});
+
+describe('Photos and wins as conversations (Andy, 2026-11-06)', () => {
+  const r = { orgId: HOPE, senderUid: 'u-helper', deleted: false };
+  it('lets the Director, the sender, the board, Andy and Doreen write (4A); not other staff', () => {
+    expect(canWriteInStory(director, 'u-dir', r)).toBe(true);
+    expect(canWriteInStory(helper, 'u-helper', r)).toBe(true);
+    expect(canWriteInStory(board, 'u-board', r)).toBe(true);
+    expect(canWriteInStory(andy, 'u-andy', r)).toBe(true);
+    expect(canWriteInStory(staff, 'u-staff', r)).toBe(false);
+    expect(canWriteInStory(director, 'u-dir', { ...r, deleted: true })).toBe(false);
+  });
+  it('lets the writer delete within five minutes; after that only Andy or Doreen', () => {
+    const at = '2026-11-06T09:00:00.000Z';
+    const t = Date.parse(at);
+    const m = { byUid: 'u-dir', at };
+    expect(canUnsay(director, 'u-dir', m, t + 4 * 60_000)).toBe(true);
+    expect(canUnsay(director, 'u-dir', m, t + 6 * 60_000)).toBe(false);
+    expect(canUnsay(board, 'u-board', m, t + 60_000)).toBe(false);
+    expect(canUnsay(andy, 'u-andy', m, t + 9e9)).toBe(true);
+    expect(canUnsay(doreen, 'u-doreen', m, t + 9e9)).toBe(true);
+    expect(canUnsay(andy, 'u-andy', { ...m, deleted: true }, t)).toBe(false);
+  });
+  it('lets only the writer edit, at any time', () => {
+    expect(canEditMessage('u-dir', { byUid: 'u-dir' })).toBe(true);
+    expect(canEditMessage('u-andy', { byUid: 'u-dir' })).toBe(false);
+    expect(canEditMessage('u-dir', { byUid: 'u-dir', deleted: true })).toBe(false);
+  });
+  it('lets the Director, Andy and Doreen package it for the board (6A)', () => {
+    for (const p of [director, andy, doreen]) expect(canPackageStory(p, HOPE)).toBe(true);
+    for (const p of [board, helper]) expect(canPackageStory(p, HOPE)).toBe(false);
+  });
+  it('gives each person their own tint (2A)', () => {
+    expect(storyTint('Diana Kiunga')).toBe('#038241');
+    expect(storyTint('Andrew Guya')).toBe('#1f2a5c');
+    expect(storyTint('Doreen Mayaka')).toBe('#c99a3c');
+    expect(storyTint('Mary Helper', 'u1')).toBe(storyTint('Mary Helper', 'u1'));
+  });
+  it('knows Office files and videos (3A)', () => {
+    const pad = (...b: number[]) => new Uint8Array([...b, ...new Array(24).fill(0)]);
+    const zip = pad(0x50, 0x4b, 0x03, 0x04);
+    expect(photoFileTypeOf(zip, 'Budget.xlsx')?.ext).toBe('xlsx');
+    expect(photoFileTypeOf(zip, 'Talk.PPTX')?.ext).toBe('pptx');
+    expect(photoFileTypeOf(zip, 'Letter.docx')?.ext).toBe('docx');
+    expect(photoFileTypeOf(pad(0xd0, 0xcf, 0x11, 0xe0), 'old.xls')?.ext).toBe('xls');
+    const ftyp = (brand: string) => pad(0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70, ...[...brand].map((c) => c.charCodeAt(0)));
+    expect(photoFileTypeOf(ftyp('isom'))).toMatchObject({ ext: 'mp4', video: true, photo: false });
+    expect(photoFileTypeOf(ftyp('qt  '))).toMatchObject({ ext: 'mov', contentType: 'video/quicktime' });
+    expect(photoFileTypeOf(ftyp('heic'))?.photo).toBe(true);
+  });
+  it('keeps the incident details tidy (7A)', () => {
+    const i = cleanIncident({ time: '14:30', place: ' Playground ', hurt: 'Amani', action: 'First aid', parentsTold: true, followUp: '', extra: 1 })!;
+    expect(i).toEqual({ time: '14:30', place: 'Playground', hurt: 'Amani', action: 'First aid', parentsTold: true, followUp: '' });
+    expect(cleanIncident({ time: '25:00' })?.time).toBe('');
+    expect(incidentRows(i).map(([k]) => k)).toEqual(['Time', 'Where', 'Who was hurt', 'What was done', 'Parents told']);
+  });
+  it('puts the opening first, then the replies by time', () => {
+    const rep = { orgId: HOPE, kind: 'win' as const, title: 'Book', day: '2026-11-06', text: 'Amani read', files: [], reportId: null, reportLabel: null, senderUid: 'u', senderName: 'Diana Kiunga', deleted: false, startedAt: '2026-11-06T08:00:00Z' };
+    const t = storyTimeline(rep, [{ id: 'b', text: '2', byUid: 'x', byName: 'X', byRole: '', at: '2026-11-06T10:00:00Z', files: [] }, { id: 'a', text: '1', byUid: 'x', byName: 'X', byRole: '', at: '2026-11-06T09:00:00Z', files: [] }]);
+    expect(t.map((m) => m.id)).toEqual(['opening', 'a', 'b']);
+  });
+  it('writes the start email and the WhatsApp note with the link', () => {
+    const rep = { kind: 'incident' as const, title: 'A fall', day: '2026-11-06', senderName: 'Diana Kiunga' };
+    const e = storyStartEmail(rep, 'Andrew', 'https://x/y', (k) => k);
+    expect(e.subject).toBe('Incident: A fall (Freedom Hope Center)');
+    expect(e.text).toContain('Dear Andrew');
+    expect(e.text).toContain('https://x/y');
+    expect(storyStartWhatsApp(rep, 'https://x/y')).toContain('https://x/y');
   });
 });
