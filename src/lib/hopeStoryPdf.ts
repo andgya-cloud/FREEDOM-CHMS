@@ -22,6 +22,8 @@ export interface StoryPdfInput {
   summary: string; preparedBy: string; preparedRole: string; link: string;
   /** The stakeholders' photos by plain name, and the children's by id (data URLs). */
   faces?: Record<string, string>; childPhotos?: Record<string, string>;
+  /** For the conversations about a child (v197): where the files come from, and their own labels. */
+  fetchFile?: (f: PhotoFile) => Promise<File>; kindLabel?: string; statusLabel?: string; followUp?: boolean; fileName?: string;
 }
 const fmt = (dataUrl: string) => (dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG');
 
@@ -51,12 +53,12 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
   const others: { f: PhotoFile; by: string; at: string }[] = [];
   for (const m of items) {
     for (const f of m.files) {
-      const img = f.photo ? await photoFile(org.id, report.id, f).then(photoForPdf).catch(() => null) : null;
+      const img = f.photo ? await (input.fetchFile ? input.fetchFile(f) : photoFile(org.id, report.id, f)).then(photoForPdf).catch(() => null) : null;
       if (img) photos.push({ f, by: m.byName, at: m.at, img }); else others.push({ f, by: m.byName, at: m.at });
     }
   }
   const logo = await mark();
-  const label = PHOTO_REPORT_LABELS[report.kind];
+  const label = input.kindLabel ?? PHOTO_REPORT_LABELS[report.kind];
   const incident = report.kind === 'incident';
   let y = 0;
   const room = (need: number) => { if (y + need > H - 18) { pdf.addPage(); y = 20; } };
@@ -88,7 +90,7 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
   const facts: [string, string][] = [
     ['Reference', report.ref ?? ''],
     ['Kind', label],
-    ['Status', STORY_STATUS_LABELS[report.status ?? 'open']],
+    ['Status', input.statusLabel ?? STORY_STATUS_LABELS[report.status ?? 'open']],
     ['Date it happened', formatDateKey(report.day)],
     ['Sent by', `${report.senderName}${report.senderRole ? `, ${report.senderRole}` : ''}`],
     ['Conversation', first ? `${chatTime(first, tz)} to ${chatTime(last, tz)}` : ''],
@@ -118,10 +120,10 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
   const rows = [
     ...(report.incident?.severity ? [['Severity', SEVERITY_LABELS[report.incident.severity]] as [string, string]] : []),
     ...incidentRows(report.incident),
-    ...(report.kind === 'incident' ? [['Follow-up done', report.followUpDoneAt ? `Yes, ${report.followUpDoneByName ?? ''}, ${chatTime(report.followUpDoneAt, tz)}` : 'Not yet'] as [string, string]] : []),
+    ...(report.kind === 'incident' && input.followUp !== false ? [['Follow-up done', report.followUpDoneAt ? `Yes, ${report.followUpDoneByName ?? ''}, ${chatTime(report.followUpDoneAt, tz)}` : 'Not yet'] as [string, string]] : []),
   ];
   if (incident && rows.length) {
-    heading('Incident details');
+    heading(input.kindLabel ? 'Details' : 'Incident details');
     for (const [k, v] of rows) {
       const lines = pdf.splitTextToSize(v, W - 74) as string[];
       room(lines.length * 5 + 3);
@@ -281,5 +283,5 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
 
   stampPoweredBy(pdf);
   const safe = report.title.replace(/[\\/:*?"<>|]+/g, '-').slice(0, 80);
-  return new File([pdf.output('blob')], `${incident ? 'Incident report' : 'Report'} - ${safe}.pdf`, { type: 'application/pdf' });
+  return new File([pdf.output('blob')], input.fileName ?? `${incident ? 'Incident report' : 'Report'} - ${safe}.pdf`, { type: 'application/pdf' });
 }

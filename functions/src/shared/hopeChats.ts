@@ -7,12 +7,22 @@
  * child can still raise it; it starts a conversation they cannot read further. Everything is kept in the vault
  * (Reports → Conversations). Reached only through the hopeChats Cloud Function.
  */
-import { canDeletePhotoReport, canSeeAllPhotoReports, isHopeBoardName, isHopeDirector, type PhotoFile } from './hopePhotos.js';
+import {
+  canDeletePhotoReport, canRemoveFiles, canSeeAllPhotoReports, isHopeBoardName, isHopeDirector,
+  type Approval, type ApprovalSlot, type PhotoFile, type RemovedFile, type Severity, type StoryChild,
+} from './hopePhotos.js';
 import { can, canAccessOrg, type AccessProfile } from './permissions.js';
 
-export type ChatStatus = 'open' | 'handling' | 'closed';
-export const CHAT_STATUSES: ChatStatus[] = ['open', 'handling', 'closed'];
-export const CHAT_STATUS_LABELS: Record<ChatStatus, string> = { open: 'Open', handling: 'Being handled', closed: 'Closed' };
+/** Open → Being handled → Resolved → Sent to the board (v197, 6A). "closed" is Resolved, so older conversations keep their note. */
+export type ChatStatus = 'open' | 'handling' | 'closed' | 'sent';
+export const CHAT_STATUSES: ChatStatus[] = ['open', 'handling', 'closed', 'sent'];
+export const CHAT_STATUS_LABELS: Record<ChatStatus, string> = { open: 'Open', handling: 'Being handled', closed: 'Resolved', sent: 'Sent to the board' };
+/** Still needs someone: Open or Being handled. */
+export const isActiveChat = (s: ChatStatus) => s === 'open' || s === 'handling';
+/** No reply from anyone else within a day: the Director is reminded once (v197, 8A). */
+export const CHAT_REPLY_HOURS = 24;
+/** "FHC-C-2026-007" (v197, 6A). */
+export const chatRef = (year: number, n: number) => `FHC-C-${year}-${String(n).padStart(3, '0')}`;
 export const isChatStatus = (v: unknown): v is ChatStatus => typeof v === 'string' && (CHAT_STATUSES as string[]).includes(v);
 
 export const CHAT_TEXT_MAX = 4000;
@@ -41,6 +51,15 @@ export interface HopeChat {
   closedOn?: string;
   /** The old safeguarding note this came from (10A). */
   fromConcernId?: string;
+  /** v197: reference number, who has read it, approvals, files taken out, severity and the reply reminder. */
+  ref?: string;
+  seenNames?: Record<string, string>;
+  approvals?: Partial<Record<ApprovalSlot, Approval>>;
+  removed?: RemovedFile[];
+  severity?: Severity;
+  startedAt?: string;
+  repliedAt?: string;
+  reminderSentAt?: string;
 }
 
 /** A message, organizations/{org}/hopeChats/{id}/messages/{messageId}. Never changed once written. */
@@ -54,6 +73,11 @@ export interface ChatMessage {
   files: PhotoFile[];
   /** A line the app writes itself, such as "Diana Kiunga closed this conversation". */
   system?: boolean;
+  /** v197: other children named (3A), and edits (4A): the earlier words are kept. */
+  children?: StoryChild[];
+  fileKeys?: string[];
+  editedAt?: string;
+  history?: { text: string; at: string }[];
 }
 
 export const chatFilePath = (orgId: string, chatId: string, messageId: string, key: string) => `hopeChats/${orgId}/${chatId}/${messageId}/${key}`;
@@ -62,6 +86,28 @@ type Profile = (AccessProfile & { displayName?: string; roleId?: string }) | nul
 
 /** Reads and writes every conversation: the Director, the board, Andy and Doreen (1A, 2). */
 export const canUseChats = (p: Profile, orgId: string) => canSeeAllPhotoReports(p, orgId);
+/** Takes out a file (5A): Andy and Doreen. */
+export const canRemoveChatFiles = (p: Profile) => canRemoveFiles(p);
+/** Each person edits only their own words (4A). */
+export const canEditChatMessage = (uid: string, m: Pick<ChatMessage, 'byUid' | 'system'>) => !m.system && !!uid && m.byUid === uid;
+
+/** One reminder to the Director when nobody else has replied a day after it started (8A). */
+export function needsReplyReminder(c: Pick<HopeChat, 'status' | 'startedAt' | 'repliedAt' | 'reminderSentAt'>, now: number) {
+  if (!isActiveChat(c.status) || c.repliedAt || c.reminderSentAt || !c.startedAt) return false;
+  return now - Date.parse(c.startedAt) >= CHAT_REPLY_HOURS * 3_600_000;
+}
+
+/** The record of changes for the PDF (9A): edits and files taken out, oldest first. */
+export function chatChanges(c: Pick<HopeChat, 'removed'>, messages: ChatMessage[]): { at: string; text: string }[] {
+  const out: { at: string; text: string }[] = [];
+  for (const m of messages) {
+    if (m.system || !m.editedAt) continue;
+    out.push({ at: m.editedAt, text: `${m.byName} edited a message sent ${m.at.slice(0, 16).replace('T', ' ')}${m.history?.length ? ` (${m.history.length} earlier ${m.history.length === 1 ? 'version' : 'versions'} kept)` : ''}.` });
+  }
+  for (const x of c.removed ?? []) out.push({ at: x.removedAt, text: `${x.removedByName} took out the file "${x.file.name}".` });
+  return out.sort((a, b) => a.at.localeCompare(b.at));
+}
+
 /** Closes a conversation: the Director, Andy and Doreen. */
 export const canCloseChat = (p: Profile, orgId: string) => canDeletePhotoReport(p, orgId);
 /** Staff who see the children may raise a worry, which starts a conversation for the readers. */

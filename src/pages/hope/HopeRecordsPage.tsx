@@ -92,7 +92,7 @@ function Records({ org }: { org: Organization }) {
       </div>
       {notes === null ? <p className="muted">Loading…</p> : folders.length === 0 ? <div className="card"><p className="muted">{notes.length || chats?.chats.length ? 'Nothing matches.' : 'No notes yet.'}</p></div> : folders.map((f) => {
         const count = f.notes.length + f.chats.length;
-        const open = f.chats.filter((c) => c.status !== 'closed').length;
+        const open = f.chats.filter((c) => c.status === 'open' || c.status === 'handling').length;
         return (
           <details key={f.childId} className="card hr-fold">
             <summary><h2>📁 {f.childName}{f.childCode ? ` · ${f.childCode}` : ''}</h2>

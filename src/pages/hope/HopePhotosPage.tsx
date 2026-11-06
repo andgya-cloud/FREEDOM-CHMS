@@ -43,7 +43,7 @@ export function usePhotoReports(orgId: string, reportId?: string) {
 }
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
-const tintStyle = (name: string, uid?: string) => ({ '--tint': storyTint(name, uid) }) as CSSProperties;
+export const tintStyle = (name: string, uid?: string) => ({ '--tint': storyTint(name, uid) }) as CSSProperties;
 const isUnseen = (r: StoredPhotoReport, uid: string) => !!r.lastAt && (!r.seen?.[uid] || r.seen[uid]! < r.lastAt);
 const appLink = (id: string) => `${location.origin}/hope/photos?report=${id}`;
 const waNumber = (phone: string) => phone.replace(/\D/g, '').replace(/^0/, '254');
@@ -157,7 +157,7 @@ const extOf = (name: string) => (name.toLowerCase().match(/\.([a-z0-9]{2,5})$/) 
 const mb = (n: number) => `${(n / 1048576).toFixed(n < 1048576 ? 2 : 1)} MB`;
 
 /** The photos, videos or documents chosen so far, with a small preview of each photo and a × to take one out. */
-function Picked({ files, onRemove }: { files: File[]; onRemove: (i: number) => void }) {
+export function Picked({ files, onRemove }: { files: File[]; onRemove: (i: number) => void }) {
   const [urls, setUrls] = useState<string[]>([]);
   useEffect(() => {
     const u = files.map((f) => (isPhotoFile(f) ? URL.createObjectURL(f) : ''));
@@ -178,7 +178,7 @@ function Picked({ files, onRemove }: { files: File[]; onRemove: (i: number) => v
   );
 }
 
-function pickFiles(list: FileList | null, have: File[], max: number, toast: (m: string) => void): File[] {
+export function pickFiles(list: FileList | null, have: File[], max: number, toast: (m: string) => void): File[] {
   const all = [...(list ?? [])];
   const chosen = all.filter(isStoryFile);
   if (chosen.length < all.length) toast('Only photos, videos, PDF, Word, Excel and PowerPoint files can be added.');
@@ -294,7 +294,8 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
 }
 
 /** A file in a bubble: photos show, a video plays when tapped (so 50 MB is not fetched on its own), documents download. */
-function FileView({ org, reportId, file, onRemove }: { org: Organization; reportId: string; file: PhotoFile; onRemove?: () => Promise<void> }) {
+export function FileView({ org, reportId, file, onRemove, getFile }: { org: Organization; reportId: string; file: PhotoFile; onRemove?: () => Promise<void>; getFile?: (f: PhotoFile) => Promise<File> }) {
+  const get = useCallback((f: PhotoFile) => (getFile ? getFile(f) : photoFile(org.id, reportId, f)), [getFile, org.id, reportId]);
   const [url, setUrl] = useState('');
   const [state, setState] = useState<'' | 'loading' | 'failed'>('');
   const [asking, setAsking] = useState(false);
@@ -302,8 +303,8 @@ function FileView({ org, reportId, file, onRemove }: { org: Organization; report
   useEffect(() => () => { if (made.current) URL.revokeObjectURL(made.current); }, []);
   const load = useCallback(() => {
     setState('loading');
-    photoFile(org.id, reportId, file).then((f) => { made.current = URL.createObjectURL(f); setUrl(made.current); setState(''); }).catch(() => setState('failed'));
-  }, [org.id, reportId, file]);
+    get(file).then((f) => { made.current = URL.createObjectURL(f); setUrl(made.current); setState(''); }).catch(() => setState('failed'));
+  }, [get, file]);
   useEffect(() => { if (file.photo) load(); }, [file.photo, load]);
   // Andy and Doreen take out any photo or file (1A): tap ✕, then "Take out".
   const remove = onRemove && (
@@ -331,7 +332,7 @@ function FileView({ org, reportId, file, onRemove }: { org: Organization; report
   return (
     <div className="st-file-box st-wide">
       <button type="button" className="st-file" disabled={state === 'loading'}
-        onClick={() => (file.video ? load() : void photoFile(org.id, reportId, file).then(downloadFile).catch(() => setState('failed')))}>
+        onClick={() => (file.video ? load() : void get(file).then(downloadFile).catch(() => setState('failed')))}>
         <span className={`st-ext e-${ext}`}>{file.video ? '▶' : ext.toUpperCase()}</span>
         <span><b>{file.name}</b><small>{mb(file.size)} · {state === 'loading' ? 'Getting it…' : state === 'failed' ? 'Could not open, tap to try again' : file.video ? 'Tap to play' : 'Tap to download'}</small></span>
       </button>
@@ -343,7 +344,7 @@ function FileView({ org, reportId, file, onRemove }: { org: Organization; report
 type Item = StoryMessage & { id: string; opening?: boolean };
 
 /** A person's face (3A): their photo if they added one, otherwise their initials in their colour. Tap to change it. */
-function Face({ name, photo, onPick }: { name: string; photo?: string; onPick?: (f: File) => void }) {
+export function Face({ name, photo, onPick }: { name: string; photo?: string; onPick?: (f: File) => void }) {
   const inner = photo ? <img src={photo} alt="" /> : initials(name);
   if (!onPick) return <span className="st-face" aria-hidden="true">{inner}</span>;
   return (
@@ -355,7 +356,7 @@ function Face({ name, photo, onPick }: { name: string; photo?: string; onPick?: 
 }
 
 /** The children named in a message (2A): photo, name, HC code and class, opening the child's page. */
-function ChildCards({ kids, photos }: { kids: StoryChild[]; photos: Record<string, string> }) {
+export function ChildCards({ kids, photos }: { kids: StoryChild[]; photos: Record<string, string> }) {
   if (!kids.length) return null;
   return (
     <div className="st-kids">
@@ -424,7 +425,7 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision, 
 }
 
 /** Naming children in a reply (2A): type @ and a few letters, or tap 👧, then choose. */
-function useChildPicker(orgId: string, text: string, setText: (t: string) => void) {
+export function useChildPicker(orgId: string, text: string, setText: (t: string) => void) {
   const [all, setAll] = useState<StoryChild[] | null>(null);
   const [picked, setPicked] = useState<StoryChild[]>([]);
   const [open, setOpen] = useState(false);

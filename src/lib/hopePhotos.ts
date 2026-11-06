@@ -81,6 +81,12 @@ export async function prepareStoryFile(f: File): Promise<Blob> {
 
 /** Sends one file in parts of 5 MB (a 50 MB video is ten parts), then joins them on the server. */
 async function uploadStoryFile(orgId: string, id: string, f: File, onPart?: (frac: number) => void): Promise<PhotoFile> {
+  return uploadInParts('hopePhotoReports', orgId, id, f, onPart);
+}
+
+/** The same upload for the photo conversations and the conversations about a child (v197). */
+export async function uploadInParts(fn: 'hopePhotoReports' | 'hopeChats', orgId: string, id: string, f: File, onPart?: (frac: number) => void): Promise<PhotoFile> {
+  const call = <R,>(data: Record<string, unknown>) => httpsCallable<typeof data, R>(functions, fn, { timeout: 120_000 })(data).then((r) => r.data);
   const blob = await prepareStoryFile(f);
   const parts = Math.max(1, Math.ceil(blob.size / STORY_PART_BYTES));
   let upload: string | undefined;

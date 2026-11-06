@@ -43,7 +43,7 @@ export async function sendMondaySummaries(now = new Date()): Promise<void> {
       ]);
       const first: Record<string, string> = {};
       for (const p of people.docs) first[p.id] = String(p.get('fullName') ?? '').trim().split(/\s+/)[0] ?? '';
-      const open = chats.filter((c) => c.status !== 'closed');
+      const open = chats.filter((c) => c.status === 'open' || c.status === 'handling');
       const { subject, lines } = mondaySummary({
         today, children: children.filter((c) => !(c as { deletedAt?: unknown }).deletedAt), firstName: (id) => first[id] ?? '',
         days, meals, champions, championDays, extras: extras.filter((e) => !e.deletedAt), approvedPay: approved,

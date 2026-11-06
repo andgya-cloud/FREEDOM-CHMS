@@ -13,6 +13,8 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import { chatRole } from './shared/hopeChats.js';
+import { childrenOf } from './hopeKids.js';
+import { sendChatReminders } from './hopeChats.js';
 import { hopeBoardContacts, plainName } from './pettyContacts.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
@@ -83,20 +85,6 @@ async function nextRef(orgId: string): Promise<string> {
   return storyRef(year, n);
 }
 
-/** The children named in a message (2A), checked and kept as they are today: name, HC code and class. */
-async function childrenOf(orgId: string, ids: unknown): Promise<StoryChild[]> {
-  const list = [...new Set(Array.isArray(ids) ? ids.filter((x): x is string => typeof x === 'string' && /^[\w-]{1,120}$/.test(x)) : [])].slice(0, STORY_CHILDREN_MAX);
-  if (!list.length) return [];
-  const today = localDateKey();
-  const out: StoryChild[] = [];
-  for (const cid of list) {
-    const [c, p] = await Promise.all([db.doc(`organizations/${orgId}/children/${cid}`).get(), db.doc(`organizations/${orgId}/people/${cid}`).get()]);
-    if (!c.exists || c.data()?.deletedAt) continue;
-    const person = p.data() ?? {};
-    out.push({ id: cid, name: String(person.fullName ?? 'Child'), code: String(c.data()?.code ?? ''), className: classOf(person.dateOfBirth as string | null, today)?.name ?? '' });
-  }
-  return out;
-}
 
 export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', timeoutSeconds: 120, secrets: [HOPE_EMAIL_APP_PASSWORD] }, async (request) => {
   const caller = await requireCaller(request);
@@ -580,5 +568,5 @@ export async function sendFollowUpReminders(now = Date.now()): Promise<number> {
 
 export const hopeIncidentReminders = onSchedule(
   { schedule: 'every 2 hours', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, memory: '256MiB', secrets: [HOPE_EMAIL_APP_PASSWORD] },
-  async () => { await sendFollowUpReminders(); },
+  async () => { await sendFollowUpReminders(); await sendChatReminders(); },
 );

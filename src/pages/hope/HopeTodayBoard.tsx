@@ -149,7 +149,10 @@ export function NeedsUs({ org, h, days, unread }: { org: Organization; h: H; day
       const byChild = new Map<string, typeof chats.chats>();
       for (const c of chats.chats.filter((x) => x.status === 'open')) byChild.set(c.childId, [...(byChild.get(c.childId) ?? []), c]);
       for (const [childId, list] of byChild) {
-        urgent.push({ key: `u${childId}`, childId, who: list[0]!.childName, why: list.length > 1 ? `${list.length} urgent conversations` : 'Urgent conversation, not yet handled',
+        // The latest line under each child (v197, 10A), newest conversation first.
+        const latest = [...list].sort((x, y) => y.lastAt.localeCompare(x.lastAt))[0]!;
+        const line = latest.lastText ? `${latest.lastByName.split(' ')[0]}: ${latest.lastText}` : 'Urgent conversation, not yet handled';
+        urgent.push({ key: `u${childId}`, childId, who: list[0]!.childName, why: list.length > 1 ? `${list.length} conversations · ${line}` : line,
           to: list.length > 1 ? '/hope/records?show=chats' : `/hope/chats/${list[0]!.id}` });
       }
     }

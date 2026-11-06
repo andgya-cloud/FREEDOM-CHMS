@@ -12,6 +12,7 @@ import { listPhotoReports, restorePhotoReport, restoreStoryFile, type PhotoList 
 import { PHOTO_REPORT_EMOJI } from '../../../functions/src/shared/hopePhotos';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { HopeGate } from './common';
+import { listChats, restoreChatFile, type ChatList } from '../../lib/hopeChats';
 import type { Organization } from '../../state/OrgContext';
 
 export function HopeBinPage() {
@@ -53,6 +54,7 @@ function Bin({ org }: { org: Organization }) {
       {tab === 'bin' && <BinList orgId={org.id} rows={inBin} loading={!bin} onChange={refresh} canDormant
         empty="The Bin is empty." note="Put it back, or remove it from the Bin. After 30 days it moves to Dormant by itself." />}
       {tab === 'bin' && <PhotoBin org={org} />}
+      {tab === 'bin' && keeper && <ChatBin org={org} />}
       {tab === 'dormant' && keeper && <BinList orgId={org.id} rows={dormant} loading={!bin} onChange={refresh}
         empty="Nothing in Dormant." note="Kept for good. Only you and Doreen see this, and anything here can be put back." />}
       {tab === 'fresh' && keeper && <StartFresh org={org} onDone={() => { refresh(); setTab('bin'); }} />}
@@ -101,6 +103,37 @@ function PhotoBin({ org }: { org: Organization }) {
               <span className="link-detail">Removed by {r.deletedByName} on {formatDateKey(r.deletedOn)}{r.deleteReason ? ` · ${r.deleteReason}` : ''} · sent by {r.senderName}</span></span>
             <Link to={`/hope/photos?report=${r.id}`} className="btn btn-quiet">Open</Link>
             <button type="button" className="btn" disabled={busy === r.id} onClick={() => void back(r.id)}>↩︎ Put back</button>
+          </div></li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** v197 (5A): files Andy or Doreen took out of a conversation about a child, to put back. */
+function ChatBin({ org }: { org: Organization }) {
+  const toast = useToast();
+  const [list, setList] = useState<ChatList | null>(null);
+  const [busy, setBusy] = useState('');
+  const load = useCallback(() => { listChats(org.id).then(setList, () => setList(null)); }, [org.id]);
+  useEffect(() => { load(); }, [load]);
+  const taken = (list?.chats ?? []).flatMap((c) => (c.removed ?? []).map((x) => ({ c, x })));
+  if (!taken.length) return null;
+  async function back(id: string, key: string) {
+    setBusy(key);
+    try { await restoreChatFile(org.id, id, key); toast.show('Put back in the conversation.'); load(); }
+    catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
+  }
+  return (
+    <section className="card stack">
+      <h2>🔒 Conversations about children</h2>
+      <ul className="link-list">
+        {taken.map(({ c, x }) => (
+          <li key={x.file.key}><div className="fee-row">
+            <span className="grow"><span className="link-title">{x.file.photo ? '🖼' : x.file.video ? '🎬' : '📄'} {x.file.name}</span>
+              <span className="link-detail">Taken out by {x.removedByName} on {formatDateKey(x.removedAt.slice(0, 10))} · about {c.childName}{c.ref ? ` (${c.ref})` : ''}</span></span>
+            <Link to={`/hope/chats/${c.id}`} className="btn btn-quiet">Open</Link>
+            <button type="button" className="btn" disabled={busy === x.file.key} onClick={() => void back(c.id, x.file.key)}>↩︎ Put back</button>
           </div></li>
         ))}
       </ul>
