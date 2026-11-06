@@ -402,3 +402,22 @@ export function incidentRows(i: IncidentDetails | undefined): [string, string][]
     ['Follow-up', i.followUp],
   ].filter(([, v]) => v) as [string, string][];
 }
+
+/**
+ * The stakeholders' own photos, built into the app (Andy, 2026-11-06), so every bubble shows the person speaking,
+ * in old conversations too. A photo added in the app replaces it. Each name and its other spellings.
+ */
+const BUILT_IN_FACES: [string, string[]][] = [
+  ['dianakiunga', ['dianakiunga']],
+  ['danielojwang', ['danielojwang']],
+  ['doreenmayaka', ['doreenmayaka', 'doreenguya']],
+  ['eliasomondi', ['eliasomondi']],
+  ['andrewguya', ['andrewguya']],
+  ['dorothymohat', ['dorothymohat', 'dorothymohart']],
+];
+/** "/people/dianakiunga.jpg", or '' for someone without one. */
+export function builtInFace(name: string): string {
+  const k = faceKey(name);
+  const hit = BUILT_IN_FACES.find(([, names]) => names.includes(k));
+  return hit ? `/people/${hit[0]}.jpg` : '';
+}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canDeletePhotoReport, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, photoFileName, photoFileTypeOf, photoReportEmail, photoReportWhatsApp,
-  canApprove, canRemoveFiles, faceKey, needsFollowUpReminder, storyChanges, storyRef,
+  builtInFace, canApprove, canRemoveFiles, faceKey, needsFollowUpReminder, storyChanges, storyRef,
   canEditMessage, canPackageStory, canUnsay, canWriteInStory, cleanIncident, incidentRows, storyStartEmail, storyStartWhatsApp, storyTimeline, storyTint,
 } from './hopePhotos';
 
@@ -173,4 +173,15 @@ describe('Official conversations (Andy, 2026-11-06, v193)', () => {
     ]);
   });
   it('keys faces by plain name', () => expect(faceKey("Daniel Ojwang'")).toBe('danielojwang'));
+});
+
+describe('Built-in stakeholder photos (Andy, 2026-11-06)', () => {
+  it('finds each person by name and other spellings', () => {
+    expect(builtInFace('Diana Kiunga')).toBe('/people/dianakiunga.jpg');
+    expect(builtInFace('Doreen Guya')).toBe('/people/doreenmayaka.jpg');
+    expect(builtInFace('Doreen Mayaka')).toBe('/people/doreenmayaka.jpg');
+    expect(builtInFace("Daniel Ojwang'")).toBe('/people/danielojwang.jpg');
+    expect(builtInFace('Dorothy Mohart')).toBe('/people/dorothymohat.jpg');
+    expect(builtInFace('Ronald Awili')).toBe('');
+  });
 });

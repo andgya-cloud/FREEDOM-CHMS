@@ -4,7 +4,7 @@ import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 import { chatTime } from '../../functions/src/shared/hopeChats';
 import { formatDateKey, localDateKey } from '../../functions/src/shared/datetime';
 import {
-  APPROVAL_LABELS, faceKey, incidentRows, PHOTO_REPORT_LABELS, SEVERITY_LABELS, STORY_STATUS_LABELS, storyChanges, storyTint, storyTimeline, type ApprovalSlot, type PhotoFile,
+  APPROVAL_LABELS, builtInFace, faceKey, incidentRows, PHOTO_REPORT_LABELS, SEVERITY_LABELS, STORY_STATUS_LABELS, storyChanges, storyTint, storyTimeline, type ApprovalSlot, type PhotoFile,
 } from '../../functions/src/shared/hopePhotos';
 import { photoFile, photoForPdf, type StoredPhotoReport, type StoredStoryMessage } from './hopePhotos';
 
@@ -36,7 +36,16 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
   const H = pdf.internal.pageSize.getHeight();
   const tz = org.timeZone || 'Africa/Nairobi';
   const items = storyTimeline(report, replies).filter((m) => !m.deleted && !m.system);
-  const faces = input.faces ?? {};
+  const faces: Record<string, string> = { ...(input.faces ?? {}) };
+  // The built-in photos for anyone who has not added their own.
+  for (const m of items) {
+    const k = faceKey(m.byName);
+    const url = builtInFace(m.byName);
+    if (faces[k] || !url) continue;
+    faces[k] = await fetch(url).then((r) => (r.ok ? r.blob() : Promise.reject(new Error('no photo'))))
+      .then((b) => new Promise<string>((ok, no) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result)); fr.onerror = () => no(fr.error); fr.readAsDataURL(b); }))
+      .catch(() => '');
+  }
   const kidPhotos = input.childPhotos ?? {};
   const photos: { f: PhotoFile; by: string; at: string; img: { dataUrl: string; w: number; h: number } }[] = [];
   const others: { f: PhotoFile; by: string; at: string }[] = [];

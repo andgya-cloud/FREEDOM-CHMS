@@ -17,7 +17,7 @@ import {
   incidentRows, MAX_PHOTO_FILES, PHOTO_REPORT_EMOJI, PHOTO_REPORT_KINDS, PHOTO_REPORT_LABELS, PHOTO_TEXT_MAX, PHOTO_TITLE_MAX,
   STORY_FILES_MAX, STORY_TEXT_MAX, storyStartWhatsApp, storyTimeline, storyTint, UNSAY_MINUTES,
   type IncidentDetails, type PhotoFile, type PhotoReportKind, type StoryMessage,
-  APPROVAL_LABELS, faceKey, FOLLOW_UP_HOURS, SEVERITY_LABELS, STORY_CHILDREN_MAX, STORY_STATUS_LABELS, STORY_STATUSES,
+  APPROVAL_LABELS, builtInFace, faceKey, FOLLOW_UP_HOURS, SEVERITY_LABELS, STORY_CHILDREN_MAX, STORY_STATUS_LABELS, STORY_STATUSES,
   type ApprovalSlot, type Severity, type StoryChild, type StoryStatus,
 } from '../../../functions/src/shared/hopePhotos';
 import { useIsAndy } from '../../lib/andy';
@@ -388,7 +388,7 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision, 
   const canDecide = story.writes && !m.opening;
   return (
     <div className={`st-msg${mine ? ' mine' : ''}`} style={tintStyle(m.byName, m.byUid)}>
-      <Face name={m.byName} photo={story.faces[faceKey(m.byName)]} onPick={onFace} />
+      <Face name={m.byName} photo={story.faces[faceKey(m.byName)] || builtInFace(m.byName)} onPick={onFace} />
       <div className="st-bubble">
         <div className="st-who"><b>{m.byName}</b>{m.byRole && <span>{m.byRole}</span>}<span>{chatTime(m.at, tz)}</span></div>
         {editing ? (
