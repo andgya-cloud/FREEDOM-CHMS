@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canDeletePhotoReport, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, photoFileName, photoFileTypeOf, photoReportEmail, photoReportWhatsApp,
-  builtInFace, canApprove, canRemoveFiles, faceKey, needsFollowUpReminder, storyChanges, storyRef,
+  builtInFace, isHopeBoardName, canApprove, canRemoveFiles, faceKey, needsFollowUpReminder, storyChanges, storyRef,
   canEditMessage, canPackageStory, canUnsay, canWriteInStory, cleanIncident, incidentRows, storyStartEmail, storyStartWhatsApp, storyTimeline, storyTint,
 } from './hopePhotos';
 
@@ -183,5 +183,13 @@ describe('Built-in stakeholder photos (Andy, 2026-11-06)', () => {
     expect(builtInFace("Daniel Ojwang'")).toBe('/people/danielojwang.jpg');
     expect(builtInFace('Dorothy Mohart')).toBe('/people/dorothymohat.jpg');
     expect(builtInFace('Ronald Awili')).toBe('');
+  });
+});
+
+describe('The Hope Centre board (Andy, 2026-11-06)', () => {
+  it('has Dorothy Mohat and not Ronald Awili', () => {
+    expect(isHopeBoardName('Dorothy Mohart')).toBe(true);
+    expect(isHopeBoardName('Dorothy Mohat')).toBe(true);
+    expect(isHopeBoardName('Ronald Awili')).toBe(false);
   });
 });

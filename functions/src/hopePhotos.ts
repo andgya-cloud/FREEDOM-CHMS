@@ -13,7 +13,7 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import { chatRole } from './shared/hopeChats.js';
-import { contactsFor, plainName } from './pettyContacts.js';
+import { hopeBoardContacts, plainName } from './pettyContacts.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
 import {
@@ -35,7 +35,7 @@ type Stored = PhotoReport & { id: string };
 const shown = (id: string, r: PhotoReport) => ({ id, ...r, createdAt: undefined, updatedAt: undefined });
 
 /** The board stakeholders the report can be sent to (the Director and the board), with their built-in contacts. */
-const boardOf = () => contactsFor('ministry').map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
+const boardOf = () => hopeBoardContacts().map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
 
 function mailer(): { transport: Transporter; from: string; test: string | undefined } | null {
   const from = letterheadFor({ type: 'ministry', name: '' }).email;

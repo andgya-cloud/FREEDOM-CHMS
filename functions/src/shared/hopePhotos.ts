@@ -230,7 +230,7 @@ export const canPackageStory = (p: Profile, orgId: string) => isHopeDirector(p, 
 
 /** Each person's glass tint (2A): the known people always have the same colour; anyone else gets one from their id. */
 const KNOWN_TINTS: [string, string][] = [
-  ['diana', '#038241'], ['andrew', '#1f2a5c'], ['doreen', '#c99a3c'], ['daniel', '#7c3a8a'], ['ronald', '#c2410c'], ['elias', '#0e7490'],
+  ['diana', '#038241'], ['andrew', '#1f2a5c'], ['doreen', '#c99a3c'], ['daniel', '#7c3a8a'], ['dorothy', '#c2410c'], ['elias', '#0e7490'],
 ];
 const OTHER_TINTS = ['#2747a8', '#8a2b7d', '#0d6f7b', '#b0301f', '#5b3aa6', '#5a6b14', '#a2620a', '#374151'];
 export function storyTint(name: string, uid = ''): string {
@@ -272,8 +272,8 @@ export function storyStartWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'send
 
 export const photoFilePath = (orgId: string, reportId: string, key: string) => `hopePhotoReports/${orgId}/${reportId}/${key}`;
 
-/** The board of Freedom Hope Centre (Andy, 2026-11-04, 7A): the stakeholders besides the Director. */
-export const HOPE_BOARD_NAMES = ['Andrew Guya', 'Doreen Mayaka', 'Doreen Guya', 'Elias Omondi', "Daniel Ojwang'", 'Ronald Awili'] as const;
+/** The board of Freedom Hope Centre (Andy, 2026-11-04, 7A; 2026-11-06: Dorothy Mohat in place of Ronald Awili). */
+export const HOPE_BOARD_NAMES = ['Andrew Guya', 'Doreen Mayaka', 'Doreen Guya', 'Elias Omondi', "Daniel Ojwang'", 'Dorothy Mohat', 'Dorothy Mohart'] as const;
 const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
 export const isHopeBoardName = (name: string | undefined) => !!name && HOPE_BOARD_NAMES.some((n) => plain(n) === plain(name));
 

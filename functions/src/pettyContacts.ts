@@ -41,6 +41,15 @@ export function isDirector(profile: { displayName?: string; pettyTitle?: string;
   return personKey(profile?.displayName ?? '') === 'andrewguya';
 }
 
+/**
+ * The Freedom Hope Centre board for photo reports and conversations (Andy, 2026-11-06): Ronald Awili is not on it;
+ * Dorothy Mohat is. Petty cash keeps its own stakeholders (contactsFor).
+ */
+export function hopeBoardContacts() {
+  return [...contactsFor('ministry').filter((c) => plainName(c.name) !== 'ronaldawili'),
+    { name: 'Dorothy Mohat', email: '', phone: normalizePhone('0721995182') ?? '', aliases: ['Dorothy Mohart'] }];
+}
+
 /** The built-in contacts for this kind of organization. */
 export function contactsFor(orgType: string | undefined) {
   const list = orgType === 'college' ? ADIA_CONTACTS : orgType === 'ministry' ? HOPE_CONTACTS : orgType === 'church_campus' ? FREEDOM_CONTACTS : [];

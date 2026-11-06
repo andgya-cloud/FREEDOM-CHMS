@@ -8,7 +8,7 @@ import { getStorage } from 'firebase-admin/storage';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg } from './shared/permissions.js';
-import { contactsFor, plainName } from './pettyContacts.js';
+import { hopeBoardContacts, plainName } from './pettyContacts.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { localDateKey } from './shared/datetime.js';
 import { PHOTO_FILE_MAX_BYTES, photoFileName, photoFileTypeOf, type PhotoFile } from './shared/hopePhotos.js';
@@ -20,7 +20,7 @@ import {
 const HOPE_EMAIL_APP_PASSWORD = defineSecret('HOPE_EMAIL_APP_PASSWORD');
 const appUrl = () => process.env.APP_URL || 'https://freedom-chms.web.app';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const boardOf = () => contactsFor('ministry').map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
+const boardOf = () => hopeBoardContacts().map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
 
 function mailer(): { transport: Transporter; from: string; test: string | undefined } | null {
   const from = letterheadFor({ type: 'ministry', name: '' }).email;

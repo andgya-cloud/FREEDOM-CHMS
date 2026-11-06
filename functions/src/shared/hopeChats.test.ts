@@ -6,7 +6,7 @@ const user = (o: Record<string, unknown>) => ({ active: true, orgIds: [HOPE], pe
 const director = user({ roleId: 'head', displayName: 'Diana Kiunga', permissions: ['people.read', 'team.manage'] });
 const helper = user({ roleId: 'helper', displayName: 'Mary Wanjiku', permissions: ['people.read', 'attendance.write'] });
 const andy = { active: true, allOrgs: true, roleId: 'pastor', displayName: 'Andrew Guya', permissions: ['users.manage'] };
-const board = user({ roleId: 'signatory', displayName: 'Ronald Awili', permissions: ['pettycash.request'] });
+const board = user({ roleId: 'signatory', displayName: 'Elias Omondi', permissions: ['pettycash.request'] });
 
 describe('Hope conversations (Andy, 2026-11-04)', () => {
   it('only the Director, the board, Andy and Doreen read and start them; staff raise a worry', () => {
