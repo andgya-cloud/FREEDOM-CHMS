@@ -74,7 +74,8 @@
 .rg-sess[aria-pressed='true'] { border-color: var(--rg-gold); }
 .rg-sess[aria-pressed='true'] span { color: var(--rg-fg); font-weight: 600; }
 .rg .btn.rg-other { position: relative; flex: none; cursor: pointer; }
-.rg-other input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; }
+.rg-other-box { display: inline-flex; gap: 8px; align-items: center; flex: none; }
+.rg-other-box input { min-height: 42px; border: 1.5px solid var(--rg-gold); border-radius: 12px; padding: 6px 10px; background: var(--rg-surface); color: var(--rg-fg); font: inherit; }
 
 /* Summary band */
 .rg-band { padding: 20px 22px; margin-bottom: 16px; }

@@ -131,11 +131,30 @@ export function SessionStrip({ days, value, onChange, pctOf, today }: { days: st
           );
         })}
       </div>
-      <label className="btn rg-other">
-        <RgIcon name="cal" />Other date
-        <input type="date" max={today} value={value} aria-label="Pick another date" onChange={(e) => e.target.value && e.target.value <= today && onChange(e.target.value)} />
-      </label>
+      <OtherDate value={value} today={today} onChange={onChange} />
     </div>
+  );
+}
+
+/**
+ * "Other date": a visible date box that opens the calendar where the browser can (Safari on a Mac could not open a
+ * hidden one, Andy 2026-11-06). Typing a date also works.
+ */
+function OtherDate({ value, today, onChange }: { value: string; today: string; onChange: (d: string) => void }) {
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (!open || !box.current) return;
+    box.current.focus();
+    try { box.current.showPicker?.(); } catch { /* the browser only allows it on a tap; the box is there to type in */ }
+  }, [open]);
+  if (!open) return <button type="button" className="btn rg-other" onClick={() => setOpen(true)}><RgIcon name="cal" />Other date</button>;
+  return (
+    <span className="rg-other-box">
+      <input ref={box} type="date" max={today} defaultValue={value} aria-label="Pick another date"
+        onChange={(e) => { const d = e.target.value; if (/^\d{4}-\d{2}-\d{2}$/.test(d) && d <= today && d >= '2020-01-01') { onChange(d); setOpen(false); } }} />
+      <button type="button" className="btn rg-sm" onClick={() => setOpen(false)}>Cancel</button>
+    </span>
   );
 }
 
