@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -7,13 +7,21 @@ import { friendlyError } from '../../lib/errors';
 import { addClubWin, markClub, removeClubWin, updateClub, type ClubInput } from '../../lib/hopeWrites';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
-import { dayTrend, rateFrom, type KidEntry } from '../../../functions/src/shared/hopeRegister';
+import { dayTrend, type KidEntry } from '../../../functions/src/shared/hopeRegister';
 import {
   clubDayId, clubDayOnOrBefore, clubSummary, levelLabel, memberRate, scheduleText, WEEKDAYS, WIN_EMOJI, WIN_KIND_LABELS, WIN_KINDS,
   type Club, type ClubDay, type WinKind,
 } from '../../../functions/src/shared/hopeClubs';
 import { HopeGate, useHopePage } from './common';
-import { Avatar, PctBadge, RegisterCalendar, tick, TrendCard } from './registerParts';
+import { Avatar, nowTime, PctBadge, tick, TrendCard } from './registerParts';
+import { DoorScan } from './DoorScan';
+import { RemoveDialog } from '../../components/CleanupDialog';
+import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { classOf, hasAllergy } from '../../../functions/src/shared/hopeClasses';
+import {
+  cameOf, chipTitle, classChips, countMarks, Empty, Field, Frame, longDate, MoreMenu, PhotoTile, RegRow, RgIcon, SessionStrip, sessionDays, shown,
+  SummaryBand, Toolbar, useCanReset, type MenuItem, type RgStatus, type View,
+} from './RegisterKit';
 import { EMOJIS } from './ClubsPage';
 import { CleanupButton } from '../../components/CleanupDialog';
 import type { Organization } from '../../state/OrgContext';
@@ -60,7 +68,7 @@ function ClubScreen({ org }: { org: Organization }) {
       <div className="segmented hr-switch" role="tablist">
         {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={tab === k ? 'on' : ''} onClick={() => setParams(k === 'register' ? {} : { tab: k }, { replace: true })}>{label}</button>)}
       </div>
-      {tab === 'register' && <ClubRegister org={org} club={club} days={days} h={h} />}
+      {tab === 'register' && <ClubRegisterBody org={org} club={club} days={days} h={h} start={clubDayOnOrBefore(club.day, h.today)} bare />}
       {tab === 'members' && <Members org={org} club={club} days={days} h={h} />}
       {tab === 'wins' && <Wins org={org} club={club} wins={wins} h={h} />}
       {tab === 'about' && <About org={org} club={club} champions={champ.champions} />}
@@ -68,70 +76,118 @@ function ClubScreen({ org }: { org: Organization }) {
   );
 }
 
-const MARKS: [KidEntry['s'], string][] = [['present', 'Present'], ['absent', 'Absent'], ['excused', 'Excused']];
-
-function ClubRegister({ org, club, days, h }: { org: Organization; club: Club; days: ClubDay[]; h: H }) {
-  const { can } = useAuth();
+/**
+ * A club's register, in the same calm layout as the children's (Registers brief, 2026-11-06): the club's meeting
+ * days, one summary band, the class chips, and one line (or one photo) per member. `bare` leaves out the page head,
+ * for the club's own page.
+ */
+export function ClubRegisterBody({ org, club, days, h, start, ptabs, subtabs, picker, bare }: {
+  org: Organization; club: Club; days: ClubDay[]; h: H; start: string; ptabs?: ReactNode; subtabs?: ReactNode; picker?: ReactNode; bare?: boolean;
+}) {
+  const { can, profile } = useAuth();
   const toast = useToast();
   const photos = useChildPhotos(org.id);
-  const [date, setDate] = useState(() => clubDayOnOrBefore(club.day, h.today));
+  const [date, setDate] = useState(start);
+  const [q, setQ] = useState('');
+  const [only, setOnly] = useState(false);
+  const [chip, setChip] = useState('all');
+  const [view, setView] = useState<View>('list');
+  const [scan, setScan] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const canReset = useCanReset(org.id);
   const marker = can('attendance.write');
+  const helper = profile?.roleId === HELPER_ROLE_ID;
   const fail = (err: unknown) => toast.show(friendlyError(err));
-  const marks = days.find((d) => d.date === date)?.marks ?? {};
-  const marked = useMemo(() => new Set(days.filter((d) => Object.keys(d.marks ?? {}).length).map((d) => d.date)), [days]);
+  const day = days.find((d) => d.date === date);
+  const marks = day?.marks ?? {};
   const ids = [...new Set([...club.memberIds, ...Object.keys(marks)])];
-  const list = ids.map((id) => ({ id, name: h.nameOf(id), child: h.children.find((x) => x.id === id) }))
-    .filter((x) => x.child).sort((a, b) => a.name.localeCompare(b.name));
-  const unmarked = list.filter((x) => !marks[x.id]);
-  const r = rateFrom(Object.values(marks));
+  const everyone = ids.map((id) => ({ id, name: h.nameOf(id), child: h.children.find((x) => x.id === id) }))
+    .filter((x) => x.child).map((x) => ({ ...x, child: x.child!, cls: classOf(x.child!.dateOfBirth, date) })).sort((a, b) => a.name.localeCompare(b.name));
+  const chips = classChips(everyone, (x) => x.cls);
+  const group = chip === 'all' || chips.some((c) => c.id === chip) ? chip : 'all';
+  const inGroup = everyone.filter((x) => group === 'all' || (group === 'none' ? !x.cls : x.cls?.id === group));
+  const counts = countMarks(inGroup.map((x) => x.id), marks);
+  const text = q.trim().toLowerCase();
+  const list = inGroup.filter((x) => (!only || !shown(marks[x.id]?.s)) && (!text || x.name.toLowerCase().includes(text) || (x.child.code ?? '').toLowerCase().includes(text)));
+  const pctOf = (d: string) => {
+    const m = days.find((x) => x.date === d)?.marks ?? {};
+    return Object.keys(m).length ? cameOf(countMarks([...new Set([...club.memberIds, ...Object.keys(m)])], m)) : null;
+  };
 
-  function mark(id: string, s: KidEntry['s'], extra: Partial<KidEntry> = {}) {
+  function mark(id: string, s: RgStatus | null, extra: Partial<KidEntry> = {}) {
+    if (!marker) return;
     const old = marks[id];
-    if (s === 'present' && old?.s !== 'present') tick();
-    markClub(org.id, club.id, date, { [id]: { s, t: null, r: s === 'excused' ? (old?.r ?? null) : null, ...extra } }).catch(fail);
+    if (s === 'present' && !shown(old?.s)) tick();
+    const there = s === 'present' || s === 'late';
+    markClub(org.id, club.id, date, { [id]: s ? { s, t: there ? (old?.t ?? (date === h.today ? nowTime() : null)) : null, r: old?.r ?? null, ...extra } : null }).catch(fail);
+  }
+  function scanned(code: string): string {
+    const c = h.children.find((x) => x.code === code);
+    if (!c) return `No child has the code ${code}.`;
+    const name = h.nameOf(c.id);
+    if (!club.memberIds.includes(c.id)) return `${name} is not a member of ${club.name}.`;
+    if (shown(marks[c.id]?.s) === 'present') return `✓ ${name} is already here.`;
+    mark(c.id, 'present');
+    return `✓ ${name} is here`;
+  }
+  function bulkAbsent() {
+    const left = inGroup.filter((x) => !shown(marks[x.id]?.s));
+    markClub(org.id, club.id, date, Object.fromEntries(left.map((x) => [x.id, { s: 'absent', t: null, r: null }]))).catch(fail);
   }
 
-  return (
+  const menu: MenuItem[] = [];
+  if (canReset && day && Object.keys(marks).length) menu.push({ label: 'Reset this day', hint: 'Moves every mark for this day to the Bin', danger: true, onClick: () => setResetting(true) });
+  const actions = (
     <>
-      <section className="card hr-top">
-        <RegisterCalendar value={date} onChange={setDate} marked={marked} today={h.today} />
-        <div className="stack">
-          <h2>{formatDateKey(date)}</h2>
-          {days.some((d) => d.date === date) && <CleanupButton orgId={org.id} kind="clubDay" id={clubDayId(club.id, date)} label="Reset this day" />}
-          <div className="hr-counts"><span><b>{r.present}</b> present</span><span><b>{r.absent}</b> absent</span><span><b>{r.excused}</b> excused</span><span><b>{unmarked.length}</b> not marked</span></div>
-          {r.pct != null && <p className="lead">{r.pct}% came</p>}
-          {marker && unmarked.length > 0 && Object.keys(marks).length > 0 && (
-            <button type="button" className="btn btn-quiet align-start" onClick={() => { markClub(org.id, club.id, date, Object.fromEntries(unmarked.map((x) => [x.id, { s: 'absent', t: null, r: null }]))).catch(fail); }}>Mark the {unmarked.length} not marked as absent</button>
-          )}
+      {marker && <button type="button" className="btn btn-primary" aria-pressed={scan} onClick={() => setScan(!scan)}><RgIcon name="cam" />Scan cards</button>}
+      <MoreMenu items={menu} />
+    </>
+  );
+  const body = (
+    <>
+      {picker}
+      {scan && marker && <DoorScan onCode={scanned} onClose={() => setScan(false)} />}
+      <SessionStrip days={sessionDays(clubDayOnOrBefore(club.day, h.today), 6, [date])} value={date} onChange={setDate} pctOf={pctOf} today={h.today} />
+      <SummaryBand title={group === 'all' ? `${club.emoji || '⭐'} ${club.name}` : chipTitle(group, club.name)} counts={counts} showPct={!helper}
+        onBulk={marker && !helper ? bulkAbsent : undefined} note={marker ? undefined : 'Your role can see this register but not change it.'} />
+      <Toolbar q={q} onQ={setQ} placeholder="Search club members" only={only} onOnly={setOnly} view={view} onView={setView} chips={chips} chip={group} onChip={setChip} chipsLabel="Filter by class" />
+      {everyone.length === 0 ? (
+        <div className="card"><Empty title="No members yet"><Link to={`/hope/clubs/${club.id}?tab=members`}>Add the members</Link> first.</Empty></div>
+      ) : list.length === 0 ? (
+        <div className="card"><Empty title={only && !q ? 'Everyone is marked' : 'No match'}>{only && !q ? 'Nothing left to do in this view.' : 'Try a different name or filter.'}</Empty></div>
+      ) : view === 'photos' ? (
+        <div className="card">
+          <ul className="rg-tiles">
+            {list.map(({ id, name, child }) => (
+              <PhotoTile key={id} name={name} photo={child.photoConsent?.given ? photos.get(id) : null} status={shown(marks[id]?.s)} time={marks[id]?.t} disabled={!marker}
+                allergy={hasAllergy(child.allergies) ? child.allergies : null} onMark={(s) => mark(id, s)} />
+            ))}
+          </ul>
         </div>
-      </section>
-      {list.length === 0 ? <div className="card"><p>No members yet. <Link to={`/hope/clubs/${club.id}?tab=members`}>Add the members</Link> first.</p></div> : (
-        <ul className="hr-list">
-          {list.map(({ id, name, child }) => {
+      ) : (
+        <ul className="card rg-list">
+          {list.map(({ id, name, child, cls }) => {
             const e = marks[id];
+            const s = shown(e?.s);
+            const pct = helper ? null : memberRate(id, days).pct;
+            const sub = [cls?.name, club.levels[id], pct != null ? `${pct}%` : null].filter(Boolean).join(' · ');
             return (
-              <li key={id} className={`card hr-row${e ? ` m-${e.s}` : ''}`}>
-                <div className="hr-who">
-                  <Avatar photo={child!.photoConsent?.given ? photos.get(id) : null} name={name} />
-                  <div><Link to={`/hope/children/${id}`} className="link-title">{name}</Link><span className="small muted"> {club.levels[id] ?? ''}</span></div>
-                  <PctBadge pct={memberRate(id, days).pct} />
-                </div>
-                <div className="hr-marks" role="group" aria-label={`Mark ${name}`}>
-                  {MARKS.map(([s, label]) => <button key={s} type="button" disabled={!marker} aria-pressed={e?.s === s} className={`hr-mark k-${s}${e?.s === s ? ' on' : ''}`} onClick={() => mark(id, s)}>{label}</button>)}
-                </div>
-                {e?.s === 'excused' && (
-                  <label className="hr-inline grow"><span>Reason</span>
-                    <input disabled={!marker} maxLength={200} defaultValue={e.r ?? ''} key={`${date}${e.r}`} placeholder="Sick, at school, travelled…" onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && mark(id, 'excused', { r: ev.target.value.trim() || null })} />
-                  </label>
-                )}
-              </li>
+              <RegRow key={id} name={name} sub={sub} photo={child.photoConsent?.given ? photos.get(id) : null} allergy={hasAllergy(child.allergies) ? child.allergies : null}
+                to={!helper && can('people.read') ? `/hope/children/${id}` : undefined} status={s} disabled={!marker} onMark={(x) => mark(id, x)}
+                details={helper || !e ? undefined : (
+                  <Field label="Notes" wide><input disabled={!marker} maxLength={200} defaultValue={e.r ?? ''} key={`${date}${e.r}`} placeholder={s === 'excused' ? 'Sick, at school, travelled…' : 'Anything to remember'}
+                    onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && s && mark(id, s, { r: ev.target.value.trim() || null })} /></Field>
+                )} />
             );
           })}
         </ul>
       )}
-      <TrendCard title="Attendance as time goes" trend={dayTrend(days)} />
+      {!helper && <div className="rg-trend"><TrendCard title="Attendance as time goes" trend={dayTrend(days)} /></div>}
+      <RemoveDialog orgId={org.id} items={[{ kind: 'clubDay', id: clubDayId(club.id, date) }]} open={resetting} onClose={() => setResetting(false)} onDone={() => setResetting(false)} />
     </>
   );
+  if (bare) return <div className="rg"><div className="rg-head rg-bare"><p>{longDate(date)}</p><div className="rg-actions">{actions}</div></div>{body}</div>;
+  return <Frame date={date} actions={actions} ptabs={ptabs} subtabs={subtabs}>{body}</Frame>;
 }
 
 function Members({ org, club, days, h }: { org: Organization; club: Club; days: ClubDay[]; h: H }) {

@@ -14,7 +14,7 @@ type Cell = { value: string | number | null; type?: StringConstructor | NumberCo
 const text = (value: string): Cell => ({ value, type: String });
 const bold = (value: string): Cell => ({ value, type: String, fontWeight: 'bold' });
 const safe = (s: string) => s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');
-const here = (e: KidEntry | null) => e?.s === 'present' || e?.s === 'departing';
+const here = (e: KidEntry | null) => e?.s === 'present' || e?.s === 'late' || e?.s === 'departing';
 const markText = (e: KidEntry | null) => (e ? KID_MARK_LABELS[e.s] : 'Not marked');
 
 /** A register day as a PDF (2A): counts, then everyone who came with the time, then absent and excused. */

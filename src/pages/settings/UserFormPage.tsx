@@ -14,7 +14,8 @@ import { generateTemporaryPassword } from '../../lib/generatePassword';
 import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
-import { GRANTABLE_PERMISSIONS, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
+import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -35,6 +36,7 @@ interface FormState {
   /** Classes ticked under v107, by name, until the programmes load. */
   legacyClasses: string[];
   inventory: string[];
+  hopeClasses: string[];
 }
 
 const ROLE_HINTS: Record<string, string> = {
@@ -48,7 +50,7 @@ const ROLE_HINTS: Record<string, string> = {
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [] };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [], hopeClasses: [] };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -81,7 +83,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [],
+          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [], hopeClasses: u.hopeClassIds ?? [],
         });
       }
       setLoaded(true);
@@ -134,6 +136,7 @@ export function UserFormPage() {
           phone: form.phone.trim(),
           departments: form.roleId === TRAINER_ROLE_ID ? form.departments : [],
           inventoryDepartments: counts ? form.inventory : [],
+          hopeClasses: form.roleId === HELPER_ROLE_ID ? form.hopeClasses : [],
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -265,6 +268,20 @@ export function UserFormPage() {
               </label>
             )}
             <small className="hint">They see only this department's students (names and admission numbers), mark its register for today or yesterday, and key in marks for its courses given to them in Exam Records. With Common courses, they also see the cohorts their common courses are taught to. Nothing else.</small>
+          </fieldset>
+        )}
+
+        {form.roleId === HELPER_ROLE_ID && !teamOnly && (
+          <fieldset className="field">
+            <legend>Class register (Hope Centre)</legend>
+            {HOPE_CLASSES.map((c) => (
+              <label key={c.id} className="check">
+                <input type="checkbox" checked={form.hopeClasses.includes(c.id)}
+                  onChange={() => setForm((f) => ({ ...f, hopeClasses: f.hopeClasses.includes(c.id) ? f.hopeClasses.filter((x) => x !== c.id) : [...f.hopeClasses, c.id] }))} />
+                {classLabel(c)}
+              </label>
+            ))}
+            <small className="hint">A class volunteer sees only this class on the Registers page and marks Present, Late, Absent or Excused one child at a time. Leave empty to let them mark every child.</small>
           </fieldset>
         )}
 

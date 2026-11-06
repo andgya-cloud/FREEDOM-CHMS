@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, HELPER_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -8,6 +8,14 @@ import { rebuildRoster } from './rosters.js';
 import { giveDepartmentCourses } from './examAssign.js';
 import { refreshCommonAccess } from './commonCourses.js';
 import { COMMON_DEPARTMENT } from './shared/commonCourses.js';
+import { HOPE_CLASSES } from './shared/hopeClasses.js';
+
+/** A Hope class volunteer's classes (Registers brief, 2026-11-06): stone ids, helpers only. */
+function hopeClassesFrom(roleId: string, value: unknown): string[] {
+  if (roleId !== HELPER_ROLE_ID) return [];
+  const known = HOPE_CLASSES.map((c) => c.id as string);
+  return [...new Set(requireStringArray(value ?? [], 'the classes'))].filter((id) => known.includes(id));
+}
 
 // The browser calls these directly, so anyone may reach them; each one checks
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
@@ -160,6 +168,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
     phone,
     ...dept,
     inventoryCourseIds: await inventoryDepartments(data.inventoryDepartments, orgIds, allOrgs),
+    hopeClassIds: hopeClassesFrom(roleId, data.hopeClasses),
     permissions: accountPermissions(roleId, role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -239,6 +248,9 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     ...dept,
     // The departments whose inventory they count (Andy, 2026-10-29).
     inventoryCourseIds,
+    // A Hope class volunteer's classes; kept when the form does not send them.
+    hopeClassIds: data.hopeClasses !== undefined ? hopeClassesFrom(merged.roleId, data.hopeClasses)
+      : merged.roleId === HELPER_ROLE_ID ? (current as { hopeClassIds?: string[] }).hopeClassIds ?? [] : [],
     permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,

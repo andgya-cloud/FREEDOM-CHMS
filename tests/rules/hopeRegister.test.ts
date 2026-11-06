@@ -27,6 +27,7 @@ beforeEach(async () => {
     const user = (roleId: string, permissions: string[]) => ({ email: 'x@example.org', displayName: 'x', roleId, extraPermissions: [], orgIds: ['hope'], allOrgs: false, permissions, active: true });
     await setDoc(doc(db, 'users/hopeAdmin'), user('admin', PERMS));
     await setDoc(doc(db, 'users/hopeStaff'), user('staff', PERMS));
+    await setDoc(doc(db, 'users/hopeHelper'), user('helper', ['people.read', 'attendance.write']));
     await setDoc(doc(db, 'organizations/hope'), { name: 'Freedom Hope Center', type: 'ministry', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'FHC', active: true, ...stamps });
     for (const id of ['c1', 'c2']) await setDoc(doc(db, `${O}/people/${id}`), { orgId: 'hope', fullName: id, firstName: id, status: 'child', whatsappConsent: {}, ...stamps });
     await setDoc(doc(db, `${O}/children/c1`), child());
@@ -73,6 +74,14 @@ describe('the weekly registers', () => {
     await assertFails(setDoc(doc(as('hopeStaff'), `${O}/hopeDays/2026-10-24`), { ...day('hopeStaff', '2026-10-24', {}), extra: 1 }));
     await assertFails(setDoc(doc(as('admin'), `${O}/hopeDays/2026-10-24`), day('admin', '2026-10-24', {})));
     await assertFails(deleteDoc(doc(as('hopeAdmin'), `${O}/hopeDays/2026-10-31`)));
+  });
+  it('lets a class volunteer mark one child at a time, Late included, but not mark many at once (Registers brief)', async () => {
+    const ref = doc(as('hopeHelper'), `${O}/hopeDays/2026-11-07`);
+    await assertSucceeds(setDoc(ref, day('hopeHelper', '2026-11-07', { c1: { s: 'late', t: '09:20' } }), { merge: true }));
+    await assertSucceeds(setDoc(ref, day('hopeHelper', '2026-11-07', { c2: { s: 'present', t: '09:21' } }), { merge: true }));
+    await assertFails(setDoc(ref, day('hopeHelper', '2026-11-07', { c1: { s: 'absent' }, c2: { s: 'absent' } }), { merge: true }));
+    await assertFails(setDoc(doc(as('hopeHelper'), `${O}/hopeDays/2026-11-14`), day('hopeHelper', '2026-11-14', { c1: { s: 'absent' }, c2: { s: 'absent' } })));
+    await assertSucceeds(setDoc(doc(as('hopeStaff'), `${O}/hopeDays/2026-11-07`), day('hopeStaff', '2026-11-07', { c1: { s: 'absent' }, c2: { s: 'absent' } }), { merge: true }));
   });
   it('lets only the Director or an admin keep the champions and their register', async () => {
     const champ = (uid: string) => ({ orgId: 'hope', name: 'Peter Otieno', phone: '0722', email: '', duty: 'Coach', status: 'active', joinedOn: '2025-03-01', ...created(uid) });

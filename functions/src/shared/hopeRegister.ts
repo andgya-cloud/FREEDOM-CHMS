@@ -10,9 +10,9 @@ import { formatPhone, normalizePhone } from './phone.js';
 
 // ---- The children's register --------------------------------------------------------------------
 
-export const KID_MARKS = ['present', 'absent', 'excused', 'departing', 'departed'] as const;
+export const KID_MARKS = ['present', 'late', 'absent', 'excused', 'departing', 'departed'] as const;
 export type KidMark = (typeof KID_MARKS)[number];
-export const KID_MARK_LABELS: Record<KidMark, string> = { present: 'Present', absent: 'Absent', excused: 'Excused', departing: 'Departing', departed: 'Departed' };
+export const KID_MARK_LABELS: Record<KidMark, string> = { present: 'Present', late: 'Late', absent: 'Absent', excused: 'Excused', departing: 'Departing', departed: 'Departed' };
 
 export interface KidEntry {
   s: KidMark;
@@ -23,8 +23,8 @@ export interface KidEntry {
 }
 export interface HopeDay { id?: string; date: string; marks: Record<string, KidEntry>; deletedAt?: unknown }
 
-/** A departing child still comes (Andy 1B), so Departing counts as there. */
-export const kidCame = (s: KidMark | undefined) => s === 'present' || s === 'departing';
+/** A departing child still comes (Andy 1B), so Departing counts as there; Late counts as came (Registers brief, 2026-11-06). */
+export const kidCame = (s: KidMark | undefined) => s === 'present' || s === 'late' || s === 'departing';
 
 export interface Rate { present: number; absent: number; excused: number; marked: number; pct: number | null }
 

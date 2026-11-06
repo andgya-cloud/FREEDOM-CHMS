@@ -2077,6 +2077,7 @@ div.tf-ask input { flex: 1 1 200px; min-width: 0; }
 .hr-dots { display: flex; gap: 5px; flex-wrap: wrap; }
 .hr-dot { width: 14px; height: 14px; border-radius: 4px; background: #e5e7eb; }
 .hr-dot.m-present, .hr-dot.m-departing { background: #16a34a; }
+.hr-dot.m-late { background: #d97706; }
 .hr-dot.m-absent { background: #dc2626; }
 .hr-dot.m-excused { background: #f59e0b; }
 .hr-dot.m-departed { background: #6b7280; }

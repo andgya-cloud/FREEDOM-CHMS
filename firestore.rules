@@ -1251,9 +1251,14 @@ service cloud.firestore {
           && request.resource.data.marks[request.auth.uid].t.matches('^[0-2][0-9]:[0-5][0-9]$');
         allow delete: if false;
       }
+      // A class volunteer (Hope helper) marks one child at a time: no bulk "mark absent" and no resets (Registers brief, 2026-11-06).
+      function helperOneAtATime() {
+        return me().roleId != 'helper'
+          || request.resource.data.marks.diff(resource == null ? {} : resource.data.marks).affectedKeys().size() <= 1;
+      }
       match /hopeDays/{day} {
         allow read: if hopeRead();
-        allow create, update: if canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day);
+        allow create, update: if canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day) && helperOneAtATime();
         allow delete: if false;
       }
       match /champions/{championId} {
@@ -1339,6 +1344,7 @@ service cloud.firestore {
           && isDate(request.resource.data.date) && request.resource.data.clubId is string
           && dayId == request.resource.data.clubId + '_' + request.resource.data.date
           && existsInOrg('clubs', request.resource.data.clubId)
+          && helperOneAtATime()
           && request.resource.data.marks is map && request.resource.data.marks.size() <= 1000
           && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
         allow delete: if false;

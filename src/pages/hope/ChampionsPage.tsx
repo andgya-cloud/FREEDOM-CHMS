@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -8,15 +8,15 @@ import { markChampion, markMany, type ChampionInput } from '../../lib/hopeWrites
 import { championChange, saveChampionChanges } from '../../lib/championEdit';
 import { useTwoSignatures } from '../../components/TwoSignatures';
 import { useChampionPay } from '../../state/useHope';
-import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
 import {
-  CHAMPION_MARKS, CHAMPION_MARK_LABELS, CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
-  planChampionImport, rateFrom, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
+  CHAMPION_TEMPLATE_EXAMPLE, CHAMPION_TEMPLATE_HEAD, championSummary, dayTrend, hoursText, minutesBetween,
+  planChampionImport, saturdayOnOrBefore, type Champion, type ChampionEntry, type ChampionImportRow, type ChampionMark,
 } from '../../../functions/src/shared/hopeRegister';
 import { useHopePage } from './common';
-import { CleanupButton } from '../../components/CleanupDialog';
-import { Avatar, nowTime, PctBadge, RegisterCalendar, SheetPicker, TemplateButtons, TrendCard } from './registerParts';
+import { RemoveDialog } from '../../components/CleanupDialog';
+import { cameOf, useCanReset, countMarks, Empty, Field, Frame, MoreMenu, RegRow, RgIcon, SessionStrip, sessionDays, SubTabs, SummaryBand, Toolbar, type Chip, type MenuItem, type RgStatus } from './RegisterKit';
+import { Avatar, nowTime, PctBadge, SheetPicker, TemplateButtons, TrendCard } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
 import { ChampionPay } from './ChampionPay';
 import { DoorScan } from './DoorScan';
@@ -30,49 +30,69 @@ type Tab = 'register' | 'people' | 'pay' | 'upload';
 
 /**
  * The Child Champions register (Andy, 2026-11-04): the people who teach and serve the Hope Centre children.
- * The Director or an admin marks it (6A): time in, time out, duty and notes, with each champion's percentage.
+ * The Director or an admin marks it (6A). Calm layout from the Registers brief (2026-11-06): Register, The champions
+ * and Pay are quiet underline tabs; Upload from Excel and Scan champion cards sit in the header; Champion QR cards
+ * and Reset this day are in the "..." menu.
  */
-export function ChampionsPanel({ org }: { org: Organization }) {
+export function ChampionsPanel({ org, ptabs }: { org: Organization; ptabs?: ReactNode }) {
   const h = useHopePage(org);
   const { profile } = useAuth();
   const c = useChampions(org.id);
   const manager = isChampionManager(profile, org.id);
   const [params] = useSearchParams();
   const [tab, setTab] = useState<Tab>(() => (manager && (params.get('tab') === 'pay' || params.get('tab') === 'upload') ? params.get('tab') as Tab : 'register'));
-  const tabs: [Tab, string][] = [['register', 'Register'], ['people', 'The champions'], ...(manager ? [['pay', 'Pay'], ['upload', 'Upload from Excel']] as [Tab, string][] : [])];
+  const subs: { id: Tab; label: string }[] = [{ id: 'register', label: 'Register' }, { id: 'people', label: 'The champions' }, ...(manager ? [{ id: 'pay' as Tab, label: 'Pay' }] : [])];
+  const subtabs = <SubTabs value={tab} options={subs} onChange={setTab} />;
+  const upload = manager && <button type="button" className="btn rg-ghost" aria-pressed={tab === 'upload'} onClick={() => setTab('upload')}><RgIcon name="up" />Upload from Excel</button>;
+  if (tab === 'register') return <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} ptabs={ptabs} subtabs={subtabs} upload={upload} />;
   return (
-    <>
-      <div className="chips hr-subtabs" role="tablist">
-        {tabs.map(([k, label]) => <button key={k} type="button" role="tab" aria-selected={tab === k} className={`chip${tab === k ? ' chip-on' : ''}`} onClick={() => setTab(k)}>{label}</button>)}
-      </div>
-      {tab === 'register' && <ChampionRegister org={org} today={h.today} data={c} manager={manager} onAdd={() => setTab(manager ? 'people' : 'register')} />}
+    <Frame ptabs={ptabs} subtabs={subtabs} actions={upload}>
       {tab === 'people' && <ChampionList org={org} today={h.today} data={c} manager={manager} />}
       {tab === 'pay' && manager && <ChampionPay org={org} today={h.today} data={c} />}
       {tab === 'upload' && manager && <ChampionUpload org={org} today={h.today} existing={c.champions} ready={!c.loading} done={() => setTab('people')} />}
-    </>
+    </Frame>
   );
 }
 
 type Data = ReturnType<typeof useChampions>;
 
-function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organization; today: string; data: Data; manager: boolean; onAdd: () => void }) {
+function ChampionRegister({ org, today, data, manager, onAdd, ptabs, subtabs, upload }: {
+  org: Organization; today: string; data: Data; manager: boolean; onAdd: () => void; ptabs?: ReactNode; subtabs: ReactNode; upload: ReactNode;
+}) {
   const toast = useToast();
   const [date, setDate] = useState(() => saturdayOnOrBefore(today));
+  const [q, setQ] = useState('');
+  const [only, setOnly] = useState(false);
+  const [chip, setChip] = useState('all');
+  const [resetting, setResetting] = useState(false);
+  const canReset = useCanReset(org.id);
   const fail = (err: unknown) => toast.show(friendlyError(err));
   const day = data.days.find((d) => d.date === date);
   const marks = day?.marks ?? {};
-  const markedDays = useMemo(() => new Set(data.days.filter((d) => Object.keys(d.marks ?? {}).length).map((d) => d.date)), [data.days]);
-  const list = data.champions.filter((x) => marks[x.id] || (x.status === 'active' && (!x.joinedOn || x.joinedOn <= date)));
-  const unmarked = list.filter((x) => !marks[x.id]);
-  const rate = rateFrom(Object.values(marks));
+  const onReg = (d: string, m: Record<string, unknown>) => data.champions.filter((x) => m[x.id] || (x.status === 'active' && (!x.joinedOn || x.joinedOn <= d)));
+  const everyone = onReg(date, marks);
+  const dutyOf = (x: Champion) => (marks[x.id]?.duty || x.duty || '').trim();
+  const duties = [...new Set(everyone.map(dutyOf).filter(Boolean))].sort();
+  const chips: Chip[] = [{ id: 'all', label: 'All', count: everyone.length }, ...duties.map((d) => ({ id: d, label: d, count: everyone.filter((x) => dutyOf(x) === d).length }))];
+  const group = chip === 'all' || duties.includes(chip) ? chip : 'all';
+  const inGroup = everyone.filter((x) => group === 'all' || dutyOf(x) === group);
+  const counts = countMarks(inGroup.map((x) => x.id), marks);
+  const text = q.trim().toLowerCase();
+  const list = inGroup.filter((x) => (!only || !marks[x.id]) && (!text || x.name.toLowerCase().includes(text) || (x.code ?? '').toLowerCase().includes(text)));
   const totalMinutes = Object.values(marks).reduce((n, e) => n + (minutesBetween(e.in, e.out) ?? 0), 0);
+  const pctOf = (d: string) => {
+    const m = data.days.find((x) => x.date === d)?.marks ?? {};
+    return Object.keys(m).length ? cameOf(countMarks(onReg(d, m).map((x) => x.id), m)) : null;
+  };
 
-  function mark(x: Champion, s0: ChampionMark, extra: Partial<ChampionEntry> = {}) {
+  function mark(x: Champion, s0: ChampionMark | null, extra: Partial<ChampionEntry> = {}) {
+    if (!s0) { markChampion(org.id, date, x.id, null).catch(fail); return; }
     const old = marks[x.id];
     let s = s0;
-    const there = s === 'present' || s === 'late';
     // Checking someone in now marks them late after 8:30am (Andy, 2026-11-05, 12).
     if (s === 'present' && !old && date === today) s = arrivalMark(nowTime());
+    const there = s === 'present' || s === 'late';
+    // Time in fills in only when marking on the day itself (brief).
     const entry: ChampionEntry = {
       s, in: there ? (old?.in ?? (date === today ? nowTime() : null)) : null, out: there ? (old?.out ?? null) : null,
       duty: old?.duty ?? (x.duty || null), r: old?.r ?? null, ...extra,
@@ -102,77 +122,63 @@ function ChampionRegister({ org, today, data, manager, onAdd }: { org: Organizat
       downloadFile(await qrCardsPdf(org, list, 'champion-cards'));
     } catch (err) { fail(err); } finally { setBusy(false); }
   }
+  function bulkAbsent() {
+    const ids = inGroup.filter((x) => !marks[x.id]);
+    markMany(org.id, 'championDays', date, Object.fromEntries(ids.map((x) => [x.id, { s: 'absent', in: null, out: null, duty: x.duty || null, r: null }]))).catch(fail);
+  }
+
+  const menu: MenuItem[] = [];
+  if (manager) menu.push({ label: busy ? 'Making the cards…' : 'Champion QR cards', hint: 'A PDF of cards to print', onClick: () => { if (!busy) void cards(); } });
+  if (canReset && day && Object.keys(marks).length) menu.push({ label: 'Reset this day', hint: 'Moves every mark for this day to the Bin', danger: true, onClick: () => setResetting(true) });
+  const actions = (
+    <>
+      {upload}
+      <button type="button" className="btn btn-primary" aria-pressed={scan} onClick={() => setScan(!scan)}><RgIcon name="cam" />Scan champion cards</button>
+      <MoreMenu items={menu} />
+    </>
+  );
+  const hours = totalMinutes ? ` · ${hoursText(totalMinutes)} served` : '';
 
   return (
-    <>
-      <div className="chips">
-        <button type="button" className="btn btn-primary" onClick={() => setScan(!scan)}>📷 Scan champion cards</button>
-        {manager && <button type="button" className="btn" disabled={busy} onClick={() => void cards()}>🪪 Champion QR cards</button>}
-      </div>
+    <Frame date={date} actions={actions} ptabs={ptabs} subtabs={subtabs}>
       {scan && <DoorScan onCode={scanned} onClose={() => setScan(false)} />}
-      <section className="card hr-top">
-        <RegisterCalendar value={date} onChange={setDate} marked={markedDays} today={today} />
-        <div className="stack">
-          <h2>{formatDateKey(date)}</h2>
-          {day && <CleanupButton orgId={org.id} kind="championDay" id={date} label="Reset this day" />}
-          <div className="hr-counts">
-            <span><b>{rate.present}</b> came</span>
-            <span><b>{Object.values(marks).filter((e) => e.s === 'late').length}</b> late</span>
-            <span><b>{rate.absent}</b> absent</span>
-            <span><b>{rate.excused}</b> excused</span>
-          </div>
-          {rate.pct != null && <p className="lead">{rate.pct}% came{totalMinutes ? ` · ${hoursText(totalMinutes)} served` : ''}</p>}
-          {manager && unmarked.length > 0 && Object.keys(marks).length > 0 && (
-            <button type="button" className="btn btn-quiet align-start" onClick={() => { markMany(org.id, 'championDays', date, Object.fromEntries(unmarked.map((x) => [x.id, { s: 'absent', in: null, out: null, duty: x.duty || null, r: null }]))).catch(fail); }}>
-              Mark the {unmarked.length} not marked as absent
-            </button>
-          )}
-          {!manager && <p className="small muted">Only the Director or an admin marks this register.</p>}
-        </div>
-      </section>
+      <SessionStrip days={sessionDays(saturdayOnOrBefore(today), 6, [date])} value={date} onChange={setDate} pctOf={pctOf} today={today} />
+      <SummaryBand title={`${group === 'all' ? 'All champions' : group}${hours}`} counts={counts} onBulk={manager ? bulkAbsent : undefined}
+        note={manager ? undefined : 'Only the Director or an admin marks this register.'} />
+      <Toolbar q={q} onQ={setQ} placeholder="Search champions" only={only} onOnly={setOnly} chips={chips} chip={group} onChip={setChip} chipsLabel="Filter by duty" />
 
-      {data.loading ? <p className="muted">Loading…</p> : list.length === 0 ? (
-        <div className="card"><p>No champions yet.{manager && <> <button type="button" className="btn btn-quiet" onClick={onAdd}>Add the champions</button></>}</p></div>
+      {data.loading ? <p className="muted">Loading…</p> : everyone.length === 0 ? (
+        <div className="card"><Empty title="No champions yet">{manager && <button type="button" className="btn rg-ghost rg-sm" onClick={onAdd}>Add the champions</button>}</Empty></div>
+      ) : list.length === 0 ? (
+        <div className="card"><Empty title={only && !q ? 'Everyone is marked' : 'No match'}>{only && !q ? 'Nothing left to do in this view.' : 'Try a different name or filter.'}</Empty></div>
       ) : (
-        <ul className="hr-list">
+        <ul className="card rg-list">
           {list.map((x) => {
             const e = marks[x.id];
             const sum = championSummary(x.id, data.days);
             const mins = minutesBetween(e?.in, e?.out);
+            const there = e && (e.s === 'present' || e.s === 'late');
+            const sub = [dutyOf(x), sum.rate.pct != null ? `${sum.rate.pct}%` : null, there && e.in ? `in ${e.in}${e.out ? `, out ${e.out}` : ''}` : null].filter(Boolean).join(' · ');
             return (
-              <li key={x.id} className={`card hr-row${e ? ` m-${e.s}` : ''}`}>
-                <div className="hr-who">
-                  <Avatar name={x.name} />
-                  <div><b>{x.name}</b><span className="small muted"> {x.duty}</span></div>
-                  <PctBadge pct={sum.rate.pct} />
-                </div>
-                <div className="hr-marks" role="group" aria-label={`Mark ${x.name}`}>
-                  {CHAMPION_MARKS.map((s) => (
-                    <button key={s} type="button" disabled={!manager} aria-pressed={e?.s === s} className={`hr-mark c-${s}${e?.s === s ? ' on' : ''}`} onClick={() => mark(x, s)}>{CHAMPION_MARK_LABELS[s]}</button>
-                  ))}
-                </div>
-                {e && (e.s === 'present' || e.s === 'late') && (
-                  <div className="hr-fields">
-                    <label className="hr-inline"><span>Time in</span><input type="time" disabled={!manager} defaultValue={e.in ?? ''} key={`i${date}${e.in}`} onBlur={(ev) => ev.target.value !== (e.in ?? '') && mark(x, e.s, { in: ev.target.value || null })} /></label>
-                    <label className="hr-inline"><span>Time out</span><input type="time" disabled={!manager} defaultValue={e.out ?? ''} key={`o${date}${e.out}`} onBlur={(ev) => ev.target.value !== (e.out ?? '') && mark(x, e.s, { out: ev.target.value || null })} /></label>
-                    {date === today && !e.out && manager && <button type="button" className="btn btn-quiet" onClick={() => mark(x, e.s, { out: nowTime() })}>Check out now</button>}
-                    {mins != null && <span className="small muted">{hoursText(mins)}</span>}
-                    <label className="hr-inline grow"><span>Duty</span><input disabled={!manager} maxLength={80} defaultValue={e.duty ?? ''} key={`d${date}${e.duty}`} placeholder="Teaching, kitchen, football…" onBlur={(ev) => ev.target.value.trim() !== (e.duty ?? '') && mark(x, e.s, { duty: ev.target.value.trim() || null })} /></label>
-                  </div>
-                )}
-                {e && (
-                  <label className="hr-inline grow"><span>{e.s === 'excused' ? 'Reason' : 'Notes'}</span>
-                    <input disabled={!manager} maxLength={200} defaultValue={e.r ?? ''} key={`r${date}${e.r}`} placeholder={e.s === 'excused' ? 'Why they could not come' : 'Anything to remember'} onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && mark(x, e.s, { r: ev.target.value.trim() || null })} />
-                  </label>
-                )}
-              </li>
+              <RegRow key={x.id} name={x.name} sub={sub} status={(e?.s as RgStatus | undefined) ?? null} disabled={!manager} onMark={(s) => mark(x, s)}
+                details={!e ? undefined : (
+                  <>
+                    {there && <Field label="Time in"><input type="time" disabled={!manager} defaultValue={e.in ?? ''} key={`i${date}${e.in}`} onBlur={(ev) => ev.target.value !== (e.in ?? '') && mark(x, e.s, { in: ev.target.value || null })} /></Field>}
+                    {there && <Field label="Time out"><input type="time" disabled={!manager} defaultValue={e.out ?? ''} key={`o${date}${e.out}`} onBlur={(ev) => ev.target.value !== (e.out ?? '') && mark(x, e.s, { out: ev.target.value || null })} /></Field>}
+                    {there && date === today && !e.out && manager && <button type="button" className="btn rg-ghost rg-sm" onClick={() => mark(x, e.s, { out: nowTime() })}>Check out now</button>}
+                    {there && mins != null && <span className="small muted">{hoursText(mins)}</span>}
+                    {there && <Field label="Duty"><input disabled={!manager} maxLength={80} defaultValue={e.duty ?? ''} key={`d${date}${e.duty}`} placeholder="Teaching, kitchen, football…" onBlur={(ev) => ev.target.value.trim() !== (e.duty ?? '') && mark(x, e.s, { duty: ev.target.value.trim() || null })} /></Field>}
+                    <Field label="Notes" wide><input disabled={!manager} maxLength={200} defaultValue={e.r ?? ''} key={`r${date}${e.r}`} placeholder={e.s === 'excused' ? 'Why they could not come' : 'Anything to remember'} onBlur={(ev) => ev.target.value.trim() !== (e.r ?? '') && mark(x, e.s, { r: ev.target.value.trim() || null })} /></Field>
+                  </>
+                )} />
             );
           })}
         </ul>
       )}
-      <TrendCard title="Champions' attendance as time goes" trend={dayTrend(data.days)} />
-      <p className="small muted">Late counts as came. Excused days are not held against a champion.</p>
-    </>
+      <div className="rg-trend"><TrendCard title="Champions' attendance as time goes" trend={dayTrend(data.days)} /></div>
+      <p className="rg-foot">Late counts as came. Excused days are not held against a champion.</p>
+      <RemoveDialog orgId={org.id} items={[{ kind: 'championDay', id: date }]} open={resetting} onClose={() => setResetting(false)} onDone={() => setResetting(false)} />
+    </Frame>
   );
 }
 
