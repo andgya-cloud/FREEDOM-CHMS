@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cellDate, missedSaturdays, needsCall, whatFile, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
+  cellDate, cellMark, planPastRegister, missedSaturdays, needsCall, whatFile, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
   type ChampionDay, type HopeDay,
 } from './hopeRegister';
 
@@ -170,5 +170,38 @@ describe('v182', () => {
     expect(whatFile([['Name', 'Phone', 'Email', 'Duty']])).toBe('champions');
     expect(whatFile([['Name', 'Gender', 'Date of birth', 'School']])).toBe('children');
     expect(whatFile([['Item', 'Price']])).toBe(null);
+  });
+});
+
+describe('past registers (Andy, 2026-11-06)', () => {
+  const kids = [
+    { id: 'a', code: 'HC-0001', name: 'Abdi R. Kibugi' },
+    { id: 'b', code: 'HC-0002', name: 'Faith Wanjiru Irungu' },
+    { id: 'c', code: null, name: 'Lovejoy Adagala' },
+  ];
+  const sheet = [
+    ['Summary title'], ['HC code', 'Name (app)', 'Gender'], ['HC-0001', 'Abdi R. Kibugi', 'Male'],
+    ['One row per child per Saturday'],
+    ['Date', 'Month', 'HC code', 'Name (app)', 'Name on sheet', 'Class', 'Gender', 'Status'],
+    [new Date(Date.UTC(2026, 5, 6)), 'June', 'HC-0001', 'Abdi R. Kibugi', 'Abdi R. Kibugi', 'Jasper', 'Male', 'Present'],
+    ['2026-06-06', 'June', 'hc-0002', 'Someone else', 'Faith W Irungu', '', '', 'Absent'],
+    ['6 Jun 2026', 'June', '', 'Lovejoy Adagala', 'Adagala L. Joy', '', '', '✓'],
+    ['13/06/2026', 'June', '', '(not in app list)', 'Tura M. Wairimu', '', '', 'Present'],
+    ['', 'June', 'HC-0001', '', '', '', '', 'Present'],
+    ['Please check'],
+  ];
+  it('is told apart from other lists', () => {
+    expect(whatFile(sheet)).toBe('register');
+    expect(whatFile([['Name', 'Date of birth', 'School']])).toBe('children');
+  });
+  it('matches by code, then by name, and lists the rest', () => {
+    const p = planPastRegister(sheet, kids)!;
+    expect(p.days).toEqual({ '2026-06-06': { a: 'present', b: 'absent', c: 'present' } });
+    expect(p.unmatched).toEqual([{ name: 'Tura M. Wairimu', rows: 1 }]);
+    expect(p.rows).toBe(4);
+    expect(p.skipped).toBe(1);
+  });
+  it('reads marks', () => {
+    expect(cellMark('✗')).toBe('absent'); expect(cellMark('P')).toBe('present'); expect(cellMark('Late')).toBe('late'); expect(cellMark('?')).toBeNull();
   });
 });

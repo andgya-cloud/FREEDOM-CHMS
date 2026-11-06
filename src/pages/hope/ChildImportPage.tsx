@@ -4,7 +4,7 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { importChildren } from '../../lib/hopeWrites';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { CHILD_TEMPLATE_EXAMPLE, CHILD_TEMPLATE_HEAD, planChildImport, type ChildImportRow } from '../../../functions/src/shared/hopeRegister';
+import { CHILD_TEMPLATE_EXAMPLE, CHILD_TEMPLATE_HEAD, planChildImport, whatFile, type ChildImportRow } from '../../../functions/src/shared/hopeRegister';
 import { HopeGate, useHopePage } from './common';
 import { SheetPicker, TemplateButtons } from './registerParts';
 import type { Organization } from '../../state/OrgContext';
@@ -22,6 +22,7 @@ function ChildImport({ org }: { org: Organization }) {
   const [fileName, setFileName] = useState('');
   const [error, setError] = useState('');
   const [sponsorList, setSponsorList] = useState(false);
+  const [register, setRegister] = useState(false);
   const [all, setAll] = useState(false);
   const ready = plan?.filter((r) => !r.skip) ?? [];
   const shown = plan ? (all ? plan : plan.slice(0, 60)) : [];
@@ -72,12 +73,21 @@ function ChildImport({ org }: { org: Organization }) {
             setFileName(name); setPlan(null); setSponsorList(true); setError(''); return;
           }
           setSponsorList(false);
+          // A past register belongs on its own page (Andy, 2026-11-06).
+          if (whatFile(rows) === 'register') { setFileName(name); setPlan(null); setRegister(true); setError(''); return; }
+          setRegister(false);
           const p = planChildImport(rows, h.children.map((c) => h.nameOf(c.id)), h.today, h.children.map((c) => c.code ?? '').filter(Boolean));
           setFileName(name);
           setError(p ? '' : 'No "Name" column was found. Use the template\'s headings in the first row.');
           setPlan(p);
         }} />
         {error && <p className="error" role="alert">{error}</p>}
+        {register && (
+          <div className="notice notice-warn stack">
+            <p><b>This is an attendance register</b>, not a list of new children. It adds past days to the children already here.</p>
+            <Link to="/hope/register/upload" className="btn btn-primary align-start">📋 Open Upload past registers</Link>
+          </div>
+        )}
         {sponsorList && (
           <div className="notice notice-warn stack">
             <p><b>This is the KE-014 sponsorship list</b>, not a list of new children. It updates the children already here with their Child ID, sponsor and dates.</p>

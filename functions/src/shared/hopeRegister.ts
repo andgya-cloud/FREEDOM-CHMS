@@ -159,8 +159,12 @@ export function cellDate(v: Cell): string | null {
   if (m) return valid(+m[1]!, +m[2]!, +m[3]!);
   m = /^(\d{1,2})[/.-](\d{1,2})[/.-](\d{4})$/.exec(t);
   if (m) return valid(+m[3]!, +m[2]!, +m[1]!);
+  // "6 Jun 2026" or "Sat 6 June 2026"
+  m = /^(?:[a-z]{3,9},? )?(\d{1,2}) ([a-z]{3,9}) (\d{4})$/i.exec(t);
+  if (m) { const mo = MONTHS.indexOf(m[2]!.slice(0, 3).toLowerCase()); if (mo >= 0) return valid(+m[3]!, mo + 1, +m[1]!); }
   return null;
 }
+const MONTHS = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
 function valid(y: number, m: number, d: number): string | null {
   const dt = new Date(Date.UTC(y, m - 1, d));
   return dt.getUTCFullYear() === y && dt.getUTCMonth() === m - 1 && dt.getUTCDate() === d ? dt.toISOString().slice(0, 10) : null;
@@ -412,13 +416,15 @@ export function needsCall(child: { id: string; enrolledOn: string | null; called
   return !(child.calledOn && child.calledOn >= latest);
 }
 
-export type HopeFileKind = 'sponsors' | 'champions' | 'children';
+export type HopeFileKind = 'sponsors' | 'champions' | 'children' | 'register';
 /**
  * What a spreadsheet is (v182, 7A), from its headings in the first rows: the partner's KE-014 list (Child ID),
  * a champions list (Duty, Appreciation, Weekly amount, Contact), or a children list (Date of birth, Parent, School).
  */
 export function whatFile(rows: readonly (readonly Cell[])[]): HopeFileKind | null {
   const key = (c: Cell) => clean(c).toLowerCase().replace(/[^a-z]/g, '');
+  // A past register (Andy, 2026-11-06): a Date and a Status column, anywhere in the workbook.
+  if (registerHead(rows) >= 0) return 'register';
   for (const r of rows.slice(0, 15)) {
     const k = new Set(r.map(key).filter(Boolean));
     if (k.size < 2) continue;
@@ -429,4 +435,75 @@ export function whatFile(rows: readonly (readonly Cell[])[]): HopeFileKind | nul
     if (has('name', 'names') && has('contact', 'phone')) return 'champions';
   }
   return null;
+}
+
+/** The row with a Date, a Status and a child (HC code or Name) heading: a past register, one row per child per day. */
+function registerHead(rows: readonly (readonly Cell[])[]): number {
+  return rows.findIndex((r) => {
+    const k = r.map(key);
+    return k.includes('date') && (k.includes('status') || k.includes('mark') || k.includes('attendance'))
+      && k.some((x) => ['hccode', 'code', 'childcode', 'name', 'nameapp', 'nameonsheet', 'childname', 'childsname', 'fullname'].includes(x));
+  });
+}
+
+const MARK_WORDS: Record<string, KidMark> = {
+  present: 'present', p: 'present', yes: 'present', came: 'present', here: 'present',
+  late: 'late', l: 'late', absent: 'absent', a: 'absent', no: 'absent', missed: 'absent',
+  excused: 'excused', e: 'excused', departing: 'departing', departed: 'departed',
+};
+/** A mark typed in a cell: Present, Absent, Late, Excused, P, A, a tick or a cross. */
+export function cellMark(v: Cell): KidMark | null {
+  const t = clean(v).toLowerCase();
+  if (['✓', '✔', '☑', '✅'].includes(t)) return 'present';
+  if (['✗', '✘', '×', '❌'].includes(t)) return 'absent';
+  return MARK_WORDS[t.replace(/[^a-z]/g, '')] ?? null;
+}
+
+export interface RegisterChild { id: string; code: string | null; name: string }
+export interface PastRegisterPlan {
+  /** date -> childId -> mark */
+  days: Record<string, Record<string, KidMark>>;
+  /** Rows whose child could not be found, by the name or code on the sheet. */
+  unmatched: { name: string; rows: number }[];
+  /** Rows skipped for a missing date or mark. */
+  skipped: number;
+  rows: number;
+}
+const plainName = (n: string) => n.toLowerCase().normalize('NFKD').replace(/[^a-z ]/g, ' ').replace(/\s+/g, ' ').trim();
+/**
+ * Reads a past register (Andy, 2026-11-06): one row per child per day, with Date, Status and the child's HC code or
+ * name ("Name (app)", "Name on sheet" or "Name"). The code is tried first, then each name exactly as the app has it.
+ */
+export function planPastRegister(rows: readonly (readonly Cell[])[], children: readonly RegisterChild[]): PastRegisterPlan | null {
+  const at = registerHead(rows);
+  if (at < 0) return null;
+  const head = rows[at]!.map(key);
+  const col = (...ks: string[]) => { for (const k of ks) { const i = head.indexOf(k); if (i >= 0) return i; } return -1; };
+  const cDate = col('date'), cMark = col('status', 'mark', 'attendance'), cCode = col('hccode', 'code', 'childcode');
+  const cNames = ['nameapp', 'name', 'fullname', 'childname', 'childsname', 'nameonsheet'].map((k) => head.indexOf(k)).filter((i) => i >= 0);
+  const byCode = new Map(children.filter((c) => c.code).map((c) => [c.code!.toUpperCase(), c.id]));
+  const byName = new Map<string, string | null>();
+  for (const c of children) { const k = plainName(c.name); byName.set(k, byName.has(k) ? null : c.id); }
+  const plan: PastRegisterPlan = { days: {}, unmatched: [], skipped: 0, rows: 0 };
+  const missing = new Map<string, number>();
+  for (const r of rows.slice(at + 1)) {
+    if (!r.some((c) => clean(c))) continue;
+    // Another table further down the workbook ends this one.
+    if (r.map(key).includes('date')) break;
+    const date = cellDate(r[cDate] ?? null), mark = cMark >= 0 ? cellMark(r[cMark] ?? null) : null;
+    // A row with only one of the two is a mistake worth showing; a row with neither is another table's text.
+    if (!date || !mark) { if (date || mark) plan.skipped++; continue; }
+    plan.rows++;
+    const code = cCode >= 0 ? clean(r[cCode] ?? null).toUpperCase() : '';
+    let id: string | null | undefined = code ? byCode.get(code) : undefined;
+    for (const i of cNames) { if (id) break; const n = plainName(clean(r[i] ?? null)); if (n) id = byName.get(n) ?? undefined; }
+    if (!id) {
+      const shown = cNames.map((i) => clean(r[i] ?? null)).find((n) => n && !n.startsWith('(')) || code || 'No name';
+      missing.set(shown, (missing.get(shown) ?? 0) + 1);
+      continue;
+    }
+    (plan.days[date] ??= {})[id] = mark;
+  }
+  plan.unmatched = [...missing].map(([name, n]) => ({ name, rows: n })).sort((a, b) => a.name.localeCompare(b.name));
+  return plan;
 }

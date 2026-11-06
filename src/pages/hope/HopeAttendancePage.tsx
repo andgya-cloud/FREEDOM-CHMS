@@ -32,7 +32,7 @@ const weekday = (d: string) => new Intl.DateTimeFormat('en-GB', { weekday: 'long
  */
 function Months({ org }: { org: Organization }) {
   const h = useHopePage(org);
-  const { profile } = useAuth();
+  const { profile, can } = useAuth();
   const toast = useToast();
   const { days, loading } = useHopeDays(org.id);
   const files = canReadNotes(profile, org.id);
@@ -63,6 +63,7 @@ function Months({ org }: { org: Organization }) {
       <p><Link to="/hope/reports">← Reports</Link></p>
       <div className="page-head"><h1>📋 Attendance and meals</h1><Link to="/hope/register?d=today" className="btn btn-primary">✅ Check in</Link></div>
       <p className="muted small">Every register day, the meals served and the month's report, in folders by month.</p>
+      {can('people.write') && <p><Link to="/hope/register/upload" className="btn btn-quiet btn-small">⬆︎ Upload past registers</Link></p>}
       {loading || h.loading ? <p className="muted">Loading…</p> : months.length === 0 ? (
         <div className="card"><p>No register has been marked yet. Tap <b>Check in</b> to start today's.</p></div>
       ) : months.map(([month, list], i) => {

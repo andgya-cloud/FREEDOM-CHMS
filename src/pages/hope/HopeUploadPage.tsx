@@ -16,6 +16,7 @@ const WHERE: Record<HopeFileKind, { to: string; says: string }> = {
   sponsors: { to: '/hope/children/sponsors', says: 'This looks like the KE-014 Child Registration List.' },
   children: { to: '/hope/children/import', says: 'This looks like a list of children.' },
   champions: { to: '/hope/register?w=champions&tab=upload', says: 'This looks like the Child Champions list.' },
+  register: { to: '/hope/register/upload', says: 'This looks like a past register.' },
 };
 
 /**
@@ -60,7 +61,7 @@ function Upload({ org }: { org: Organization }) {
       <p><Link to="/hope/children">← Children</Link></p>
       <h1>⬆︎ Upload</h1>
       <section className="card stack">
-        <p>Choose any file: the KE-014 list, a list of children, the champions list, or children's photos. The app tells what it is and shows you everything before it saves.</p>
+        <p>Choose any file: the KE-014 list, a list of children, past registers, the champions list, or children's photos. The app tells what it is and shows you everything before it saves.</p>
         <label className="btn btn-primary align-start">{busy ? 'Reading…' : 'Choose a file'}<input type="file" hidden multiple disabled={busy}
           accept=".xlsx,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,image/*" onChange={(e) => void choose(e)} /></label>
         <p className="small muted">For photos, name each one with the child's code (HC-0042.jpg) or their full name, and choose them all at once.</p>
@@ -73,6 +74,7 @@ function Upload({ org }: { org: Organization }) {
           <div className="chips">
             <button type="button" className="btn" onClick={() => go('sponsors', unsure.rows, unsure.name)}>🤝 KE-014 list</button>
             <button type="button" className="btn" onClick={() => go('children', unsure.rows, unsure.name)}>🧒 Children list</button>
+            <button type="button" className="btn" onClick={() => go('register', unsure.rows, unsure.name)}>📋 Past register</button>
             {champions && <button type="button" className="btn" onClick={() => go('champions', unsure.rows, unsure.name)}>🙌 Champions list</button>}
           </div>
         </section>
