@@ -35,10 +35,15 @@ function SponsorList({ org }: { org: Organization }) {
   const existing = useMemo(() => Object.fromEntries(h.children.map((c) => [c.id, c.sponsorship])), [h.children]);
   const plan = useMemo(() => (rows ? planSponsorUpdate(rows, kids, h.today, existing, picks) : null), [rows, kids, h.today, existing, picks]);
   const error = rows && !plan ? 'This sheet has no "Child ID" column. Choose the Child Registration List.' : '';
+  // A short list (a few children to update, Andy 2026-11-06) leaves everyone else as they are; the full monthly
+  // list marks the children not on it "Not on KE-014".
+  const listed = plan ? plan.rows.length + plan.unsure.length + plan.notFound.length : 0;
+  const [fullChoice, setFullChoice] = useState<boolean | null>(null);
+  const full = fullChoice ?? listed >= kids.length / 2;
   // Only children whose mark changes are written again.
-  const toMark = useMemo(() => (plan ? plan.notOnList.filter((c) => existing[c.id]?.status !== NOT_ON_LIST) : []), [plan, existing]);
+  const toMark = useMemo(() => (plan && full ? plan.notOnList.filter((c) => existing[c.id]?.status !== NOT_ON_LIST) : []), [plan, existing, full]);
 
-  function read(r: Rows) { setPicks({}); setRows(r); }
+  function read(r: Rows) { setPicks({}); setFullChoice(null); setRows(r); }
   function save() {
     if (!plan) return;
     const total = plan.rows.length + toMark.length;
@@ -99,10 +104,12 @@ function SponsorList({ org }: { org: Organization }) {
               <span className="ok"><b>{plan.rows.length}</b> children found</span>
               <span><b>{sponsored}</b> sponsored</span>
               <span><b>{plan.rows.length - sponsored}</b> not sponsored</span>
-              {plan.notOnList.length > 0 && <span><b>{plan.notOnList.length}</b> not on KE-014</span>}
+              {full && plan.notOnList.length > 0 && <span><b>{plan.notOnList.length}</b> not on KE-014</span>}
               {plan.notFound.length > 0 && <span className="bad"><b>{plan.notFound.length}</b> not found</span>}
             </div>
             <p className="small">Updates: {Object.keys(fills).length ? Object.entries(fills).map(([k, n]) => `${FILL_LABEL[k]} for ${n}`).join(', ') : 'nothing new'}.</p>
+            <label className="check small"><input type="checkbox" checked={full} onChange={(e) => setFullChoice(e.target.checked)} /><span>This is the full monthly list: mark the children not on it "Not on KE-014"</span></label>
+            {!full && <p className="small muted">Only the {listed} {listed === 1 ? 'child' : 'children'} on this sheet are updated. Everyone else is left as they are.</p>}
             {plan.unsure.length > 0 && <p className="notice notice-warn small">Choose the {plan.unsure.length} {plan.unsure.length === 1 ? 'child' : 'children'} under "Please check" first.</p>}
             <button type="button" className="btn btn-primary align-start" disabled={!plan.rows.length || plan.unsure.length > 0} onClick={save}>Update {plan.rows.length + toMark.length} profiles</button>
           </section>
@@ -112,7 +119,7 @@ function SponsorList({ org }: { org: Organization }) {
               <ul className="link-list">{differs.map((r) => <li key={r.childId}><Link to={`/hope/children/${r.childId}`}><span className="link-title">{r.code} {r.name}</span><span className="link-detail">{r.differs.join(' · ')}</span></Link></li>)}</ul>
             </details>
           )}
-          {plan.notOnList.length > 0 && (
+          {full && plan.notOnList.length > 0 && (
             <details className="card hr-fold">
               <summary><h2>Not on KE-014 ({plan.notOnList.length})</h2><span className="small muted">Marked "Not on KE-014" on their profile</span></summary>
               <ul className="link-list">{plan.notOnList.map((r) => <li key={r.id}><Link to={`/hope/children/${r.id}`}><span className="link-title">{r.code} {r.name}</span></Link></li>)}</ul>

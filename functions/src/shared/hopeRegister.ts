@@ -175,7 +175,7 @@ const emailOk = (e: string) => !e || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
 /** Finds the header row (the first with a "Name" column) and maps each column by its heading. */
 function columns(rows: readonly (readonly Cell[])[], head: readonly string[]) {
   const wanted = head.map(key);
-  const at = rows.findIndex((r) => r.some((c) => ['name', 'names', 'fullname', 'fullnames', 'childsname', 'championname', 'championsname'].includes(key(c))));
+  const at = rows.findIndex((r) => r.some((c) => ['name', 'names', 'fullname', 'fullnames', 'childsname', 'childname', 'championname', 'championsname'].includes(key(c))));
   if (at < 0) return null;
   const map: Record<string, number> = {};
   rows[at]!.forEach((c, i) => {
@@ -187,7 +187,7 @@ function columns(rows: readonly (readonly Cell[])[], head: readonly string[]) {
     if (k === 'sponsor' || k === 'sponsorsname') k = 'sponsorname';
     if (k === 'parent' || k === 'parentsname' || k === 'guardianname' || k === 'guardian') k = 'parentname';
     if (k === 'parentscontact' || k === 'parentcontact' || k === 'guardianphone' || k === 'parentsphone') k = 'parentphone';
-    if (k === 'joined' || k === 'enrolledon' || k === 'datejoined') k = 'joinedon';
+    if (k === 'joined' || k === 'enrolledon' || k === 'datejoined' || k === 'registrationdate' || k === 'registeredon') k = 'joinedon';
     if (k === 'role') k = 'duty';
     if (k === 'grade' || k === 'schoolclass') k = 'class';
     if (k === 'paybillnumber' || k === 'paybilltillphone' || k === 'paynumber' || k === 'number') k = 'paynumber';
@@ -201,6 +201,8 @@ export interface ChildImportRow {
   line: number;
   /** A code from the sheet (HC-0042), kept when the child is added. */
   code: string | null;
+  /** The code as the sheet gives it, even one already used: it finds the child to update (Andy, 2026-11-06). */
+  givenCode: string | null;
   name: string;
   gender: string | null;
   dateOfBirth: string | null;
@@ -243,7 +245,10 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
     const k = name.toLowerCase();
     const codeText = clean(cols.get(r, 'Code'));
     let code = codeText ? normalizeCode(codeText) : null;
-    const codeWarn = codeText && !code ? `code "${codeText}" not read` : code && (takenCodes.has(code) || seenCodes.has(code)) ? `code ${code} is already used, a new one will be given` : '';
+    const givenCode = code;
+    // A code of a child already here means that child: the row updates them (Andy, 2026-11-06).
+    const known = !!code && takenCodes.has(code);
+    const codeWarn = codeText && !code ? `code "${codeText}" not read` : code && !known && seenCodes.has(code) ? `code ${code} is already used, a new one will be given` : '';
     if (codeWarn) code = null;
     if (code) seenCodes.add(code);
     const payText = clean(cols.get(r, 'Pay by'));
@@ -263,7 +268,8 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
     ].filter(Boolean);
     out.push({
       line: cols.at + 2 + i,
-      code,
+      code: known ? null : code,
+      givenCode,
       name: name.slice(0, 120),
       gender: g.startsWith('f') || g === 'girl' ? 'Female' : g.startsWith('m') || g === 'boy' ? 'Male' : null,
       dateOfBirth: dateOfBirth && dateOfBirth <= today ? dateOfBirth : null,
@@ -278,7 +284,7 @@ export function planChildImport(rows: readonly (readonly Cell[])[], existingName
       guardianConsent: yes(cols.get(r, 'Guardian consent')),
       schoolClass: clean(cols.get(r, 'Class')).slice(0, 40),
       payment: anyPay ? payment : null,
-      skip: name.length < 2 ? 'no name' : have.has(k) ? 'already on the register' : seen.has(k) ? 'listed twice' : null,
+      skip: known ? 'already on the register' : name.length < 2 ? 'no name' : have.has(k) ? 'already on the register' : seen.has(k) ? 'listed twice' : null,
       warn: warns.join('; ') || null,
     });
     seen.add(k);
@@ -506,4 +512,47 @@ export function planPastRegister(rows: readonly (readonly Cell[])[], children: r
   }
   plan.unmatched = [...missing].map(([name, n]) => ({ name, rows: n })).sort((a, b) => a.name.localeCompare(b.name));
   return plan;
+}
+
+/** What a child on the register already has, to compare a sheet row with (Andy, 2026-11-06). */
+export interface ChildNow {
+  gender: string; dateOfBirth: string | null; school: string; schoolClass: string; sponsorName: string; sponsorPhone: string; sponsorEmail: string;
+  parentName: string; parentPhone: string; enrolledOn: string | null; photoConsent: boolean | null; guardianConsent: boolean | null; payment: ChildPayment | null;
+}
+export interface ChildUpdate {
+  /** Fields for the child's record (consents as yes/no; the page adds the date). */
+  child: Partial<Omit<ChildNow, 'gender'>>;
+  gender: string | null;
+  /** What changes, in words: "birth date: none → 31/01/2021". */
+  said: string[];
+}
+/**
+ * Updating a child already here from a sheet row (Andy, 2026-11-06): every cell that has something, and differs,
+ * is taken as the new information. Empty cells leave the profile as it is.
+ */
+export function childUpdate(row: ChildImportRow, now: ChildNow): ChildUpdate {
+  const out: ChildUpdate = { child: {}, gender: null, said: [] };
+  const say = (label: string, from: string | null | undefined, to: string) => out.said.push(`${label}: ${from || 'none'} → ${to}`);
+  const text = (k: 'school' | 'schoolClass' | 'sponsorName' | 'sponsorPhone' | 'sponsorEmail' | 'parentName' | 'parentPhone', label: string) => {
+    const v = row[k];
+    if (v && v !== now[k]) { out.child[k] = v; say(label, now[k], v); }
+  };
+  if (row.gender && row.gender !== now.gender) { out.gender = row.gender; say('gender', now.gender, row.gender); }
+  if (row.dateOfBirth && row.dateOfBirth !== now.dateOfBirth) { out.child.dateOfBirth = row.dateOfBirth; say('birth date', now.dateOfBirth, row.dateOfBirth); }
+  if (row.enrolledOn && row.enrolledOn !== now.enrolledOn) { out.child.enrolledOn = row.enrolledOn; say('joined on', now.enrolledOn, row.enrolledOn); }
+  text('school', 'school'); text('schoolClass', 'class'); text('sponsorName', 'sponsor'); text('sponsorPhone', 'sponsor phone'); text('sponsorEmail', 'sponsor email');
+  text('parentName', 'parent'); text('parentPhone', 'parent phone');
+  const yn = (b: boolean | null) => (b == null ? 'not asked' : b ? 'yes' : 'no');
+  if (row.photoConsent != null && row.photoConsent !== now.photoConsent) { out.child.photoConsent = row.photoConsent; say('photo consent', yn(now.photoConsent), yn(row.photoConsent)); }
+  if (row.guardianConsent != null && row.guardianConsent !== now.guardianConsent) { out.child.guardianConsent = row.guardianConsent; say('guardian consent', yn(now.guardianConsent), yn(row.guardianConsent)); }
+  if (row.payment) {
+    const was = now.payment;
+    const next: ChildPayment = {
+      by: row.payment.by ?? was?.by ?? null, number: row.payment.number || was?.number || '', account: row.payment.account || was?.account || '',
+      payTo: row.payment.payTo || was?.payTo || '', amount: row.payment.amount || was?.amount || '', note: row.payment.note || was?.note || '',
+    };
+    const same = !!was && (['by', 'number', 'account', 'payTo', 'amount', 'note'] as const).every((k) => (was[k] ?? '') === (next[k] ?? ''));
+    if (!same) { out.child.payment = next; out.said.push('school fees details'); }
+  }
+  return out;
 }

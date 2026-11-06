@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  cellDate, cellMark, planPastRegister, missedSaturdays, needsCall, whatFile, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
+  cellDate, cellMark, childUpdate, planPastRegister, missedSaturdays, needsCall, whatFile, championSummary, dayTrend, kidRate, minutesBetween, monthGrid, planChampionImport, planChildImport, rateFrom, saturdayOnOrBefore, shiftMonth,
   type ChampionDay, type HopeDay,
 } from './hopeRegister';
 
@@ -80,10 +80,10 @@ describe('uploads', () => {
     expect(plan[3]!.skip).toBe('already on the register');
     expect(planChildImport([['a', 'b']], [], '2026-11-04')).toBeNull();
   });
-  it('keeps a code from the sheet, unless it is taken or repeated', () => {
+  it('keeps a code from the sheet; a code already here means that child, to update', () => {
     const plan = planChildImport([['Code', 'Name'], ['hc-7', 'A One'], ['HC-0002', 'B Two'], ['HC-0007', 'C Three'], ['nonsense', 'D Four']], [], '2026-11-04', ['HC-0002'])!;
     expect(plan.map((r) => r.code)).toEqual(['HC-0007', null, null, null]);
-    expect(plan[1]!.warn).toContain('already used');
+    expect(plan[1]).toMatchObject({ givenCode: 'HC-0002', skip: 'already on the register', warn: null });
     expect(plan[2]!.warn).toContain('already used');
     expect(plan[3]!.warn).toContain('not read');
   });
@@ -203,5 +203,16 @@ describe('past registers (Andy, 2026-11-06)', () => {
   });
   it('reads marks', () => {
     expect(cellMark('✗')).toBe('absent'); expect(cellMark('P')).toBe('present'); expect(cellMark('Late')).toBe('late'); expect(cellMark('?')).toBeNull();
+  });
+});
+
+describe('updating children already here (Andy, 2026-11-06)', () => {
+  it('takes every filled cell that differs, and leaves empty ones', () => {
+    const [row] = planChildImport([['Code', 'Child Name', 'Gender', 'Date of birth', 'School', 'Registration Date'], ['HC-0063', 'Elsie W. Wangari', 'Female', 44227, '', '2025-05-29']], [], '2026-11-06', ['HC-0063'])!;
+    expect(row).toMatchObject({ givenCode: 'HC-0063', skip: 'already on the register', dateOfBirth: '2021-01-31', enrolledOn: '2025-05-29' });
+    const u = childUpdate(row!, { gender: '', dateOfBirth: null, school: 'Maua ECDE', schoolClass: '', sponsorName: '', sponsorPhone: '', sponsorEmail: '', parentName: '', parentPhone: '', enrolledOn: '2025-05-29', photoConsent: true, guardianConsent: null, payment: null });
+    expect(u.gender).toBe('Female');
+    expect(u.child).toEqual({ dateOfBirth: '2021-01-31' });
+    expect(u.said).toEqual(['gender: none → Female', 'birth date: none → 2021-01-31']);
   });
 });

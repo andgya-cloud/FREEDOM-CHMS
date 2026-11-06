@@ -11,6 +11,8 @@ const clean = (v: Cell) => (v instanceof Date ? v.toISOString().slice(0, 10) : v
 const key = (v: Cell) => clean(v).toLowerCase().replace(/[^a-z]/g, '');
 const dateOf = (v: Cell): string | null => {
   if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : v.toISOString().slice(0, 10);
+  // A date saved as an Excel day number (lists from WPS Office come like this, Andy 2026-11-06).
+  if (typeof v === 'number' && v > 20000 && v < 80000) return new Date(Date.UTC(1899, 11, 30) + Math.floor(v) * 86_400_000).toISOString().slice(0, 10);
   const s = clean(v);
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(s);
