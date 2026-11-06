@@ -68,8 +68,52 @@ export interface PhotoReport {
   /** "Package for the board" (5A, 6A): the summary on the PDF's first page, and when it was sent. */
   summary?: string;
   packagedByName?: string;
-  status?: 'open' | 'sent';
+  status?: StoryStatus;
+  /** The report's number, "FHC-2026-014" (v193, 4A). */
+  ref?: string;
+  /** Who has opened it (uid → name), for "Seen by" (5A). */
+  seenNames?: Record<string, string>;
+  /** The two approvals printed on the PDF (7A). */
+  approvals?: Partial<Record<ApprovalSlot, Approval>>;
+  /** Photos or files Andy or Doreen took out, kept to put back (1A). */
+  removed?: RemovedFile[];
+  /** Children named in the opening message (2A). */
+  children?: StoryChild[];
+  /** An incident's follow-up marked done, and the 48-hour reminder (8A). */
+  followUpDoneAt?: string;
+  followUpDoneByName?: string;
+  reminderSentAt?: string;
+  textHistory?: { text: string; at: string }[];
 }
+
+/** Open → Under review → Resolved → Sent to the board (6A). */
+export type StoryStatus = 'open' | 'review' | 'resolved' | 'sent';
+export const STORY_STATUSES: StoryStatus[] = ['open', 'review', 'resolved', 'sent'];
+export const STORY_STATUS_LABELS: Record<StoryStatus, string> = { open: 'Open', review: 'Under review', resolved: 'Resolved', sent: 'Sent to the board' };
+export const isStoryStatus = (v: unknown): v is StoryStatus => typeof v === 'string' && (STORY_STATUSES as string[]).includes(v);
+
+/** The Director's approval and the board's (7A). */
+export type ApprovalSlot = 'director' | 'board';
+export const APPROVAL_LABELS: Record<ApprovalSlot, string> = { director: 'Director', board: 'For the board' };
+export interface Approval { name: string; role: string; at: string }
+/** The confirmed password must be this fresh to approve. */
+export const APPROVAL_PROOF_MINUTES = 5;
+
+/** A child named in a message (2A): the details are kept as they were that day. */
+export interface StoryChild { id: string; name: string; code: string; className: string }
+export const STORY_CHILDREN_MAX = 10;
+
+export interface RemovedFile { messageId: string; file: PhotoFile; removedByName: string; removedAt: string }
+
+/** An incident's severity (8A). */
+export type Severity = 'low' | 'medium' | 'high';
+export const SEVERITY_LABELS: Record<Severity, string> = { low: 'Low', medium: 'Medium', high: 'High' };
+export const isSeverity = (v: unknown): v is Severity => v === 'low' || v === 'medium' || v === 'high';
+/** The Director is reminded when an incident's follow-up is not done after this long. */
+export const FOLLOW_UP_HOURS = 48;
+
+/** "FHC-2026-014". */
+export const storyRef = (year: number, n: number) => `FHC-${year}-${String(n).padStart(3, '0')}`;
 
 /** What an incident report records (7A). */
 export interface IncidentDetails {
@@ -81,6 +125,7 @@ export interface IncidentDetails {
   /** Were the parents or guardians told? null when not answered yet. */
   parentsTold: boolean | null;
   followUp: string;
+  severity?: Severity | null;
 }
 export const INCIDENT_FIELD_MAX = 300;
 export function cleanIncident(v: unknown): IncidentDetails | null {
@@ -88,7 +133,10 @@ export function cleanIncident(v: unknown): IncidentDetails | null {
   const o = v as Record<string, unknown>;
   const s = (x: unknown) => (typeof x === 'string' ? x.trim().slice(0, INCIDENT_FIELD_MAX) : '');
   const time = /^([01]\d|2[0-3]):[0-5]\d$/.test(s(o.time)) ? s(o.time) : '';
-  return { time, place: s(o.place), hurt: s(o.hurt), action: s(o.action), parentsTold: typeof o.parentsTold === 'boolean' ? o.parentsTold : null, followUp: s(o.followUp) };
+  return {
+    time, place: s(o.place), hurt: s(o.hurt), action: s(o.action), parentsTold: typeof o.parentsTold === 'boolean' ? o.parentsTold : null, followUp: s(o.followUp),
+    severity: isSeverity(o.severity) ? o.severity : null,
+  };
 }
 
 /** A reply in a report's conversation, organizations/{org}/hopePhotoReports/{id}/messages/{messageId}. */
@@ -109,6 +157,10 @@ export interface StoryMessage {
   deletedAt?: string;
   /** Marked as a decision or next step, printed on the PDF's "Decisions and next steps". */
   decision?: boolean;
+  /** Children named in it (2A). */
+  children?: StoryChild[];
+  /** A line the app writes itself: a status change, an approval, a removed photo. */
+  system?: boolean;
 }
 
 /** The opening message's id in the conversation (the report itself). */
@@ -139,6 +191,39 @@ export function canUnsay(p: Profile, uid: string, m: Pick<StoryMessage, 'byUid' 
 }
 /** Only the writer changes their own words, at any time. */
 export const canEditMessage = (uid: string, m: Pick<StoryMessage, 'byUid' | 'deleted'>) => !m.deleted && !!uid && m.byUid === uid;
+
+/** Takes out any photo or file, and puts it back (v193, 1A): Andy and Doreen. */
+export const canRemoveFiles = (p: Profile) => canKeepAccounts(p);
+
+/** Who may give each approval (7A): the Director's is Diana's; the board's is a board member's, Andy's or Doreen's. */
+export function canApprove(p: Profile, orgId: string, slot: ApprovalSlot): boolean {
+  if (!canAccessOrg(p, orgId)) return false;
+  return slot === 'director' ? isHopeDirector(p, orgId) : isHopeBoardName(p?.displayName) || canKeepAccounts(p);
+}
+
+/** The key a stakeholder's photo is kept under: their name, plain. */
+export const faceKey = (name: string) => (name || '').toLowerCase().replace(/[^a-z]/g, '');
+
+/** An incident whose follow-up is overdue (8A): not done, not reminded yet, more than 48 hours old. */
+export function needsFollowUpReminder(r: Pick<PhotoReport, 'kind' | 'deleted' | 'followUpDoneAt' | 'reminderSentAt' | 'startedAt' | 'status'>, now = Date.now()): boolean {
+  if (r.kind !== 'incident' || r.deleted || r.followUpDoneAt || r.reminderSentAt || !r.startedAt) return false;
+  if (r.status === 'resolved' || r.status === 'sent') return false;
+  const t = Date.parse(r.startedAt);
+  return Number.isFinite(t) && now - t >= FOLLOW_UP_HOURS * 3_600_000;
+}
+
+/** The record of changes printed at the end of the PDF (9A): edits, deletions and removed files, oldest first. */
+export function storyChanges(r: Pick<PhotoReport, 'senderName' | 'editedAt' | 'removed' | 'textHistory'>, replies: StoryMessage[]): { at: string; text: string }[] {
+  const out: { at: string; text: string }[] = [];
+  if (r.editedAt) out.push({ at: r.editedAt, text: `${r.senderName} edited the opening message${r.textHistory?.length ? ` (${r.textHistory.length} earlier ${r.textHistory.length === 1 ? 'version' : 'versions'} kept)` : ''}.` });
+  for (const m of replies) {
+    if (m.system) continue;
+    if (m.editedAt && !m.deleted) out.push({ at: m.editedAt, text: `${m.byName} edited a message sent ${m.at.slice(0, 16).replace('T', ' ')}${m.history?.length ? ` (${m.history.length} earlier ${m.history.length === 1 ? 'version' : 'versions'} kept)` : ''}.` });
+    if (m.deleted) out.push({ at: m.deletedAt ?? m.at, text: `${m.deletedByName ?? 'Someone'} deleted a message from ${m.byName}.` });
+  }
+  for (const x of r.removed ?? []) out.push({ at: x.removedAt, text: `${x.removedByName} took out the file "${x.file.name}".` });
+  return out.sort((a, b) => a.at.localeCompare(b.at));
+}
 
 /** Packages the conversation for the board (6A): the Director, Andy or Doreen. */
 export const canPackageStory = (p: Profile, orgId: string) => isHopeDirector(p, orgId) || (canAccessOrg(p, orgId) && canKeepAccounts(p));
@@ -300,7 +385,7 @@ export const PHOTO_PROOF_MINUTES = 20;
 export function storyTimeline(r: PhotoReport & { id?: string }, replies: (StoryMessage & { id: string })[]): (StoryMessage & { id: string; opening?: boolean })[] {
   const opening = {
     id: OPENING_ID, opening: true, text: r.text, byUid: r.senderUid, byName: r.senderName, byRole: r.senderRole ?? '',
-    at: r.startedAt ?? `${r.day}T09:00:00.000Z`, files: r.files, ...(r.editedAt ? { editedAt: r.editedAt } : {}),
+    at: r.startedAt ?? `${r.day}T09:00:00.000Z`, files: r.files, ...(r.editedAt ? { editedAt: r.editedAt } : {}), ...(r.children?.length ? { children: r.children } : {}),
   };
   return [opening, ...[...replies].sort((a, b) => a.at.localeCompare(b.at))];
 }

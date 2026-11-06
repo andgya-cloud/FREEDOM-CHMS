@@ -5,6 +5,7 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
 import {
+  approveStory, removeStoryFile, restoreStoryFile, setFace, setFollowUp, setStoryStatus, storyChildren,
   deletePhotoReport, editStoryMessage, emailStoryPdf, isPhotoFile, isStoryFile, isVideoFile, listPhotoReports, loadBoard, markDecision, openStory,
   photoFile, restorePhotoReport, saveStorySummary, sayInStory, startStory, STORY_ACCEPT, storyPeople, unsayStoryMessage,
   type BoardPerson, type PhotoList, type StoredPhotoReport, type StoryOpen,
@@ -16,7 +17,11 @@ import {
   incidentRows, MAX_PHOTO_FILES, PHOTO_REPORT_EMOJI, PHOTO_REPORT_KINDS, PHOTO_REPORT_LABELS, PHOTO_TEXT_MAX, PHOTO_TITLE_MAX,
   STORY_FILES_MAX, STORY_TEXT_MAX, storyStartWhatsApp, storyTimeline, storyTint, UNSAY_MINUTES,
   type IncidentDetails, type PhotoFile, type PhotoReportKind, type StoryMessage,
+  APPROVAL_LABELS, faceKey, FOLLOW_UP_HOURS, SEVERITY_LABELS, STORY_CHILDREN_MAX, STORY_STATUS_LABELS, STORY_STATUSES,
+  type ApprovalSlot, type Severity, type StoryChild, type StoryStatus,
 } from '../../../functions/src/shared/hopePhotos';
+import { useIsAndy } from '../../lib/andy';
+import { myOwnProof, passwordProof } from '../../lib/pettyPin';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate, useHopePage } from './common';
 import { useClubs } from '../../state/useHope';
@@ -110,7 +115,7 @@ function Photos({ org }: { org: Organization }) {
                       <span className="st-item-last">{r.lastByName ? <b>{r.lastByName.split(' ')[0]}: </b> : null}{r.lastText || r.text || `${r.files.length} files`}</span>
                       <span className="st-item-meta">
                         {formatDateKey(r.day)} · {r.senderName} · {(r.replies ?? 0) + 1} {(r.replies ?? 0) === 0 ? 'message' : 'messages'}
-                        {r.status === 'sent' ? ' · ✓ Sent to the board' : ''}{r.reportLabel ? ` · for ${r.reportLabel}` : ''}
+                        {r.status && r.status !== 'open' ? ` · ${STORY_STATUS_LABELS[r.status]}` : ''}{r.ref ? ` · ${r.ref}` : ''}{r.reportLabel ? ` · for ${r.reportLabel}` : ''}
                       </span>
                     </span>
                   </Link>
@@ -198,7 +203,7 @@ function FilePicker({ files, setFiles, max }: { files: File[]; setFiles: (f: Fil
   );
 }
 
-const NO_INCIDENT: IncidentDetails = { time: '', place: '', hurt: '', action: '', parentsTold: null, followUp: '' };
+const NO_INCIDENT: IncidentDetails = { time: '', place: '', hurt: '', action: '', parentsTold: null, followUp: '', severity: null };
 
 /** The incident's own questions (7A). */
 function IncidentFields({ value, onChange }: { value: IncidentDetails; onChange: (v: IncidentDetails) => void }) {
@@ -206,6 +211,14 @@ function IncidentFields({ value, onChange }: { value: IncidentDetails; onChange:
   return (
     <fieldset className="st-incident-fields stack">
       <legend>⚠️ Incident details</legend>
+      <div className="field">
+        <span>How serious is it?</span>
+        <div className="chips" role="radiogroup" aria-label="Severity">
+          {(['low', 'medium', 'high'] as Severity[]).map((v) => (
+            <button key={v} type="button" role="radio" aria-checked={value.severity === v} className={`chip${value.severity === v ? ' chip-on' : ''}`} onClick={() => set('severity', value.severity === v ? null : v)}>{SEVERITY_LABELS[v]}</button>
+          ))}
+        </div>
+      </div>
       <div className="grid-2">
         <label className="field"><span>Time</span><input type="time" value={value.time} onChange={(e) => set('time', e.target.value)} /></label>
         <label className="field"><span>Where</span><input value={value.place} maxLength={300} onChange={(e) => set('place', e.target.value)} placeholder="Playground" /></label>
@@ -235,13 +248,14 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
   const [incident, setIncident] = useState<IncidentDetails>(NO_INCIDENT);
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState<[number, number] | null>(null);
+  const picker = useChildPicker(org.id, text, setText);
 
   async function send() {
     if (!title.trim()) { toast.show('Please give it a title.'); return; }
     if (!files.length && !text.trim()) { toast.show('Add a few words or at least one photo.'); return; }
     setProgress([0, files.length]);
     try {
-      const { id, emailed, failed } = await startStory(org.id, { kind, title: title.trim(), day, text, reportId: forReport || null, incident: kind === 'incident' ? incident : null }, files, (d, of) => setProgress([d, of]));
+      const { id, emailed, failed } = await startStory(org.id, { kind, title: title.trim(), day, text, reportId: forReport || null, incident: kind === 'incident' ? incident : null, childIds: picker.picked.map((c) => c.id) }, files, (d, of) => setProgress([d, of]));
       if (failed.length) toast.show(`Sent, but ${failed.length} ${failed.length === 1 ? 'file' : 'files'} did not go: ${failed.join(', ')}. Add them again in the conversation.`);
       onSent(id, emailed.length);
     } catch (err) { toast.show(friendlyError(err)); } finally { setProgress(null); }
@@ -262,7 +276,12 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
       <label className="field"><span>Title</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'win' ? 'Amani read a whole book' : kind === 'activity' ? 'Sports day' : kind === 'incident' ? 'A child fell in the playground' : ''} /></label>
       <label className="field"><span>Date</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>
       {kind === 'incident' && <IncidentFields value={incident} onChange={setIncident} />}
-      <label className="field"><span>What happened (a few lines)</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} /></label>
+      <label className="field"><span>What happened (a few lines)</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder="Type @ and a name to add a child's photo" /></label>
+      <div className="st-light">
+        {picker.panel}
+        {picker.chips}
+        <button type="button" className="btn btn-quiet btn-small align-start" onClick={picker.toggle}>👧 Name a child</button>
+      </div>
       <FilePicker files={files} setFiles={setFiles} max={MAX_PHOTO_FILES} />
       <div className="btn-line">
         <button type="button" className="btn btn-primary" disabled={!!progress} onClick={() => void send()}>
@@ -275,9 +294,10 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
 }
 
 /** A file in a bubble: photos show, a video plays when tapped (so 50 MB is not fetched on its own), documents download. */
-function FileView({ org, reportId, file }: { org: Organization; reportId: string; file: PhotoFile }) {
+function FileView({ org, reportId, file, onRemove }: { org: Organization; reportId: string; file: PhotoFile; onRemove?: () => Promise<void> }) {
   const [url, setUrl] = useState('');
   const [state, setState] = useState<'' | 'loading' | 'failed'>('');
+  const [asking, setAsking] = useState(false);
   const made = useRef('');
   useEffect(() => () => { if (made.current) URL.revokeObjectURL(made.current); }, []);
   const load = useCallback(() => {
@@ -285,30 +305,75 @@ function FileView({ org, reportId, file }: { org: Organization; reportId: string
     photoFile(org.id, reportId, file).then((f) => { made.current = URL.createObjectURL(f); setUrl(made.current); setState(''); }).catch(() => setState('failed'));
   }, [org.id, reportId, file]);
   useEffect(() => { if (file.photo) load(); }, [file.photo, load]);
+  // Andy and Doreen take out any photo or file (1A): tap ✕, then "Take out".
+  const remove = onRemove && (
+    <span className="st-fx-wrap">
+      {asking ? (
+        <>
+          <button type="button" className="st-chip danger" onClick={() => void onRemove().catch(() => setAsking(false))}>Take out</button>
+          <button type="button" className="st-chip" onClick={() => setAsking(false)}>Keep</button>
+        </>
+      ) : <button type="button" className="st-fx" aria-label={`Take out ${file.name}`} onClick={() => setAsking(true)}>✕</button>}
+    </span>
+  );
   if (file.photo) {
     return (
-      <a className="st-pic" href={url || undefined} target="_blank" rel="noreferrer" aria-label={file.name}>
-        {url ? <img src={url} alt="" onError={() => setState('failed')} /> : <span>{state === 'failed' ? 'Could not load' : 'Loading…'}</span>}
-      </a>
+      <div className="st-file-box">
+        <a className="st-pic" href={url || undefined} target="_blank" rel="noreferrer" aria-label={file.name}>
+          {url ? <img src={url} alt="" onError={() => setState('failed')} /> : <span>{state === 'failed' ? 'Could not load' : 'Loading…'}</span>}
+        </a>
+        {remove}
+      </div>
     );
   }
-  if (file.video && url) return <video className="st-video" src={url} controls playsInline preload="metadata" />;
+  if (file.video && url) return <div className="st-file-box st-wide"><video className="st-video" src={url} controls playsInline preload="metadata" />{remove}</div>;
   const ext = extOf(file.name);
   return (
-    <button type="button" className="st-file" disabled={state === 'loading'}
-      onClick={() => (file.video ? load() : void photoFile(org.id, reportId, file).then(downloadFile).catch(() => setState('failed')))}>
-      <span className={`st-ext e-${ext}`}>{file.video ? '▶' : ext.toUpperCase()}</span>
-      <span><b>{file.name}</b><small>{mb(file.size)} · {state === 'loading' ? 'Getting it…' : state === 'failed' ? 'Could not open, tap to try again' : file.video ? 'Tap to play' : 'Tap to download'}</small></span>
-    </button>
+    <div className="st-file-box st-wide">
+      <button type="button" className="st-file" disabled={state === 'loading'}
+        onClick={() => (file.video ? load() : void photoFile(org.id, reportId, file).then(downloadFile).catch(() => setState('failed')))}>
+        <span className={`st-ext e-${ext}`}>{file.video ? '▶' : ext.toUpperCase()}</span>
+        <span><b>{file.name}</b><small>{mb(file.size)} · {state === 'loading' ? 'Getting it…' : state === 'failed' ? 'Could not open, tap to try again' : file.video ? 'Tap to play' : 'Tap to download'}</small></span>
+      </button>
+      {remove}
+    </div>
   );
 }
 
 type Item = StoryMessage & { id: string; opening?: boolean };
 
-/** One bubble (2A): the person's tint, their name, role and time, and what they may do with it. */
-function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision }: {
+/** A person's face (3A): their photo if they added one, otherwise their initials in their colour. Tap to change it. */
+function Face({ name, photo, onPick }: { name: string; photo?: string; onPick?: (f: File) => void }) {
+  const inner = photo ? <img src={photo} alt="" /> : initials(name);
+  if (!onPick) return <span className="st-face" aria-hidden="true">{inner}</span>;
+  return (
+    <label className="st-face st-face-edit" title={photo ? 'Change the photo' : 'Add a photo'}>
+      {inner}
+      <input type="file" accept="image/*" hidden onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ''; }} />
+    </label>
+  );
+}
+
+/** The children named in a message (2A): photo, name, HC code and class, opening the child's page. */
+function ChildCards({ kids, photos }: { kids: StoryChild[]; photos: Record<string, string> }) {
+  if (!kids.length) return null;
+  return (
+    <div className="st-kids">
+      {kids.map((c) => (
+        <Link key={c.id} to={`/hope/children/${c.id}`} className="st-kid">
+          {photos[c.id] ? <img src={photos[c.id]} alt="" /> : <span className="st-kid-none">{initials(c.name)}</span>}
+          <span><b>{c.name}</b><small>{[c.code, c.className].filter(Boolean).join(' · ')}</small></span>
+        </Link>
+      ))}
+    </div>
+  );
+}
+
+/** One bubble (2A): the person's face and tint, their name, role and time, and what they may do with it. */
+function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision, onRemoveFile, onFace }: {
   org: Organization; story: StoryOpen; m: Item; mine: boolean; canDelete: boolean;
   onEdit: (text: string) => Promise<void>; onDelete: () => Promise<void>; onDecision: (on: boolean) => Promise<void>;
+  onRemoveFile: (key: string) => Promise<void>; onFace?: (f: File) => void;
 }) {
   const tz = org.timeZone || 'Africa/Nairobi';
   const [editing, setEditing] = useState(false);
@@ -316,13 +381,14 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision }
   const [menu, setMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const run = async (f: () => Promise<void>) => { setBusy(true); try { await f(); setMenu(false); setEditing(false); } catch { /* already shown */ } finally { setBusy(false); } };
+  if (m.system) return <p className="st-gone st-system">{m.text} · {chatTime(m.at, tz)}</p>;
   if (m.deleted) {
     return <div className={`st-msg${mine ? ' mine' : ''}`}><p className="st-gone">🗑 A message from {m.byName} was deleted{m.deletedByName && m.deletedByName !== m.byName ? ` by ${m.deletedByName}` : ''}.</p></div>;
   }
   const canDecide = story.writes && !m.opening;
   return (
     <div className={`st-msg${mine ? ' mine' : ''}`} style={tintStyle(m.byName, m.byUid)}>
-      <span className="st-face" aria-hidden="true">{initials(m.byName)}</span>
+      <Face name={m.byName} photo={story.faces[faceKey(m.byName)]} onPick={onFace} />
       <div className="st-bubble">
         <div className="st-who"><b>{m.byName}</b>{m.byRole && <span>{m.byRole}</span>}<span>{chatTime(m.at, tz)}</span></div>
         {editing ? (
@@ -334,7 +400,12 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision }
             </div>
           </div>
         ) : m.text && <p>{m.text}</p>}
-        {m.files.length > 0 && <div className="st-pics">{m.files.map((f) => <FileView key={f.key} org={org} reportId={story.report.id} file={f} />)}</div>}
+        <ChildCards kids={m.children ?? []} photos={story.childPhotos} />
+        {m.files.length > 0 && (
+          <div className="st-pics">
+            {m.files.map((f) => <FileView key={f.key} org={org} reportId={story.report.id} file={f} onRemove={story.removes && !story.report.deleted ? () => onRemoveFile(f.key) : undefined} />)}
+          </div>
+        )}
         <div className="st-when">
           <span>{m.decision ? '📌 Decision · ' : ''}{m.editedAt ? 'edited' : ''}</span>
           {(mine || canDelete || canDecide) && !editing && <button type="button" className="st-more" aria-expanded={menu} onClick={() => setMenu(!menu)}>⋯</button>}
@@ -350,6 +421,37 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision }
       </div>
     </div>
   );
+}
+
+/** Naming children in a reply (2A): type @ and a few letters, or tap 👧, then choose. */
+function useChildPicker(orgId: string, text: string, setText: (t: string) => void) {
+  const [all, setAll] = useState<StoryChild[] | null>(null);
+  const [picked, setPicked] = useState<StoryChild[]>([]);
+  const [open, setOpen] = useState(false);
+  const [q, setQ] = useState('');
+  const at = /(^|\s)@([^@\n]{0,30})$/.exec(text);
+  const query = at ? at[2]! : open ? q : null;
+  useEffect(() => { if (query !== null && !all) storyChildren(orgId).then(setAll).catch(() => setAll([])); }, [query, all, orgId]);
+  const words = (query ?? '').toLowerCase().split(/\s+/).filter(Boolean);
+  const matches = query === null || !all ? [] : all.filter((c) => !picked.some((p) => p.id === c.id) && words.every((w) => `${c.name} ${c.code}`.toLowerCase().includes(w))).slice(0, 8);
+  function choose(c: StoryChild) {
+    if (picked.length < STORY_CHILDREN_MAX) setPicked([...picked, c]);
+    if (at) setText(text.slice(0, at.index + at[1]!.length) + c.name + ' ');
+    setOpen(false); setQ('');
+  }
+  const panel = query !== null && (
+    <div className="st-suggest">
+      {open && !at && <input className="st-suggest-q" autoFocus placeholder="Child's name or HC code" value={q} onChange={(e) => setQ(e.target.value)} />}
+      {!all ? <p className="small">Loading the children…</p> : matches.length === 0 ? <p className="small">{words.length ? 'No child found.' : 'Type a name or HC code.'}</p> : (
+        <ul>{matches.map((c) => <li key={c.id}><button type="button" onClick={() => choose(c)}><b>{c.name}</b> <small>{[c.code, c.className].filter(Boolean).join(' · ')}</small></button></li>)}</ul>
+      )}
+      {open && !at && <button type="button" className="st-chip" onClick={() => { setOpen(false); setQ(''); }}>Close</button>}
+    </div>
+  );
+  const chips = picked.length > 0 && (
+    <div className="st-menu">{picked.map((c) => <button key={c.id} type="button" className="st-chip on" onClick={() => setPicked(picked.filter((p) => p.id !== c.id))}>👧 {c.name} ✕</button>)}</div>
+  );
+  return { picked, clear: () => setPicked([]), panel, chips, toggle: () => setOpen(!open) };
 }
 
 /** The one tap to tell everyone on WhatsApp (Andy, 2026-11-06), after the email has gone. */
@@ -381,6 +483,57 @@ function TellEveryone({ org, story, emailed, onDone }: { org: Organization; stor
   );
 }
 
+/** The two approvals (7A): the Director's and the board's, each with that person's own password (none for Andy). */
+function Approvals({ org, story, onDone }: { org: Organization; story: StoryOpen; onDone: () => void }) {
+  const toast = useToast();
+  const { profile } = useAuth();
+  const andy = useIsAndy();
+  const [slot, setSlot] = useState<ApprovalSlot | null>(null);
+  const [pw, setPw] = useState('');
+  const [busy, setBusy] = useState(false);
+  const tz = org.timeZone || 'Africa/Nairobi';
+  const r = story.report;
+  async function approve(s: ApprovalSlot, undo = false) {
+    if (!profile) return;
+    setBusy(true);
+    try {
+      const proof = andy ? await myOwnProof() : await passwordProof(profile.uid, profile.email, pw);
+      await approveStory(org.id, r.id, s, proof, undo);
+      toast.show(undo ? 'Approval taken back.' : 'Approved.');
+      setSlot(null); setPw(''); onDone();
+    } catch (err) {
+      const code = (err as { code?: string }).code ?? '';
+      toast.show(/invalid-credential|wrong-password/.test(code) ? 'That password is not right.' : friendlyError(err));
+    } finally { setBusy(false); }
+  }
+  return (
+    <div className="stack st-approvals">
+      <h3>Approvals</h3>
+      {(['director', 'board'] as ApprovalSlot[]).map((s) => {
+        const a = r.approvals?.[s];
+        const mine = story.approves[s];
+        return (
+          <div key={s} className="st-approval">
+            <span className="grow"><b>{APPROVAL_LABELS[s]}</b><br />
+              <span className="small muted">{a ? `✅ ${a.name}, ${a.role}, ${chatTime(a.at, tz)}` : 'Not approved yet'}</span></span>
+            {mine && slot !== s && <button type="button" className="btn btn-small" disabled={busy} onClick={() => (andy ? void approve(s, !!a) : setSlot(s))}>{a ? 'Take back' : '✅ Approve'}</button>}
+          </div>
+        );
+      })}
+      {slot && !andy && (
+        <div className="stack">
+          <label className="field"><span>Your Insight-IQ password</span><input type="password" autoComplete="current-password" value={pw} onChange={(e) => setPw(e.target.value)} autoFocus /></label>
+          <div className="btn-line">
+            <button type="button" className="btn btn-primary" disabled={busy || !pw} onClick={() => void approve(slot, !!r.approvals?.[slot])}>{busy ? 'Checking…' : r.approvals?.[slot] ? 'Take back my approval' : 'Approve'}</button>
+            <button type="button" className="btn btn-quiet" onClick={() => { setSlot(null); setPw(''); }}>Cancel</button>
+          </div>
+        </div>
+      )}
+      <p className="small muted">The PDF prints "Approved by … on …" for each approval. Without one, it leaves a line to sign by hand.</p>
+    </div>
+  );
+}
+
 /** "Package for the board" (5A, 6A): a summary, the PDF to look at first, then email it or send it on WhatsApp. */
 function Package({ org, story, items, onClose, onSent }: { org: Organization; story: StoryOpen; items: Item[]; onClose: () => void; onSent: () => void }) {
   const toast = useToast();
@@ -396,6 +549,8 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
     loadBoard(org.id).then((p) => { setPeople(p); setTicked(new Set(p.filter((x) => x.hasEmail && x.name.split(' ')[0] !== (profile?.displayName ?? '').split(' ')[0]).map((x) => x.name))); }).catch((err) => toast.show(friendlyError(err)));
   }, [org.id, profile?.displayName, toast]);
   useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  // A new approval or status means the PDF must be made again.
+  useEffect(() => { setPdf(null); }, [r.approvals, r.status]);
   const replies = items.filter((m) => !m.opening) as (StoryMessage & { id: string })[];
   const decisions = items.filter((m) => m.decision && !m.deleted).length;
 
@@ -404,7 +559,7 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
     try {
       await saveStorySummary(org.id, r.id, summary);
       const role = profile ? chatRole(profile, org.id) : '';
-      const f = await hopeStoryPdf(org, r, replies, { summary, preparedBy: profile?.displayName || 'Freedom Hope Center', preparedRole: role, link: appLink(r.id) });
+      const f = await hopeStoryPdf(org, r, replies, { summary, preparedBy: profile?.displayName || 'Freedom Hope Center', preparedRole: role, link: appLink(r.id), faces: story.faces, childPhotos: story.childPhotos });
       setPdf(f);
       if (preview) URL.revokeObjectURL(preview);
       setPreview(URL.createObjectURL(f));
@@ -444,6 +599,7 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
         {pdf && <a className="btn btn-quiet" href={preview} target="_blank" rel="noreferrer">Open the PDF</a>}
       </div>
       {preview && <iframe className="st-preview" src={preview} title="The report PDF" />}
+      <Approvals org={org} story={story} onDone={onSent} />
       {!people ? <p className="muted small">Loading the board…</p> : (
         <ul className="ph-people">
           {people.map((p) => (
@@ -478,6 +634,7 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
   const [reason, setReason] = useState('');
   const end = useRef<HTMLDivElement>(null);
   const [, tick] = useState(0);
+  const picker = useChildPicker(org.id, text, setText);
 
   const load = useCallback(async () => {
     try { const s = await openStory(org.id, id); setStory(s); setSkew(s.now - Date.now()); setError(''); } catch (err) { setError(friendlyError(err)); }
@@ -503,12 +660,12 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
 
   const guard = (f: () => Promise<unknown>) => async (): Promise<void> => { try { await f(); await load(); onChanged(); } catch (err) { toast.show(friendlyError(err)); throw err; } };
   async function send() {
-    if (!text.trim() && !files.length) return;
+    if (!text.trim() && !files.length && !picker.picked.length) return;
     setSending([0, files.length]);
     try {
-      const failed = await sayInStory(org.id, id, text, files, (d, of) => setSending([d, of]));
+      const failed = await sayInStory(org.id, id, text, files, (d, of) => setSending([d, of]), picker.picked.map((c) => c.id));
       if (failed.length) toast.show(`${failed.length} did not go: ${failed.join(', ')}`);
-      setText(''); setFiles([]); await load(); onChanged();
+      setText(''); setFiles([]); picker.clear(); await load(); onChanged();
     } catch (err) { toast.show(friendlyError(err)); } finally { setSending(null); }
   }
   async function delReport() {
@@ -519,6 +676,11 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
     try { await restorePhotoReport(org.id, id); toast.show('Put back.'); await load(); onChanged(); } catch (err) { toast.show(friendlyError(err)); }
   }
   const now = Date.now() + skew;
+  const tz = org.timeZone || 'Africa/Nairobi';
+  const status = r.status ?? 'open';
+  const lastAt = r.lastAt ?? '';
+  const seenBy = Object.entries(r.seen ?? {}).filter(([u, t]) => u !== story.me && lastAt && t >= lastAt).map(([u]) => r.seenNames?.[u]).filter(Boolean) as string[];
+  const face = (f: File, name?: string) => void setFace(org.id, f, name).then(load).then(() => toast.show('Photo saved.')).catch((err) => toast.show(friendlyError(err)));
 
   return (
     <>
@@ -528,16 +690,33 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
           <button type="button" className="st-back" onClick={onBack} aria-label="Back to Photos and wins">←</button>
           <div className="st-title">
             <b>{PHOTO_REPORT_EMOJI[r.kind]} {r.title}</b>
-            <small>{PHOTO_REPORT_LABELS[r.kind]} · {formatDateKey(r.day)} · {items.filter((m) => !m.deleted).length} messages{r.status === 'sent' ? ' · ✓ Sent to the board' : ''}</small>
+            <small>{r.ref ? `${r.ref} · ` : ''}{PHOTO_REPORT_LABELS[r.kind]} · {formatDateKey(r.day)} · {items.filter((m) => !m.deleted && !m.system).length} messages</small>
           </div>
           {story.packages && !r.deleted && <button type="button" className="st-pack" onClick={() => setPacking(true)}>📦 Package for the board</button>}
         </header>
+        <div className="st-status">
+          <ol className="st-steps" aria-label="Status">
+            {STORY_STATUSES.map((st, i) => <li key={st} className={STORY_STATUSES.indexOf(status) >= i ? 'on' : ''}>{STORY_STATUS_LABELS[st]}</li>)}
+          </ol>
+          {story.packages && !r.deleted && status !== 'sent' && (
+            <div className="st-menu">
+              {(['open', 'review', 'resolved'] as StoryStatus[]).filter((st) => st !== status).map((st) => (
+                <button key={st} type="button" className="st-chip" onClick={() => void guard(() => setStoryStatus(org.id, id, st))().catch(() => undefined)}>Mark {STORY_STATUS_LABELS[st]}</button>
+              ))}
+            </div>
+          )}
+        </div>
         {r.reportLabel && <p className="st-day">For the report <Link to={`/hope/reports?report=${r.reportId}`}>{r.reportLabel}</Link></p>}
         {r.deleted && <p className="st-facts">Deleted by {r.deletedByName} on {formatDateKey(r.deletedOn)}{r.deleteReason ? `: ${r.deleteReason}` : '.'}</p>}
         {facts.length > 0 && (
           <details className="st-facts" open>
-            <summary><span>⚠️ Incident details</span><span>{r.incident?.parentsTold === true ? 'Parents told' : r.incident?.parentsTold === false ? 'Parents not told yet' : ''}</span></summary>
+            <summary><span>⚠️ Incident details{r.incident?.severity ? ` · ${SEVERITY_LABELS[r.incident.severity]}` : ''}</span><span>{r.incident?.parentsTold === true ? 'Parents told' : r.incident?.parentsTold === false ? 'Parents not told yet' : ''}</span></summary>
             <dl>{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
+            <div className="st-menu">
+              {r.followUpDoneAt ? <span className="small">✅ Follow-up done by {r.followUpDoneByName}, {chatTime(r.followUpDoneAt, tz)}</span>
+                : <span className="small">Follow-up not done yet{r.startedAt ? `. Diana is reminded ${FOLLOW_UP_HOURS} hours after it was reported.` : '.'}</span>}
+              {story.packages && !r.deleted && <button type="button" className="st-chip on" onClick={() => void guard(() => setFollowUp(org.id, id, !r.followUpDoneAt))().catch(() => undefined)}>{r.followUpDoneAt ? 'Not done yet' : '✅ Follow-up done'}</button>}
+            </div>
           </details>
         )}
         {tell && told !== null && r.senderUid === story.me && <TellEveryone org={org} story={story} emailed={told} onDone={() => setTell(false)} />}
@@ -552,23 +731,38 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
               <div key={m.id} className="st-row">
                 {showDay && <span className="st-day">{formatDateKey(localDateKey(new Date(m.at), org.timeZone || 'Africa/Nairobi'))}</span>}
                 <Bubble org={org} story={story} m={m} mine={mine} canDelete={canDelete}
+                  onFace={mine ? (f) => face(f) : story.keeps ? (f) => face(f, m.byName) : undefined}
+                  onRemoveFile={(key) => guard(() => removeStoryFile(org.id, id, key))()}
                   onEdit={(t) => guard(() => editStoryMessage(org.id, id, m.id, t))()}
                   onDelete={() => guard(() => unsayStoryMessage(org.id, id, m.id))()}
                   onDecision={(on) => guard(() => markDecision(org.id, id, m.id, on))()} />
               </div>
             );
           })}
+          {seenBy.length > 0 && <p className="st-seen">Seen by {seenBy.map((n) => n.split(' ')[0]).join(', ')}</p>}
+          {story.removes && (r.removed?.length ?? 0) > 0 && (
+            <details className="st-facts st-removed">
+              <summary><span>🗑 {r.removed!.length} {r.removed!.length === 1 ? 'file' : 'files'} taken out</span></summary>
+              <ul>{r.removed!.map((x) => (
+                <li key={x.file.key}><span>{x.file.name} · by {x.removedByName}, {chatTime(x.removedAt, tz)}</span>
+                  <button type="button" className="st-chip" onClick={() => void guard(() => restoreStoryFile(org.id, id, x.file.key))().catch(() => undefined)}>↩︎ Put back</button></li>
+              ))}</ul>
+            </details>
+          )}
           <div ref={end} />
         </div>
         {story.writes ? (
           <div className="st-compose-wrap">
+            {picker.panel}
+            {picker.chips}
             {files.length > 0 && <div className="st-picked"><Picked files={files} onRemove={(i) => setFiles(files.filter((_, j) => j !== i))} /></div>}
             <div className="st-composer">
               <label className="st-ic" aria-label="Add photos, videos or files">📎
                 <input type="file" multiple hidden accept={STORY_ACCEPT} onChange={(e) => { setFiles(pickFiles(e.target.files, files, STORY_FILES_MAX, toast.show)); e.target.value = ''; }} />
               </label>
-              <textarea rows={1} value={text} maxLength={STORY_TEXT_MAX} placeholder="Write a reply…" onChange={(e) => setText(e.target.value)} />
-              <button type="button" className="st-send" disabled={!!sending || (!text.trim() && !files.length)} onClick={() => void send()}>
+              <button type="button" className="st-ic" aria-label="Name a child" onClick={picker.toggle}>👧</button>
+              <textarea rows={1} value={text} maxLength={STORY_TEXT_MAX} placeholder="Write a reply… (@ to name a child)" onChange={(e) => setText(e.target.value)} />
+              <button type="button" className="st-send" disabled={!!sending || (!text.trim() && !files.length && !picker.picked.length)} onClick={() => void send()}>
                 {sending ? (sending[1] ? `${Math.min(sending[0] + 1, sending[1])}/${sending[1]}` : '…') : 'Send'}
               </button>
             </div>

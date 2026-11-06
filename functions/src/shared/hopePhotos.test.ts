@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   canDeletePhotoReport, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, photoFileName, photoFileTypeOf, photoReportEmail, photoReportWhatsApp,
+  canApprove, canRemoveFiles, faceKey, needsFollowUpReminder, storyChanges, storyRef,
   canEditMessage, canPackageStory, canUnsay, canWriteInStory, cleanIncident, incidentRows, storyStartEmail, storyStartWhatsApp, storyTimeline, storyTint,
 } from './hopePhotos';
 
@@ -113,7 +114,9 @@ describe('Photos and wins as conversations (Andy, 2026-11-06)', () => {
   });
   it('keeps the incident details tidy (7A)', () => {
     const i = cleanIncident({ time: '14:30', place: ' Playground ', hurt: 'Amani', action: 'First aid', parentsTold: true, followUp: '', extra: 1 })!;
-    expect(i).toEqual({ time: '14:30', place: 'Playground', hurt: 'Amani', action: 'First aid', parentsTold: true, followUp: '' });
+    expect(i).toEqual({ time: '14:30', place: 'Playground', hurt: 'Amani', action: 'First aid', parentsTold: true, followUp: '', severity: null });
+    expect(cleanIncident({ severity: 'high' })?.severity).toBe('high');
+    expect(cleanIncident({ severity: 'huge' })?.severity).toBeNull();
     expect(cleanIncident({ time: '25:00' })?.time).toBe('');
     expect(incidentRows(i).map(([k]) => k)).toEqual(['Time', 'Where', 'Who was hurt', 'What was done', 'Parents told']);
   });
@@ -130,4 +133,44 @@ describe('Photos and wins as conversations (Andy, 2026-11-06)', () => {
     expect(e.text).toContain('https://x/y');
     expect(storyStartWhatsApp(rep, 'https://x/y')).toContain('https://x/y');
   });
+});
+
+describe('Official conversations (Andy, 2026-11-06, v193)', () => {
+  it('lets only Andy and Doreen take out photos (1A)', () => {
+    expect(canRemoveFiles(andy)).toBe(true);
+    expect(canRemoveFiles(doreen)).toBe(true);
+    expect(canRemoveFiles(director)).toBe(false);
+    expect(canRemoveFiles(board)).toBe(false);
+  });
+  it('numbers the reports (4A)', () => expect(storyRef(2026, 14)).toBe('FHC-2026-014'));
+  it('keeps each approval to the right people (7A)', () => {
+    expect(canApprove(director, HOPE, 'director')).toBe(true);
+    expect(canApprove(board, HOPE, 'director')).toBe(false);
+    expect(canApprove(board, HOPE, 'board')).toBe(true);
+    expect(canApprove(andy, HOPE, 'board')).toBe(true);
+    expect(canApprove(helper, HOPE, 'board')).toBe(false);
+  });
+  it('reminds about an incident follow-up after 48 hours, once (8A)', () => {
+    const t = Date.parse('2026-11-06T09:00:00Z');
+    const r = { kind: 'incident' as const, deleted: false, startedAt: '2026-11-06T09:00:00Z', status: 'open' as const };
+    expect(needsFollowUpReminder(r, t + 47 * 3_600_000)).toBe(false);
+    expect(needsFollowUpReminder(r, t + 49 * 3_600_000)).toBe(true);
+    expect(needsFollowUpReminder({ ...r, followUpDoneAt: 'x' }, t + 49 * 3_600_000)).toBe(false);
+    expect(needsFollowUpReminder({ ...r, reminderSentAt: 'x' }, t + 49 * 3_600_000)).toBe(false);
+    expect(needsFollowUpReminder({ ...r, kind: 'win' }, t + 49 * 3_600_000)).toBe(false);
+    expect(needsFollowUpReminder({ ...r, status: 'resolved' }, t + 49 * 3_600_000)).toBe(false);
+  });
+  it('lists the changes for the PDF (9A)', () => {
+    const c = storyChanges(
+      { senderName: 'Diana Kiunga', editedAt: '2026-11-06T10:00:00Z', textHistory: [{ text: 'a', at: '' }], removed: [{ messageId: 'm', removedByName: 'Andrew Guya', removedAt: '2026-11-06T11:00:00Z', file: { key: 'k', name: 'p.jpg', contentType: 'image/jpeg', size: 1, photo: true } }] },
+      [{ text: '', byUid: 'x', byName: 'Elias Omondi', byRole: '', at: '2026-11-06T09:30:00Z', files: [], deleted: true, deletedByName: 'Doreen Mayaka', deletedAt: '2026-11-06T12:00:00Z' },
+        { text: 'x', byUid: 'y', byName: 'Bot', byRole: '', at: '2026-11-06T09:40:00Z', files: [], system: true }],
+    );
+    expect(c.map((x) => x.text)).toEqual([
+      'Diana Kiunga edited the opening message (1 earlier version kept).',
+      'Andrew Guya took out the file "p.jpg".',
+      'Doreen Mayaka deleted a message from Elias Omondi.',
+    ]);
+  });
+  it('keys faces by plain name', () => expect(faceKey("Daniel Ojwang'")).toBe('danielojwang'));
 });

@@ -2,12 +2,12 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 import {
   MAX_PHOTO_FILES, PHOTO_FILE_MAX_BYTES, STORY_DOC_MAX_BYTES, STORY_PART_BYTES, STORY_VIDEO_MAX_BYTES,
-  type IncidentDetails, type PhotoFile, type PhotoReport, type PhotoReportKind, type StoryMessage,
+  type ApprovalSlot, type IncidentDetails, type StoryChild, type StoryStatus, type PhotoFile, type PhotoReport, type PhotoReportKind, type StoryMessage,
 } from '../../functions/src/shared/hopePhotos';
 
 export type StoredPhotoReport = PhotoReport & { id: string };
 export type StoredStoryMessage = StoryMessage & { id: string };
-type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'board' | 'email' | 'people' | 'messages' | 'uploadPart' | 'uploadDone' | 'say' | 'edit' | 'unsay' | 'decision' | 'package';
+type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'board' | 'email' | 'people' | 'messages' | 'uploadPart' | 'uploadDone' | 'say' | 'edit' | 'unsay' | 'decision' | 'package' | 'faces' | 'setFace' | 'children' | 'removeFile' | 'restoreFile' | 'status' | 'followUp' | 'approve';
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: Action }) =>
   httpsCallable<typeof data, R>(functions, 'hopePhotoReports', { timeout: 120_000 })(data).then((r) => r.data);
 
@@ -59,7 +59,7 @@ export async function shrinkForUpload(f: File): Promise<Blob> {
   return f;
 }
 
-export interface NewPhotoReport { kind: PhotoReportKind; title: string; day: string; text: string; reportId?: string | null; incident?: IncidentDetails | null }
+export interface NewPhotoReport { kind: PhotoReportKind; title: string; day: string; text: string; reportId?: string | null; incident?: IncidentDetails | null; childIds?: string[] }
 
 /** Photos, videos and documents for a conversation (3A): JPG, PNG, HEIC, WebP, MP4, MOV, PDF, Word, Excel, PowerPoint. */
 export const isVideoFile = (f: File) => f.type.startsWith('video/') || /\.(mp4|m4v|mov|webm|3gp)$/i.test(f.name);
@@ -116,13 +116,16 @@ export async function startStory(orgId: string, input: NewPhotoReport, files: Fi
   return { id, emailed: emailed ?? [], failed };
 }
 
-export interface StoryOpen { report: StoredPhotoReport; messages: StoredStoryMessage[]; me: string; writes: boolean; keeps: boolean; packages: boolean; seesAll: boolean; deletes: boolean; now: number }
+export interface StoryOpen {
+  report: StoredPhotoReport; messages: StoredStoryMessage[]; me: string; writes: boolean; keeps: boolean; packages: boolean; seesAll: boolean; deletes: boolean; now: number;
+  childPhotos: Record<string, string>; faces: Record<string, string>; removes: boolean; approves: Record<ApprovalSlot, boolean>;
+}
 export const openStory = (orgId: string, id: string) => call<StoryOpen>({ orgId, action: 'messages', id });
 /** A reply, with its photos, videos or files. */
-export async function sayInStory(orgId: string, id: string, text: string, files: File[], progress?: (done: number, of: number) => void) {
+export async function sayInStory(orgId: string, id: string, text: string, files: File[], progress?: (done: number, of: number) => void, childIds: string[] = []) {
   const { up, failed } = await uploadAll(orgId, id, files, progress);
-  if (failed.length && !up.length && !text.trim()) throw new Error(failed.join(', '));
-  await call({ orgId, action: 'say', id, text, files: up });
+  if (failed.length && !up.length && !text.trim() && !childIds.length) throw new Error(failed.join(', '));
+  await call({ orgId, action: 'say', id, text, files: up, childIds });
   return failed;
 }
 export const editStoryMessage = (orgId: string, id: string, messageId: string, text: string) => call({ orgId, action: 'edit', id, messageId, text });
@@ -193,3 +196,32 @@ export const deletePhotoReport = (orgId: string, id: string, reason: string) => 
 export const restorePhotoReport = (orgId: string, id: string) => call({ orgId, action: 'restore', id });
 export interface BoardPerson { name: string; hasEmail: boolean; phone: string }
 export const loadBoard = (orgId: string) => call<{ people: BoardPerson[] }>({ orgId, action: 'board' }).then((r) => r.people);
+
+/** The stakeholders' photos (3A), by plain name. */
+export const loadFaces = (orgId: string) => call<{ faces: Record<string, string> }>({ orgId, action: 'faces' }).then((r) => r.faces);
+/** A person's photo, made small (256 px) on the phone. Without a name, your own. */
+export async function setFace(orgId: string, file: File | null, name?: string) {
+  let photo: string | null = null;
+  if (file) {
+    const img = await decode(file);
+    if (!img) throw new Error('This photo could not be read on this device.');
+    const side = Math.min(img.naturalWidth, img.naturalHeight);
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 256;
+    c.getContext('2d')!.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, 256, 256);
+    photo = c.toDataURL('image/jpeg', 0.82);
+  }
+  await call({ orgId, action: 'setFace', photo, ...(name ? { name } : {}) });
+}
+let kids: Promise<StoryChild[]> | null = null;
+/** The children to name in a message (2A), loaded once per visit. */
+export function storyChildren(orgId: string): Promise<StoryChild[]> {
+  kids ??= call<{ children: StoryChild[] }>({ orgId, action: 'children' }).then((r) => r.children);
+  kids.catch(() => { kids = null; });
+  return kids;
+}
+export const removeStoryFile = (orgId: string, id: string, key: string) => call({ orgId, action: 'removeFile', id, key });
+export const restoreStoryFile = (orgId: string, id: string, key: string) => call({ orgId, action: 'restoreFile', id, key });
+export const setStoryStatus = (orgId: string, id: string, status: StoryStatus) => call({ orgId, action: 'status', id, status });
+export const setFollowUp = (orgId: string, id: string, done: boolean) => call({ orgId, action: 'followUp', id, done });
+export const approveStory = (orgId: string, id: string, slot: ApprovalSlot, proof: string, undo = false) => call({ orgId, action: 'approve', id, slot, proof, undo });

@@ -2565,3 +2565,42 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .st-incident-fields { border: 1.5px solid #f0b6ad; border-radius: 14px; padding: 10px 12px 12px; background: #fff6f4; margin: 0; }
 .st-incident-fields legend { font-weight: 700; color: #8a1c0f; padding: 0 4px; }
 .st-incident-fields .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+
+/* v193: faces, child cards, status steps, seen by, approvals (Andy, 2026-11-06). */
+.st-face { overflow: hidden; }
+.st-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.st-face-edit { cursor: pointer; }
+.st-kids { display: grid; gap: 6px; margin-top: 8px; }
+.st-kid { display: flex; align-items: center; gap: 10px; padding: 6px 10px 6px 6px; border-radius: 14px; background: rgb(255 255 255 / 0.18); border: 1px solid rgb(255 255 255 / 0.32); color: #fff; text-decoration: none; }
+.st-kid img, .st-kid-none { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex: none; }
+.st-kid-none { display: grid; place-items: center; background: rgb(255 255 255 / 0.22); font-weight: 800; font-size: 0.8rem; }
+.st-kid b { display: block; font-size: 0.85rem; }
+.st-kid small { font-size: 0.72rem; color: rgb(255 255 255 / 0.85); }
+.st-file-box { position: relative; min-width: 0; }
+.st-file-box.st-wide { grid-column: 1 / -1; }
+.st-file-box .st-pic { display: grid; width: 100%; }
+.st-fx-wrap { position: absolute; top: 4px; right: 4px; display: flex; gap: 4px; }
+.st-fx { width: 26px; height: 26px; border-radius: 50%; border: 0; background: rgb(0 0 0 / 0.6); color: #fff; cursor: pointer; font-size: 0.85rem; }
+.st-fx-wrap .st-chip { background: rgb(0 0 0 / 0.65); }
+.st-status { margin: 10px 16px 0; display: grid; gap: 6px; }
+.st-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+.st-steps li { font-size: 0.68rem; text-align: center; padding: 5px 4px; border-radius: 999px; background: rgb(255 255 255 / 0.12); border: 1px solid rgb(255 255 255 / 0.2); color: rgb(255 255 255 / 0.75); }
+.st-steps li.on { background: rgb(255 255 255 / 0.85); color: #02341b; font-weight: 700; }
+.st-seen { justify-self: end; margin: 0; font-size: 0.72rem; color: rgb(255 255 255 / 0.8); }
+.st-system { justify-self: center; text-align: center; font-style: normal; }
+.st-removed ul { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 6px; font-size: 0.8rem; }
+.st-removed li { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.st-suggest { background: rgb(255 255 255 / 0.95); color: var(--text, #1e1e1e); border-radius: 16px; padding: 8px; margin-bottom: 8px; display: grid; gap: 6px; box-shadow: 0 8px 24px rgb(0 0 0 / 0.2); }
+.st-suggest p { margin: 4px; }
+.st-suggest ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; max-height: 240px; overflow-y: auto; }
+.st-suggest li button { width: 100%; text-align: left; border: 0; background: transparent; padding: 8px; border-radius: 10px; font: inherit; cursor: pointer; color: inherit; }
+.st-suggest li button:hover, .st-suggest li button:focus { background: #eaf5ee; }
+.st-suggest small { color: var(--muted); }
+.st-suggest-q { border: 1px solid var(--border, #e2e8e4); border-radius: 10px; padding: 8px; font: inherit; }
+.st-suggest .st-chip, .st-light .st-chip { color: var(--text, #1e1e1e); border-color: var(--border, #cfd8d3); background: #f3f6f4; }
+.st-light .st-chip.on { background: var(--primary, #038241); color: #fff; }
+.st-light { display: grid; gap: 6px; }
+.st-approvals { border-top: 1px solid var(--border, #e2e8e4); padding-top: 12px; }
+.st-approvals h3 { margin: 0; }
+.st-approval { display: flex; align-items: center; gap: 10px; }
+.st-approval .grow { flex: 1; min-width: 0; }

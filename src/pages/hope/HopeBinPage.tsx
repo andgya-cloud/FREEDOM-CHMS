@@ -8,7 +8,7 @@ import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { START_FRESH_KINDS, START_FRESH_LABELS, type StartFreshKind } from '../../../functions/src/shared/cleanup';
 import { BinList } from '../settings/CleanupPage';
 import { friendlyError } from '../../lib/errors';
-import { listPhotoReports, restorePhotoReport, type PhotoList } from '../../lib/hopePhotos';
+import { listPhotoReports, restorePhotoReport, restoreStoryFile, type PhotoList } from '../../lib/hopePhotos';
 import { PHOTO_REPORT_EMOJI } from '../../../functions/src/shared/hopePhotos';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { HopeGate } from './common';
@@ -67,7 +67,13 @@ function PhotoBin({ org }: { org: Organization }) {
   const [busy, setBusy] = useState('');
   const load = useCallback(() => { listPhotoReports(org.id).then(setList, () => setList(null)); }, [org.id]);
   useEffect(() => { load(); }, [load]);
-  if (!list?.deletes || list.deleted.length === 0) return null;
+  const taken = (list?.reports ?? []).flatMap((r) => (r.removed ?? []).map((x) => ({ r, x })));
+  if (!list?.deletes || (list.deleted.length === 0 && taken.length === 0)) return null;
+  async function fileBack(id: string, key: string) {
+    setBusy(key);
+    try { await restoreStoryFile(org.id, id, key); toast.show('Put back in the conversation.'); load(); }
+    catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
+  }
   async function back(id: string) {
     setBusy(id);
     try { await restorePhotoReport(org.id, id); toast.show('Put back in Photo reports.'); load(); }
@@ -76,6 +82,18 @@ function PhotoBin({ org }: { org: Organization }) {
   return (
     <section className="card stack">
       <h2>📷 Photo reports</h2>
+      {taken.length > 0 && (
+        <ul className="link-list">
+          {taken.map(({ r, x }) => (
+            <li key={x.file.key}><div className="fee-row">
+              <span className="grow"><span className="link-title">{x.file.photo ? '🖼' : '📄'} {x.file.name}</span>
+                <span className="link-detail">Taken out by {x.removedByName} on {formatDateKey(x.removedAt.slice(0, 10))} · from "{r.title}"</span></span>
+              <Link to={`/hope/photos?report=${r.id}`} className="btn btn-quiet">Open</Link>
+              <button type="button" className="btn" disabled={busy === x.file.key} onClick={() => void fileBack(r.id, x.file.key)}>↩︎ Put back</button>
+            </div></li>
+          ))}
+        </ul>
+      )}
       <ul className="link-list">
         {list.deleted.map((r) => (
           <li key={r.id}><div className="fee-row">
