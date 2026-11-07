@@ -1,3 +1,4 @@
+import { PersonConcern } from '../../components/PersonConcern';
 import { useState } from 'react';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -172,6 +173,7 @@ export function PersonPage() {
       {org?.type === 'church_campus' && <PipelineTimeline orgId={orgId} personId={personId} />}
       {org && can('giving.person.read') && <GivingForPerson org={org} personId={personId} personName={person.fullName} />}
       {can('pastoral.read') && <PastoralSection orgId={orgId} personId={personId} />}
+      {org?.type === 'church_campus' && <PersonConcern org={org} personId={personId} name={person.fullName} />}
 
       {canWrite && !keeper && (
         <button type="button" className="btn btn-quiet danger-text align-start" onClick={() => setConfirmDelete(true)}>Delete {person.firstName || person.fullName}</button>

@@ -100,6 +100,9 @@ const HopeRecordsPage = lazy(() => import('./pages/hope/HopeRecordsPage').then((
 const HopeBinPage = lazy(() => import('./pages/hope/HopeBinPage').then((m) => ({ default: m.HopeBinPage })));
 const HopeMorePage = lazy(() => import('./pages/hope/HopeMorePage').then((m) => ({ default: m.HopeMorePage })));
 const HopePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.HopePhotosPage })));
+const CirclePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.CirclePhotosPage })));
+const CircleVaultPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.CircleVaultPage })));
+const CircleChatPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.CircleChatPage })));
 const HopeReportsPage = lazy(() => import('./pages/hope/HopeReportsPage').then((m) => ({ default: m.HopeReportsPage })));
 const KidsRegisterPage = lazy(() => import('./pages/hope/KidsRegisterPage').then((m) => ({ default: m.KidsRegisterPage })));
 const ClubsPage = lazy(() => import('./pages/hope/ClubsPage').then((m) => ({ default: m.ClubsPage })));
@@ -261,6 +264,13 @@ function AppRoutes() {
         <Route path="/hope/photos" element={<HopePhotosPage />} />
         <Route path="/hope/chats" element={<Navigate to="/hope/records?show=chats" replace />} />
         <Route path="/hope/chats/:id" element={<HopeChatPage />} />
+        {/* The same conversations at ADIA and Freedom Church (Andy, 2026-11-07); the server checks who reads what. */}
+        <Route path="/school/updates" element={<CirclePhotosPage type="college" />} />
+        <Route path="/school/conversations" element={<CircleVaultPage type="college" />} />
+        <Route path="/school/conversations/:id" element={<CircleChatPage type="college" />} />
+        <Route path="/updates" element={<CirclePhotosPage type="church_campus" />} />
+        <Route path="/conversations" element={<CircleVaultPage type="church_campus" />} />
+        <Route path="/conversations/:id" element={<CircleChatPage type="church_campus" />} />
         <Route path="/hope/attendance" element={<HopeAttendancePage />} />
         <Route path="/hope/attendance/:date" element={<HopeAttendanceDayPage />} />
         <Route path="/hope/records" element={<HopeRecordsPage />} />

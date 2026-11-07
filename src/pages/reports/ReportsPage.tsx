@@ -38,7 +38,11 @@ function Archive({ org }: { org: Organization }) {
     <div className="page">
       <div className="page-head">
         <h1>Reports</h1>
-        {can('settings.manage') && <Link to="/settings/reports" className="btn btn-quiet">Report settings</Link>}
+        <div className="btn-line">
+          {org.type === 'church_campus' && <Link to="/updates" className="btn">📷 Photos and wins</Link>}
+          {org.type === 'church_campus' && <Link to="/conversations" className="btn btn-quiet">🔒 Conversations</Link>}
+          {can('settings.manage') && <Link to="/settings/reports" className="btn btn-quiet">Report settings</Link>}
+        </div>
       </div>
       <div className="segmented" role="tablist" aria-label="Reports">
         {tabs.map((t) => (

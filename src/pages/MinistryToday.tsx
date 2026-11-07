@@ -13,6 +13,7 @@ import { AdiaIcon, type AdiaIconName } from '../components/icons';
 import { PoweredBy } from '../components/PoweredBy';
 import { AnniversariesCard, BirthdaysCard, SignupsCard, SundayCard, sundayFor } from './ChurchSunday';
 import { ReachCard } from './followups/FollowUpsPage';
+import { CircleNeedsYou } from '../components/CircleNeedsYou';
 import type { Organization } from '../state/OrgContext';
 import type { ReactNode } from 'react';
 
@@ -55,6 +56,7 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
           <div className="lav-scene lav-scene-slim"><SceneVideo name="church-scene" /></div>
         </section>
         <FirstRunChecklist />
+        <CircleNeedsYou org={org} offerSend />
         <SundayCard org={org} />
         <SignupsCard org={org} />
         <ReachCard org={org} />

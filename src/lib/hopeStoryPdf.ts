@@ -7,13 +7,15 @@ import {
   APPROVAL_LABELS, builtInFace, faceKey, incidentRows, PHOTO_REPORT_LABELS, SEVERITY_LABELS, STORY_STATUS_LABELS, storyChanges, storyTint, storyTimeline, type ApprovalSlot, type PhotoFile,
 } from '../../functions/src/shared/hopePhotos';
 import { photoFile, photoForPdf, type StoredPhotoReport, type StoredStoryMessage } from './hopePhotos';
+import { letterheadFor } from '../../functions/src/shared/pettyVoucher';
+import { circleOf, kindLabel } from '../../functions/src/shared/circles';
 
-const GREEN: [number, number, number] = [3, 130, 65];
 const rgb = (hex: string): [number, number, number] => [parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16)];
 
-async function mark(): Promise<string | null> {
+async function mark(file: string | null): Promise<string | null> {
+  if (!file) return null;
   try {
-    const blob = await (await fetch('/org/hope-centre-mark.png')).blob();
+    const blob = await (await fetch(`/org/${file}`)).blob();
     return await new Promise((ok) => { const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = () => ok(null); r.readAsDataURL(blob); });
   } catch { return null; }
 }
@@ -24,6 +26,8 @@ export interface StoryPdfInput {
   faces?: Record<string, string>; childPhotos?: Record<string, string>;
   /** For the conversations about a child (v197): where the files come from, and their own labels. */
   fetchFile?: (f: PhotoFile) => Promise<File>; kindLabel?: string; statusLabel?: string; followUp?: boolean; fileName?: string;
+  /** Each organization's approval names (2026-11-07, 10A). */
+  labels?: Record<ApprovalSlot, string>;
 }
 const fmt = (dataUrl: string) => (dataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG');
 
@@ -57,8 +61,13 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
       if (img) photos.push({ f, by: m.byName, at: m.at, img }); else others.push({ f, by: m.byName, at: m.at });
     }
   }
-  const logo = await mark();
-  const label = input.kindLabel ?? PHOTO_REPORT_LABELS[report.kind];
+  // Each organization's letterhead colour and logo (2026-11-07, 8A): Hope green, ADIA navy, the church's green.
+  const lh = letterheadFor(org);
+  const GREEN = lh.band;
+  const circle = circleOf(org.type);
+  const logo = await mark(lh.crest);
+  const label = input.kindLabel ?? (org.type === 'ministry' ? PHOTO_REPORT_LABELS[report.kind] : kindLabel(report.kind, circle.type));
+  const labels = input.labels ?? (org.type === 'ministry' ? APPROVAL_LABELS : { director: circle.firstApproval, board: circle.secondApproval });
   const incident = report.kind === 'incident';
   let y = 0;
   const room = (need: number) => { if (y + need > H - 18) { pdf.addPage(); y = 20; } };
@@ -78,7 +87,7 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
   if (logo) { try { pdf.addImage(logo, 'PNG', 14, 12, 26, 26); } catch { /* no logo */ } }
   pdf.setTextColor(255, 255, 255);
   pdf.setFont('helvetica', 'normal'); pdf.setFontSize(11);
-  pdf.text(`${org.name} · Report to the board${report.ref ? ` · ${report.ref}` : ''}`, logo ? 46 : 14, 20);
+  pdf.text(`${org.name} · Report to ${circle.board}${report.ref ? ` · ${report.ref}` : ''}`, logo ? 46 : 14, 20);
   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(21);
   const titleLines = (pdf.splitTextToSize(report.title, W - (logo ? 60 : 28)) as string[]).slice(0, 2);
   pdf.text(titleLines, logo ? 46 : 14, 30);
@@ -248,7 +257,7 @@ export async function hopeStoryPdf(org: Organization, report: StoredPhotoReport,
       pdf.line(x, y + 14, x + half, y + 14);
     }
     pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(...GREY);
-    pdf.text(APPROVAL_LABELS[slot], x, y + 25);
+    pdf.text(labels[slot], x, y + 25);
   });
   y += 32;
 

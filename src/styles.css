@@ -2665,3 +2665,21 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .chat-sev .st-chip.sev-low.on { background: #2f9e5b; border-color: #2f9e5b; color: #fff; }
 .chat-sev .st-chip.sev-medium.on { background: #d08a12; border-color: #d08a12; color: #fff; }
 .chat-sev .st-chip.sev-high.on { background: #c62828; border-color: #c62828; color: #fff; }
+
+/* ===== The conversations in ADIA's and Freedom Church's colours (Andy, 2026-11-07, 8A) ===== */
+/* ADIA: navy and gold glass. */
+.look-glass .st-scene-default { background: radial-gradient(40% 35% at 18% 22%, #6f7fc9 0%, transparent 70%), radial-gradient(35% 30% at 82% 18%, #e7c27a 0%, transparent 70%), radial-gradient(45% 40% at 70% 78%, #c99a3c 0%, transparent 70%), radial-gradient(40% 40% at 20% 85%, #141c44 0%, transparent 70%), linear-gradient(160deg, #1f2a5c, #0c1230); }
+.look-glass .st-room::after { background: linear-gradient(180deg, rgb(10 14 40 / 0.38), rgb(10 14 40 / 0.15) 30%, rgb(10 14 40 / 0.5)); }
+.look-glass .st-pack { color: #1f2a5c; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25), inset 0 0 0 1.5px #c99a3c; }
+.look-glass .st-send { background: linear-gradient(135deg, #1f2a5c, #34407e); color: #fff; }
+.look-glass .st-steps li.on { background: linear-gradient(135deg, #c99a3c, #e3bd6a); color: #1f2a5c; }
+/* Freedom Church: the logo greens with gold. */
+.look-cockpit .st-scene-default { background: radial-gradient(40% 35% at 18% 22%, #a2c986 0%, transparent 70%), radial-gradient(35% 30% at 82% 18%, #c9a24e 0%, transparent 70%), radial-gradient(45% 40% at 70% 78%, #6dae85 0%, transparent 70%), radial-gradient(40% 40% at 20% 85%, #1f4a33 0%, transparent 70%), linear-gradient(160deg, #2f6e4a, #10281b); }
+.look-cockpit .st-pack { color: #1f4a33; box-shadow: 0 8px 24px rgb(0 0 0 / 0.25), inset 0 0 0 1.5px rgb(201 162 78); }
+.look-cockpit .st-send { background: linear-gradient(135deg, #2f6e4a, #6dae85); color: #fff; }
+.look-cockpit .st-steps li.on { background: linear-gradient(135deg, #6dae85, #a2c986); color: #10281b; }
+.circle-needs .nu-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.circle-needs .nu-pill { text-decoration: none; }
+.circle-face { width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; font-weight: 800; font-size: 12px; color: #fff; background: var(--navy, #1f2a5c); }
+.circle-send { display: flex; justify-content: center; }
+.person-concern .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }

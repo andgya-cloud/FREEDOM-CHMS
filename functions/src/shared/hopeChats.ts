@@ -12,6 +12,7 @@ import {
   type Approval, type ApprovalSlot, type PhotoFile, type RemovedFile, type Severity, type StoryChild,
 } from './hopePhotos.js';
 import { can, canAccessOrg, type AccessProfile } from './permissions.js';
+import { circleKeeper, circleOf, circleReader, circleRef, circleRole, circleSender, type CircleType } from './circles.js';
 
 /** Open → Being handled → Resolved → Sent to the board (v197, 6A). "closed" is Resolved, so older conversations keep their note. */
 export type ChatStatus = 'open' | 'handling' | 'closed' | 'sent';
@@ -22,7 +23,7 @@ export const isActiveChat = (s: ChatStatus) => s === 'open' || s === 'handling';
 /** No reply from anyone else within a day: the Director is reminded once (v197, 8A). */
 export const CHAT_REPLY_HOURS = 24;
 /** "FHC-C-2026-007" (v197, 6A). */
-export const chatRef = (year: number, n: number) => `FHC-C-${year}-${String(n).padStart(3, '0')}`;
+export const chatRef = (year: number, n: number, type: CircleType = 'ministry') => circleRef(type, year, n, true);
 export const isChatStatus = (v: unknown): v is ChatStatus => typeof v === 'string' && (CHAT_STATUSES as string[]).includes(v);
 
 export const CHAT_TEXT_MAX = 4000;
@@ -85,7 +86,7 @@ export const chatFilePath = (orgId: string, chatId: string, messageId: string, k
 type Profile = (AccessProfile & { displayName?: string; roleId?: string }) | null | undefined;
 
 /** Reads and writes every conversation: the Director, the board, Andy and Doreen (1A, 2). */
-export const canUseChats = (p: Profile, orgId: string) => canSeeAllPhotoReports(p, orgId);
+export const canUseChats = (p: Profile, orgId: string, type: CircleType = 'ministry') => (type === 'ministry' ? canSeeAllPhotoReports(p, orgId) : circleReader(p, orgId, type));
 /** Takes out a file (5A): Andy and Doreen. */
 export const canRemoveChatFiles = (p: Profile) => canRemoveFiles(p);
 /** Each person edits only their own words (4A). */
@@ -109,14 +110,17 @@ export function chatChanges(c: Pick<HopeChat, 'removed'>, messages: ChatMessage[
 }
 
 /** Closes a conversation: the Director, Andy and Doreen. */
-export const canCloseChat = (p: Profile, orgId: string) => canDeletePhotoReport(p, orgId);
+export const canCloseChat = (p: Profile, orgId: string, type: CircleType = 'ministry') => (type === 'ministry' ? canDeletePhotoReport(p, orgId) : circleKeeper(p, orgId, type));
 /** Staff who see the children may raise a worry, which starts a conversation for the readers. */
-export const canRaiseWorry = (p: Profile, orgId: string) => canAccessOrg(p, orgId) && (can(p, 'people.write') || can(p, 'attendance.write') || can(p, 'people.read'));
+export const canRaiseWorry = (p: Profile, orgId: string, type: CircleType = 'ministry') => (type === 'ministry'
+  ? canAccessOrg(p, orgId) && (can(p, 'people.write') || can(p, 'attendance.write') || can(p, 'people.read'))
+  : circleSender(p, orgId, type));
 
 const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
 
 /** The role printed in each signature. */
-export function chatRole(p: Profile, orgId: string): string {
+export function chatRole(p: Profile, orgId: string, type: CircleType = 'ministry'): string {
+  if (type !== 'ministry') return circleRole(p, orgId, type);
   const name = plain(p?.displayName ?? '');
   if (name === 'andrewguya' && can(p, 'users.manage')) return 'Pastor';
   if (isHopeDirector(p, orgId)) return 'Director';
@@ -152,20 +156,21 @@ export const chatSignature = (m: Pick<ChatMessage, 'byName' | 'byRole' | 'at'>, 
 export const isUnread = (c: Pick<HopeChat, 'lastAt' | 'seen' | 'lastByName'>, uid: string) => !c.seen?.[uid] || c.seen[uid]! < c.lastAt;
 
 /** The URGENT email when a conversation starts. Only the child's first name and code, never what was written. */
-export function urgentEmail(c: Pick<HopeChat, 'childName' | 'childCode' | 'startedByName'>, firstName: string, link: string) {
-  const child = `${c.childName.split(' ')[0] || 'a child'}${c.childCode ? ` (${c.childCode})` : ''}`;
+export function urgentEmail(c: Pick<HopeChat, 'childName' | 'childCode' | 'startedByName'>, firstName: string, link: string, type: CircleType = 'ministry', orgName = circleOf(type).orgName) {
+  const who = circleOf(type).person;
+  const child = `${c.childName.split(' ')[0] || `a ${who}`}${c.childCode ? ` (${c.childCode})` : ''}`;
   return {
     subject: `URGENT: your response is needed about ${child}`,
     text: [
       `Dear ${firstName},`,
       '',
-      `${c.startedByName} has started a conversation about ${child} at Freedom Hope Center. Your URGENT response is needed.`,
+      `${c.startedByName} has started a conversation about ${child} at ${orgName}. Your URGENT response is needed.`,
       '',
       `Please open it and reply here: ${link}`,
       '',
-      'For the child\'s safety, what was written is only in Insight-IQ, not in this email.',
+      type === 'ministry' ? 'For the child\'s safety, what was written is only in Insight-IQ, not in this email.' : `To keep it private, what was written is only in Insight-IQ, not in this email.`,
       '',
-      'Freedom Hope Center',
+      orgName,
     ].join('\n'),
   };
 }

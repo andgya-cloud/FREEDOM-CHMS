@@ -26,6 +26,7 @@ export const startChat = (orgId: string, childId: string, text: string, raise = 
 export interface ChatOpen {
   chat: StoredChat; messages: StoredMessage[]; closer: boolean; me: string; keeps: boolean;
   childPhotos: Record<string, string>; faces: Record<string, string>; approves: Record<ApprovalSlot, boolean>;
+  labels?: Record<ApprovalSlot, string>;
 }
 export const openChat = (orgId: string, id: string) => call<ChatOpen>({ orgId, action: 'messages', id });
 export const editChatMessage = (orgId: string, id: string, messageId: string, text: string) => call({ orgId, action: 'edit', id, messageId, text });

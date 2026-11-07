@@ -18,6 +18,8 @@ import { myOwnProof, passwordProof } from '../../lib/pettyPin';
 import { ChildCards, Face, FileView, Picked, pickFiles, tintStyle, useChildPicker } from './HopePhotosPage';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate } from './common';
+import { CircleGate } from '../../components/CircleGate';
+import { circleOf, type CircleType } from '../../../functions/src/shared/circles';
 
 export const STATUS_ICON: Record<ChatStatus, string> = { open: '🔴', handling: '🟠', closed: '✅', sent: '📨' };
 
@@ -41,6 +43,8 @@ export function useChats(orgId: string, childId?: string) {
 /** The vault (8A): every conversation about a child, searchable, with an Open/Being handled/Closed filter. Shown on the Care page (v182, 5A) to the board and staff. */
 export function Vault({ org }: { org: Organization }) {
   const { list, error } = useChats(org.id);
+  const circle = circleOf(org.type);
+  const hope = circle.type === 'ministry';
   const [q, setQ] = useState('');
   const [status, setStatus] = useState<ChatStatus | 'all'>('all');
   const me = useAuth().profile?.uid ?? '';
@@ -48,11 +52,11 @@ export function Vault({ org }: { org: Organization }) {
     && (!q.trim() || `${c.childName} ${c.childCode}`.toLowerCase().includes(q.trim().toLowerCase())));
   return (
     <div className="page narrow">
-      <p><Link to="/hope/reports">← Reports</Link></p>
-      <h1>🔒 Care</h1>
-      <p className="small muted">{list?.reader === false ? 'The worries you raised, and whether they are being dealt with. Only the Director, the board, Andy and Doreen read the conversations.' : 'Every conversation about a child, kept for the record. Only the Director, the board, Andy and Doreen can open them.'}</p>
+      {hope ? <p><Link to="/hope/reports">← Reports</Link></p> : <p><Link to={circle.photosPath}>📷 Photos and wins</Link></p>}
+      <h1>🔒 {hope ? 'Care' : 'Private conversations'}</h1>
+      <p className="small muted">{list?.reader === false ? `The worries you raised, and whether they are being dealt with. Only ${circle.readers} read the conversations.` : `Every conversation about a ${circle.person}, kept for the record. Only ${circle.readers} can open them.`}</p>
       {error && <p className="notice notice-warn small">{error}</p>}
-      <label className="field"><span>Find a child</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or HC code" /></label>
+      <label className="field"><span>Find a {circle.person}</span><input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={circle.codeLabel ? `Name or ${circle.codeLabel}` : 'Name'} /></label>
       <div className="chips" role="radiogroup" aria-label="Show">
         {(['all', 'open', 'handling', 'closed', 'sent'] as const).map((k) => (
           <button key={k} type="button" role="radio" aria-checked={status === k} className={`chip${status === k ? ' chip-on' : ''}`} onClick={() => setStatus(k)}>
@@ -60,28 +64,36 @@ export function Vault({ org }: { org: Organization }) {
           </button>
         ))}
       </div>
-      {!list ? (!error && <p className="muted">Loading…</p>) : rows.length === 0 ? <div className="card"><p>{list.chats.length ? 'None match.' : 'No conversations yet. Start one from a child\'s page.'}</p></div> : (
+      {!list ? (!error && <p className="muted">Loading…</p>) : rows.length === 0 ? <div className="card"><p>{list.chats.length ? 'None match.' : `No conversations yet. Start one from a ${circle.person}'s page.`}</p></div> : (
         <ul className="link-list chat-list">
-          {rows.map((c) => <ChatRow key={c.id} c={c} reader={list.reader} unread={list.reader && isUnread(c, me)} />)}
+          {rows.map((c) => <ChatRow key={c.id} c={c} reader={list.reader} unread={list.reader && isUnread(c, me)} type={org.type} />)}
         </ul>
       )}
     </div>
   );
 }
 
-export function ChatRow({ c, reader, unread }: { c: StoredChat; reader: boolean; unread: boolean }) {
+export function ChatRow({ c, reader, unread, type }: { c: StoredChat; reader: boolean; unread: boolean; type?: string }) {
   const body = (
     <>
       <span className="link-title">{STATUS_ICON[c.status]} {c.childName}{c.childCode ? ` · ${c.childCode}` : ''}{unread && <span className="badge badge-warn">New</span>}</span>
       <span className="link-detail">{reader ? `${c.lastByName}: ${c.lastText}` : CHAT_STATUS_LABELS[c.status]} · {chatTime(c.lastAt)}</span>
     </>
   );
-  return <li>{reader ? <Link to={`/hope/chats/${c.id}`}>{body}</Link> : <div>{body}</div>}</li>;
+  return <li>{reader ? <Link to={`${circleOf(type).chatsPath}/${c.id}`}>{body}</Link> : <div>{body}</div>}</li>;
 }
 
 /** One conversation, like a WhatsApp group (3A, 5A, 6A, 7A). */
 export function HopeChatPage() {
   return <HopeGate title="Conversation">{(org) => <Chat org={org} />}</HopeGate>;
+}
+
+/** ADIA's and Freedom Church's private conversations (Andy, 2026-11-07, 5A): the list, and one conversation. */
+export function CircleVaultPage({ type }: { type: Exclude<CircleType, 'ministry'> }) {
+  return <CircleGate type={type} title="Private conversations">{(org) => <Vault org={org} />}</CircleGate>;
+}
+export function CircleChatPage({ type }: { type: Exclude<CircleType, 'ministry'> }) {
+  return <CircleGate type={type} title="Conversation">{(org) => <Chat org={org} />}</CircleGate>;
 }
 
 function Chat({ org }: { org: Organization }) {
@@ -97,7 +109,8 @@ function Chat({ org }: { org: Organization }) {
   const end = useRef<HTMLDivElement>(null);
   const tz = org.timeZone || 'Africa/Nairobi';
   const count = data?.messages.length ?? 0;
-  const picker = useChildPicker(org.id, text, setText);
+  const picker = useChildPicker(org.id, text, setText, org.type);
+  const circle = circleOf(org.type);
   const myName = useAuth().profile?.displayName ?? '';
 
   const load = useCallback(() => {
@@ -133,7 +146,7 @@ function Chat({ org }: { org: Organization }) {
     } catch (err) { toast.show(friendlyError(err)); } finally { setSending(''); }
   }
 
-  if (error && !data) return <div className="page narrow"><p className="notice notice-warn">{error}</p><Link to="/hope/records?show=chats" className="btn">Back to Care</Link></div>;
+  if (error && !data) return <div className="page narrow"><p className="notice notice-warn">{error}</p><Link to={circle.vaultPath} className="btn">Back</Link></div>;
   if (!data) return <div className="page narrow"><p className="muted">Loading…</p></div>;
   const c = data.chat;
   const closed = c.status === 'closed';
@@ -145,13 +158,13 @@ function Chat({ org }: { org: Organization }) {
       <section className="st-room chat-room">
         <div className="st-scene st-scene-default" />
         <header className="st-head">
-          <Link to="/hope/records?show=chats" className="st-back" aria-label="Back to Care">←</Link>
-          <Link to={`/hope/children/${c.childId}`} className="chat-kid" aria-label={`${c.childName}'s page`}>
+          <Link to={circle.vaultPath} className="st-back" aria-label="Back">←</Link>
+          <Link to={circle.personPath(c.childId)} className="chat-kid" aria-label={`${c.childName}'s page`}>
             {kidPhoto ? <img src={kidPhoto} alt="" /> : <span>{c.childName.split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('').toUpperCase()}</span>}
           </Link>
           <div className="st-title">
             <b>{c.childName}{c.childCode ? ` · ${c.childCode}` : ''}</b>
-            <small>{c.ref ? `${c.ref} · ` : ''}🔒 Director, board, Andy and Doreen{c.severity ? ` · ${SEVERITY_LABELS[c.severity]} urgency` : ''}</small>
+            <small>{c.ref ? `${c.ref} · ` : ''}🔒 {circle.type === 'ministry' ? 'Director, board, Andy and Doreen' : circle.readers.replace(/^the /, 'The ')}{c.severity ? ` · ${SEVERITY_LABELS[c.severity]} urgency` : ''}</small>
           </div>
         </header>
         <div className="st-status">
@@ -173,7 +186,7 @@ function Chat({ org }: { org: Organization }) {
             <button type="button" className="st-chip" onClick={() => setPanel(panel === 'approve' ? '' : 'approve')}>✍️ Approvals{c.approvals?.director || c.approvals?.board ? ` (${[c.approvals?.director, c.approvals?.board].filter(Boolean).length}/2)` : ''}</button>
             <button type="button" className="st-chip" disabled={!!sending} onClick={() => void pdf(false)}>⬇︎ PDF</button>
             <button type="button" className="st-chip" disabled={!!sending} onClick={() => void pdf(true)}>🟢 WhatsApp</button>
-            <button type="button" className="st-chip" onClick={() => setPanel(panel === 'send' ? '' : 'send')}>✉️ Send to the board</button>
+            <button type="button" className="st-chip" onClick={() => setPanel(panel === 'send' ? '' : 'send')}>✉️ Send to {circle.board}</button>
           </div>
         </div>
         {panel === 'close' && (
@@ -212,7 +225,7 @@ function Chat({ org }: { org: Organization }) {
         </div>
 
         {closed ? (
-          <p className="st-day">Resolved{c.closedOn ? ` on ${formatDateKey(c.closedOn)}` : ''}: {c.closeNote?.replace(/[.\s]+$/, '')}. {data.closer ? 'Tap "Open again" to continue it.' : 'The Director, Andy or Doreen can open it again.'}</p>
+          <p className="st-day">Resolved{c.closedOn ? ` on ${formatDateKey(c.closedOn)}` : ''}: {c.closeNote?.replace(/[.\s]+$/, '')}. {data.closer ? 'Tap "Open again" to continue it.' : `${circle.keepers.replace(/^the /, 'The ')} can open it again.`}</p>
         ) : (
           <div className="st-compose-wrap">
             {picker.panel}
@@ -222,8 +235,8 @@ function Chat({ org }: { org: Organization }) {
               <label className="st-ic" aria-label="Add photos, videos or files">📎
                 <input type="file" multiple hidden accept={STORY_ACCEPT} onChange={(e) => { setFiles(pickFiles(e.target.files, files, CHAT_FILES_MAX, toast.show)); e.target.value = ''; }} />
               </label>
-              <button type="button" className="st-ic" aria-label="Name another child" onClick={picker.toggle}>👧</button>
-              <textarea rows={1} value={text} maxLength={CHAT_TEXT_MAX} placeholder="Write a reply… (@ to name a child)" aria-label="Message" onChange={(e) => setText(e.target.value)}
+              <button type="button" className="st-ic" aria-label={`Name another ${circle.person}`} onClick={picker.toggle}>{circle.personEmoji}</button>
+              <textarea rows={1} value={text} maxLength={CHAT_TEXT_MAX} placeholder={`Write a reply… (@ to name a ${circle.person})`} aria-label="Message" onChange={(e) => setText(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void send(); } }} />
               <button type="button" className="st-send" disabled={!!sending || (!text.trim() && !files.length && !picker.picked.length)} onClick={() => void send()}>{sending ? '…' : 'Send'}</button>
             </div>
@@ -265,7 +278,7 @@ function ChatBubble({ org, data, m, getFile, onEdit, onRemoveFile }: {
             <small className="st-note">The earlier words are kept, and the PDF lists the change.</small>
           </div>
         ) : m.text && <p>{m.text}</p>}
-        <ChildCards kids={m.children ?? []} photos={data.childPhotos} />
+        <ChildCards kids={m.children ?? []} photos={data.childPhotos} type={org.type} />
         {m.files?.length > 0 && (
           <div className="st-pics">
             {m.files.map((f) => <FileView key={f.key} org={org} reportId={data.chat.id} file={f} getFile={getFile} onRemove={data.keeps ? () => onRemoveFile(f.key) : undefined} />)}
@@ -307,9 +320,10 @@ function ChatApprovals({ org, data, onDone }: { org: Organization; data: ChatOpe
     <div className="stack st-approvals">
       {(['director', 'board'] as ApprovalSlot[]).map((s) => {
         const a = c.approvals?.[s];
+        const labels = data.labels ?? APPROVAL_LABELS;
         return (
           <div key={s} className="st-approval">
-            <span className="grow"><b>{APPROVAL_LABELS[s]}</b><br /><span className="small muted">{a ? `✅ ${a.name}, ${a.role}, ${chatTime(a.at, tz)}` : 'Not approved yet'}</span></span>
+            <span className="grow"><b>{labels[s]}</b><br /><span className="small muted">{a ? `✅ ${a.name}, ${a.role}, ${chatTime(a.at, tz)}` : 'Not approved yet'}</span></span>
             {data.approves[s] && slot !== s && <button type="button" className="btn btn-small" disabled={busy} onClick={() => (andy ? void approve(s, !!a) : setSlot(s))}>{a ? 'Take back' : '✅ Approve'}</button>}
           </div>
         );
@@ -341,8 +355,8 @@ function SendBox({ org, data, onSent }: { org: Organization; data: ChatOpen; onS
   useEffect(() => {
     chatBoard(org.id).then((p) => { setPeople(p); setTicked(new Set(p.filter((x) => x.hasEmail).map((x) => x.name))); }).catch((err) => toast.show(friendlyError(err)));
   }, [org.id, toast]);
-  const link = `${location.origin}/hope/chats/${chat.id}`;
-  const urgent = useMemo(() => `URGENT: your response is needed in the conversation about ${chat.childName.split(' ')[0]}${chat.childCode ? ` (${chat.childCode})` : ''} at Freedom Hope Center. Please open it: ${link}`, [chat, link]);
+  const link = `${location.origin}${circleOf(org.type).chatsPath}/${chat.id}`;
+  const urgent = useMemo(() => `URGENT: your response is needed in the conversation about ${chat.childName.split(' ')[0]}${chat.childCode ? ` (${chat.childCode})` : ''} at ${org.name}. Please open it: ${link}`, [chat, link, org.name]);
   async function email() {
     setBusy(true);
     try { const to = await emailChat(org.id, chat.id, [...ticked], await hopeChatPdf(org, data, profile?.displayName ?? '')); toast.show(`Emailed to ${to.join(', ')}.`); onSent(); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
@@ -360,7 +374,7 @@ function SendBox({ org, data, onSent }: { org: Organization; data: ChatOpen; onS
             ))}
           </ul>
           <button type="button" className="btn btn-primary align-start" disabled={busy || ticked.size === 0} onClick={() => void email()}>{busy ? 'Emailing…' : `✉️ Email the PDF to ${ticked.size}`}</button>
-          <p className="small muted">The email carries the whole conversation as a PDF. "WhatsApp: urgent" asks that person for an urgent reply with a link; the child's details stay in Insight-IQ.</p>
+          <p className="small muted">The email carries the whole conversation as a PDF. "WhatsApp: urgent" asks that person for an urgent reply with a link; the details stay in Insight-IQ.</p>
         </>
       )}
     </div>

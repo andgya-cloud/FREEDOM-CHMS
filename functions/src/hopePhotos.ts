@@ -1,56 +1,31 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { logger } from 'firebase-functions';
-import { defineSecret } from 'firebase-functions/params';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getAuth } from 'firebase-admin/auth';
 import { proofAge } from './directorProof.js';
-import { classOf } from './shared/hopeClasses.js';
 import { getStorage } from 'firebase-admin/storage';
-import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import { chatRole } from './shared/hopeChats.js';
-import { childrenOf } from './hopeKids.js';
+import { appUrl, CIRCLE_SECRETS, circleContacts, circleEveryone, circleLeadEmails, circleMailer, circlePeopleOf, EMAIL, keepTestMail, nextNumber } from './circleKit.js';
+import { circleOf, isCircleType, kindLabel, type CircleType } from './shared/circles.js';
 import { sendChatReminders } from './hopeChats.js';
-import { hopeBoardContacts, plainName } from './pettyContacts.js';
-import { letterheadFor } from './shared/pettyVoucher.js';
+import { plainName } from './pettyContacts.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
 import {
   canDeletePhotoReport, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, isPhotoReportKind, MAX_PHOTO_FILES,
   PHOTO_FILE_MAX_BYTES, PHOTO_TEXT_MAX, PHOTO_TITLE_MAX, photoFileName, photoFilePath, photoFileTypeOf,
   canEditMessage, canPackageStory, canUnsay, canWriteInStory, cleanIncident, OPENING_ID, STORY_DOC_MAX_BYTES, STORY_FILES_MAX, STORY_PART_BYTES,
   STORY_TEXT_MAX, STORY_VIDEO_MAX_BYTES, storyStartEmail, type PhotoFile, type PhotoReport, type StoryMessage,
-  APPROVAL_LABELS, APPROVAL_PROOF_MINUTES, canApprove, canRemoveFiles, faceKey, FOLLOW_UP_HOURS, isHopeDirector, isStoryStatus, needsFollowUpReminder,
-  STORY_CHILDREN_MAX, STORY_STATUS_LABELS, storyRef, type ApprovalSlot, type RemovedFile, type StoryChild,
+  approvalLabels, APPROVAL_PROOF_MINUTES, canApprove, canRemoveFiles, faceKey, FOLLOW_UP_HOURS, isStoryStatus, needsFollowUpReminder,
+  STORY_STATUS_LABELS, storyRef, type ApprovalSlot, type RemovedFile,
 } from './shared/hopePhotos.js';
 
-/** Freedom Hope Center sends from freedomnbi@gmail.com (Andy, 2026-10-30). */
-const HOPE_EMAIL_APP_PASSWORD = defineSecret('HOPE_EMAIL_APP_PASSWORD');
-const appUrl = () => process.env.APP_URL || 'https://freedom-chms.web.app';
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Stored = PhotoReport & { id: string };
 const shown = (id: string, r: PhotoReport) => ({ id, ...r, createdAt: undefined, updatedAt: undefined });
-
-/** The board stakeholders the report can be sent to (the Director and the board), with their built-in contacts. */
-const boardOf = () => hopeBoardContacts().map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
-
-function mailer(): { transport: Transporter; from: string; test: string | undefined } | null {
-  const from = letterheadFor({ type: 'ministry', name: '' }).email;
-  const test = process.env.PETTY_MAIL_TEST_DIR;
-  const pass = test ? 'test' : HOPE_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
-  if (!from || !pass) return null;
-  return { from, test, transport: test ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport({ service: 'gmail', auth: { user: from, pass } }) };
-}
-async function keepTestMail(test: string | undefined, info: unknown, tag: string) {
-  if (!test) return;
-  await mkdir(test, { recursive: true });
-  await writeFile(join(test, `${Date.now()}-${tag}.json`), String((info as { message?: unknown }).message ?? ''));
-}
 
 const preview = (text: string, files: number) => (text.replace(/\s+/g, ' ').trim().slice(0, 90) || (files ? `📎 ${files} ${files === 1 ? 'file' : 'files'}` : ''));
 /** A reply's file in Storage; the opening's files keep their "1" to "10" places. */
@@ -72,33 +47,34 @@ const shownMessage = (id: string, m: StoryMessage) => (m.deleted
  * - "delete" (the Director, Andy, Doreen) with an optional reason; "restore" puts it back.
  * - "board": the names and numbers to send it to; "email": sends it to the chosen board members.
  */
-/** The next report number for this year, "FHC-2026-014" (v193, 4A). */
-async function nextRef(orgId: string): Promise<string> {
-  const year = Number(localDateKey().slice(0, 4));
-  const counter = db.doc(`organizations/${orgId}/counters/hopePhotoReports`);
-  const n = await db.runTransaction(async (tx) => {
-    const c = (await tx.get(counter)).data() as { year?: number; n?: number } | undefined;
-    const next = c?.year === year ? (c.n ?? 0) + 1 : 1;
-    tx.set(counter, { year, n: next });
-    return next;
-  });
-  return storyRef(year, n);
+/** The next report number for this year, "FHC-2026-014", "ADIA-2026-003", "FCN-2026-001" (v193 4A; 2026-11-07 7A). */
+async function nextRef(orgId: string, type: CircleType): Promise<string> {
+  const { year, n } = await nextNumber(orgId, 'hopePhotoReports');
+  return storyRef(year, n, type);
 }
 
-
-export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', timeoutSeconds: 120, secrets: [HOPE_EMAIL_APP_PASSWORD] }, async (request) => {
+/**
+ * Photos and wins for every organization (Hope 2026-11-04; ADIA and Freedom Church 2026-11-07, 1A-10A). The reports
+ * and their files are reached only here, so who may see what is checked on every call.
+ */
+export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', timeoutSeconds: 120, secrets: CIRCLE_SECRETS }, async (request) => {
   const caller = await requireCaller(request);
   const me = caller.profile as UserProfile;
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   if (!canAccessOrg(me, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this organization.');
   const org = (await db.doc(`organizations/${orgId}`).get()).data();
-  if (org?.type !== 'ministry') throw new HttpsError('failed-precondition', 'Photo reports are for the Hope Center.');
+  if (!isCircleType(org?.type)) throw new HttpsError('failed-precondition', 'Photo reports are not set up for this organization.');
+  const type: CircleType = org.type;
+  const circle = circleOf(type);
+  const boardOf = () => circleContacts(type, orgId);
+  const linkTo = (id: string) => `${appUrl()}${circle.photosPath}?report=${id}`;
+  const role = chatRole(me, orgId, type);
   const col = db.collection(`organizations/${orgId}/hopePhotoReports`);
   const action = String(data.action ?? '');
   const myName = me.displayName || me.email;
-  const all = canSeeAllPhotoReports(me, orgId);
-  const deleter = canDeletePhotoReport(me, orgId);
+  const all = canSeeAllPhotoReports(me, orgId, type);
+  const deleter = canDeletePhotoReport(me, orgId, type);
 
   if (action === 'list') {
     const reportId = typeof data.reportId === 'string' && data.reportId ? data.reportId.slice(0, 120) : null;
@@ -107,24 +83,24 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     else if (!all) q = q.where('senderUid', '==', caller.uid);
     const snap = await q.get();
     const rows: Stored[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as PhotoReport) }))
-      .filter((r) => canSeePhotoReport(me, caller.uid, r) || (r.deleted && deleter))
+      .filter((r) => canSeePhotoReport(me, caller.uid, r, type) || (r.deleted && deleter))
       .sort((a, b) => b.day.localeCompare(a.day) || b.id.localeCompare(a.id));
     return {
       reports: rows.filter((r) => !r.deleted).slice(0, 300).map((r) => shown(r.id, r)),
       deleted: deleter && !reportId ? rows.filter((r) => r.deleted).slice(0, 300).map((r) => shown(r.id, r)) : [],
-      seesAll: all, deletes: deleter, sends: canSendPhotoReport(me, orgId),
+      seesAll: all, deletes: deleter, sends: canSendPhotoReport(me, orgId, type),
     };
   }
 
   if (action === 'create') {
-    if (!canSendPhotoReport(me, orgId)) throw new HttpsError('permission-denied', 'You cannot send reports here.');
-    if (!isPhotoReportKind(data.kind)) throw new HttpsError('invalid-argument', 'Please choose the kind of report.');
+    if (!canSendPhotoReport(me, orgId, type)) throw new HttpsError('permission-denied', 'You cannot send reports here.');
+    if (!isPhotoReportKind(data.kind, type)) throw new HttpsError('invalid-argument', 'Please choose the kind of report.');
     const title = requireString(data.title, 'the title', { max: PHOTO_TITLE_MAX });
     const day = typeof data.day === 'string' && DAY.test(data.day) ? data.day : '';
     if (!day || day > localDateKey()) throw new HttpsError('invalid-argument', 'Please check the date.');
     const text = typeof data.text === 'string' ? data.text.trim().slice(0, PHOTO_TEXT_MAX) : '';
     let reportId: string | null = null; let reportLabel: string | null = null;
-    if (typeof data.reportId === 'string' && data.reportId) {
+    if (type === 'ministry' && typeof data.reportId === 'string' && data.reportId) {
       const rep = (await db.doc(`organizations/${orgId}/hopeReports/${data.reportId.slice(0, 120)}`).get());
       if (!rep.exists) throw new HttpsError('not-found', 'That weekly or monthly report was not found.');
       reportId = rep.id; reportLabel = String(rep.data()?.label ?? '');
@@ -132,13 +108,13 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     const ref = col.doc();
     const at = new Date().toISOString();
     const incident = data.kind === 'incident' ? cleanIncident(data.incident) : null;
-    const children = await childrenOf(orgId, data.childIds);
-    const number = await nextRef(orgId);
+    const children = await circlePeopleOf(orgId, data.childIds, type);
+    const number = await nextRef(orgId, type);
     const doc: PhotoReport & Record<string, unknown> = {
       ref: number, seenNames: { [caller.uid]: myName }, ...(children.length ? { children } : {}),
       orgId, kind: data.kind, title, day, text, files: [], reportId, reportLabel,
       senderUid: caller.uid, senderName: myName, deleted: false,
-      startedAt: at, senderRole: chatRole(me, orgId), lastAt: at, lastText: preview(text, 0) || title, lastByName: myName, replies: 0, seen: { [caller.uid]: at }, status: 'open',
+      startedAt: at, senderRole: role, lastAt: at, lastText: preview(text, 0) || title, lastByName: myName, replies: 0, seen: { [caller.uid]: at }, status: 'open',
       ...(incident ? { incident } : {}),
       createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid,
     };
@@ -146,13 +122,13 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     // Everyone else hears by email that a conversation has started (Andy, 2026-11-06); WhatsApp is the sender's one tap.
     const emailed: string[] = [];
     if (!reportId) {
-      const m = mailer();
-      if (!m) logger.warn('Hope photo reports: email is not set up.');
+      const m = circleMailer(type);
+      if (!m) logger.warn(`${circle.orgName} photo reports: email is not set up.`);
       else {
-        for (const p of boardOf().filter((x) => plainName(x.name) !== plainName(myName) && EMAIL.test(x.email))) {
-          const { subject, text: body } = storyStartEmail(doc, p.name.split(' ')[0] ?? p.name, `${appUrl()}/hope/photos?report=${ref.id}`, formatDateKey);
+        for (const p of (await boardOf()).filter((x) => plainName(x.name) !== plainName(myName) && EMAIL.test(x.email))) {
+          const { subject, text: body } = storyStartEmail(doc, p.name.split(' ')[0] ?? p.name, linkTo(ref.id), formatDateKey, type, String(org.name || circle.orgName));
           try {
-            const info = await m.transport.sendMail({ from: `"Freedom Hope Center" <${m.from}>`, replyTo: m.from, to: `"${p.name.replace(/"/g, '')}" <${p.email}>`, subject, text: body, ...(data.kind === 'incident' ? { priority: 'high' as const } : {}) });
+            const info = await m.transport.sendMail({ from: `"${String(org.name || m.name).replace(/"/g, '')}" <${m.from}>`, replyTo: m.from, to: `"${p.name.replace(/"/g, '')}" <${p.email}>`, subject, text: body, ...(data.kind === 'incident' ? { priority: 'high' as const } : {}) });
             await keepTestMail(m.test, info, `hopestory-${ref.id}-${plainName(p.name)}`);
             emailed.push(p.name);
           } catch (err) { logger.warn(`Photo report email to ${p.email} failed`, err); }
@@ -164,14 +140,14 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   }
 
   if (action === 'board') {
-    if (!all) throw new HttpsError('permission-denied', 'Only the Director and the board send reports on.');
-    return { people: boardOf().map(({ name, email, phone }) => ({ name, hasEmail: EMAIL.test(email), phone })) };
+    if (!all) throw new HttpsError('permission-denied', `Only ${circle.readers} send reports on.`);
+    return { people: (await boardOf()).map(({ name, email, phone }) => ({ name, hasEmail: EMAIL.test(email), phone })) };
   }
 
   if (action === 'people') {
     // The people to tell on WhatsApp when a conversation starts: everyone but the sender.
-    if (!canSendPhotoReport(me, orgId)) throw new HttpsError('permission-denied', 'You cannot send reports here.');
-    return { people: boardOf().filter((p) => plainName(p.name) !== plainName(myName)).map(({ name, phone }) => ({ name, hasEmail: true, phone })) };
+    if (!canSendPhotoReport(me, orgId, type)) throw new HttpsError('permission-denied', 'You cannot send reports here.');
+    return { people: (await boardOf()).filter((p) => plainName(p.name) !== plainName(myName)).map(({ name, phone }) => ({ name, hasEmail: true, phone })) };
   }
 
   if (action === 'faces') {
@@ -187,7 +163,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     if (!key) throw new HttpsError('invalid-argument', 'Whose photo is it?');
     if (key !== faceKey(myName)) {
       if (!canKeepAccounts(me)) throw new HttpsError('permission-denied', 'Only Andy and Doreen set other people\'s photos.');
-      if (!boardOf().some((p) => faceKey(p.name) === key)) throw new HttpsError('invalid-argument', 'That name is not on the list.');
+      if (!(await boardOf()).some((p) => faceKey(p.name) === key)) throw new HttpsError('invalid-argument', 'That name is not on the list.');
     }
     const photo = data.photo;
     if (photo === null) { await db.doc(`stakeholderFaces/${key}`).delete(); return { ok: true }; }
@@ -198,17 +174,8 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
 
   if (action === 'children') {
     // The children to name in a message (2A): name, HC code and class only.
-    if (!canSendPhotoReport(me, orgId) && !all) throw new HttpsError('permission-denied', 'You cannot write here.');
-    const today = localDateKey();
-    const kids = (await db.collection(`organizations/${orgId}/children`).get()).docs.filter((d) => !d.data().deletedAt && d.data().status !== 'left');
-    const people = kids.length ? await db.getAll(...kids.map((d) => db.doc(`organizations/${orgId}/people/${d.id}`))) : [];
-    const names = new Map(people.map((p) => [p.id, p.data() ?? {}]));
-    return {
-      children: kids.map((d) => {
-        const p = names.get(d.id) ?? {};
-        return { id: d.id, name: String(p.fullName ?? ''), code: String(d.data().code ?? ''), className: classOf(p.dateOfBirth as string | null, today)?.name ?? '' };
-      }).filter((c) => c.name).sort((a, b) => a.name.localeCompare(b.name)),
-    };
+    if (!canSendPhotoReport(me, orgId, type) && !all) throw new HttpsError('permission-denied', 'You cannot write here.');
+    return { children: await circleEveryone(orgId, type) };
   }
 
   const id = requireString(data.id, 'the report', { max: 80 });
@@ -232,7 +199,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     return { file };
   }
 
-  if (!canSeePhotoReport(me, caller.uid, r)) throw new HttpsError('permission-denied', 'You cannot open this report.');
+  if (!canSeePhotoReport(me, caller.uid, r, type)) throw new HttpsError('permission-denied', 'You cannot open this report.');
 
   if (action === 'file') {
     const key = requireString(data.key, 'the file', { max: 40 });
@@ -257,7 +224,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   }
 
   if (action === 'delete' || action === 'restore') {
-    if (!deleter) throw new HttpsError('permission-denied', 'Only the Director, Andy and Doreen delete reports.');
+    if (!deleter) throw new HttpsError('permission-denied', `Only ${circle.keepers} delete reports.`);
     const del = action === 'delete';
     const reason = del && typeof data.reason === 'string' ? data.reason.trim().slice(0, 300) : '';
     await ref.update({
@@ -268,7 +235,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     return { ok: true };
   }
 
-  const writer = canWriteInStory(me, caller.uid, r);
+  const writer = canWriteInStory(me, caller.uid, r, type);
   const now = () => new Date().toISOString();
 
   if (action === 'messages') {
@@ -277,7 +244,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     const last = r.lastAt ?? r.startedAt ?? '';
     const change: Record<string, unknown> = {};
     if (last && r.seen?.[caller.uid] !== last) { change[`seen.${caller.uid}`] = last; change[`seenNames.${caller.uid}`] = myName; }
-    if (!r.ref && !r.deleted) { r.ref = await nextRef(orgId); change.ref = r.ref; }
+    if (!r.ref && !r.deleted) { r.ref = await nextRef(orgId, type); change.ref = r.ref; }
     if (Object.keys(change).length) await ref.update(change);
     if (last) { r.seen = { ...r.seen, [caller.uid]: last }; r.seenNames = { ...r.seenNames, [caller.uid]: myName }; }
     // The children's photos (only those with photo consent have one) and the stakeholders' photos.
@@ -287,8 +254,8 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     return {
       childPhotos: Object.fromEntries(kidPhotos.filter((d) => d.exists).map((d) => [d.id, String(d.data()?.photo ?? '')])),
       faces: Object.fromEntries(faces.map((d) => [d.id, String(d.data().photo ?? '')])),
-      removes: canRemoveFiles(me), approves: { director: canApprove(me, orgId, 'director'), board: canApprove(me, orgId, 'board') },
-      report: shown(id, r), messages, me: caller.uid, writes: writer, keeps: canKeepAccounts(me), packages: canPackageStory(me, orgId),
+      removes: canRemoveFiles(me), approves: { director: canApprove(me, orgId, 'director', type), board: canApprove(me, orgId, 'board', type) }, labels: approvalLabels(type),
+      report: shown(id, r), messages, me: caller.uid, writes: writer, keeps: canKeepAccounts(me), packages: canPackageStory(me, orgId, type),
       seesAll: all, deletes: deleter, now: Date.now(),
     };
   }
@@ -333,7 +300,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   }
 
   if (action === 'say') {
-    if (!writer) throw new HttpsError('permission-denied', 'Only the Director, the sender, the board, Andy and Doreen write here.');
+    if (!writer) throw new HttpsError('permission-denied', `Only ${circle.readers} and the sender write here.`);
     const text = typeof data.text === 'string' ? data.text.trim().slice(0, STORY_TEXT_MAX) : '';
     const wanted = Array.isArray(data.files) ? (data.files as PhotoFile[]).slice(0, STORY_FILES_MAX) : [];
     const bucket = getStorage().bucket();
@@ -353,14 +320,14 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
       if (files.length) await ref.update({ files: FieldValue.arrayUnion(...files), updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
       return { id: OPENING_ID, at: r.startedAt ?? '' };
     }
-    const children = await childrenOf(orgId, data.childIds);
+    const children = await circlePeopleOf(orgId, data.childIds, type);
     if (!text && !files.length && !children.length) throw new HttpsError('invalid-argument', 'Write a message or add a photo.');
     const at = now();
-    const msg: StoryMessage & { fileKeys: string[] } = { text, byUid: caller.uid, byName: myName, byRole: chatRole(me, orgId), at, files, fileKeys: files.map((f) => f.key), ...(children.length ? { children } : {}) };
+    const msg: StoryMessage & { fileKeys: string[] } = { text, byUid: caller.uid, byName: myName, byRole: role, at, files, fileKeys: files.map((f) => f.key), ...(children.length ? { children } : {}) };
     const mref = ref.collection('messages').doc();
     const batch = db.batch();
     batch.set(mref, msg);
-    batch.update(ref, { lastAt: at, lastText: preview(text, files.length) || `👧 ${children.map((c) => c.name.split(' ')[0]).join(', ')}`, lastByName: myName, replies: FieldValue.increment(1), [`seen.${caller.uid}`]: at, [`seenNames.${caller.uid}`]: myName, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
+    batch.update(ref, { lastAt: at, lastText: preview(text, files.length) || `${circle.personEmoji} ${children.map((c) => c.name.split(' ')[0]).join(', ')}`, lastByName: myName, replies: FieldValue.increment(1), [`seen.${caller.uid}`]: at, [`seenNames.${caller.uid}`]: myName, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
     await batch.commit();
     return { id: mref.id, at };
   }
@@ -415,7 +382,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   async function systemLine(text: string, extra: Record<string, unknown> = {}) {
     const at = now();
     const batch = db.batch();
-    batch.set(ref.collection('messages').doc(), { text, byUid: caller.uid, byName: myName, byRole: chatRole(me, orgId), at, files: [], system: true } satisfies StoryMessage);
+    batch.set(ref.collection('messages').doc(), { text, byUid: caller.uid, byName: myName, byRole: role, at, files: [], system: true } satisfies StoryMessage);
     batch.update(ref, { ...extra, lastAt: at, lastText: text.slice(0, 90), lastByName: myName, [`seen.${caller.uid}`]: at, [`seenNames.${caller.uid}`]: myName, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
     await batch.commit();
   }
@@ -453,7 +420,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
 
   if (action === 'status') {
     // Open → Under review → Resolved → Sent to the board (6A); the change is written in the conversation.
-    if (!canPackageStory(me, orgId) || r.deleted) throw new HttpsError('permission-denied', 'Only the Director, Andy or Doreen change the status.');
+    if (!canPackageStory(me, orgId, type) || r.deleted) throw new HttpsError('permission-denied', `Only ${circle.keepers} change the status.`);
     if (!isStoryStatus(data.status) || data.status === 'sent') throw new HttpsError('invalid-argument', 'Please choose the status.');
     if ((r.status ?? 'open') === data.status) return { ok: true };
     await systemLine(`${myName} marked this ${STORY_STATUS_LABELS[data.status]}.`, { status: data.status });
@@ -461,7 +428,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   }
 
   if (action === 'followUp') {
-    if (!canPackageStory(me, orgId) || r.kind !== 'incident') throw new HttpsError('permission-denied', 'Only the Director, Andy or Doreen mark the follow-up.');
+    if (!canPackageStory(me, orgId, type) || r.kind !== 'incident') throw new HttpsError('permission-denied', `Only ${circle.keepers} mark the follow-up.`);
     const done = data.done !== false;
     await systemLine(done ? `${myName} marked the follow-up done.` : `${myName} marked the follow-up not done yet.`,
       done ? { followUpDoneAt: now(), followUpDoneByName: myName } : { followUpDoneAt: FieldValue.delete(), followUpDoneByName: FieldValue.delete() });
@@ -472,21 +439,21 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     // The Director's and the board's approval, each with that person's own password (7A), printed on the PDF.
     const slot = data.slot === 'director' || data.slot === 'board' ? data.slot as ApprovalSlot : null;
     if (!slot || r.deleted) throw new HttpsError('invalid-argument', 'Please choose the approval.');
-    if (!canApprove(me, orgId, slot)) throw new HttpsError('permission-denied', slot === 'director' ? 'Only the Director gives this approval.' : 'Only a board member, Andy or Doreen gives the board\'s approval.');
+    if (!canApprove(me, orgId, slot, type)) throw new HttpsError('permission-denied', `This approval is for the ${approvalLabels(type)[slot]}.`);
     const proof = typeof data.proof === 'string' && data.proof.startsWith('idtoken:') ? data.proof.slice(8) : '';
     const token = proof ? await getAuth().verifyIdToken(proof).catch(() => null) : null;
     if (!token || token.uid !== caller.uid || (await proofAge(token)) > APPROVAL_PROOF_MINUTES * 60) throw new HttpsError('permission-denied', 'The password could not be confirmed. Please type it again.');
     if (data.undo === true) {
-      await systemLine(`${myName} took back the ${APPROVAL_LABELS[slot].toLowerCase()} approval.`, { [`approvals.${slot}`]: FieldValue.delete() });
+      await systemLine(`${myName} took back the ${approvalLabels(type)[slot].toLowerCase()} approval.`, { [`approvals.${slot}`]: FieldValue.delete() });
       return { ok: true };
     }
-    await systemLine(`✅ Approved by ${myName} (${APPROVAL_LABELS[slot]}).`, { [`approvals.${slot}`]: { name: myName, role: chatRole(me, orgId), at: now() } });
+    await systemLine(`✅ Approved by ${myName} (${approvalLabels(type)[slot]}).`, { [`approvals.${slot}`]: { name: myName, role, at: now() } });
     await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: 'hope_photo_report_approve', path: ref.path, collection: 'hopePhotoReports', docId: id, orgId, note: slot });
     return { ok: true };
   }
 
   if (action === 'package') {
-    if (!canPackageStory(me, orgId) || r.deleted) throw new HttpsError('permission-denied', 'Only the Director, Andy or Doreen package a report for the board.');
+    if (!canPackageStory(me, orgId, type) || r.deleted) throw new HttpsError('permission-denied', `Only ${circle.keepers} package a report.`);
     const summary = typeof data.summary === 'string' ? data.summary.trim().slice(0, 3000) : '';
     await ref.update({ summary, packagedByName: myName, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
     return { ok: true };
@@ -494,21 +461,21 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
 
   if (action === 'email') {
     // The packaged PDF to the chosen board members, by button only (6A).
-    if (!canPackageStory(me, orgId) || r.deleted) throw new HttpsError('permission-denied', 'Only the Director, Andy or Doreen send the report to the board.');
+    if (!canPackageStory(me, orgId, type) || r.deleted) throw new HttpsError('permission-denied', `Only ${circle.keepers} send the report on.`);
     const names = new Set(requireStringArray(data.names, 'who to send to').map(plainName));
-    const to = boardOf().filter((p) => names.has(plainName(p.name)) && EMAIL.test(p.email));
+    const to = (await boardOf()).filter((p) => names.has(plainName(p.name)) && EMAIL.test(p.email));
     if (!to.length) throw new HttpsError('invalid-argument', 'Please tick at least one person with an email address.');
     const pdf = Buffer.from(requireString(data.pdf, 'the PDF', { max: 14_000_000 }), 'base64');
     if (photoFileTypeOf(pdf)?.ext !== 'pdf') throw new HttpsError('invalid-argument', 'The report PDF could not be made.');
-    const m = mailer();
-    if (!m) throw new HttpsError('failed-precondition', 'Email is not set up for the Hope Center yet.');
-    const orgName = String(org?.name || 'Freedom Hope Center');
+    const m = circleMailer(type);
+    if (!m) throw new HttpsError('failed-precondition', `Email is not set up for ${circle.orgName} yet.`);
+    const orgName = String(org?.name || circle.orgName);
     const label = r.kind === 'incident' ? 'Incident report' : 'Report';
     try {
       const info = await m.transport.sendMail({
         from: `"${orgName.replace(/"/g, '')}" <${m.from}>`, replyTo: m.from, to: to.map((p) => `"${p.name.replace(/"/g, '')}" <${p.email}>`).join(', '),
         subject: `${label}${r.ref ? ` ${r.ref}` : ''}: ${r.title} (${orgName})`,
-        text: [`Dear board,`, '', `Attached is the report "${r.title}" (${formatDateKey(r.day)}), sent by ${myName}.`, '', `Open the conversation in Insight-IQ: ${appUrl()}/hope/photos?report=${id}`, '', orgName].join('\n'),
+        text: [type === 'church_campus' ? 'Dear leaders,' : 'Dear board,', '', `Attached is the report "${r.title}" (${formatDateKey(r.day)}, ${kindLabel(r.kind, type)}), sent by ${myName}.`, '', `Open the conversation in Insight-IQ: ${linkTo(id)}`, '', orgName].join('\n'),
         attachments: [{ filename: `${photoFileName(r.title, 1, 'pdf').replace(/ 1\.pdf$/, '')}.pdf`, content: pdf, contentType: 'application/pdf' }],
       });
       await keepTestMail(m.test, info, `hopephoto-${id}`);
@@ -529,32 +496,30 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
  * was reported, the Director gets one email (Andy and Doreen are copied) with the link. Checked every two hours.
  */
 export async function sendFollowUpReminders(now = Date.now()): Promise<number> {
-  const orgs = await db.collection('organizations').where('type', '==', 'ministry').get();
+  const orgs = await db.collection('organizations').where('type', 'in', ['ministry', 'college', 'church_campus']).get();
   let sent = 0;
   for (const o of orgs.docs) {
+    const type = o.data().type as CircleType;
+    const circle = circleOf(type);
+    const orgName = String(o.data().name || circle.orgName);
     const snap = await db.collection(`organizations/${o.id}/hopePhotoReports`).where('kind', '==', 'incident').get();
     const due = snap.docs.filter((d) => needsFollowUpReminder(d.data() as PhotoReport, now));
     if (!due.length) continue;
-    const users = (await db.collection('users').where('active', '==', true).get()).docs.map((d) => d.data() as UserProfile);
-    const directors = users.filter((u) => isHopeDirector(u, o.id) && !u.allOrgs);
-    const contacts = boardOf();
-    const emailOf = (name: string, fallback: string) => contacts.find((c) => plainName(c.name) === plainName(name))?.email || fallback;
-    const to = [...new Set(directors.map((u) => emailOf(u.displayName, u.email)).filter((e) => EMAIL.test(e)))];
-    const cc = [...new Set(contacts.filter((c) => ['andrewguya', 'doreenmayaka'].includes(plainName(c.name))).map((c) => c.email).filter((e) => EMAIL.test(e)))];
-    const m = mailer();
-    if (!m || !to.length) { logger.warn('Incident reminders: no email or no Director address.'); continue; }
+    const { to, cc } = await circleLeadEmails(type, o.id);
+    const m = circleMailer(type);
+    if (!m || !to.length) { logger.warn(`Incident reminders: no email or no address for ${orgName}.`); continue; }
     for (const d of due) {
       const r = d.data() as PhotoReport;
-      const link = `${appUrl()}/hope/photos?report=${d.id}`;
+      const link = `${appUrl()}${circle.photosPath}?report=${d.id}`;
       try {
         const info = await m.transport.sendMail({
-          from: `"Freedom Hope Center" <${m.from}>`, replyTo: m.from, to: to.join(', '), cc: cc.join(', '), priority: 'high',
+          from: `"${orgName.replace(/"/g, '')}" <${m.from}>`, replyTo: m.from, to: to.join(', '), ...(cc.length ? { cc: cc.join(', ') } : {}), priority: 'high',
           subject: `Reminder: follow-up for the incident ${r.ref ?? ''} "${r.title}"`.replace(/\s+/g, ' '),
           text: [
-            'Dear Director,', '',
+            `Dear ${circle.lead},`, '',
             `The incident "${r.title}" (${formatDateKey(r.day)}) was reported more than ${FOLLOW_UP_HOURS} hours ago and its follow-up is not marked done yet.`,
             r.incident?.followUp ? `Follow-up planned: ${r.incident.followUp}` : '', '',
-            `Please open it, and tap "Follow-up done" when it is done: ${link}`, '', 'Freedom Hope Center',
+            `Please open it, and tap "Follow-up done" when it is done: ${link}`, '', orgName,
           ].filter((x, i, a) => x || a[i - 1]).join('\n'),
         });
         await keepTestMail(m.test, info, `hopeincident-${d.id}`);
@@ -567,6 +532,6 @@ export async function sendFollowUpReminders(now = Date.now()): Promise<number> {
 }
 
 export const hopeIncidentReminders = onSchedule(
-  { schedule: 'every 2 hours', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, memory: '256MiB', secrets: [HOPE_EMAIL_APP_PASSWORD] },
+  { schedule: 'every 2 hours', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, memory: '256MiB', secrets: CIRCLE_SECRETS },
   async () => { await sendFollowUpReminders(); await sendChatReminders(); },
 );

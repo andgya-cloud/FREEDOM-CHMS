@@ -14,7 +14,7 @@ import { hopeStoryPdf } from '../../lib/hopeStoryPdf';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 import { chatRole, chatTime } from '../../../functions/src/shared/hopeChats';
 import {
-  incidentRows, MAX_PHOTO_FILES, PHOTO_REPORT_EMOJI, PHOTO_REPORT_KINDS, PHOTO_REPORT_LABELS, PHOTO_TEXT_MAX, PHOTO_TITLE_MAX,
+  incidentRows, MAX_PHOTO_FILES, PHOTO_REPORT_EMOJI, PHOTO_TEXT_MAX, PHOTO_TITLE_MAX,
   STORY_FILES_MAX, STORY_TEXT_MAX, storyStartWhatsApp, storyTimeline, storyTint, UNSAY_MINUTES,
   type IncidentDetails, type PhotoFile, type PhotoReportKind, type StoryMessage,
   APPROVAL_LABELS, builtInFace, faceKey, FOLLOW_UP_HOURS, SEVERITY_LABELS, STORY_CHILDREN_MAX, STORY_STATUS_LABELS, STORY_STATUSES,
@@ -24,12 +24,20 @@ import { useIsAndy } from '../../lib/andy';
 import { myOwnProof, passwordProof } from '../../lib/pettyPin';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate, useHopePage } from './common';
+import { CircleGate } from '../../components/CircleGate';
+import { circleOf, KINDS_OF, kindLabel, type Circle, type CircleType } from '../../../functions/src/shared/circles';
 import { useClubs } from '../../state/useHope';
 import { WIN_KIND_LABELS } from '../../../functions/src/shared/hopeClubs';
 
 export function HopePhotosPage() {
   return <HopeGate title="Photos and wins">{(org) => <Photos org={org} />}</HopeGate>;
 }
+
+/** Photos and wins at ADIA and Freedom Church (Andy, 2026-11-07, 1A-10A): the same conversations as the Hope Centre. */
+export function CirclePhotosPage({ type }: { type: Exclude<CircleType, 'ministry'> }) {
+  return <CircleGate type={type} title="Photos and wins">{(org) => <Photos org={org} />}</CircleGate>;
+}
+const circleFor = (org: Organization): Circle => circleOf(org.type);
 
 /** Loads the photo reports this person may see; reportId narrows it to one weekly or monthly report. */
 export function usePhotoReports(orgId: string, reportId?: string) {
@@ -45,7 +53,7 @@ export function usePhotoReports(orgId: string, reportId?: string) {
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('');
 export const tintStyle = (name: string, uid?: string) => ({ '--tint': storyTint(name, uid) }) as CSSProperties;
 const isUnseen = (r: StoredPhotoReport, uid: string) => !!r.lastAt && (!r.seen?.[uid] || r.seen[uid]! < r.lastAt);
-const appLink = (id: string) => `${location.origin}/hope/photos?report=${id}`;
+const appLink = (id: string, type?: string) => `${location.origin}${circleOf(type).photosPath}?report=${id}`;
 const waNumber = (phone: string) => phone.replace(/\D/g, '').replace(/^0/, '254');
 
 /**
@@ -59,6 +67,9 @@ function Photos({ org }: { org: Organization }) {
   const { profile } = useAuth();
   const uid = profile?.uid ?? '';
   const { list, error, reload } = usePhotoReports(org.id);
+  const circle = circleFor(org);
+  const hope = circle.type === 'ministry';
+  const kinds = KINDS_OF[circle.type];
   const openId = params.get('report') ?? '';
   const making = params.get('new') === '1';
   const forReport = params.get('for') ?? '';
@@ -80,10 +91,13 @@ function Photos({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head">
         <h1>📷 Photos and wins</h1>
-        {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>📷 New report</button>}
+        <div className="btn-line">
+          {!hope && <Link to={circle.vaultPath} className="btn btn-quiet">🔒 Private conversations</Link>}
+          {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>📷 New report</button>}
+        </div>
       </div>
       <p className="small muted">
-        {list?.seesAll ? 'Each report is a conversation: open it to reply, add photos, and package it for the board.' : 'Only the Director, the board, Andy and Doreen see these reports. You see the ones you sent.'}
+        {list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
       </p>
       {error && <p className="notice notice-warn small">{error}</p>}
 
@@ -97,9 +111,9 @@ function Photos({ org }: { org: Organization }) {
         <>
           {list.reports.length > 0 && (
             <div className="chips" role="radiogroup" aria-label="Show">
-              {(['all', ...PHOTO_REPORT_KINDS] as const).map((k) => (
+              {(['all', ...kinds] as const).map((k) => (
                 <button key={k} type="button" role="radio" aria-checked={kind === k} className={`chip${kind === k ? ' chip-on' : ''}`} onClick={() => setKind(k)}>
-                  {k === 'all' ? 'All' : `${PHOTO_REPORT_EMOJI[k]} ${PHOTO_REPORT_LABELS[k]}`}
+                  {k === 'all' ? 'All' : `${PHOTO_REPORT_EMOJI[k]} ${kindLabel(k, circle.type)}`}
                 </button>
               ))}
             </div>
@@ -108,7 +122,7 @@ function Photos({ org }: { org: Organization }) {
             <ul className="st-list">
               {shown.map((r) => (
                 <li key={r.id}>
-                  <Link to={`/hope/photos?report=${r.id}`} className={`st-item${r.kind === 'incident' ? ' incident' : ''}`}>
+                  <Link to={`${circle.photosPath}?report=${r.id}`} className={`st-item${r.kind === 'incident' ? ' incident' : ''}`}>
                     <span className="st-face" style={tintStyle(r.lastByName ?? r.senderName)} aria-hidden="true">{PHOTO_REPORT_EMOJI[r.kind]}</span>
                     <span className="st-item-main">
                       <span className="st-item-title">{r.title}{isUnseen(r, uid) && <i className="st-dot" aria-label="New messages" />}</span>
@@ -125,7 +139,20 @@ function Photos({ org }: { org: Organization }) {
           )}
         </>
       )}
-      {!making && <ClubWins org={org} />}
+      {!making && hope && <ClubWins org={org} />}
+      {!making && !hope && list && list.deleted.length > 0 && (
+        <details className="card hr-fold">
+          <summary><h2>🗑 Deleted reports</h2><span className="small muted">{list.deleted.length}</span></summary>
+          <ul className="link-list">
+            {list.deleted.map((r) => (
+              <li key={r.id}><Link to={`${circle.photosPath}?report=${r.id}`}>
+                <span className="link-title">{PHOTO_REPORT_EMOJI[r.kind]} {r.title}</span>
+                <span className="link-detail">{[r.ref, `deleted by ${r.deletedByName ?? ''}`, r.deletedOn ? formatDateKey(r.deletedOn) : '', r.deleteReason].filter(Boolean).join(' · ')}</span>
+              </Link></li>
+            ))}
+          </ul>
+        </details>
+      )}
     </div>
   );
 }
@@ -206,7 +233,8 @@ function FilePicker({ files, setFiles, max }: { files: File[]; setFiles: (f: Fil
 const NO_INCIDENT: IncidentDetails = { time: '', place: '', hurt: '', action: '', parentsTold: null, followUp: '', severity: null };
 
 /** The incident's own questions (7A). */
-function IncidentFields({ value, onChange }: { value: IncidentDetails; onChange: (v: IncidentDetails) => void }) {
+function IncidentFields({ value, onChange, circle }: { value: IncidentDetails; onChange: (v: IncidentDetails) => void; circle: Circle }) {
+  const hope = circle.type === 'ministry';
   const set = (k: keyof IncidentDetails, v: string | boolean | null) => onChange({ ...value, [k]: v });
   return (
     <fieldset className="st-incident-fields stack">
@@ -221,19 +249,19 @@ function IncidentFields({ value, onChange }: { value: IncidentDetails; onChange:
       </div>
       <div className="grid-2">
         <label className="field"><span>Time</span><input type="time" value={value.time} onChange={(e) => set('time', e.target.value)} /></label>
-        <label className="field"><span>Where</span><input value={value.place} maxLength={300} onChange={(e) => set('place', e.target.value)} placeholder="Playground" /></label>
+        <label className="field"><span>Where</span><input value={value.place} maxLength={300} onChange={(e) => set('place', e.target.value)} placeholder={hope ? 'Playground' : circle.type === 'college' ? 'Workshop' : 'Main hall'} /></label>
       </div>
-      <label className="field"><span>Who was hurt</span><input value={value.hurt} maxLength={300} onChange={(e) => set('hurt', e.target.value)} placeholder="Name and HC code, or 'No one'" /></label>
-      <label className="field"><span>What was done</span><textarea rows={2} value={value.action} maxLength={300} onChange={(e) => set('action', e.target.value)} placeholder="First aid, called the nurse…" /></label>
+      <label className="field"><span>Who was hurt</span><input value={value.hurt} maxLength={300} onChange={(e) => set('hurt', e.target.value)} placeholder={hope ? "Name and HC code, or 'No one'" : "Name, or 'No one'"} /></label>
+      <label className="field"><span>What was done</span><textarea rows={2} value={value.action} maxLength={300} onChange={(e) => set('action', e.target.value)} placeholder={hope ? 'First aid, called the nurse…' : 'First aid, called for help…'} /></label>
       <div className="field">
-        <span>Were the parents or guardians told?</span>
+        <span>{circle.type === 'church_campus' ? 'Was the family told?' : 'Were the parents or guardians told?'}</span>
         <div className="chips" role="radiogroup" aria-label="Parents told">
           {([[true, 'Yes'], [false, 'No']] as const).map(([v, l]) => (
             <button key={l} type="button" role="radio" aria-checked={value.parentsTold === v} className={`chip${value.parentsTold === v ? ' chip-on' : ''}`} onClick={() => set('parentsTold', value.parentsTold === v ? null : v)}>{l}</button>
           ))}
         </div>
       </div>
-      <label className="field"><span>Follow-up</span><textarea rows={2} value={value.followUp} maxLength={300} onChange={(e) => set('followUp', e.target.value)} placeholder="Check on the child tomorrow…" /></label>
+      <label className="field"><span>Follow-up</span><textarea rows={2} value={value.followUp} maxLength={300} onChange={(e) => set('followUp', e.target.value)} placeholder={`Check on the ${circle.person} tomorrow…`} /></label>
     </fieldset>
   );
 }
@@ -248,7 +276,14 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
   const [incident, setIncident] = useState<IncidentDetails>(NO_INCIDENT);
   const [files, setFiles] = useState<File[]>([]);
   const [progress, setProgress] = useState<[number, number] | null>(null);
-  const picker = useChildPicker(org.id, text, setText);
+  const picker = useChildPicker(org.id, text, setText, org.type);
+  const circle = circleFor(org);
+  const kinds = KINDS_OF[circle.type];
+  const sample: Partial<Record<PhotoReportKind, string>> = circle.type === 'college'
+    ? { win: 'Grace passed her trade test', activity: 'Catering practical day', exams: 'Cohort 3 CAT results', incident: 'A student was hurt in the workshop' }
+    : circle.type === 'church_campus'
+      ? { win: 'Healed after prayer', activity: 'Youth Sunday', care: 'Hospital visit to Mary', incident: 'A child got lost after the service' }
+      : { win: 'Amani read a whole book', activity: 'Sports day', incident: 'A child fell in the playground' };
 
   async function send() {
     if (!title.trim()) { toast.show('Please give it a title.'); return; }
@@ -264,23 +299,23 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
   return (
     <section className="card stack">
       <h2>{forReport ? `Add photos to ${forLabel || 'the report'}` : 'Start a report'}</h2>
-      <p className="small muted">{forReport ? "These photos will be printed at the end of the report's PDF." : 'Your first message opens the conversation. Everyone on the board gets an email, and you can tell them on WhatsApp with one tap.'}</p>
+      <p className="small muted">{forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
       <div className="ph-kinds" role="radiogroup" aria-label="Kind of report">
-        {PHOTO_REPORT_KINDS.map((k) => (
+        {kinds.map((k) => (
           <button key={k} type="button" role="radio" aria-checked={kind === k} className={`ph-kind${kind === k ? ' on' : ''}${k === 'incident' ? ' incident' : ''}`} onClick={() => setKind(k)}>
-            <span aria-hidden="true">{PHOTO_REPORT_EMOJI[k]}</span>{PHOTO_REPORT_LABELS[k]}
+            <span aria-hidden="true">{PHOTO_REPORT_EMOJI[k]}</span>{kindLabel(k, circle.type)}
           </button>
         ))}
       </div>
-      {kind === 'incident' && <p className="notice notice-warn small">An incident is seen only by the Director, the board, Andy and Doreen.</p>}
-      <label className="field"><span>Title</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={kind === 'win' ? 'Amani read a whole book' : kind === 'activity' ? 'Sports day' : kind === 'incident' ? 'A child fell in the playground' : ''} /></label>
+      {kind === 'incident' && <p className="notice notice-warn small">An incident is seen only by {circle.readers}.</p>}
+      <label className="field"><span>Title</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={sample[kind] ?? ''} /></label>
       <label className="field"><span>Date</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>
-      {kind === 'incident' && <IncidentFields value={incident} onChange={setIncident} />}
-      <label className="field"><span>What happened (a few lines)</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder="Type @ and a name to add a child's photo" /></label>
+      {kind === 'incident' && <IncidentFields value={incident} onChange={setIncident} circle={circle} />}
+      <label className="field"><span>What happened (a few lines)</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder={`Type @ and a name to add a ${circle.person}'s card`} /></label>
       <div className="st-light">
         {picker.panel}
         {picker.chips}
-        <button type="button" className="btn btn-quiet btn-small align-start" onClick={picker.toggle}>👧 Name a child</button>
+        <button type="button" className="btn btn-quiet btn-small align-start" onClick={picker.toggle}>{circle.personEmoji} Name a {circle.person}</button>
       </div>
       <FilePicker files={files} setFiles={setFiles} max={MAX_PHOTO_FILES} />
       <div className="btn-line">
@@ -356,12 +391,13 @@ export function Face({ name, photo, onPick }: { name: string; photo?: string; on
 }
 
 /** The children named in a message (2A): photo, name, HC code and class, opening the child's page. */
-export function ChildCards({ kids, photos }: { kids: StoryChild[]; photos: Record<string, string> }) {
+export function ChildCards({ kids, photos, type }: { kids: StoryChild[]; photos: Record<string, string>; type?: string }) {
   if (!kids.length) return null;
+  const circle = circleOf(type);
   return (
     <div className="st-kids">
       {kids.map((c) => (
-        <Link key={c.id} to={`/hope/children/${c.id}`} className="st-kid">
+        <Link key={c.id} to={circle.personPath(c.id)} className="st-kid">
           {photos[c.id] ? <img src={photos[c.id]} alt="" /> : <span className="st-kid-none">{initials(c.name)}</span>}
           <span><b>{c.name}</b><small>{[c.code, c.className].filter(Boolean).join(' · ')}</small></span>
         </Link>
@@ -401,7 +437,7 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision, 
             </div>
           </div>
         ) : m.text && <p>{m.text}</p>}
-        <ChildCards kids={m.children ?? []} photos={story.childPhotos} />
+        <ChildCards kids={m.children ?? []} photos={story.childPhotos} type={org.type} />
         {m.files.length > 0 && (
           <div className="st-pics">
             {m.files.map((f) => <FileView key={f.key} org={org} reportId={story.report.id} file={f} onRemove={story.removes && !story.report.deleted ? () => onRemoveFile(f.key) : undefined} />)}
@@ -425,7 +461,8 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision, 
 }
 
 /** Naming children in a reply (2A): type @ and a few letters, or tap 👧, then choose. */
-export function useChildPicker(orgId: string, text: string, setText: (t: string) => void) {
+export function useChildPicker(orgId: string, text: string, setText: (t: string) => void, type?: string) {
+  const circle = circleOf(type);
   const [all, setAll] = useState<StoryChild[] | null>(null);
   const [picked, setPicked] = useState<StoryChild[]>([]);
   const [open, setOpen] = useState(false);
@@ -442,15 +479,15 @@ export function useChildPicker(orgId: string, text: string, setText: (t: string)
   }
   const panel = query !== null && (
     <div className="st-suggest">
-      {open && !at && <input className="st-suggest-q" autoFocus placeholder="Child's name or HC code" value={q} onChange={(e) => setQ(e.target.value)} />}
-      {!all ? <p className="small">Loading the children…</p> : matches.length === 0 ? <p className="small">{words.length ? 'No child found.' : 'Type a name or HC code.'}</p> : (
+      {open && !at && <input className="st-suggest-q" autoFocus placeholder={circle.codeLabel ? `Name or ${circle.codeLabel}` : 'Name'} value={q} onChange={(e) => setQ(e.target.value)} />}
+      {!all ? <p className="small">Loading the {circle.people}…</p> : matches.length === 0 ? <p className="small">{words.length ? `No ${circle.person} found.` : circle.codeLabel ? `Type a name or ${circle.codeLabel}.` : 'Type a name.'}</p> : (
         <ul>{matches.map((c) => <li key={c.id}><button type="button" onClick={() => choose(c)}><b>{c.name}</b> <small>{[c.code, c.className].filter(Boolean).join(' · ')}</small></button></li>)}</ul>
       )}
       {open && !at && <button type="button" className="st-chip" onClick={() => { setOpen(false); setQ(''); }}>Close</button>}
     </div>
   );
   const chips = picked.length > 0 && (
-    <div className="st-menu">{picked.map((c) => <button key={c.id} type="button" className="st-chip on" onClick={() => setPicked(picked.filter((p) => p.id !== c.id))}>👧 {c.name} ✕</button>)}</div>
+    <div className="st-menu">{picked.map((c) => <button key={c.id} type="button" className="st-chip on" onClick={() => setPicked(picked.filter((p) => p.id !== c.id))}>{circle.personEmoji} {c.name} ✕</button>)}</div>
   );
   return { picked, clear: () => setPicked([]), panel, chips, toggle: () => setOpen(!open) };
 }
@@ -459,7 +496,7 @@ export function useChildPicker(orgId: string, text: string, setText: (t: string)
 function TellEveryone({ org, story, emailed, onDone }: { org: Organization; story: StoryOpen; emailed: string; onDone: () => void }) {
   const [people, setPeople] = useState<BoardPerson[]>([]);
   useEffect(() => { storyPeople(org.id).then(setPeople).catch(() => setPeople([])); }, [org.id]);
-  const text = storyStartWhatsApp(story.report, appLink(story.report.id));
+  const text = storyStartWhatsApp(story.report, appLink(story.report.id, org.type), circleOf(org.type).type);
   async function tell() {
     const nav = navigator as Navigator & { share?: (d: ShareData) => Promise<void> };
     if (nav.share && /Android|iPhone|iPad/i.test(navigator.userAgent)) {
@@ -511,11 +548,12 @@ function Approvals({ org, story, onDone }: { org: Organization; story: StoryOpen
     <div className="stack st-approvals">
       <h3>Approvals</h3>
       {(['director', 'board'] as ApprovalSlot[]).map((s) => {
+        const labels = story.labels ?? APPROVAL_LABELS;
         const a = r.approvals?.[s];
         const mine = story.approves[s];
         return (
           <div key={s} className="st-approval">
-            <span className="grow"><b>{APPROVAL_LABELS[s]}</b><br />
+            <span className="grow"><b>{labels[s]}</b><br />
               <span className="small muted">{a ? `✅ ${a.name}, ${a.role}, ${chatTime(a.at, tz)}` : 'Not approved yet'}</span></span>
             {mine && slot !== s && <button type="button" className="btn btn-small" disabled={busy} onClick={() => (andy ? void approve(s, !!a) : setSlot(s))}>{a ? 'Take back' : '✅ Approve'}</button>}
           </div>
@@ -540,6 +578,7 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
   const toast = useToast();
   const { profile } = useAuth();
   const r = story.report;
+  const circle = circleFor(org);
   const [summary, setSummary] = useState(r.summary ?? r.text ?? '');
   const [pdf, setPdf] = useState<File | null>(null);
   const [preview, setPreview] = useState('');
@@ -559,8 +598,8 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
     setBusy('pdf');
     try {
       await saveStorySummary(org.id, r.id, summary);
-      const role = profile ? chatRole(profile, org.id) : '';
-      const f = await hopeStoryPdf(org, r, replies, { summary, preparedBy: profile?.displayName || 'Freedom Hope Center', preparedRole: role, link: appLink(r.id), faces: story.faces, childPhotos: story.childPhotos });
+      const role = profile ? chatRole(profile, org.id, circle.type) : '';
+      const f = await hopeStoryPdf(org, r, replies, { summary, preparedBy: profile?.displayName || org.name, preparedRole: role, link: appLink(r.id, org.type), faces: story.faces, childPhotos: story.childPhotos, labels: story.labels });
       setPdf(f);
       if (preview) URL.revokeObjectURL(preview);
       setPreview(URL.createObjectURL(f));
@@ -578,7 +617,7 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
   async function whatsapp() {
     try {
       const f = pdf ?? await make();
-      const text = `${PHOTO_REPORT_EMOJI[r.kind]} *${r.title}*: the report for the board is attached.\n${appLink(r.id)}`;
+      const text = `${PHOTO_REPORT_EMOJI[r.kind]} *${r.title}*: the report for ${circle.board} is attached.\n${appLink(r.id, org.type)}`;
       const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
       if (nav.canShare?.({ files: [f] })) {
         try { await nav.share({ files: [f], text, title: r.title }); } catch (err) { if ((err as { name?: string }).name !== 'AbortError') throw err; }
@@ -592,16 +631,16 @@ function Package({ org, story, items, onClose, onSent }: { org: Organization; st
 
   return (
     <section className="card stack st-package">
-      <div className="card-head"><h2>📦 Package for the board</h2><button type="button" className="btn btn-quiet" onClick={onClose} aria-label="Close">✕</button></div>
+      <div className="card-head"><h2>📦 Package for {circle.board}</h2><button type="button" className="btn btn-quiet" onClick={onClose} aria-label="Close">✕</button></div>
       <p className="small muted">The PDF has a cover, your summary{r.kind === 'incident' ? ', the incident details' : ''}, the dated conversation, the photos with captions, the files and videos (linked), {decisions} {decisions === 1 ? 'decision' : 'decisions'} and next steps, and a sign-off.</p>
-      <label className="field"><span>Summary for the board</span><textarea rows={5} value={summary} maxLength={3000} onChange={(e) => { setSummary(e.target.value); setPdf(null); }} placeholder="What happened, what it means, and what we will do." /></label>
+      <label className="field"><span>Summary for {circle.board}</span><textarea rows={5} value={summary} maxLength={3000} onChange={(e) => { setSummary(e.target.value); setPdf(null); }} placeholder="What happened, what it means, and what we will do." /></label>
       <div className="btn-line">
         <button type="button" className="btn" disabled={!!busy} onClick={() => void make().catch((err) => toast.show(friendlyError(err)))}>{busy === 'pdf' ? 'Making the PDF…' : pdf ? '↻ Make it again' : '👁 Preview the PDF'}</button>
         {pdf && <a className="btn btn-quiet" href={preview} target="_blank" rel="noreferrer">Open the PDF</a>}
       </div>
       {preview && <iframe className="st-preview" src={preview} title="The report PDF" />}
       <Approvals org={org} story={story} onDone={onSent} />
-      {!people ? <p className="muted small">Loading the board…</p> : (
+      {!people ? <p className="muted small">Loading the names…</p> : (
         <ul className="ph-people">
           {people.map((p) => (
             <li key={p.name}>
@@ -635,7 +674,9 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
   const [reason, setReason] = useState('');
   const end = useRef<HTMLDivElement>(null);
   const [, tick] = useState(0);
-  const picker = useChildPicker(org.id, text, setText);
+  const picker = useChildPicker(org.id, text, setText, org.type);
+  const circle = circleFor(org);
+  const hope = circle.type === 'ministry';
 
   const load = useCallback(async () => {
     try { const s = await openStory(org.id, id); setStory(s); setSkew(s.now - Date.now()); setError(''); } catch (err) { setError(friendlyError(err)); }
@@ -671,7 +712,7 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
   }
   async function delReport() {
     setDeleting('busy');
-    try { await deletePhotoReport(org.id, id, reason); toast.show('Moved to the Bin. It can be put back from Reports → Bin.'); onBack(); } catch (err) { toast.show(friendlyError(err)); setDeleting('ask'); }
+    try { await deletePhotoReport(org.id, id, reason); toast.show(hope ? 'Moved to the Bin. It can be put back from Reports → Bin.' : 'Deleted. It can be put back from "Deleted reports" at the foot of Photos and wins.'); onBack(); } catch (err) { toast.show(friendlyError(err)); setDeleting('ask'); }
   }
   async function restore() {
     try { await restorePhotoReport(org.id, id); toast.show('Put back.'); await load(); onChanged(); } catch (err) { toast.show(friendlyError(err)); }
@@ -691,9 +732,9 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
           <button type="button" className="st-back" onClick={onBack} aria-label="Back to Photos and wins">←</button>
           <div className="st-title">
             <b>{PHOTO_REPORT_EMOJI[r.kind]} {r.title}</b>
-            <small>{r.ref ? `${r.ref} · ` : ''}{PHOTO_REPORT_LABELS[r.kind]} · {formatDateKey(r.day)} · {items.filter((m) => !m.deleted && !m.system).length} messages</small>
+            <small>{r.ref ? `${r.ref} · ` : ''}{kindLabel(r.kind, circle.type)} · {formatDateKey(r.day)} · {items.filter((m) => !m.deleted && !m.system).length} messages</small>
           </div>
-          {story.packages && !r.deleted && <button type="button" className="st-pack" onClick={() => setPacking(true)}>📦 Package for the board</button>}
+          {story.packages && !r.deleted && <button type="button" className="st-pack" onClick={() => setPacking(true)}>📦 Package for {circle.board}</button>}
         </header>
         <div className="st-status">
           <ol className="st-steps" aria-label="Status">
@@ -715,7 +756,7 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
             <dl>{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>
             <div className="st-menu">
               {r.followUpDoneAt ? <span className="small">✅ Follow-up done by {r.followUpDoneByName}, {chatTime(r.followUpDoneAt, tz)}</span>
-                : <span className="small">Follow-up not done yet{r.startedAt ? `. Diana is reminded ${FOLLOW_UP_HOURS} hours after it was reported.` : '.'}</span>}
+                : <span className="small">Follow-up not done yet{r.startedAt ? `. ${hope ? 'Diana is' : `The ${circle.lead} is`} reminded ${FOLLOW_UP_HOURS} hours after it was reported.` : '.'}</span>}
               {story.packages && !r.deleted && <button type="button" className="st-chip on" onClick={() => void guard(() => setFollowUp(org.id, id, !r.followUpDoneAt))().catch(() => undefined)}>{r.followUpDoneAt ? 'Not done yet' : '✅ Follow-up done'}</button>}
             </div>
           </details>
@@ -761,14 +802,14 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
               <label className="st-ic" aria-label="Add photos, videos or files">📎
                 <input type="file" multiple hidden accept={STORY_ACCEPT} onChange={(e) => { setFiles(pickFiles(e.target.files, files, STORY_FILES_MAX, toast.show)); e.target.value = ''; }} />
               </label>
-              <button type="button" className="st-ic" aria-label="Name a child" onClick={picker.toggle}>👧</button>
-              <textarea rows={1} value={text} maxLength={STORY_TEXT_MAX} placeholder="Write a reply… (@ to name a child)" onChange={(e) => setText(e.target.value)} />
+              <button type="button" className="st-ic" aria-label={`Name a ${circle.person}`} onClick={picker.toggle}>{circle.personEmoji}</button>
+              <textarea rows={1} value={text} maxLength={STORY_TEXT_MAX} placeholder={`Write a reply… (@ to name a ${circle.person})`} onChange={(e) => setText(e.target.value)} />
               <button type="button" className="st-send" disabled={!!sending || (!text.trim() && !files.length && !picker.picked.length)} onClick={() => void send()}>
                 {sending ? (sending[1] ? `${Math.min(sending[0] + 1, sending[1])}/${sending[1]}` : '…') : 'Send'}
               </button>
             </div>
           </div>
-        ) : <p className="st-day">Only the Director, the sender, the board, Andy and Doreen write here.</p>}
+        ) : <p className="st-day">Only {circle.readers} and the sender write here.</p>}
       </section>
 
       {packing && <Package org={org} story={story} items={items} onClose={() => setPacking(false)} onSent={() => { void load(); onChanged(); }} />}

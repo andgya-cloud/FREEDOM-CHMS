@@ -20,6 +20,7 @@ import {
 } from '../../../functions/src/shared/school';
 import { SchoolGate, money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
+import { PersonConcern } from '../../components/PersonConcern';
 
 export function StudentPage() {
   return <SchoolGate title="Student">{(org) => <Student org={org} />}</SchoolGate>;
@@ -175,6 +176,7 @@ function Student({ org }: { org: Organization }) {
       )}
 
       {reminder && <FeeReminderSheet org={org} studentId={st.id} studentName={name} sponsors={st.sponsors ?? []} balanceCents={bal?.balanceCents ?? 0} onClose={() => setReminder(false)} />}
+      <PersonConcern org={org} personId={st.id} name={name} />
       {can('pastoral.read') && <PrivateCard orgId={org.id} studentId={st.id} />}
     </div>
   );

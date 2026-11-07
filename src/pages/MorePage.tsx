@@ -14,6 +14,8 @@ export function MorePage() {
     && profile?.roleId !== FINANCE_ROLE_ID;
   const items = [
     { show: can('people.read') && profile?.roleId !== USHER_ROLE_ID, to: '/reports', label: 'Reports', detail: 'The scorecard, weekly, monthly and giving reports' },
+    { show: current?.type === 'church_campus', to: '/updates', label: 'Photos and wins', detail: 'Testimonies, events, pastoral care and incidents, as conversations' },
+    { show: current?.type === 'church_campus', to: '/conversations', label: 'Private conversations', detail: 'Worries about a member, read only by Andy, Doreen and the leaders' },
     { show: petty, to: pettyCashBase(current?.type ?? 'church_campus'), label: 'Petty Cash', detail: 'Requests, signatures, receipts and month-end' },
     { show: true, to: '/settings', label: 'Settings', detail: 'Staff accounts, messages, this device and sign out' },
     { show: true, to: '/help', label: 'Help', detail: 'How to do the everyday jobs' },

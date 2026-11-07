@@ -22,6 +22,8 @@ import { usePayrollAccess } from '../../state/usePayroll';
 import { useInventoryAccess } from '../../state/useInventory';
 import { money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
+import { CircleNeedsYou } from '../../components/CircleNeedsYou';
+import { circleSender } from '../../../functions/src/shared/circles';
 
 const WEEKS = 8;
 
@@ -111,6 +113,7 @@ export function AdiaToday({ org }: { org: Organization }) {
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
     { to: '/attendance', icon: 'register', label: 'Mark register', sub: 'Who came to class today', show: canRegister },
     { to: '/school/exams', icon: 'exams', label: can('exams.manage') || can('users.manage') ? 'Exam Records' : 'Enter marks', sub: 'CATs, finals and results', show: can('exams.mark') || can('exams.manage') || can('users.manage') },
+    { to: '/school/updates', icon: 'files', label: 'Photos and wins', sub: 'Report good news, classes or an incident', show: circleSender(profile, org.id, 'college') },
     { to: '/school/students', icon: 'people', label: 'Find a student', sub: 'By name or admission number', show: can('people.read') },
     { to: '/school/students/new', icon: 'addStudent', label: 'Add a student', sub: 'Enrol into a cohort', show: can('people.write') },
     { to: '/school/fees', icon: 'fees', label: 'Record fees', sub: 'M-Pesa or cash', show: s.feesAllowed },
@@ -146,6 +149,8 @@ export function AdiaToday({ org }: { org: Organization }) {
           {isDirectorProfile(profile) && <FirstRunChecklist variant="scene" />}
         </div>
       </section>
+
+      <CircleNeedsYou org={org} />
 
       <section className="lav-jobs" aria-label="What do you want to do?">
         <h2>What do you want to do?</h2>

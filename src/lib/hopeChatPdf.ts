@@ -4,6 +4,7 @@ import type { PhotoReport, StoryMessage } from '../../functions/src/shared/hopeP
 import { hopeStoryPdf } from './hopeStoryPdf';
 import type { StoredPhotoReport, StoredStoryMessage } from './hopePhotos';
 import { chatFile, type ChatOpen } from './hopeChats';
+import { circleOf } from '../../functions/src/shared/circles';
 
 /**
  * The conversation about a child as an official record (v197, 9A), the same as Photos and wins: a red cover with the
@@ -12,6 +13,7 @@ import { chatFile, type ChatOpen } from './hopeChats';
  */
 export async function hopeChatPdf(org: Organization, data: ChatOpen, preparedBy = ''): Promise<File> {
   const c = data.chat;
+  const circle = circleOf(org.type);
   const [first, ...rest] = data.messages;
   const child = { id: c.childId, name: c.childName, code: c.childCode, className: '' };
   const report = {
@@ -26,9 +28,9 @@ export async function hopeChatPdf(org: Organization, data: ChatOpen, preparedBy 
     ? `${c.closeNote ? `Outcome: ${c.closeNote}${c.closedByName ? ` (${c.closedByName})` : ''}` : 'Resolved.'}`
     : `Still ${CHAT_STATUS_LABELS[c.status].toLowerCase()}. It was started by ${c.startedByName}: ${first?.text ?? ''}`;
   return hopeStoryPdf(org, report, rest as unknown as StoredStoryMessage[] & StoryMessage[], {
-    summary: outcome, preparedBy: preparedBy || data.messages.find((m) => m.byUid === data.me)?.byName || c.lastByName, preparedRole: '', link: `${location.origin}/hope/chats/${c.id}`,
+    summary: outcome, preparedBy: preparedBy || data.messages.find((m) => m.byUid === data.me)?.byName || c.lastByName, preparedRole: '', link: `${location.origin}${circle.chatsPath}/${c.id}`, labels: data.labels,
     faces: data.faces, childPhotos: data.childPhotos, fetchFile: (f) => chatFile(org.id, c.id, f),
-    kindLabel: 'Conversation about a child', statusLabel: CHAT_STATUS_LABELS[c.status], followUp: false,
+    kindLabel: `Conversation about a ${circle.person}`, statusLabel: CHAT_STATUS_LABELS[c.status], followUp: false,
     fileName: `Conversation - ${c.childName.replace(/[\\/:*?"<>|]+/g, '-')}${c.ref ? ` - ${c.ref}` : ''}.pdf`,
   });
 }

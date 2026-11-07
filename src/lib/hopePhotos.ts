@@ -125,6 +125,8 @@ export async function startStory(orgId: string, input: NewPhotoReport, files: Fi
 export interface StoryOpen {
   report: StoredPhotoReport; messages: StoredStoryMessage[]; me: string; writes: boolean; keeps: boolean; packages: boolean; seesAll: boolean; deletes: boolean; now: number;
   childPhotos: Record<string, string>; faces: Record<string, string>; removes: boolean; approves: Record<ApprovalSlot, boolean>;
+  /** Each organization's approval names (2026-11-07, 10A). */
+  labels?: Record<ApprovalSlot, string>;
 }
 export const openStory = (orgId: string, id: string) => call<StoryOpen>({ orgId, action: 'messages', id });
 /** A reply, with its photos, videos or files. */

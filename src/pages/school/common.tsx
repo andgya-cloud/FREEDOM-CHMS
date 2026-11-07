@@ -40,6 +40,8 @@ export function SchoolTitle({ feesAllowed, children }: { feesAllowed: boolean; c
   const items: [string, string, boolean][] = [
     ['/school/students', 'Students', true], ['/school/fees', 'Fees', feesAllowed],
     ['/school/graduation', 'Graduation', true], ['/school/reports', 'Reports', can('finance.reports') || can('settings.manage')],
+    // The conversations (Andy, 2026-11-07, 9A); the server shows each person only what they may see.
+    ['/school/updates', 'Photos and wins', true], ['/school/conversations', 'Private conversations', true],
   ];
   const shown = items.filter((i) => i[2]);
   const here = shown.find(([to]) => pathname === to || pathname.startsWith(`${to}/`))?.[0] ?? '';

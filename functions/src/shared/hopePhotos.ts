@@ -7,12 +7,18 @@
  * deleted what (8A). Files sit in Storage, reached only through the hopePhotoReports Cloud Function.
  */
 import { can, canAccessOrg, canKeepAccounts, type AccessProfile } from './permissions.js';
+import {
+  circleApprover, circleKeeper, circleOf, circleReader, circleRef, circleSender, HOPE_BOARD_NAMES, isKindOf, KIND_EMOJI, kindLabel,
+  type CircleKind, type CircleType,
+} from './circles.js';
 
-export type PhotoReportKind = 'win' | 'activity' | 'incident' | 'other';
+export { HOPE_BOARD_NAMES };
+/** Hope's four kinds; ADIA adds "Exams and results" and the church "Pastoral care" (circles.ts). */
+export type PhotoReportKind = CircleKind;
 export const PHOTO_REPORT_KINDS: PhotoReportKind[] = ['win', 'activity', 'incident', 'other'];
-export const PHOTO_REPORT_LABELS: Record<PhotoReportKind, string> = { win: 'Good news', activity: 'Activity or event', incident: 'Incident', other: 'Other' };
-export const PHOTO_REPORT_EMOJI: Record<PhotoReportKind, string> = { win: '🌟', activity: '📅', incident: '⚠️', other: '📝' };
-export const isPhotoReportKind = (v: unknown): v is PhotoReportKind => typeof v === 'string' && (PHOTO_REPORT_KINDS as string[]).includes(v);
+export const PHOTO_REPORT_LABELS: Record<PhotoReportKind, string> = { win: 'Good news', activity: 'Activity or event', exams: 'Exams and results', care: 'Pastoral care', incident: 'Incident', other: 'Other' };
+export const PHOTO_REPORT_EMOJI: Record<PhotoReportKind, string> = KIND_EMOJI;
+export const isPhotoReportKind = (v: unknown, type: CircleType = 'ministry'): v is PhotoReportKind => isKindOf(v, type);
 
 export const MAX_PHOTO_FILES = 10;
 /** Each file, after the phone has shrunk the photos. Ten of them still fit in one email. */
@@ -112,8 +118,13 @@ export const isSeverity = (v: unknown): v is Severity => v === 'low' || v === 'm
 /** The Director is reminded when an incident's follow-up is not done after this long. */
 export const FOLLOW_UP_HOURS = 48;
 
-/** "FHC-2026-014". */
-export const storyRef = (year: number, n: number) => `FHC-${year}-${String(n).padStart(3, '0')}`;
+/** "FHC-2026-014", "ADIA-2026-003", "FCN-2026-001" (7A). */
+export const storyRef = (year: number, n: number, type: CircleType = 'ministry') => circleRef(type, year, n);
+/** The approval labels for this organization (10A): Hope's Director and board; ADIA's Principal; the church's Pastor. */
+export function approvalLabels(type: CircleType = 'ministry'): Record<ApprovalSlot, string> {
+  const c = circleOf(type);
+  return { director: c.firstApproval, board: c.secondApproval };
+}
 
 /** What an incident report records (7A). */
 export interface IncidentDetails {
@@ -177,9 +188,9 @@ export const STORY_PART_BYTES = 5 * 1024 * 1024;
 export const UNSAY_MINUTES = 5;
 
 /** Writes in a report's conversation (4A): the Director, the sender, the board, Andy and Doreen. */
-export function canWriteInStory(p: Profile, uid: string, r: Pick<PhotoReport, 'orgId' | 'senderUid' | 'deleted'>): boolean {
+export function canWriteInStory(p: Profile, uid: string, r: Pick<PhotoReport, 'orgId' | 'senderUid' | 'deleted'>, type: CircleType = 'ministry'): boolean {
   if (r.deleted) return false;
-  return canSeeAllPhotoReports(p, r.orgId) || (r.senderUid === uid && canAccessOrg(p, r.orgId));
+  return canSeeAllPhotoReports(p, r.orgId, type) || (r.senderUid === uid && canAccessOrg(p, r.orgId));
 }
 
 /** Who may take a message out, and until when (Andy, 2026-11-06): the writer within five minutes; after that only Andy or Doreen. */
@@ -196,8 +207,9 @@ export const canEditMessage = (uid: string, m: Pick<StoryMessage, 'byUid' | 'del
 export const canRemoveFiles = (p: Profile) => canKeepAccounts(p);
 
 /** Who may give each approval (7A): the Director's is Diana's; the board's is a board member's, Andy's or Doreen's. */
-export function canApprove(p: Profile, orgId: string, slot: ApprovalSlot): boolean {
+export function canApprove(p: Profile, orgId: string, slot: ApprovalSlot, type: CircleType = 'ministry'): boolean {
   if (!canAccessOrg(p, orgId)) return false;
+  if (type !== 'ministry') return circleApprover(p, orgId, slot, type);
   return slot === 'director' ? isHopeDirector(p, orgId) : isHopeBoardName(p?.displayName) || canKeepAccounts(p);
 }
 
@@ -226,7 +238,7 @@ export function storyChanges(r: Pick<PhotoReport, 'senderName' | 'editedAt' | 'r
 }
 
 /** Packages the conversation for the board (6A): the Director, Andy or Doreen. */
-export const canPackageStory = (p: Profile, orgId: string) => isHopeDirector(p, orgId) || (canAccessOrg(p, orgId) && canKeepAccounts(p));
+export const canPackageStory = (p: Profile, orgId: string, type: CircleType = 'ministry') => (type === 'ministry' ? isHopeDirector(p, orgId) || (canAccessOrg(p, orgId) && canKeepAccounts(p)) : circleKeeper(p, orgId, type));
 
 /** Each person's glass tint (2A): the known people always have the same colour; anyone else gets one from their id. */
 const KNOWN_TINTS: [string, string][] = [
@@ -244,27 +256,27 @@ export function storyTint(name: string, uid = ''): string {
 }
 
 /** "Diana Kiunga started a conversation" email to the others (Andy, 2026-11-06), with the link to reply. */
-export function storyStartEmail(r: Pick<PhotoReport, 'kind' | 'title' | 'day' | 'senderName'>, firstName: string, link: string, formatDay: (k: string) => string) {
-  const label = PHOTO_REPORT_LABELS[r.kind];
+export function storyStartEmail(r: Pick<PhotoReport, 'kind' | 'title' | 'day' | 'senderName'>, firstName: string, link: string, formatDay: (k: string) => string, type: CircleType = 'ministry', orgName = circleOf(type).orgName) {
+  const label = kindLabel(r.kind, type);
   return {
-    subject: `${r.kind === 'incident' ? 'Incident' : label}: ${r.title} (Freedom Hope Center)`,
+    subject: `${r.kind === 'incident' ? 'Incident' : label}: ${r.title} (${orgName})`,
     text: [
       `Dear ${firstName},`,
       '',
-      `${r.senderName} has started a conversation at Freedom Hope Center: ${PHOTO_REPORT_EMOJI[r.kind]} ${label}, "${r.title}" (${formatDay(r.day)}).`,
+      `${r.senderName} has started a conversation at ${orgName}: ${PHOTO_REPORT_EMOJI[r.kind]} ${label}, "${r.title}" (${formatDay(r.day)}).`,
       '',
       r.kind === 'incident' ? 'Please open it and respond as soon as you can:' : 'Please open it to see the photos and reply:',
       link,
       '',
-      'Freedom Hope Center',
+      orgName,
     ].join('\n'),
   };
 }
 
 /** The one-tap WhatsApp note when a conversation starts (Andy, 2026-11-06). */
-export function storyStartWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'senderName'>, link: string): string {
+export function storyStartWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'senderName'>, link: string, type: CircleType = 'ministry'): string {
   return [
-    `${PHOTO_REPORT_EMOJI[r.kind]} *${PHOTO_REPORT_LABELS[r.kind]}: ${r.title}*`,
+    `${PHOTO_REPORT_EMOJI[r.kind]} *${kindLabel(r.kind, type)}: ${r.title}*`,
     `${r.senderName} started a conversation in Insight-IQ. Please open it and reply:`,
     link,
   ].join('\n');
@@ -272,8 +284,6 @@ export function storyStartWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'send
 
 export const photoFilePath = (orgId: string, reportId: string, key: string) => `hopePhotoReports/${orgId}/${reportId}/${key}`;
 
-/** The board of Freedom Hope Centre (Andy, 2026-11-04, 7A; 2026-11-06: Dorothy Mohat in place of Ronald Awili). */
-export const HOPE_BOARD_NAMES = ['Andrew Guya', 'Doreen Mayaka', 'Doreen Guya', 'Elias Omondi', "Daniel Ojwang'", 'Dorothy Mohat', 'Dorothy Mohart'] as const;
 const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
 export const isHopeBoardName = (name: string | undefined) => !!name && HOPE_BOARD_NAMES.some((n) => plain(n) === plain(name));
 
@@ -285,24 +295,27 @@ export function isHopeDirector(p: Profile, orgId: string): boolean {
 }
 
 /** Anyone who works at the Hope Centre may send one: the Director, staff and helpers (2A). */
-export function canSendPhotoReport(p: Profile, orgId: string): boolean {
+export function canSendPhotoReport(p: Profile, orgId: string, type: CircleType = 'ministry'): boolean {
+  if (type !== 'ministry') return circleSender(p, orgId, type);
   return canAccessOrg(p, orgId) && (can(p, 'people.read') || can(p, 'attendance.write'));
 }
 
 /** Sees every report: the Director, the board, Andy and Doreen; not the Hope staff (3A). */
-export function canSeeAllPhotoReports(p: Profile, orgId: string): boolean {
+export function canSeeAllPhotoReports(p: Profile, orgId: string, type: CircleType = 'ministry'): boolean {
+  if (type !== 'ministry') return circleReader(p, orgId, type);
   if (!canAccessOrg(p, orgId)) return false;
   return can(p, 'users.manage') || isHopeDirector(p, orgId) || isHopeBoardName(p?.displayName);
 }
 
 /** Only the Director, Andy and Doreen delete (8A). */
-export function canDeletePhotoReport(p: Profile, orgId: string): boolean {
+export function canDeletePhotoReport(p: Profile, orgId: string, type: CircleType = 'ministry'): boolean {
+  if (type !== 'ministry') return circleKeeper(p, orgId, type);
   return isHopeDirector(p, orgId) || (canAccessOrg(p, orgId) && canKeepAccounts(p));
 }
 
-export function canSeePhotoReport(p: Profile, uid: string, r: Pick<PhotoReport, 'orgId' | 'senderUid' | 'deleted'>): boolean {
-  if (r.deleted) return canDeletePhotoReport(p, r.orgId);
-  return canSeeAllPhotoReports(p, r.orgId) || (r.senderUid === uid && canAccessOrg(p, r.orgId));
+export function canSeePhotoReport(p: Profile, uid: string, r: Pick<PhotoReport, 'orgId' | 'senderUid' | 'deleted'>, type: CircleType = 'ministry'): boolean {
+  if (r.deleted) return canDeletePhotoReport(p, r.orgId, type);
+  return canSeeAllPhotoReports(p, r.orgId, type) || (r.senderUid === uid && canAccessOrg(p, r.orgId));
 }
 
 /**
@@ -345,8 +358,8 @@ export function photoFileName(title: string, index: number, ext: string): string
 }
 
 /** The email to the board. */
-export function photoReportEmail(r: Pick<PhotoReport, 'kind' | 'title' | 'day' | 'text' | 'senderName' | 'reportLabel' | 'files'>, orgName: string, link: string, formatDay: (k: string) => string) {
-  const label = PHOTO_REPORT_LABELS[r.kind];
+export function photoReportEmail(r: Pick<PhotoReport, 'kind' | 'title' | 'day' | 'text' | 'senderName' | 'reportLabel' | 'files'>, orgName: string, link: string, formatDay: (k: string) => string, type: CircleType = 'ministry') {
+  const label = kindLabel(r.kind, type);
   const subject = `${r.kind === 'incident' ? 'Incident' : label}: ${r.title} (${orgName})`;
   const text = [
     `${PHOTO_REPORT_EMOJI[r.kind]} ${label}: ${r.title}`,
@@ -363,9 +376,9 @@ export function photoReportEmail(r: Pick<PhotoReport, 'kind' | 'title' | 'day' |
 }
 
 /** The WhatsApp message (the photos are shared with it from the phone). */
-export function photoReportWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'day' | 'text' | 'senderName'>, link: string, formatDay: (k: string) => string): string {
+export function photoReportWhatsApp(r: Pick<PhotoReport, 'kind' | 'title' | 'day' | 'text' | 'senderName'>, link: string, formatDay: (k: string) => string, type: CircleType = 'ministry'): string {
   return [
-    `${PHOTO_REPORT_EMOJI[r.kind]} *${PHOTO_REPORT_LABELS[r.kind]}: ${r.title}*`,
+    `${PHOTO_REPORT_EMOJI[r.kind]} *${kindLabel(r.kind, type)}: ${r.title}*`,
     `${formatDay(r.day)} · ${r.senderName}`,
     ...(r.text ? ['', r.text] : []),
     '',
