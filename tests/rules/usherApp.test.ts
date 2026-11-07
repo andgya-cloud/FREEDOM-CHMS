@@ -38,6 +38,8 @@ describe('usher counter app', () => {
     await assertSucceeds(setDoc(doc(usher(), PATH), template()));
     await assertSucceeds(updateDoc(doc(usher(), PATH), { 'headcounts.adults': 150, 'headcounts.teens': 30, 'headcounts.children': 45, updatedBy: 'usher', updatedAt: serverTimestamp() }));
     await assertSucceeds(updateDoc(doc(usher(), PATH), { 'headcounts.adults': increment(1), updatedBy: 'usher', updatedAt: serverTimestamp() }));
+    // v1.6 also counts everyone in "all" (a cross-check, not part of the total; Andy, 2026-11-07).
+    await assertSucceeds(updateDoc(doc(usher(), PATH), { 'headcounts.all': increment(1), updatedBy: 'usher', updatedAt: serverTimestamp() }));
   });
   it('refuses the common mistakes', async () => {
     await assertSucceeds(setDoc(doc(usher(), PATH), template()));

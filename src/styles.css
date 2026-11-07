@@ -2683,3 +2683,8 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .circle-face { width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; flex: none; font-weight: 800; font-size: 12px; color: #fff; background: var(--navy, #1f2a5c); }
 .circle-send { display: flex; justify-content: center; }
 .person-concern .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+
+/* "All (everyone counted)": the usher app's cross-check, kept apart from the total (Andy, 2026-11-07). */
+.count-box.count-check { border-style: dashed; border-color: rgb(201 162 78); background: #fffdf6; }
+.count-box.count-check .count-label { color: #6b5320; }
+.count-check-note { font-style: italic; opacity: .85; }

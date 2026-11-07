@@ -32,7 +32,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 export const CHECK_IN_METHODS = ['staff', 'door', 'register'] as const;
 export type CheckInMethod = (typeof CHECK_IN_METHODS)[number];
 
-export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations'] as const;
+export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'] as const;
 export type HeadcountKey = (typeof HEADCOUNT_KEYS)[number];
 export type Headcounts = Partial<Record<HeadcountKey, number>>;
 
@@ -45,6 +45,7 @@ export const HEADCOUNT_LABELS: Record<HeadcountKey, string> = {
   total: 'Total',
   firstTimers: 'First-time visitors',
   salvations: 'Salvations',
+  all: 'All (everyone counted)',
 };
 
 /** Which counts each kind of gathering asks for. */
@@ -61,6 +62,21 @@ export const HEADCOUNT_FIELDS: Record<EventType, HeadcountKey[]> = {
  * headcount total: first-timers and salvations are already counted among the adults, teens and children.
  */
 export const SERVICE_EXTRA_KEYS = ['firstTimers', 'salvations'] as const satisfies readonly HeadcountKey[];
+
+/**
+ * "All" (Andy, 2026-11-07): the usher app's separate count of everyone in church (v1.6 sends headcounts.all with
+ * increment()). It is a cross-check only: never added to the total, any percentage, trend or report.
+ */
+export const SERVICE_CROSSCHECK_KEY = 'all' as const satisfies HeadcountKey;
+
+/** How "All" compares with adults + teens + children: '' when they match or All was not counted. */
+export function crossCheckNote(counts: Headcounts | null | undefined): string {
+  const all = Number(counts?.all) || 0;
+  if (!all) return '';
+  const diff = all - headcountTotal(counts, 'service');
+  if (diff === 0) return 'Matches the category count';
+  return `${Math.abs(diff)} ${diff > 0 ? 'more' : 'fewer'} than the category count`;
+}
 
 /** 'other' marks a midweek, youth or special service, so Sunday figures stay apart (Andy, 2026-11-02, 5A). */
 export type ServiceKind = 'other' | null;

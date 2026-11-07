@@ -9,6 +9,8 @@ import {
   HEADCOUNT_FIELDS,
   HEADCOUNT_LABELS,
   headcountTotal,
+  crossCheckNote,
+  SERVICE_CROSSCHECK_KEY,
   SERVICE_EXTRA_KEYS,
   type HeadcountKey,
   type Headcounts,
@@ -23,6 +25,7 @@ const HINTS: Partial<Record<HeadcountKey, string>> = {
   total: 'When names are not taken',
   firstTimers: 'Already in the numbers above',
   salvations: 'Already in the numbers above',
+  all: 'Cross-check, not added to the total',
 };
 
 /**
@@ -34,7 +37,7 @@ export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdi
   const saved = useSavedMessage();
   const counted = HEADCOUNT_FIELDS[event.type];
   // Services also take first-timers and salvations, which are not added to the total (Andy, 2026-11-02, 3A).
-  const fields: HeadcountKey[] = event.type === 'service' ? [...counted, ...SERVICE_EXTRA_KEYS] : counted;
+  const fields: HeadcountKey[] = event.type === 'service' ? [...counted, ...SERVICE_EXTRA_KEYS, SERVICE_CROSSCHECK_KEY] : counted;
   const [counts, setCounts] = useState<Headcounts>(event.headcounts ?? {});
   const [status, setStatus] = useState('');
   const dirty = useRef(false);
@@ -104,6 +107,7 @@ export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdi
           </div>
         ))}
       </div>
+      {event.type === 'service' && crossCheckNote(counts) && <p className="hint count-check-note">All: {crossCheckNote(counts)}.</p>}
       {status && <p className="hint hint-ok" role="status">{status}</p>}
     </section>
   );

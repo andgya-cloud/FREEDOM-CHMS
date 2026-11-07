@@ -285,8 +285,8 @@ service cloud.firestore {
           && (!('activity' in d) || d.activity == null || (d.activity is string && d.activity.size() <= 120))
           && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
           && h is map
-          && h.keys().hasOnly(['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations'])
-          && validCount(h, 'firstTimers') && validCount(h, 'salvations')
+          && h.keys().hasOnly(['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'])
+          && validCount(h, 'firstTimers') && validCount(h, 'salvations') && validCount(h, 'all')
           && (!('serviceKind' in d) || d.serviceKind == null || d.serviceKind == 'other')
           && validCount(h, 'adults') && validCount(h, 'teens') && validCount(h, 'children')
           && validCount(h, 'new') && validCount(h, 'returning') && validCount(h, 'total')

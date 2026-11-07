@@ -3,6 +3,7 @@ import {
   attendanceIdFor,
   attendanceRate,
   cleanCount,
+  crossCheckNote,
   doorName,
   eventChoices,
   eventIdFor,
@@ -47,6 +48,16 @@ describe('headcounts', () => {
     expect(headcountTotal({ adults: 180, teens: 25, children: 40 }, 'service')).toBe(245);
     expect(headcountTotal({ new: 12, returning: 88, adults: 5 }, 'meal')).toBe(100);
     expect(headcountTotal(undefined, 'service')).toBe(0);
+  });
+
+  it('keeps the usher app\'s "all" count out of the total, as a cross-check only (Andy, 2026-11-07)', () => {
+    const counts = { adults: 180, teens: 25, children: 40, firstTimers: 6, salvations: 2, all: 247 };
+    expect(headcountTotal(counts, 'service')).toBe(245);
+    expect(crossCheckNote(counts)).toBe('2 more than the category count');
+    expect(crossCheckNote({ ...counts, all: 240 })).toBe('5 fewer than the category count');
+    expect(crossCheckNote({ ...counts, all: 245 })).toBe('Matches the category count');
+    expect(crossCheckNote({ adults: 10 })).toBe('');
+    expect(crossCheckNote(undefined)).toBe('');
   });
 
   it('turns whatever was typed into a whole, non-negative count', () => {

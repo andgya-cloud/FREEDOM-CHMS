@@ -44,6 +44,17 @@ describe('services and headcounts', () => {
     await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/events/2026-10-15_y'), event('admin', { date: '2026-10-15', name: 'Y', headcounts: { salvations: -2 } })));
   });
 
+  it('accepts the usher app\'s "all" headcount from 0 to 100000, and nothing else (Andy, 2026-11-07)', async () => {
+    const hc = { adults: 180, teens: 25, children: 40 };
+    await assertSucceeds(setDoc(doc(as('admin'), `${EVENT}_1`), event('admin', { headcounts: { ...hc, all: 0 } })));
+    await assertSucceeds(setDoc(doc(as('admin'), `${EVENT}_2`), event('admin', { headcounts: { ...hc, all: 247 } })));
+    await assertSucceeds(setDoc(doc(as('admin'), `${EVENT}_3`), event('admin', { headcounts: { ...hc, all: 100000 } })));
+    await assertFails(setDoc(doc(as('admin'), `${EVENT}_4`), event('admin', { headcounts: { ...hc, all: -1 } })));
+    await assertFails(setDoc(doc(as('admin'), `${EVENT}_5`), event('admin', { headcounts: { ...hc, all: 1.5 } })));
+    await assertFails(setDoc(doc(as('admin'), `${EVENT}_6`), event('admin', { headcounts: { ...hc, all: '247' } })));
+    await assertFails(setDoc(doc(as('admin'), `${EVENT}_7`), event('admin', { headcounts: { ...hc, all: 100001 } })));
+  });
+
   it('rejects counts that are negative, not whole numbers, or not a known count', async () => {
     await assertFails(setDoc(doc(as('admin'), EVENT), event('admin', { headcounts: { adults: -1 } })));
     await assertFails(setDoc(doc(as('admin'), EVENT), event('admin', { headcounts: { adults: 2.5 } })));

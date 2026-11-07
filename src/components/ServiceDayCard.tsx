@@ -4,12 +4,12 @@ import type { ChurchEvent } from '../state/useAttendance';
 import { useToast } from '../state/ToastContext';
 import { saveServiceCount } from '../lib/attendanceWrites';
 import { friendlyError } from '../lib/errors';
-import { cleanCount, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
+import { cleanCount, crossCheckNote, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { serviceSuggestions } from './ServiceInput';
 
-const KEYS = ['adults', 'teens', 'children', 'firstTimers', 'salvations'] as const;
+const KEYS = ['adults', 'teens', 'children', 'firstTimers', 'salvations', 'all'] as const;
 type Key = (typeof KEYS)[number];
-const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
+const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above', all: 'Cross-check · not in the total' };
 
 /**
  * The counting card on the Service page (Andy, 2026-11-03, 1A-6A): type the service, then tap – and + (or type a
@@ -94,7 +94,7 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
       </p>
       <div className="count-grid">
         {KEYS.map((k) => (
-          <div key={k} className="count-box">
+          <div key={k} className={`count-box${k === 'all' ? ' count-check' : ''}`}>
             <span className="count-label">{HEADCOUNT_LABELS[k]}</span>
             <input className="count-number" type="number" inputMode="numeric" min={0} aria-label={HEADCOUNT_LABELS[k]} disabled={!name}
               value={draft[k] ?? String(counts[k] ?? 0)} onFocus={(e) => e.target.select()} onChange={(e) => type(k, e.target.value)} />
@@ -109,6 +109,7 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
           <span className="count-label">Total count</span>
           <b className="count-number">{total}</b>
           <small className="count-hint">Adults, teens and children</small>
+          {crossCheckNote(counts) && <small className="count-hint count-check-note">All: {crossCheckNote(counts)}</small>}
         </div>
       </div>
       <div className="button-row">
