@@ -337,18 +337,56 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
   );
 }
 
+/**
+ * The files in one message, with "Download all" when there are two or more photos or videos (Andy, 2026-11-07).
+ * On a phone the share sheet opens so they can be saved to the gallery in one go; on a computer each one downloads.
+ */
+export function FilesGrid({ files, get, children }: { files: PhotoFile[]; get: (f: PhotoFile) => Promise<File>; children: ReactNode }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState('');
+  const media = files.filter((f) => f.photo || f.video);
+  async function saveAll() {
+    setBusy(`Getting 0 of ${media.length}…`);
+    try {
+      const got: File[] = [];
+      for (const f of media) { got.push(await get(f)); setBusy(`Getting ${got.length} of ${media.length}…`); }
+      const nav = navigator as Navigator & { canShare?: (d: ShareData) => boolean };
+      const phone = typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+      if (phone && nav.canShare?.({ files: got })) {
+        try { await nav.share({ files: got }); return; } catch (err) { if ((err as { name?: string })?.name === 'AbortError') return; }
+      }
+      for (const f of got) { downloadFile(f); await new Promise((r) => window.setTimeout(r, 400)); }
+      toast.show(`${got.length} files downloaded.`);
+    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
+  }
+  return (
+    <>
+      <div className="st-pics">{children}</div>
+      {media.length > 1 && (
+        <button type="button" className="st-chip st-dl-all" disabled={!!busy} onClick={() => void saveAll()}>{busy || `⬇ Download all ${media.length}`}</button>
+      )}
+    </>
+  );
+}
+
 /** A file in a bubble: photos show, a video plays when tapped (so 50 MB is not fetched on its own), documents download. */
 export function FileView({ org, reportId, file, onRemove, getFile }: { org: Organization; reportId: string; file: PhotoFile; onRemove?: () => Promise<void>; getFile?: (f: PhotoFile) => Promise<File> }) {
   const get = useCallback((f: PhotoFile) => (getFile ? getFile(f) : photoFile(org.id, reportId, f)), [getFile, org.id, reportId]);
   const [url, setUrl] = useState('');
   const [state, setState] = useState<'' | 'loading' | 'failed'>('');
   const [asking, setAsking] = useState(false);
+  const [saving, setSaving] = useState(false);
   const made = useRef('');
   useEffect(() => () => { if (made.current) URL.revokeObjectURL(made.current); }, []);
   const load = useCallback(() => {
     setState('loading');
     get(file).then((f) => { made.current = URL.createObjectURL(f); setUrl(made.current); setState(''); }).catch(() => setState('failed'));
   }, [get, file]);
+  // Save a shared photo or video to this phone or computer (Andy, 2026-11-07).
+  const save = () => { setSaving(true); void get(file).then(downloadFile).catch(() => setState('failed')).finally(() => setSaving(false)); };
+  const saveBtn = (
+    <button type="button" className="st-dl" aria-label={`Download ${file.name}`} title="Download" disabled={saving} onClick={save}>{saving ? '…' : '⬇'}</button>
+  );
   useEffect(() => { if (file.photo) load(); }, [file.photo, load]);
   // Andy and Doreen take out any photo or file (1A): tap ✕, then "Take out".
   const remove = onRemove && (
@@ -367,11 +405,12 @@ export function FileView({ org, reportId, file, onRemove, getFile }: { org: Orga
         <a className="st-pic" href={url || undefined} target="_blank" rel="noreferrer" aria-label={file.name}>
           {url ? <img src={url} alt="" onError={() => setState('failed')} /> : <span>{state === 'failed' ? 'Could not load' : 'Loading…'}</span>}
         </a>
+        {url && saveBtn}
         {remove}
       </div>
     );
   }
-  if (file.video && url) return <div className="st-file-box st-wide"><video className="st-video" src={url} controls playsInline preload="metadata" />{remove}</div>;
+  if (file.video && url) return <div className="st-file-box st-wide"><video className="st-video" src={url} controls playsInline preload="metadata" />{saveBtn}{remove}</div>;
   const ext = extOf(file.name);
   return (
     <div className="st-file-box st-wide">
@@ -448,9 +487,9 @@ function Bubble({ org, story, m, mine, canDelete, onEdit, onDelete, onDecision, 
         ) : m.text && <p>{m.text}</p>}
         <ChildCards kids={m.children ?? []} photos={story.childPhotos} type={org.type} />
         {m.files.length > 0 && (
-          <div className="st-pics">
+          <FilesGrid files={m.files} get={(f) => photoFile(org.id, story.report.id, f)}>
             {m.files.map((f) => <FileView key={f.key} org={org} reportId={story.report.id} file={f} onRemove={story.removes && !story.report.deleted ? () => onRemoveFile(f.key) : undefined} />)}
-          </div>
+          </FilesGrid>
         )}
         <div className="st-when">
           <span>{m.decision ? '📌 Decision · ' : ''}{m.editedAt ? 'edited' : ''}</span>

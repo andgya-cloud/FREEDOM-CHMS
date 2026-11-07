@@ -15,7 +15,7 @@ import { APPROVAL_LABELS, builtInFace, faceKey, SEVERITY_LABELS, type ApprovalSl
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 import { useIsAndy } from '../../lib/andy';
 import { myOwnProof, passwordProof } from '../../lib/pettyPin';
-import { AwayFromHope, ChildCards, Face, FileView, Picked, pickFiles, tintStyle, useChildPicker } from './HopePhotosPage';
+import { AwayFromHope, ChildCards, Face, FileView, FilesGrid, Picked, pickFiles, tintStyle, useChildPicker } from './HopePhotosPage';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate } from './common';
 import { CircleGate } from '../../components/CircleGate';
@@ -280,9 +280,9 @@ function ChatBubble({ org, data, m, getFile, onEdit, onRemoveFile }: {
         ) : m.text && <p>{m.text}</p>}
         <ChildCards kids={m.children ?? []} photos={data.childPhotos} type={org.type} />
         {m.files?.length > 0 && (
-          <div className="st-pics">
+          <FilesGrid files={m.files} get={getFile}>
             {m.files.map((f) => <FileView key={f.key} org={org} reportId={data.chat.id} file={f} getFile={getFile} onRemove={data.keeps ? () => onRemoveFile(f.key) : undefined} />)}
-          </div>
+          </FilesGrid>
         )}
         <div className="st-when">
           <span>{m.editedAt ? 'edited' : ''}</span>
