@@ -57,7 +57,8 @@ export const canAddLeavingNote = (p: Profile, orgId: string) => canReadNotes(p, 
 /** The Director, Daniel Ojwang' (the accountant), Andy and Doreen (8). */
 export function canKeepFees(p: Profile, orgId: string): boolean {
   if (!canAccessOrg(p, orgId)) return false;
-  return isHopeDirector(p, orgId) || canKeepAccounts(p) || plain(p?.displayName ?? '') === 'danielojwang';
+  // Diana Kiunga by name too (Andy, 2026-11-07), whatever role her account has.
+  return isHopeDirector(p, orgId) || canKeepAccounts(p) || ['danielojwang', 'dianakiunga'].includes(plain(p?.displayName ?? ''));
 }
 
 export type FeeMethod = 'mpesa' | 'bank' | 'cash' | 'other';

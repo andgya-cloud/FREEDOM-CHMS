@@ -32,5 +32,6 @@ describe('hope records', () => {
     expect(canReadNotes(p({}), org)).toBe(false);
     expect(canKeepFees(p({ displayName: "Daniel Ojwang'" }), org)).toBe(true);
     expect(canKeepFees(p({ displayName: 'Someone Else' }), org)).toBe(false);
+    expect(canKeepFees(p({ displayName: 'Diana Kiunga' }), org)).toBe(true);
   });
 });
