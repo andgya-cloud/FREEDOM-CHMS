@@ -7,10 +7,10 @@ import { friendlyError } from '../lib/errors';
 import { cleanCount, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { serviceSuggestions } from './ServiceInput';
 
-// The "All" box was removed (Andy, 2026-11-07).
-const KEYS = ['adults', 'teens', 'children', 'firstTimers', 'salvations'] as const;
+// "Whole Church" replaces the Teens box: its own count of everyone, never added to the total (Andy, 2026-11-07).
+const KEYS = ['adults', 'all', 'children', 'firstTimers', 'salvations'] as const;
 type Key = (typeof KEYS)[number];
-const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
+const HINTS: Record<Key, string> = { adults: '13 and over', all: 'Everyone · not in the total', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
 
 /**
  * The counting card on the Service page (Andy, 2026-11-03, 1A-6A): type the service, then tap – and + (or type a
@@ -95,7 +95,7 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
       </p>
       <div className="count-grid">
         {KEYS.map((k) => (
-          <div key={k} className="count-box">
+          <div key={k} className={`count-box${k === 'all' ? ' count-check' : ''}`}>
             <span className="count-label">{HEADCOUNT_LABELS[k]}</span>
             <input className="count-number" type="number" inputMode="numeric" min={0} aria-label={HEADCOUNT_LABELS[k]} disabled={!name}
               value={draft[k] ?? String(counts[k] ?? 0)} onFocus={(e) => e.target.select()} onChange={(e) => type(k, e.target.value)} />

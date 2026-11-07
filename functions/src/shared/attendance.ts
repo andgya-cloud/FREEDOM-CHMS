@@ -45,7 +45,7 @@ export const HEADCOUNT_LABELS: Record<HeadcountKey, string> = {
   total: 'Total',
   firstTimers: 'First-time visitors',
   salvations: 'Salvations',
-  all: 'All (Entire Church)',
+  all: 'Whole Church',
 };
 
 /** Which counts each kind of gathering asks for. */
