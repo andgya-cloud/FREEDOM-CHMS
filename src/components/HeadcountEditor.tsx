@@ -37,7 +37,10 @@ export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdi
   const saved = useSavedMessage();
   const counted = HEADCOUNT_FIELDS[event.type];
   // Services also take first-timers and salvations, which are not added to the total (Andy, 2026-11-02, 3A).
-  const fields: HeadcountKey[] = event.type === 'service' ? [...counted, ...SERVICE_EXTRA_KEYS, SERVICE_CROSSCHECK_KEY] : counted;
+  // "All (Entire Church)" first and Adults last, the same as the Sunday page (Andy, 2026-11-07).
+  const fields: HeadcountKey[] = event.type === 'service'
+    ? [SERVICE_CROSSCHECK_KEY, ...counted.filter((k) => k !== 'adults'), ...SERVICE_EXTRA_KEYS, 'adults']
+    : counted;
   const [counts, setCounts] = useState<Headcounts>(event.headcounts ?? {});
   const [status, setStatus] = useState('');
   const dirty = useRef(false);

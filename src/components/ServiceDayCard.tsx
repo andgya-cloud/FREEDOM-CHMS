@@ -7,9 +7,10 @@ import { friendlyError } from '../lib/errors';
 import { cleanCount, crossCheckNote, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { serviceSuggestions } from './ServiceInput';
 
-const KEYS = ['adults', 'teens', 'children', 'firstTimers', 'salvations', 'all'] as const;
+// "All (Entire Church)" takes the first box and Adults the last one (Andy, 2026-11-07).
+const KEYS = ['all', 'teens', 'children', 'firstTimers', 'salvations', 'adults'] as const;
 type Key = (typeof KEYS)[number];
-const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above', all: 'Cross-check · not in the total' };
+const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above', all: 'Everyone · not in the total' };
 
 /**
  * The counting card on the Service page (Andy, 2026-11-03, 1A-6A): type the service, then tap – and + (or type a
