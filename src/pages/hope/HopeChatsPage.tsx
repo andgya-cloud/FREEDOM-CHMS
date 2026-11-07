@@ -15,7 +15,7 @@ import { APPROVAL_LABELS, builtInFace, faceKey, SEVERITY_LABELS, type ApprovalSl
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 import { useIsAndy } from '../../lib/andy';
 import { myOwnProof, passwordProof } from '../../lib/pettyPin';
-import { ChildCards, Face, FileView, Picked, pickFiles, tintStyle, useChildPicker } from './HopePhotosPage';
+import { AwayFromHope, ChildCards, Face, FileView, Picked, pickFiles, tintStyle, useChildPicker } from './HopePhotosPage';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate } from './common';
 import { CircleGate } from '../../components/CircleGate';
@@ -85,15 +85,15 @@ export function ChatRow({ c, reader, unread, type }: { c: StoredChat; reader: bo
 
 /** One conversation, like a WhatsApp group (3A, 5A, 6A, 7A). */
 export function HopeChatPage() {
-  return <HopeGate title="Conversation">{(org) => <Chat org={org} />}</HopeGate>;
+  return <AwayFromHope page="chat"><HopeGate title="Conversation">{(org) => <Chat org={org} />}</HopeGate></AwayFromHope>;
 }
 
 /** ADIA's and Freedom Church's private conversations (Andy, 2026-11-07, 5A): the list, and one conversation. */
 export function CircleVaultPage({ type }: { type: Exclude<CircleType, 'ministry'> }) {
-  return <CircleGate type={type} title="Private conversations">{(org) => <Vault org={org} />}</CircleGate>;
+  return <CircleGate type={type} title="Private conversations" page="vault">{(org) => <Vault org={org} />}</CircleGate>;
 }
 export function CircleChatPage({ type }: { type: Exclude<CircleType, 'ministry'> }) {
-  return <CircleGate type={type} title="Conversation">{(org) => <Chat org={org} />}</CircleGate>;
+  return <CircleGate type={type} title="Conversation" page="chat">{(org) => <Chat org={org} />}</CircleGate>;
 }
 
 function Chat({ org }: { org: Organization }) {

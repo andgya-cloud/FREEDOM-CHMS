@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
@@ -24,18 +24,27 @@ import { useIsAndy } from '../../lib/andy';
 import { myOwnProof, passwordProof } from '../../lib/pettyPin';
 import type { Organization } from '../../state/OrgContext';
 import { HopeGate, useHopePage } from './common';
-import { CircleGate } from '../../components/CircleGate';
-import { circleOf, KINDS_OF, kindLabel, type Circle, type CircleType } from '../../../functions/src/shared/circles';
+import { CircleGate, circlePageFor, isOneItem, type CirclePage } from '../../components/CircleGate';
+import { useOrg } from '../../state/OrgContext';
+import { circleOf, isCircleType, KINDS_OF, kindLabel, type Circle, type CircleType } from '../../../functions/src/shared/circles';
 import { useClubs } from '../../state/useHope';
 import { WIN_KIND_LABELS } from '../../../functions/src/shared/hopeClubs';
 
 export function HopePhotosPage() {
-  return <HopeGate title="Photos and wins">{(org) => <Photos org={org} />}</HopeGate>;
+  return <AwayFromHope page="photos"><HopeGate title="Photos and wins">{(org) => <Photos org={org} />}</HopeGate></AwayFromHope>;
+}
+
+/** On a Hope page after switching to ADIA or the church: open that organization's own page (Andy, 2026-11-07). */
+export function AwayFromHope({ page, children }: { page: CirclePage; children: ReactNode }) {
+  const { current } = useOrg();
+  const [params] = useSearchParams();
+  if (current && current.type !== 'ministry' && isCircleType(current.type) && !isOneItem(page, params.toString() ? `?${params.toString()}` : '')) return <Navigate to={circlePageFor(current.type, page)} replace />;
+  return <>{children}</>;
 }
 
 /** Photos and wins at ADIA and Freedom Church (Andy, 2026-11-07, 1A-10A): the same conversations as the Hope Centre. */
 export function CirclePhotosPage({ type }: { type: Exclude<CircleType, 'ministry'> }) {
-  return <CircleGate type={type} title="Photos and wins">{(org) => <Photos org={org} />}</CircleGate>;
+  return <CircleGate type={type} title="Photos and wins" page="photos">{(org) => <Photos org={org} />}</CircleGate>;
 }
 const circleFor = (org: Organization): Circle => circleOf(org.type);
 
