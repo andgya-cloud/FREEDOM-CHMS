@@ -9,8 +9,6 @@ import {
   HEADCOUNT_FIELDS,
   HEADCOUNT_LABELS,
   headcountTotal,
-  crossCheckNote,
-  SERVICE_CROSSCHECK_KEY,
   SERVICE_EXTRA_KEYS,
   type HeadcountKey,
   type Headcounts,
@@ -37,10 +35,8 @@ export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdi
   const saved = useSavedMessage();
   const counted = HEADCOUNT_FIELDS[event.type];
   // Services also take first-timers and salvations, which are not added to the total (Andy, 2026-11-02, 3A).
-  // "All (Entire Church)" first and Adults last, the same as the Sunday page (Andy, 2026-11-07).
-  const fields: HeadcountKey[] = event.type === 'service'
-    ? [SERVICE_CROSSCHECK_KEY, ...counted.filter((k) => k !== 'adults'), ...SERVICE_EXTRA_KEYS, 'adults']
-    : counted;
+  // The "All" box was removed (Andy, 2026-11-07).
+  const fields: HeadcountKey[] = event.type === 'service' ? [...counted, ...SERVICE_EXTRA_KEYS] : counted;
   const [counts, setCounts] = useState<Headcounts>(event.headcounts ?? {});
   const [status, setStatus] = useState('');
   const dirty = useRef(false);
@@ -110,7 +106,6 @@ export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdi
           </div>
         ))}
       </div>
-      {event.type === 'service' && crossCheckNote(counts) && <p className="hint count-check-note">All: {crossCheckNote(counts)}.</p>}
       {status && <p className="hint hint-ok" role="status">{status}</p>}
     </section>
   );
