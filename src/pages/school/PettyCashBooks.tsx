@@ -18,6 +18,7 @@ import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, Re
 import { needsReceipt, receiptStatus } from '../../lib/receiptNames';
 import type { Organization } from '../../state/OrgContext';
 import { PastUploadCard } from './PettyPast';
+import { pettyReport, periodName, REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
 import { useAuth } from '../../state/AuthContext';
 import { canTopUpAlone } from '../../../functions/src/shared/pettyCash';
 
@@ -432,6 +433,68 @@ function MonthEnd({ org }: { org: Organization }) {
   );
 }
 
+/**
+ * The professional monthly report (Andy, 2026-11-08): pick a month or a whole year and who approves it,
+ * then download it as PDF or Excel. Same in ADIA, Freedom Church and Hope.
+ */
+function MonthlyReportCard({ org }: { org: Organization }) {
+  const p = usePettyCash(org);
+  const toast = useToast();
+  const { receipts } = useReceipts(org);
+  const periods = useMemo(() => {
+    const ms = [...p.requisitions.filter((r) => r.status === 'approved').map((r) => millis(r.approved?.at)), ...p.funds.filter((f) => f.status === 'done').map((f) => millis(f.doneAt))]
+      .filter((x): x is number => x != null);
+    const months = [...new Set(ms.map((x) => new Date(x + 3 * 3_600_000).toISOString().slice(0, 7)))].sort().reverse();
+    return [...new Set(months.map((x) => x.slice(0, 4)))].flatMap((y) => [...months.filter((x) => x.startsWith(y)), y]);
+  }, [p.requisitions, p.funds]);
+  const [period, setPeriod] = useState('');
+  const [approver, setApprover] = useState<string>(REPORT_APPROVERS[0]);
+  const [busy, setBusy] = useState<'' | 'pdf' | 'excel'>('');
+  const chosen = period || periods[0] || '';
+  async function make(kind: 'pdf' | 'excel') {
+    if (!chosen) return;
+    setBusy(kind);
+    try {
+      const counts = receipts.reduce<Record<string, number>>((n, rc) => ({ ...n, [rc.reqId]: (n[rc.reqId] ?? 0) + 1 }), {});
+      const rep = pettyReport(chosen, p.funds, p.requisitions, counts, millis);
+      if (kind === 'pdf') {
+        const { pettyReportPdf } = await import('../../lib/pettyPdf');
+        downloadFile(await pettyReportPdf(org, rep, approver));
+      } else {
+        const { pettyReportWorkbook } = await import('../../lib/pettyExcel');
+        downloadFile(await pettyReportWorkbook(org.name, rep, approver));
+      }
+    } catch (err) {
+      toast.show(friendlyError(err));
+    } finally {
+      setBusy('');
+    }
+  }
+  return (
+    <section className="card stack no-print">
+      <h2>Monthly report</h2>
+      <p className="small muted">Opening and closing balance, money in and out, spending by category against the period before, every voucher and top-up, the checks and the sign-off lines.</p>
+      <div className="field-row">
+        <label className="field"><span>Period</span>
+          <select value={chosen} onChange={(e) => setPeriod(e.target.value)} disabled={!periods.length}>
+            {periods.map((x) => <option key={x} value={x}>{x.length === 4 ? `Whole year ${x}` : periodName(x)}</option>)}
+          </select>
+        </label>
+        <label className="field"><span>Approved by</span>
+          <select value={approver} onChange={(e) => setApprover(e.target.value)}>
+            {REPORT_APPROVERS.map((n) => <option key={n} value={n}>{n}</option>)}
+          </select>
+        </label>
+      </div>
+      <p className="small muted">Prepared by {REPORT_PREPARED_BY.name} ({REPORT_PREPARED_BY.role}).</p>
+      <div className="row-actions">
+        <button type="button" className="btn btn-primary" disabled={!chosen || !!busy} onClick={() => void make('pdf')}>{busy === 'pdf' ? 'Making PDF…' : 'Download PDF'}</button>
+        <button type="button" className="btn" disabled={!chosen || !!busy} onClick={() => void make('excel')}>{busy === 'excel' ? 'Making Excel…' : 'Download Excel'}</button>
+      </div>
+    </section>
+  );
+}
+
 /** Reports: approved requisitions by month (moved off the Overview, Andy 2026-10-24), with the other reports one tap away. */
 export function PettyReportsPage() {
   return <PettyGate title="Reports">{(org) => <Reports org={org} />}</PettyGate>;
@@ -450,6 +513,7 @@ function Reports({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head"><h1>Reports</h1></div>
       <PettyNav org={org} /><ReportsNav org={org} />
+      <MonthlyReportCard org={org} />
       <section className="card stack">
         <div className="card-head">
           <h2>Approved requisitions</h2>
