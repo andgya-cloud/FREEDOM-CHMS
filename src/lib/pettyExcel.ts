@@ -24,7 +24,7 @@ export async function pettyWorkbook(orgName: string, period: string, requisition
   const foot: Cell[] = [text(POWERED_BY)];
 
   const reqSheet: Cell[][] = [title, [],
-    head(['Number', 'Date', 'Month', 'Requester', 'Category', 'Items', 'Amount (KES)', 'Status', 'Signed by', 'Paid to', 'M-Pesa code', 'Ref. No.', 'Receipts']),
+    head(['Number', 'Date', 'Month', 'Requester', 'Category', 'Items', 'Amount (KES)', 'Status', 'Signed by', 'Paid to', 'M-Pesa code', 'Family Bank ref. no.', 'Receipts']),
     ...inPeriod.map((r) => [text(r.number ?? 'New'), date(millis(r.createdAt)), text(r.month), text(r.requesterName), text(categoryLabel(r)),
       text(r.items.map((i) => i.description).join('; ')), kes(r.totalCents), text(receiptStatus(r, count(r.id), PETTY_CASH_STATUS_LABELS[r.status])),
       text(signers(r)), text(r.payee), text(r.mpesaCode), text(r.refNo), { value: count(r.id), type: Number }]),
@@ -32,7 +32,7 @@ export async function pettyWorkbook(orgName: string, period: string, requisition
     [], foot,
   ];
   const itemSheet: Cell[][] = [title, [],
-    head(['Number', 'Date', 'Category', 'Item', 'Description', 'Quantity', 'Unit price (KES)', 'Amount (KES)', 'Paid to', 'M-Pesa code', 'Ref. No.', 'Status']),
+    head(['Number', 'Date', 'Category', 'Item', 'Description', 'Quantity', 'Unit price (KES)', 'Amount (KES)', 'Paid to', 'M-Pesa code', 'Family Bank ref. no.', 'Status']),
     ...inPeriod.flatMap((r) => r.items.map((i, n) => [text(r.number ?? 'New'), date(millis(r.createdAt)), text(categoryLabel(r)), { value: n + 1, type: Number },
       text(i.description), { value: i.quantity ?? 1, type: Number }, kes(i.unitPriceCents ?? i.amountCents), kes(i.amountCents), text(r.payee), text(r.mpesaCode), text(r.refNo),
       text(PETTY_CASH_STATUS_LABELS[r.status])] as Cell[])),

@@ -78,7 +78,7 @@ export interface PettyCashRequisition {
   /** Who was paid and, when paid by M-Pesa, the transaction code (Andy, 2026-10-24). Both optional. */
   payee?: string | null;
   mpesaCode?: string | null;
-  /** A reference number, such as an invoice or bank slip number (Andy, 2026-11-08). */
+  /** The Family Bank reference number, shown next to the M-Pesa code (Andy, 2026-11-08). */
   refNo?: string | null;
 }
 

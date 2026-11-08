@@ -149,7 +149,14 @@ h2 { font-size: 1.15rem; margin: 0 0 0.5rem; }
 .field { display: flex; flex-direction: column; gap: 6px; border: 0; margin: 0; padding: 0; }
 .field > span, .field > legend, .field > label { font-weight: 600; }
 .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-/* Paid to on its own line on phones; M-Pesa code and Ref. No. side by side (2026-11-08). */
+/* Payment details (2026-11-08): Paid to on its own line on phones; M-Pesa code and Family Bank ref. side by side. */
+.pay-head { margin: 8px 0 0; font-size: 1rem; }
+.pay-head small { font-weight: 400; font-size: 0.8rem; }
+.pay-facts { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.pay-facts dl { display: grid; grid-template-columns: repeat(3, minmax(0, auto)); gap: 4px 24px; margin: 0; }
+.pay-facts dt { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; opacity: 0.65; }
+.pay-facts dd { margin: 0; font-weight: 700; overflow-wrap: anywhere; }
+@media (max-width: 520px) { .pay-facts dl { grid-template-columns: 1fr 1fr; } .pay-facts dl > :first-child { grid-column: 1 / -1; } }
 .pay-row > :first-child { grid-column: 1 / -1; }
 @media (min-width: 720px) { .pay-row { grid-template-columns: 1fr 1fr 1fr; } .pay-row > :first-child { grid-column: auto; } }
 input, select, textarea {

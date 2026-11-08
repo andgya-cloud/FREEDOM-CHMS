@@ -644,12 +644,12 @@ function NewRequisition({ org }: { org: Organization }) {
           <button type="button" className="btn btn-quiet align-start" onClick={() => setLines((ls) => [...ls, { key: Math.max(...ls.map((x) => x.key)) + 1, description: '', quantity: '1', unitPrice: '' }])}>Add another item</button>
         )}
         <p className="petty-total">Total <strong>{money(org, total)}</strong></p>
+        <h3 className="pay-head">Payment details <small className="muted">(optional, can be added later with the receipts)</small></h3>
         <div className="field-row pay-row">
-          <label className="field"><span>Paid to (optional)</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
-          <label className="field"><span>M-Pesa code (optional)</span><input value={mpesa} maxLength={14} autoCapitalize="characters" onChange={(e) => setMpesa(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
-          <label className="field"><span>Ref. No. (optional)</span><input value={refNo} maxLength={40} onChange={(e) => setRefNo(e.target.value)} placeholder="Invoice or slip number" /></label>
+          <label className="field"><span>Paid to</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
+          <label className="field"><span>M-Pesa code</span><input value={mpesa} maxLength={14} autoCapitalize="characters" onChange={(e) => setMpesa(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
+          <label className="field"><span>Family Bank ref. no.</span><input value={refNo} maxLength={40} autoCapitalize="characters" onChange={(e) => setRefNo(e.target.value.toUpperCase())} placeholder="From the bank SMS or slip" /></label>
         </div>
-        <p className="small muted">You can also add these later, with the receipts.</p>
         {codeUsed && <p className="petty-warn small">This M-Pesa code is already on {label(codeUsed)} ({codeUsed.requesterName}, {money(org, codeUsed.totalCents)}). Check it is not the same payment.</p>}
         {bigOne && <p className="petty-warn small">This request is over {money(org, DIRECTOR_LIMIT_CENTS)}, so the Director must be one of the two signatures.</p>}
         {dupes.length > 0 && <p className="petty-warn small">Possible repeat: {dupes.map((d) => `${label(d)} (${when(d.createdAt)})`).join(', ')} asked for the same amount in {category} within {DUPLICATE_DAYS} days. You can still submit it if it is a new expense.</p>}
@@ -913,16 +913,20 @@ function PaymentDetails({ org, r, locked }: { org: Organization; r: RequisitionR
       <div className="field-row pay-row">
         <label className="field"><span>Paid to</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
         <label className="field"><span>M-Pesa code</span><input value={code} maxLength={14} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
-        <label className="field"><span>Ref. No.</span><input value={ref} maxLength={40} onChange={(e) => setRef(e.target.value)} placeholder="Invoice or slip number" /></label>
+        <label className="field"><span>Family Bank ref. no.</span><input value={ref} maxLength={40} onChange={(e) => setRef(e.target.value.toUpperCase())} placeholder="From the bank SMS or slip" /></label>
       </div>
       <div className="row-actions"><button type="button" className="btn btn-primary" onClick={save}>Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>Cancel</button></div>
     </div>
   );
   return (
-    <p className="small">
-      Paid to: <strong>{r.payee || 'not given'}</strong> · M-Pesa code: <strong>{r.mpesaCode || 'none'}</strong> · Ref. No.: <strong>{r.refNo || 'none'}</strong>
-      {canEdit && <> <button type="button" className="btn btn-quiet no-print" onClick={() => setEditing(true)}>{r.payee || r.mpesaCode || r.refNo ? 'Change' : 'Add'}</button></>}
-    </p>
+    <div className="pay-facts">
+      <dl>
+        <div><dt>Paid to</dt><dd>{r.payee || '—'}</dd></div>
+        <div><dt>M-Pesa code</dt><dd>{r.mpesaCode || '—'}</dd></div>
+        <div><dt>Family Bank ref. no.</dt><dd>{r.refNo || '—'}</dd></div>
+      </dl>
+      {canEdit && <button type="button" className="btn btn-quiet no-print" onClick={() => setEditing(true)}>{r.payee || r.mpesaCode || r.refNo ? 'Change payment details' : 'Add payment details'}</button>}
+    </div>
   );
 }
 
