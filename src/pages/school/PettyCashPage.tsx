@@ -488,6 +488,7 @@ function NewRequisition({ org }: { org: Organization }) {
   const [copyFrom, setCopyFrom] = useState('');
   const [payee, setPayee] = useState(prefill?.payee ?? '');
   const [mpesa, setMpesa] = useState('');
+  const [refNo, setRefNo] = useState('');
   const parsed = lines.map((l) => {
     const quantity = parseQuantity(l.quantity);
     const unitPriceCents = parseAmountCents(l.unitPrice);
@@ -538,7 +539,7 @@ function NewRequisition({ org }: { org: Organization }) {
   const input = () => ({
     category: category as PettyCashCategory, categoryNote: category === 'Other' ? note.trim().slice(0, 120) : null,
     items: parsed.map((i) => ({ description: i.description.slice(0, 200), quantity: i.quantity!, unitPriceCents: i.unitPriceCents!, amountCents: i.amountCents! })), month: p.month,
-    payee: payee.trim().slice(0, 120) || null, mpesaCode: cleanMpesaCode(mpesa) || null,
+    payee: payee.trim().slice(0, 120) || null, mpesaCode: cleanMpesaCode(mpesa) || null, refNo: refNo.trim().slice(0, 40) || null,
   });
   /** ADIA: the chosen stakeholder raises it as theirs on this device, with their PIN. */
   async function raiseForChosen() {
@@ -643,9 +644,10 @@ function NewRequisition({ org }: { org: Organization }) {
           <button type="button" className="btn btn-quiet align-start" onClick={() => setLines((ls) => [...ls, { key: Math.max(...ls.map((x) => x.key)) + 1, description: '', quantity: '1', unitPrice: '' }])}>Add another item</button>
         )}
         <p className="petty-total">Total <strong>{money(org, total)}</strong></p>
-        <div className="field-row">
+        <div className="field-row pay-row">
           <label className="field"><span>Paid to (optional)</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
           <label className="field"><span>M-Pesa code (optional)</span><input value={mpesa} maxLength={14} autoCapitalize="characters" onChange={(e) => setMpesa(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
+          <label className="field"><span>Ref. No. (optional)</span><input value={refNo} maxLength={40} onChange={(e) => setRefNo(e.target.value)} placeholder="Invoice or slip number" /></label>
         </div>
         <p className="small muted">You can also add these later, with the receipts.</p>
         {codeUsed && <p className="petty-warn small">This M-Pesa code is already on {label(codeUsed)} ({codeUsed.requesterName}, {money(org, codeUsed.totalCents)}). Check it is not the same payment.</p>}
@@ -707,7 +709,7 @@ function Requisition({ org }: { org: Organization }) {
   const makePdf = () => requisitionPdf(org, {
     number: r.number, requesterName: r.requesterName, category: r.category, categoryNote: r.categoryNote, items: r.items,
     totalCents: r.totalCents, status: r.status, statusLabel: PETTY_CASH_STATUS_LABELS[r.status], date: when(r.createdAt),
-    payee: r.payee ?? null, mpesaCode: r.mpesaCode ?? null,
+    payee: r.payee ?? null, mpesaCode: r.mpesaCode ?? null, refNo: r.refNo ?? null,
   }, signOffs, receipts.length);
   async function pdf() {
     try {
@@ -897,27 +899,29 @@ function PaymentDetails({ org, r, locked }: { org: Organization; r: RequisitionR
   const [editing, setEditing] = useState(false);
   const [payee, setPayee] = useState(r.payee ?? '');
   const [code, setCode] = useState(r.mpesaCode ?? '');
+  const [ref, setRef] = useState(r.refNo ?? '');
   const canEdit = !locked && r.status !== 'rejected' && (r.requesterId === p.uid || p.canSign);
   function save() {
     const clean = cleanMpesaCode(code);
     if (clean && !MPESA_CODE.test(clean)) { toast.show('An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.'); return; }
-    savePayment(org.id, r.id, payee.trim().slice(0, 120) || null, clean || null).catch((err) => toast.show(friendlyError(err)));
+    savePayment(org.id, r.id, payee.trim().slice(0, 120) || null, clean || null, ref.trim().slice(0, 40) || null).catch((err) => toast.show(friendlyError(err)));
     setEditing(false);
     toast.show('Payment details saved.');
   }
   if (editing) return (
     <div className="stack no-print">
-      <div className="field-row">
+      <div className="field-row pay-row">
         <label className="field"><span>Paid to</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
         <label className="field"><span>M-Pesa code</span><input value={code} maxLength={14} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
+        <label className="field"><span>Ref. No.</span><input value={ref} maxLength={40} onChange={(e) => setRef(e.target.value)} placeholder="Invoice or slip number" /></label>
       </div>
       <div className="row-actions"><button type="button" className="btn btn-primary" onClick={save}>Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>Cancel</button></div>
     </div>
   );
   return (
     <p className="small">
-      Paid to: <strong>{r.payee || 'not given'}</strong> · M-Pesa code: <strong>{r.mpesaCode || 'none'}</strong>
-      {canEdit && <> <button type="button" className="btn btn-quiet no-print" onClick={() => setEditing(true)}>{r.payee || r.mpesaCode ? 'Change' : 'Add'}</button></>}
+      Paid to: <strong>{r.payee || 'not given'}</strong> · M-Pesa code: <strong>{r.mpesaCode || 'none'}</strong> · Ref. No.: <strong>{r.refNo || 'none'}</strong>
+      {canEdit && <> <button type="button" className="btn btn-quiet no-print" onClick={() => setEditing(true)}>{r.payee || r.mpesaCode || r.refNo ? 'Change' : 'Add'}</button></>}
     </p>
   );
 }

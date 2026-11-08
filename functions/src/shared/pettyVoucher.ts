@@ -110,7 +110,7 @@ export interface PdfSignOff { role: string; name: string | null; when: string | 
 export interface VoucherRequisition {
   number: string | null; requesterName: string; category: string; categoryNote?: string | null; items: PettyCashItem[];
   totalCents: number; status: string; statusLabel: string; date: string;
-  payee?: string | null; mpesaCode?: string | null;
+  payee?: string | null; mpesaCode?: string | null; refNo?: string | null;
 }
 
 /**
@@ -136,7 +136,7 @@ export function drawRequisition(pdf: JsPdf, lh: Letterhead, crest: string | null
 
   // Who and what.
   const rows: [string, string][] = [['Requested by', r.requesterName], ['Category', categoryLabel(r)], ['Status', r.statusLabel]];
-  if (r.payee || r.mpesaCode) rows.push(['Paid to', [r.payee, r.mpesaCode ? `M-Pesa ${r.mpesaCode}` : ''].filter(Boolean).join(' · ')]);
+  if (r.payee || r.mpesaCode || r.refNo) rows.push(['Paid to', [r.payee, r.mpesaCode ? `M-Pesa ${r.mpesaCode}` : '', r.refNo ? `Ref. No. ${r.refNo}` : ''].filter(Boolean).join(' · ')]);
   pdf.setFillColor(...GOLD_SOFT);
   pdf.roundedRect(14, y, w - 76, rows.length * 8 + 6, 2, 2, 'F');
   pdf.setFontSize(9);

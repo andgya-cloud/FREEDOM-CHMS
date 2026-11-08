@@ -1520,9 +1520,10 @@ service cloud.firestore {
         return !exists(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month))
           || get(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month)).data.status != 'closed';
       }
-      // Who was paid and the M-Pesa code (10 letters and digits); both optional.
+      // Who was paid, the M-Pesa code (10 letters and digits) and a reference number; all optional.
       function pcPaymentFields(d) {
         return (d.get('payee', null) == null || shortText(d.payee, 120))
+          && (d.get('refNo', null) == null || shortText(d.refNo, 40))
           && (d.get('mpesaCode', null) == null || (d.mpesaCode is string && d.mpesaCode.matches('^[A-Z0-9]{10}$')));
       }
       function pcSigner() {
@@ -1546,7 +1547,7 @@ service cloud.firestore {
         // Only the signatories (pettycash.request) and the pastor raise requests.
         allow create: if pc('pettycash.request') && stampedCreate() && freshRecord()
           && request.resource.data.keys().hasOnly(['orgId', 'number', 'requesterId', 'requesterName', 'category', 'categoryNote', 'items',
-               'totalCents', 'month', 'status', 'checked', 'approved', 'rejection', 'signatures', 'payee', 'mpesaCode',
+               'totalCents', 'month', 'status', 'checked', 'approved', 'rejection', 'signatures', 'payee', 'mpesaCode', 'refNo',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId
           && pcPaymentFields(request.resource.data) && pcMonthOpen(request.resource.data.month)
@@ -1581,7 +1582,7 @@ service cloud.firestore {
         }
         // The requester or a signer adds or corrects who was paid and the M-Pesa code, until the month is closed.
         function pcPaymentEdit() {
-          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payee', 'mpesaCode', 'updatedAt', 'updatedBy'])
+          return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['payee', 'mpesaCode', 'refNo', 'updatedAt', 'updatedBy'])
             && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
             && (resource.data.requesterId == request.auth.uid || pcSigner())
             && resource.data.status != 'rejected' && pcPaymentFields(request.resource.data);

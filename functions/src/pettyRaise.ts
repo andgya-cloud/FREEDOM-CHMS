@@ -54,13 +54,14 @@ export const raisePettyRequest = onCall(CALLABLE, async (request) => {
   await requireMonthOpen(null, orgId, month);
   const payee = typeof data.payee === 'string' ? data.payee.trim().slice(0, 120) || null : null;
   const code = typeof data.mpesaCode === 'string' ? cleanMpesaCode(data.mpesaCode) : '';
+  const refNo = typeof data.refNo === 'string' ? data.refNo.trim().slice(0, 40) || null : null;
   if (code && !MPESA_CODE.test(code)) throw new HttpsError('invalid-argument', 'An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.');
 
   const ref = db.collection(`organizations/${orgId}/pettyCash`).doc();
   const now = FieldValue.serverTimestamp();
   await ref.set({
     orgId, number: null, requesterId: requesterUid, requesterName: requester!.displayName || requester!.email,
-    category, categoryNote: category === 'Other' ? note : null, items, totalCents: itemsTotalCents(items), month, payee, mpesaCode: code || null,
+    category, categoryNote: category === 'Other' ? note : null, items, totalCents: itemsTotalCents(items), month, payee, mpesaCode: code || null, refNo,
     status: 'submitted', checked: null, approved: null, rejection: null, signatures: {},
     raisedBy: caller.uid, raisedByName: caller.profile.displayName || caller.profile.email,
     deletedAt: null, deletedBy: null, createdAt: now, createdBy: requesterUid, updatedAt: now, updatedBy: requesterUid,

@@ -62,7 +62,7 @@ export async function binSign(args: {
 /** ADIA: raises a requisition as the chosen stakeholder, after checking their PIN. Returns its id and their name. */
 export async function raisePettyRequest(args: {
   orgId: string; requesterUid: string; pin: string; category: string; categoryNote: string | null; month: string;
-  payee?: string | null; mpesaCode?: string | null;
+  payee?: string | null; mpesaCode?: string | null; refNo?: string | null;
   items: { description: string; quantity: number; unitPriceCents: number; amountCents: number }[];
 }): Promise<{ id: string; name: string }> {
   const res = await httpsCallable<object, { id: string; name: string }>(functions, 'raisePettyRequest')(args);
