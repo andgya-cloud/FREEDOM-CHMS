@@ -4,14 +4,13 @@ import type { ChurchEvent } from '../state/useAttendance';
 import { useToast } from '../state/ToastContext';
 import { saveServiceCount } from '../lib/attendanceWrites';
 import { friendlyError } from '../lib/errors';
-import { cleanCount, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
+import { categoryTotal, cleanCount, headcountTotal, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { serviceSuggestions } from './ServiceInput';
 
-// Same six buttons, same order, as the usher app v1.8 (Andy, 2026-11-08). Whole Church is its own count of
-// everyone and is never added to the total.
+// Same six buttons, same order, as the usher app v1.8 (Andy, 2026-11-08). Whole Church, when counted, is the total.
 const KEYS = ['adults', 'teens', 'children', 'all', 'firstTimers', 'salvations'] as const;
 type Key = (typeof KEYS)[number];
-const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', all: 'Everyone · not in the total', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
+const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', all: 'Everyone · this is the total', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
 
 /**
  * The counting card on the Service page (Andy, 2026-11-03, 1A-6A): type the service, then tap – and + (or type a
@@ -38,7 +37,9 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
   useEffect(() => { onName?.(name); }, [name, onName]);
   const saved = running.find((e) => e.name === name) ?? null;
   const counts: Headcounts = saved?.headcounts ?? {};
-  const total = (counts.adults ?? 0) + (counts.teens ?? 0) + (counts.children ?? 0);
+  const categories = categoryTotal(counts, 'service');
+  const total = headcountTotal(counts, 'service');
+  const wholeChurch = (counts.all ?? 0) > 0;
 
   // Open the day on its first service, so its numbers show straight away.
   const firstName = running[0]?.name ?? '';
@@ -110,7 +111,8 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
         <div className="count-box count-total" aria-live="polite">
           <span className="count-label">Total count</span>
           <b className="count-number">{total}</b>
-          <small className="count-hint">Adults, teens and children</small>
+          <small className="count-hint">{wholeChurch ? 'From Whole Church' : 'Adults, teens and children'}</small>
+          {wholeChurch && categories > 0 && <small className="count-hint">Adults + Teens + Children: {categories}</small>}
         </div>
       </div>
       <div className="button-row">

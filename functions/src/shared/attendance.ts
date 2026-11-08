@@ -65,7 +65,7 @@ export const SERVICE_EXTRA_KEYS = ['firstTimers', 'salvations'] as const satisfi
 
 /**
  * "All" (Andy, 2026-11-07): the usher app's separate count of everyone in church (v1.6 sends headcounts.all with
- * increment()). It is a cross-check only: never added to the total, any percentage, trend or report.
+ * increment()). Since 2026-11-08 (Andy) it IS the service total when taken; see headcountTotal.
  */
 export const SERVICE_CROSSCHECK_KEY = 'all' as const satisfies HeadcountKey;
 
@@ -73,7 +73,7 @@ export const SERVICE_CROSSCHECK_KEY = 'all' as const satisfies HeadcountKey;
 export function crossCheckNote(counts: Headcounts | null | undefined): string {
   const all = Number(counts?.all) || 0;
   if (!all) return '';
-  const diff = all - headcountTotal(counts, 'service');
+  const diff = all - categoryTotal(counts, 'service');
   if (diff === 0) return 'Matches the category count';
   return `${Math.abs(diff)} ${diff > 0 ? 'more' : 'fewer'} than the category count`;
 }
@@ -140,6 +140,14 @@ export function attended(status: AttendanceStatus | string | undefined): boolean
 }
 
 export function headcountTotal(counts: Headcounts | null | undefined, type: EventType): number {
+  if (!counts) return 0;
+  // A service's Whole Church count, when taken, is the total (Andy, 2026-11-08). Otherwise adults + teens + children.
+  if (type === 'service' && (Number(counts.all) || 0) > 0) return Number(counts.all);
+  return categoryTotal(counts, type);
+}
+
+/** Adults + teens + children for a service (the counted fields for other gatherings), ignoring Whole Church. */
+export function categoryTotal(counts: Headcounts | null | undefined, type: EventType): number {
   if (!counts) return 0;
   return HEADCOUNT_FIELDS[type].reduce((sum, k) => sum + (Number(counts[k]) || 0), 0);
 }

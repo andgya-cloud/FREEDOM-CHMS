@@ -8,6 +8,7 @@ import {
   eventChoices,
   eventIdFor,
   eventTypeFor,
+  categoryTotal,
   headcountTotal,
   phoneHint,
   weeksAttended,
@@ -50,9 +51,13 @@ describe('headcounts', () => {
     expect(headcountTotal(undefined, 'service')).toBe(0);
   });
 
-  it('keeps the usher app\'s "all" count out of the total, as a cross-check only (Andy, 2026-11-07)', () => {
+  it('uses Whole Church as the service total when it was counted (Andy, 2026-11-08)', () => {
     const counts = { adults: 180, teens: 25, children: 40, firstTimers: 6, salvations: 2, all: 247 };
-    expect(headcountTotal(counts, 'service')).toBe(245);
+    expect(headcountTotal(counts, 'service')).toBe(247);
+    expect(categoryTotal(counts, 'service')).toBe(245);
+    expect(headcountTotal({ all: 220 }, 'service')).toBe(220);
+    expect(headcountTotal({ adults: 10, teens: 2, all: 0 }, 'service')).toBe(12);
+    expect(headcountTotal({ total: 9, all: 50 }, 'session')).toBe(9);
     expect(crossCheckNote(counts)).toBe('2 more than the category count');
     expect(crossCheckNote({ ...counts, all: 240 })).toBe('5 fewer than the category count');
     expect(crossCheckNote({ ...counts, all: 245 })).toBe('Matches the category count');

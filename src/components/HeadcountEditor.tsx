@@ -23,7 +23,7 @@ const HINTS: Partial<Record<HeadcountKey, string>> = {
   total: 'When names are not taken',
   firstTimers: 'Already in the numbers above',
   salvations: 'Already in the numbers above',
-  all: 'Cross-check, not added to the total',
+  all: 'Everyone · when counted, this is the total',
 };
 
 /**
