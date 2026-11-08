@@ -7,10 +7,11 @@ import { friendlyError } from '../lib/errors';
 import { cleanCount, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { serviceSuggestions } from './ServiceInput';
 
-// "Whole Church" replaces the Teens box: its own count of everyone, never added to the total (Andy, 2026-11-07).
-const KEYS = ['adults', 'all', 'children', 'firstTimers', 'salvations'] as const;
+// Same six buttons, same order, as the usher app v1.8 (Andy, 2026-11-08). Whole Church is its own count of
+// everyone and is never added to the total.
+const KEYS = ['adults', 'teens', 'children', 'all', 'firstTimers', 'salvations'] as const;
 type Key = (typeof KEYS)[number];
-const HINTS: Record<Key, string> = { adults: '13 and over', all: 'Everyone · not in the total', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
+const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', all: 'Everyone · not in the total', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
 
 /**
  * The counting card on the Service page (Andy, 2026-11-03, 1A-6A): type the service, then tap – and + (or type a
