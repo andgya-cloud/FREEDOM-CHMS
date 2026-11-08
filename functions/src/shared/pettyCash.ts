@@ -180,6 +180,8 @@ export interface PettyFund {
   signatures: Record<string, PettyFundSignature>;
   status: PettyFundStatus;
   doneAt?: unknown;
+  /** A short word on why money was added, such as "Fuel for the trip" (Andy, 2026-11-08). */
+  note?: string | null;
 }
 
 /** A top-up needs one stakeholder's PIN (Andy, 2026-10-24); a reset still needs two. */
@@ -193,8 +195,11 @@ export function fundStatusAfter(signatureCount: number, kind: PettyFundKind = 'r
   return signatureCount >= fundSignaturesNeeded(kind) ? 'done' : 'collecting';
 }
 
-/** Only these four may top up (Andy: ADIA 2026-10-24; Freedom Church and Hope too, 2026-10-30), besides the pastor (Andrew Guya). */
-export const ADIA_TOPUP_NAMES = ['Andrew Guya', "Daniel Ojwang'", 'Doreen Mayaka', 'Elias Omondi'] as const;
+/**
+ * Only these may set the budget and add money, in all three organizations (Andy 3A, 2026-11-08; Daniel
+ * Ojwang' could top up from 2026-10-24 until then), besides the pastor (Andrew Guya).
+ */
+export const ADIA_TOPUP_NAMES = ['Andrew Guya', 'Doreen Mayaka', 'Elias Omondi'] as const;
 /** Doreen Mayaka's account may carry her married name. */
 const TOPUP_ALIASES = ['Doreen Guya'];
 const plainName = (name: string) => name.toLowerCase().replace(/[^a-z]/g, '');
@@ -262,7 +267,7 @@ export interface LedgerLine {
  * takes from it, and a completed reset starts the balance again from zero.
  */
 export function pettyLedger(
-  funds: readonly Pick<PettyFund, 'id' | 'kind' | 'amountCents' | 'status' | 'doneAt'>[],
+  funds: readonly (Pick<PettyFund, 'id' | 'kind' | 'amountCents' | 'status' | 'doneAt'> & { note?: string | null })[],
   requisitions: readonly (Pick<PettyCashRequisition, 'id' | 'number' | 'status' | 'totalCents' | 'approved' | 'requesterName' | 'category'> & { categoryNote?: string | null })[],
   millis: (t: unknown) => number | null,
   now = Date.now(),
@@ -272,7 +277,7 @@ export function pettyLedger(
   for (const f of funds) {
     if (f.status !== 'done') continue;
     lines.push(f.kind === 'topup'
-      ? { id: f.id, at: at(f.doneAt), kind: 'topup', description: 'Top-up signed by 3 stakeholders', creditCents: f.amountCents, debitCents: 0 }
+      ? { id: f.id, at: at(f.doneAt), kind: 'topup', description: `Money added${f.note ? ` · ${f.note}` : ''}`, creditCents: f.amountCents, debitCents: 0 }
       : { id: f.id, at: at(f.doneAt), kind: 'reset', description: 'Budget reset to zero, signed by 3 stakeholders', creditCents: 0, debitCents: 0 });
   }
   for (const r of requisitions) {

@@ -65,9 +65,9 @@ describe('petty cash', () => {
     expect(fundStatusAfter(1, 'reset')).toBe('collecting');
   });
 
-  it('lets only the four named stakeholders top up alone, at ADIA, the church and Hope', () => {
-    expect(canTopUpAlone('college', "Daniel Ojwang'", false)).toBe(true);
-    expect(canTopUpAlone('college', 'daniel ojwang', false)).toBe(true);
+  it('lets only Andrew, Doreen and Elias add money, at ADIA, the church and Hope', () => {
+    expect(canTopUpAlone('college', "Daniel Ojwang'", false)).toBe(false);
+    expect(canTopUpAlone('college', 'Doreen Guya', false)).toBe(true);
     expect(canTopUpAlone('college', 'Doreen Mayaka', false)).toBe(true);
     expect(canTopUpAlone('college', 'Elizabeth Mutuku', false)).toBe(false);
     expect(canTopUpAlone('college', 'Andy', true)).toBe(true);

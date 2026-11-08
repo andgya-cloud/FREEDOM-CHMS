@@ -67,7 +67,10 @@ export function usePettyCash(org: Organization) {
   const periodStart = useMemo(() => periodStartOf(funds, millis), [funds]);
   const budget = useLiveDoc<{ allocations?: Record<string, number> }>(() => (on ? doc(db, 'organizations', orgId, 'pettySettings', 'budget') : null), [orgId, on]);
   const allocations = budget.data?.allocations ?? {};
-  return { ...access, month, requisitions, funds, summary, periodStart, allocations, loading: reqs.loading };
+  // The size the pot should be, set by Andy, Doreen or Elias (2026-11-08).
+  const money = useLiveDoc<{ budgetCents?: number; setBy?: string; updatedAt?: unknown }>(() => (on ? doc(db, 'organizations', orgId, 'pettySettings', 'money') : null), [orgId, on]);
+  const target = { budgetCents: money.data?.budgetCents ?? 0, setBy: money.data?.setBy ?? '', setAt: money.data?.updatedAt };
+  return { ...access, month, requisitions, funds, summary, periodStart, allocations, target, loading: reqs.loading };
 }
 
 export interface ReceiptRow { id: string; reqId: string; name: string; type: string; size: number; uploadedByName: string; itemIndex?: number | null; createdAt?: Timestamp; createdBy?: string; deletedAt?: unknown }

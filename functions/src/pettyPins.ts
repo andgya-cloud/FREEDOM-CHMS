@@ -277,7 +277,7 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
       const live = <T>(q: FirebaseFirestore.QuerySnapshot) => q.docs.map((d) => d.data()).filter((d) => !d.deletedAt) as T[];
       const { remainingCents } = fundSummary(live(funds), live(spent), (t) => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : null));
       if (remainingCents - (r.totalCents as number) < 0) {
-        throw new HttpsError('failed-precondition', `Not enough petty cash: ${formatMoney(Math.max(0, remainingCents), 'KES')} left, and this request is ${formatMoney(r.totalCents as number, 'KES')}. Top up first, then sign.`);
+        throw new HttpsError('failed-precondition', `Not enough petty cash: ${formatMoney(Math.max(0, remainingCents), 'KES')} left, and this request is ${formatMoney(r.totalCents as number, 'KES')}. Add money first, then sign.`);
       }
     }
     const mine = { name, role, at: FieldValue.serverTimestamp(), ...proxy, ...(director ? { director: true } : {}) };
@@ -328,8 +328,9 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
   }
   const ref = funds.doc();
   const status = fundStatusAfter(1, kind);
+  const note = typeof data.note === 'string' ? data.note.trim().slice(0, 120) || null : null;
   await ref.set({
-    orgId, kind, amountCents, status, doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
+    orgId, kind, amountCents, status, note, doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
     signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp(), ...proxy } },
     deletedAt: null, deletedBy: null,
     createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
@@ -339,4 +340,39 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
     docId: ref.id, orgId, note: `${kind === 'topup' ? 'Top-up' : 'Reset signed'} with PIN on ${caller.profile.displayName || caller.email}'s device`,
   });
   return { name, id: ref.id };
+});
+
+/**
+ * Sets the petty cash budget (Andy, 2026-11-08): the size the one running pot should be. It is what the
+ * Money box measures "left" against and what the low warning (a fifth of it) uses; no money moves.
+ * Only those who may add money (Andrew Guya, Doreen Mayaka, Elias Omondi), each with their own PIN; the
+ * Director signed in as himself needs none. Stored in organizations/{org}/pettySettings/money.
+ */
+export const setPettyBudget = onCall(CALLABLE, async (request) => {
+  const caller = await requireCaller(request);
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const orgId = requireString(data.orgId, 'the organization', { max: 80 });
+  const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
+  const budgetCents = typeof data.budgetCents === 'number' ? data.budgetCents : parseAmountCents(String(data.budgetCents ?? ''));
+  if (budgetCents == null || !Number.isInteger(budgetCents) || budgetCents < 0 || budgetCents > 100000000000) {
+    throw new HttpsError('invalid-argument', 'Type the budget in numbers, for example 50000.');
+  }
+  requireMember(caller.profile, orgId);
+  const [signerSnap, org] = await Promise.all([db.doc(`users/${signerUid}`).get(), db.doc(`organizations/${orgId}`).get()]);
+  const signer = signerSnap.data() as UserProfile | undefined;
+  const name = signer ? signer.displayName || signer.email : '';
+  const orgType = (org.data() as { type?: string } | undefined)?.type;
+  if (!canSign(signer, orgId, 'fund') || !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage'))) {
+    throw new HttpsError('permission-denied', 'That person cannot set the budget here.');
+  }
+  await requireSelfOrKeeper(caller, signerUid, orgId);
+  if (!directorSelf(caller.uid, signerUid, signer)) await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
+  const ref = db.doc(`organizations/${orgId}/pettySettings/money`);
+  const before = (await ref.get()).get('budgetCents') as number | undefined;
+  await ref.set({ orgId, budgetCents, setBy: name, setByUid: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid });
+  await writeAudit({
+    actorUid: signerUid, actorEmail: signer!.email, action: 'petty_budget_set', path: ref.path, collection: 'pettySettings',
+    docId: 'money', orgId, note: `Budget ${formatMoney(before ?? 0)} to ${formatMoney(budgetCents)}, on ${caller.profile.displayName || caller.email}'s device`,
+  });
+  return { name };
 });

@@ -10,7 +10,9 @@ import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, 
 import { addReceipt, savePayment, cancelFund, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { takePettyPrefill } from '../../lib/pettyPrefill';
-import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, setPettyBudget, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
+import { LineChart } from '../../components/charts';
+import { lowCashLine, moneyLife, nairobiDay } from '../../../functions/src/shared/pettyLife';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 
@@ -20,10 +22,10 @@ import { downloadFile } from '../../lib/givingPdf';
 import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
 import type { PackGroup } from '../../lib/receiptPack';
 import {
-  categoryBudgets, categoryLabel, lineAmountCents, type CategoryBudgetRow,
+  categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, type CategoryBudgetRow,
   ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
-  cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, LOW_CASH_CENTS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
+  cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
 import { PettyInsights } from '../../components/PettyInsights';
@@ -168,27 +170,86 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
   );
 }
 
-/** Total budget, spent and remaining. Month end carries the balance forward, so there is no reset (Andy, 2026-10-24). */
-function Stats({ org }: { org: Organization }) {
+const shortDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
+
+/**
+ * The Money box (Andy, 2026-11-08): one running pot. Budget is the size it should be, Left is the cash in
+ * it now, and the life line shows money left over 30 days with a dashed line to the day it runs out.
+ */
+function MoneyBox({ org, canChange, onAdd, onSetBudget }: { org: Organization; canChange: boolean; onAdd: () => void; onSetBudget: () => void }) {
   const p = usePettyCash(org);
   const s = p.summary;
+  const budget = p.target.budgetCents;
+  const ledger = useMemo(() => pettyLedger(p.funds, p.requisitions, millis), [p.funds, p.requisitions]);
+  const life = useMemo(() => moneyLife(ledger, Date.now(), budget), [ledger, budget]);
+  const month = nairobiDay(Date.now()).slice(0, 7);
+  const spentMonth = p.requisitions.filter((r) => r.status === 'approved' && nairobiDay(millis(r.approved?.at) ?? Date.now()).startsWith(month)).reduce((n, r) => n + r.totalCents, 0);
+  const pct = budget > 0 ? Math.max(0, Math.round((s.remainingCents / budget) * 100)) : null;
   // An older top-up still waiting for a signature is shown, but only counts once it is finished.
   const pending = p.funds.find((f) => f.kind === 'topup' && f.status === 'collecting');
-  const pendingLeft = pending ? Math.max(1, fundSignaturesNeeded('topup') - Object.keys(pending.signatures).length) : 0;
+  const lasts = s.remainingCents <= 0 ? 'The money has run out.'
+    : life.daysLeft == null ? 'Nothing spent in the last 30 days, so no run-out date yet.'
+    : life.daysLeft === 0 ? 'At this rate it runs out today.'
+    : `Lasts about ${life.daysLeft} more day${life.daysLeft === 1 ? '' : 's'} (until ${shortDay(life.runOutDay!)}), at ${money(org, life.perDayCents)} a day.`;
   return (
-    <div className="petty-stats">
-      <div className="petty-stat petty-stat-budget"><span>Total budget</span><strong>{money(org, s.budgetCents)}</strong>
-        {pending && <small className="petty-stat-pending">+ {money(org, pending.amountCents)} once {pendingLeft} more sign{pendingLeft === 1 ? 's' : ''}</small>}
+    <section className={`card stack money-box money-${life.tone}`} aria-label="Money box">
+      <div className="petty-stats money-stats">
+        <div className="petty-stat petty-stat-budget"><span>Budget</span><strong>{budget > 0 ? money(org, budget) : 'Not set'}</strong></div>
+        <div className="petty-stat petty-stat-spent"><span>Spent this month</span><strong>{money(org, spentMonth)}</strong></div>
+        <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Left{pct != null ? ` · ${pct}%` : ''}</span><strong>{money(org, s.remainingCents)}</strong>
+          {pending && <small className="petty-stat-pending">+ {money(org, pending.amountCents)} waiting for a signature</small>}
+        </div>
       </div>
-      <div className="petty-stat petty-stat-spent"><span>Total spent</span><strong>{money(org, s.spentCents)}</strong></div>
-      <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Remaining</span><strong>{money(org, s.remainingCents)}</strong></div>
-    </div>
+      <p className={`money-lasts money-lasts-${life.tone}`}><strong>{lasts}</strong></p>
+      {ledger.length > 0 && (
+        <LineChart label="Money left, day by day, and when it runs out at this rate" height={180}
+          labels={life.days.map(shortDay)} format={(v) => money(org, v * 100)}
+          series={[{ name: 'Money left', values: life.left.map((v) => (v == null ? null : v / 100)) },
+            ...(life.daysLeft != null ? [{ name: 'At this rate', values: life.ahead.map((v) => (v == null ? null : v / 100)), dashed: true }] : [])]} />
+      )}
+      {canChange && (
+        <div className="row-actions">
+          <button type="button" className="btn btn-primary" onClick={onAdd}>Add money</button>
+          <button type="button" className="btn" onClick={onSetBudget}>Set budget</button>
+        </div>
+      )}
+      {budget > 0 && p.target.setBy && <p className="small muted">Budget set by {p.target.setBy}{p.target.setAt ? `, ${when(p.target.setAt)}` : ''}.</p>}
+    </section>
   );
 }
 
+/** Set budget: the size the pot should be. One PIN from Andy, Doreen or Elias; Andy needs none (2026-11-08). */
+function SetBudgetCard({ org, onClose }: { org: Organization; onClose: () => void }) {
+  const p = usePettyCash(org);
+  const [amount, setAmount] = useState(p.target.budgetCents ? String(p.target.budgetCents / 100) : '');
+  const cents = parseAmountCents(amount);
+  const ready = cents != null && cents > 0;
+  return (
+    <section className="petty-auth petty-auth-topup" aria-label="Set budget">
+      <div className="petty-auth-head">
+        <div className="petty-auth-title"><h2>Set budget</h2><p>How much the petty cash should hold. No money moves; it is what "Left" and the low warning are measured against.</p></div>
+      </div>
+      <div className="petty-auth-body">
+        <label className="field"><span className="petty-caps">Budget (KES)</span>
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 50000" />
+          {amount.trim() && (ready
+            ? <small className="petty-amount-ok">Budget {money(org, cents)}. The low warning shows below {money(org, lowCashLine(cents))}.</small>
+            : <small className="petty-amount-bad">Type the amount in numbers only, for example 50000.</small>)}
+        </label>
+        <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Save budget"
+          sign={async (uid, pin) => {
+            const who = await setPettyBudget(org.id, cents ?? 0, uid, pin);
+            onClose();
+            return `Budget set to ${money(org, cents ?? 0)} by ${who}.`;
+          }} />
+        <div className="row-actions"><button type="button" className="btn btn-quiet" onClick={onClose}>Close</button></div>
+      </div>
+    </section>
+  );
+}
 
 const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
-  topup: { title: 'Top-Up', sub: 'Any one signer tops up with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
+  topup: { title: 'Add money', sub: 'Any one signer adds money with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
   reset: { title: 'Reset Budget Authorization', sub: 'Any two signers approve the reset: each picks their name and types their PIN.', done: 'Budget reset. It now starts again from zero.' },
 };
 
@@ -200,7 +261,9 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const p = usePettyCash(org);
   const toast = useToast();
   const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
   const amountBox = useRef<HTMLInputElement>(null);
+  const toBudget = p.target.budgetCents - p.summary.remainingCents;
   const [askDelete, setAskDelete] = useState(false);
   const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
   const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
@@ -217,7 +280,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   // Imprest top-up (Andy, 2026-10-24): offer exactly what was spent since the last top-up.
   const lastTopUp = Math.max(0, ...p.funds.filter((f) => f.kind === 'topup' && f.status === 'done').map((f) => millis(f.doneAt) ?? millis(f.createdAt) ?? 0));
   const spentSince = p.requisitions.filter((r) => r.status === 'approved' && (millis(r.approved?.at) ?? millis(r.createdAt) ?? 0) > lastTopUp).reduce((n, r) => n + r.totalCents, 0);
-  const topUpWho = isPettyOrg(org.type) ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} tops up with their own PIN.` : text.sub;
+  const topUpWho = isPettyOrg(org.type) ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} adds money with their own PIN.` : text.sub;
 
   return (
     <section className={`petty-auth petty-auth-${kind}`} aria-label={text.title}>
@@ -232,27 +295,39 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
         {kind === 'topup' && (open ? (
           <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a signer'}</p>
         ) : (
-          <label className="field"><span className="petty-caps">Top-up amount (KES)</span>
+          <>
+          <label className="field"><span className="petty-caps">Amount to add (KES)</span>
             <input ref={amountBox} inputMode="decimal" className={ready ? '' : 'petty-amount-empty'} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Type the amount here, e.g. 500000" disabled={!p.canAuthorize} />
             {amount.trim() && (cents != null && cents > 0
               ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget as soon as you confirm below.</small>
               : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
-            {spentSince > 0 && p.canAuthorize && (
+            {toBudget > 0 && p.canAuthorize && (
+              <button type="button" className="btn btn-quiet align-start" onClick={() => setAmount(String(toBudget / 100))}>
+                Fill back up to the budget: {money(org, toBudget)}
+              </button>
+            )}
+            {!(toBudget > 0) && spentSince > 0 && p.canAuthorize && (
               <button type="button" className="btn btn-quiet align-start" onClick={() => setAmount(String(spentSince / 100))}>
-                Fill in {money(org, spentSince)}, spent since the last top-up
+                Fill in {money(org, spentSince)}, spent since money was last added
               </button>
             )}
           </label>
+          <label className="field"><span className="petty-caps">What for (optional)</span>
+            <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Cash from the bank" disabled={!p.canAuthorize} />
+          </label>
+          </>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the top-up amount in the box above. Step 2: choose your name, type your PIN or password and press Top up.</p>}
+        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the amount in the box above. Step 2: choose your name, type your PIN or password and press Add money.</p>}
         {quickTopUp ? (
-          <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Top up"
+          <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Add money"
             sign={async (uid, pin) => {
-              if (!(await askConfirm())) return 'Top-up cancelled. Nothing was added.';
-              const who = await topUpWithPin(org.id, cents ?? 0, uid, pin);
+              if (!(await askConfirm())) return 'Cancelled. Nothing was added.';
+              const who = await topUpWithPin(org.id, cents ?? 0, uid, pin, 'topup', note);
               setAmount('');
-              return `Top-up of ${money(org, cents ?? 0)} by ${who} is done. The money is now in the budget.`;
+              setNote('');
+              onClose?.();
+              return `${who} added ${money(org, cents ?? 0)}. It is in the petty cash now.`;
             }} />
         ) : (
         <ol className="petty-signers">
@@ -285,7 +360,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
           {onClose && !open && <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>}
         </div>
-        <ConfirmDialog open={!!confirming} title={`Add ${money(org, cents ?? 0)} to the budget?`} body={`The ${org.name} petty cash budget goes up by ${money(org, cents ?? 0)} straight away.`}
+        <ConfirmDialog open={!!confirming} title={`Add ${money(org, cents ?? 0)}?`} body={`The ${org.name} petty cash goes up by ${money(org, cents ?? 0)} straight away.`}
           confirmLabel="Confirm" onConfirm={() => answer(true)} onCancel={() => answer(false)} />
         {open && <AskDeleteDialog org={org} kind="fund" targetId={open.id} open={askDelete} onClose={() => setAskDelete(false)}
           title={`Delete this ${kind === 'topup' ? 'top-up' : 'reset'}?`} body={kind === 'topup' ? `Top-up of ${money(org, open.amountCents)}.` : 'Budget reset.'} />}
@@ -336,6 +411,8 @@ function Home({ org }: { org: Organization }) {
   const { receipts } = useReceipts(org);
   const noReceipt = approved.filter((r) => !receipts.some((rc) => rc.reqId === r.id));
   const [topUpOpen, setTopUpOpen] = useState(false);
+  const [budgetOpen, setBudgetOpen] = useState(false);
+  const lowLine = lowCashLine(p.target.budgetCents);
   // An older top-up still waiting for a signature stays open so it can be finished.
   const topUpWaiting = p.funds.some((f) => f.kind === 'topup' && f.status === 'collecting');
   if (!p.any) return <NoAccess />;
@@ -354,8 +431,8 @@ function Home({ org }: { org: Organization }) {
           <RequisitionList org={org} rows={waiting} empty="Nothing needs your signature." />
         </section>
       )}
-      {p.seesAll && p.summary.remainingCents < LOW_CASH_CENTS && (
-        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, LOW_CASH_CENTS)}.{canTopUpHere ? ' Press Top up below; it can fill in what was spent since the last top-up.' : ' Ask someone who may top up.'}</p>
+      {p.seesAll && !p.loading && p.summary.remainingCents < lowLine && (
+        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, lowLine)}{p.target.budgetCents > 0 ? ' (a fifth of the budget)' : ''}.{canTopUpHere ? ' Press Add money below.' : ` Ask ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} to add money.`}</p>
       )}
       {p.seesAll && noReceipt.length > 0 && (
         <p className="petty-warn">
@@ -363,10 +440,10 @@ function Home({ org }: { org: Organization }) {
           <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
         </p>
       )}
-      {p.seesAll && <Stats org={org} />}
-      {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting
-        ? <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />
-        : <div className="row-actions"><button type="button" className="btn" onClick={() => setTopUpOpen(true)}>Top up</button></div>)}
+      {p.seesAll && <MoneyBox org={org} canChange={canTopUpHere && !topUpOpen && !topUpWaiting && !budgetOpen}
+        onAdd={() => setTopUpOpen(true)} onSetBudget={() => setBudgetOpen(true)} />}
+      {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting) && <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />}
+      {p.seesAll && canTopUpHere && budgetOpen && <SetBudgetCard org={org} onClose={() => setBudgetOpen(false)} />}
       {p.canSign && <BinNotice org={org} />}
       {p.canRequest && (
         <section className="card stack">
@@ -616,7 +693,7 @@ function Requisition({ org }: { org: Organization }) {
   const sigs = signaturesOf(r);
   // The last signature may not take the cash left below zero (Andy, 2026-10-24).
   const shortOfCash = waitingToSign && sigs.length + 1 >= REQUEST_SIGNATURES_NEEDED && p.summary.remainingCents - r.totalCents < 0;
-  const cashNote = shortOfCash && <p className="petty-warn">Not enough petty cash to approve this: {money(org, Math.max(0, p.summary.remainingCents))} left, and this request is {money(org, r.totalCents)}. Top up first, then sign.</p>;
+  const cashNote = shortOfCash && <p className="petty-warn">Not enough petty cash to approve this: {money(org, Math.max(0, p.summary.remainingCents))} left, and this request is {money(org, r.totalCents)}. Add money first, then sign.</p>;
   const signOffs = r.signatures
     ? Array.from({ length: REQUEST_SIGNATURES_NEEDED }, (_, n) => {
       const s = sigs[n];

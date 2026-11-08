@@ -660,6 +660,15 @@ a.chip.chip-on { color: var(--primary-ink); }
 .petty-stat-spent { color: #dc2626; }
 .petty-stat-left { color: #16a34a; }
 .petty-stat-over { color: #dc2626; }
+/* Money box (2026-11-08): the run-out line turns amber at half the budget, red at a fifth. */
+.money-box .money-stats { margin-bottom: 0; }
+@media (min-width: 720px) { .money-box .money-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.money-lasts { margin: 0; padding: 10px 14px; border-radius: 12px; }
+.money-lasts-good { background: color-mix(in srgb, #16a34a 12%, transparent); color: #15803d; }
+.money-lasts-watch { background: color-mix(in srgb, #d97706 14%, transparent); color: #b45309; }
+.money-lasts-low { background: color-mix(in srgb, #dc2626 12%, transparent); color: #b91c1c; }
+.money-watch .petty-stat-left { color: #d97706; }
+.money-low .petty-stat-left { color: #dc2626; }
 .petty-reset {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 16px 12px; border-radius: 18px; cursor: pointer;
   font: inherit; color: #1f2937; background: linear-gradient(to bottom, #fef08a, #fde047); border: 1px solid #facc15; box-shadow: 0 4px 10px rgba(0, 0, 0, 0.08);
