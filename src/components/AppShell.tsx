@@ -93,13 +93,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           Giving
         </NavLink>
       )}
-      {finance && pettyAllowed && (
+      {/* Petty Cash is pinned on the menu for everyone who works with it, not in More (Andy, 2026-11-08). */}
+      {pettyAllowed && (
         <NavLink to={pettyCashBase('church_campus')} className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
           Petty Cash
         </NavLink>
       )}
-      <NavLink to="/more" className={({ isActive }) => `tab tab-dots${isActive || /^\/(reports|settings|help|follow-ups|dashboard)(\/|$)/.test(location.pathname) || (!finance && /^\/petty-cash(\/|$)/.test(location.pathname)) ? ' active' : ''}`}>
+      <NavLink to="/more" className={({ isActive }) => `tab tab-dots${isActive || /^\/(reports|settings|help|follow-ups|dashboard)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
         More
       </NavLink>
@@ -132,7 +133,14 @@ export function AppShell({ children }: { children: ReactNode }) {
           Reports
         </NavLink>
       )}
-      <NavLink to="/hope/more" className={({ isActive }) => `tab${isActive || /^\/(settings|help|hope\/petty-cash|hope\/bin)/.test(location.pathname) ? ' active' : ''}`}>
+      {/* Petty Cash is pinned on the menu, not in More (Andy, 2026-11-08). */}
+      {pettyAllowed && !helper && (
+        <NavLink to={pettyCashBase('ministry')} className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
+          <TabLabel full="Petty Cash" short="Petty" />
+        </NavLink>
+      )}
+      <NavLink to="/hope/more" className={({ isActive }) => `tab${isActive || /^\/(settings|help|hope\/bin)/.test(location.pathname) ? ' active' : ''}`}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
         More
       </NavLink>

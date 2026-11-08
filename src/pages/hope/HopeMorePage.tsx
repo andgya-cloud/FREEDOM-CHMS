@@ -1,7 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
-import { pettyCashBase } from '../../../functions/src/shared/pettyCash';
-import { canKeepAccounts, HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { HopeGate } from './common';
 import { HOPE_PHONE, HOPE_PHONE_E164 } from '../../../functions/src/shared/hopeMessages';
 import type { Organization } from '../../state/OrgContext';
@@ -13,10 +12,7 @@ export function HopeMorePage() {
 /** More (Andy, 2026-11-05, v173 9A): the pages used now and then, out of the main menu. */
 function More(_: { org: Organization }) {
   const { can, profile } = useAuth();
-  const helper = profile?.roleId === HELPER_ROLE_ID;
-  const petty = !helper && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage'));
   const tiles: [string, string, string, string, boolean][] = [
-    [pettyCashBase('ministry'), '💵', 'Petty Cash', 'Ask for cash, sign and close the month', petty],
     ['/hope/messages', '💬', 'WhatsApp parents', 'One message to many parents, from the Hope phone', can('people.write')],
     ['/hope/bin', '🗑', 'Bin', 'What was removed, to put back', canKeepAccounts(profile)],
     ['/settings', '⚙️', 'Settings', 'Your account, password and the Hope Centre settings', true],
