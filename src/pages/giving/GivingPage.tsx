@@ -43,6 +43,7 @@ function Giving({ org }: { org: Organization }) {
     { show: can('giving.person.read'), to: '/giving/statements', label: `Giving statements${january ? ' (year-end)' : ''}` },
     { show: can('finance.reports'), to: '/reports?tab=giving', label: 'Giving figures and reports' },
     { show: can('finance.reports'), to: '/giving/summary', label: 'Monthly summary' },
+    { show: can('finance.reports'), to: '/finance', label: 'Financial statements from the bank' },
     { show: can('settings.manage'), to: '/settings/funds', label: 'Funds' },
   ].filter((m) => m.show);
 

@@ -72,6 +72,7 @@ const RequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((
 const PettyReceiptsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReceiptsPage })));
 const CleanupPage = lazy(() => import('./pages/settings/CleanupPage').then((m) => ({ default: m.CleanupPage })));
 const SigningPinPage = lazy(() => import('./pages/settings/SigningPinPage').then((m) => ({ default: m.SigningPinPage })));
+const FinancePage = lazy(() => import('./pages/finance/FinancePage'));
 const PettyReportsPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyReportsPage })));
 const PettyMonthEndPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyMonthEndPage })));
 const PettyBalanceSheetPage = lazy(() => import('./pages/school/PettyCashBooks').then((m) => ({ default: m.PettyBalanceSheetPage })));
@@ -287,6 +288,7 @@ function AppRoutes() {
         <Route path="/hope/petty-cash/budget" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBudgetPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/bin" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyBinPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/:reqId" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><RequisitionPage /></RequirePermission>} />
+        <Route path="/finance" element={<RequirePermission anyOf={['finance.reports', 'pettycash.approve', 'pettycash.check', 'pettycash.authorize', 'users.manage']}><FinancePage /></RequirePermission>} />
         <Route path="/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />
         <Route path="/petty-cash/receipts" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyReceiptsPage /></RequirePermission>} />

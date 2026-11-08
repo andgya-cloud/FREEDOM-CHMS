@@ -10,7 +10,7 @@ import { crestImage } from './payrollPdf';
 
 const logos = new Map<string, Promise<string | null>>();
 /** The organization's logo from /org as a data URL, for the PDF letterhead; ADIA's crest is shared with payroll. */
-function logoImage(file: string | null): Promise<string | null> {
+export function logoImage(file: string | null): Promise<string | null> {
   if (!file) return Promise.resolve(null);
   if (file === 'adia-crest.png') return crestImage();
   if (!logos.has(file)) {

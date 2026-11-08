@@ -2712,3 +2712,12 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .st-dl:disabled { opacity: 0.7; cursor: wait; }
 .st-file-box .st-video + .st-dl { bottom: auto; top: 6px; left: 6px; right: auto; }
 .st-dl-all { margin-top: 6px; justify-self: start; }
+
+/* Financial statements (Andy, 2026-11-08) */
+.fin-line { display: flex; gap: 10px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.fin-line:last-child { border-bottom: 0; }
+.fin-line-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 220px; overflow-wrap: anywhere; }
+.fin-line select { flex: 0 1 240px; max-width: 100%; }
+.fin-in { color: #15803d; }
+.fin-out { color: #b91c1c; }
+.fin-budget { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }

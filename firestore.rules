@@ -1497,6 +1497,39 @@ service cloud.firestore {
 
       // "Download everything", one person's export and erasing one person. A Cloud
       // Function checks the pastor again, does the erasing, logs it and marks it done.
+      // ---- Financial statements from bank statements (Andy, 2026-11-08) -------
+      // The petty cash signatories (Daniel prepares; Andrew, Doreen or Elias approve), finance and the
+      // pastor upload Family Bank and M-Pesa statements and sort their lines. Each organization on its own.
+      function finBooks() {
+        return canAccessOrg(orgId) && (has('finance.reports') || has('pettycash.approve') || has('pettycash.check')
+          || has('pettycash.authorize') || has('users.manage'));
+      }
+      match /bankStatements/{statementId} {
+        allow read: if finBooks();
+        allow create: if finBooks() && stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'account', 'accountKind', 'fileName', 'from', 'to',
+               'openingCents', 'closingCents', 'lines', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.account, 80) && request.resource.data.account.size() > 0
+          && request.resource.data.accountKind in ['bank', 'mpesa']
+          && shortText(request.resource.data.fileName, 120)
+          && isDate(request.resource.data.from) && isDate(request.resource.data.to)
+          && request.resource.data.openingCents is int && request.resource.data.closingCents is int
+          && request.resource.data.lines is list && request.resource.data.lines.size() >= 1 && request.resource.data.lines.size() <= 2000;
+        allow update: if finBooks() && stampedUpdate() && validSoftDelete()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lines', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.lines is list && request.resource.data.lines.size() == resource.data.lines.size();
+        allow delete: if false;
+      }
+      match /finBooks/{bookId} {
+        allow read: if finBooks();
+        allow write: if finBooks() && bookId in ['learned', 'budget', 'owned']
+          && request.resource.data.keys().hasOnly(['orgId', bookId, 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+          && (bookId == 'owned' ? request.resource.data.owned is list && request.resource.data.owned.size() <= 300 : request.resource.data[bookId] is map);
+      }
+
       // ---- ADIA petty cash ---------------------------------------------------
       // Petty cash for ADIA Training Centre, Freedom Hope Center and Freedom Church, each organization on its own.
       // Submitted by the requester, checked by the accountant, then final approval by a board member.

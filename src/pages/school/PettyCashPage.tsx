@@ -118,6 +118,8 @@ export function PettyNav({ org }: { org: Organization }) {
   const items: [string, string, boolean, boolean | undefined][] = [
     [base, 'Overview', true, undefined], [`${base}/new`, 'New requisition', p.canRequest, undefined], [`${base}/receipts`, 'Receipts', p.seesAll, undefined],
     [`${base}/reports`, 'Reports', p.seesAll, inReports],
+    // Financial statements from the bank statements (Andy, 2026-11-08).
+    ['/finance', 'Financial statements', p.seesAll, undefined],
   ];
   return (
     <nav className="chips petty-nav no-print" aria-label="Petty cash">
