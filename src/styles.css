@@ -2721,3 +2721,5 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .fin-in { color: #15803d; }
 .fin-out { color: #b91c1c; }
 .fin-budget { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.fin-card-link { display: flex; justify-content: space-between; align-items: center; margin: 0 0 12px; padding: 14px 18px; color: #c62828 !important; font-weight: 700; font-size: 1.05rem; text-decoration: none; border-left: 4px solid #c62828; }
+.fin-card-link:hover { background: #fdecea; }

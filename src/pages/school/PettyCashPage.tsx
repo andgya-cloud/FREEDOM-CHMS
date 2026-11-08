@@ -118,13 +118,15 @@ export function PettyNav({ org }: { org: Organization }) {
   const items: [string, string, boolean, boolean | undefined][] = [
     [base, 'Overview', true, undefined], [`${base}/new`, 'New requisition', p.canRequest, undefined], [`${base}/receipts`, 'Receipts', p.seesAll, undefined],
     [`${base}/reports`, 'Reports', p.seesAll, inReports],
-    // Financial statements from the bank statements (Andy, 2026-11-08).
-    ['/finance', 'Financial statements', p.seesAll, undefined],
   ];
   return (
-    <nav className="chips petty-nav no-print" aria-label="Petty cash">
-      {items.filter((i) => i[2]).map(([to, text, , forced]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip${isActive || forced ? ' chip-on' : ''}`}>{text}</NavLink>)}
-    </nav>
+    <>
+      <nav className="chips petty-nav no-print" aria-label="Petty cash">
+        {items.filter((i) => i[2]).map(([to, text, , forced]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip${isActive || forced ? ' chip-on' : ''}`}>{text}</NavLink>)}
+      </nav>
+      {/* Financial statements from the bank statements, in red on its own card so it is easy to find (Andy, 2026-11-08). */}
+      {p.seesAll && <Link to="/finance" className="card fin-card-link no-print">Financial statements <span aria-hidden="true">›</span></Link>}
+    </>
   );
 }
 
