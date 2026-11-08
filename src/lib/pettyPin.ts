@@ -24,10 +24,10 @@ export async function topUpWithPin(orgId: string, amountCents: number, signerUid
   return res.data.name;
 }
 
-/** Sets the size the petty cash pot should be (Andy, 2026-11-08). Returns who set it. */
-export async function setPettyBudget(orgId: string, budgetCents: number, signerUid: string, pin: string): Promise<string> {
-  const res = await httpsCallable<object, { name: string }>(functions, 'setPettyBudget')({ orgId, budgetCents, signerUid, pin });
-  return res.data.name;
+/** Sets the size the petty cash pot should be and fills the box up to it (Andy, 2026-11-08). */
+export async function setPettyBudget(orgId: string, budgetCents: number, signerUid: string, pin: string): Promise<{ name: string; addedCents: number }> {
+  const res = await httpsCallable<object, { name: string; addedCents?: number }>(functions, 'setPettyBudget')({ orgId, budgetCents, signerUid, pin });
+  return { name: res.data.name, addedCents: res.data.addedCents ?? 0 };
 }
 
 /**

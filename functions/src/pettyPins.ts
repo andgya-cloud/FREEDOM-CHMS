@@ -344,7 +344,9 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
 
 /**
  * Sets the petty cash budget (Andy, 2026-11-08): the size the one running pot should be. It is what the
- * Money box measures "left" against and what the low warning (a fifth of it) uses; no money moves.
+ * Money box measures "left" against and what the low warning (a fifth of it) uses. Saving it also fills
+ * the box up to the budget in the same step (Andy saw KES 0 left after setting KES 190,000), recorded as
+ * an ordinary top-up so the balance sheet shows it.
  * Only those who may add money (Andrew Guya, Doreen Mayaka, Elias Omondi), each with their own PIN; the
  * Director signed in as himself needs none. Stored in organizations/{org}/pettySettings/money.
  */
@@ -369,10 +371,30 @@ export const setPettyBudget = onCall(CALLABLE, async (request) => {
   if (!directorSelf(caller.uid, signerUid, signer)) await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
   const ref = db.doc(`organizations/${orgId}/pettySettings/money`);
   const before = (await ref.get()).get('budgetCents') as number | undefined;
-  await ref.set({ orgId, budgetCents, setBy: name, setByUid: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid });
+  const [funds, spent] = await Promise.all([
+    db.collection(`organizations/${orgId}/pettyFunds`).get(),
+    db.collection(`organizations/${orgId}/pettyCash`).where('status', '==', 'approved').get(),
+  ]);
+  const live = <T>(q: FirebaseFirestore.QuerySnapshot) => q.docs.map((d) => d.data()).filter((d) => !d.deletedAt) as T[];
+  const { remainingCents } = fundSummary(live(funds), live(spent), (t) => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : null));
+  const addedCents = data.fill === false ? 0 : Math.max(0, budgetCents - remainingCents);
+  const batch = db.batch();
+  batch.set(ref, { orgId, budgetCents, setBy: name, setByUid: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid });
+  const fund = db.collection(`organizations/${orgId}/pettyFunds`).doc();
+  if (addedCents > 0) {
+    batch.set(fund, {
+      orgId, kind: 'topup', amountCents: addedCents, status: 'done', doneAt: FieldValue.serverTimestamp(), note: 'Filled up to the budget',
+      signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp() } }, deletedAt: null, deletedBy: null,
+      createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
+    });
+  }
+  await batch.commit();
+  if (addedCents > 0) {
+    await writeAudit({ actorUid: signerUid, actorEmail: signer!.email, action: 'petty_topup', path: fund.path, collection: 'pettyFunds', docId: fund.id, orgId, note: `Filled up to the budget with Set budget, on ${caller.profile.displayName || caller.email}'s device` });
+  }
   await writeAudit({
     actorUid: signerUid, actorEmail: signer!.email, action: 'petty_budget_set', path: ref.path, collection: 'pettySettings',
     docId: 'money', orgId, note: `Budget ${formatMoney(before ?? 0)} to ${formatMoney(budgetCents)}, on ${caller.profile.displayName || caller.email}'s device`,
   });
-  return { name };
+  return { name, addedCents };
 });

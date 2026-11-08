@@ -227,20 +227,20 @@ function SetBudgetCard({ org, onClose }: { org: Organization; onClose: () => voi
   return (
     <section className="petty-auth petty-auth-topup" aria-label="Set budget">
       <div className="petty-auth-head">
-        <div className="petty-auth-title"><h2>Set budget</h2><p>How much the petty cash should hold. No money moves; it is what "Left" and the low warning are measured against.</p></div>
+        <div className="petty-auth-title"><h2>Set budget</h2><p>How much the petty cash should hold. Saving it fills the box up to this amount, so it is ready to spend.</p></div>
       </div>
       <div className="petty-auth-body">
         <label className="field"><span className="petty-caps">Budget (KES)</span>
           <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 50000" />
           {amount.trim() && (ready
-            ? <small className="petty-amount-ok">Budget {money(org, cents)}. The low warning shows below {money(org, lowCashLine(cents))}.</small>
+            ? <small className="petty-amount-ok">Budget {money(org, cents)}.{cents > p.summary.remainingCents ? ` ${money(org, cents - p.summary.remainingCents)} is added now, so ${money(org, cents)} is left to spend.` : ` The box already holds ${money(org, p.summary.remainingCents)}, so nothing is added.`} The low warning shows below {money(org, lowCashLine(cents))}.</small>
             : <small className="petty-amount-bad">Type the amount in numbers only, for example 50000.</small>)}
         </label>
         <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Save budget"
           sign={async (uid, pin) => {
-            const who = await setPettyBudget(org.id, cents ?? 0, uid, pin);
+            const { name: who, addedCents } = await setPettyBudget(org.id, cents ?? 0, uid, pin);
             onClose();
-            return `Budget set to ${money(org, cents ?? 0)} by ${who}.`;
+            return `Budget set to ${money(org, cents ?? 0)} by ${who}.${addedCents > 0 ? ` ${money(org, addedCents)} was added, so it is ready to spend.` : ''}`;
           }} />
         <div className="row-actions"><button type="button" className="btn btn-quiet" onClick={onClose}>Close</button></div>
       </div>
