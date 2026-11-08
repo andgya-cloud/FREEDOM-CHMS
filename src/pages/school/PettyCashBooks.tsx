@@ -17,6 +17,9 @@ import { money } from './common';
 import { BudgetHealth, NoAccess, packGroup, PettyGate, PettyNav, ReceiptsBox, ReportsNav, RequisitionList, savePack } from './PettyCashPage';
 import { needsReceipt, receiptStatus } from '../../lib/receiptNames';
 import type { Organization } from '../../state/OrgContext';
+import { PastUploadCard } from './PettyPast';
+import { useAuth } from '../../state/AuthContext';
+import { canTopUpAlone } from '../../../functions/src/shared/pettyCash';
 
 const day = (ms: number) => formatDate(new Date(ms));
 
@@ -128,6 +131,9 @@ function BalanceSheet({ org }: { org: Organization }) {
   }, [p.requisitions]);
   const [period, setPeriod] = useState('');
   const [excelBusy, setExcelBusy] = useState(false);
+  const { profile } = useAuth();
+  // Past months are added by Andrew Guya, Doreen Mayaka or Elias Omondi (Andy, 2026-11-08).
+  const canAddPast = p.canAuthorize && canTopUpAlone(org.type, profile?.displayName ?? '', p.isPastor);
   if (!p.seesAll) return <NoAccess />;
   async function excel() {
     const chosen = period || periods[1] || periods[0];
@@ -182,6 +188,7 @@ function BalanceSheet({ org }: { org: Organization }) {
           <button type="button" className="btn btn-primary align-start" disabled={!periods.length || excelBusy} onClick={() => void excel()}>{excelBusy ? 'Making Excel…' : 'Download Excel'}</button>
         </div>
       </section>
+      {canAddPast && <PastUploadCard org={org} prefix={org.receiptPrefix || 'PC'} />}
       <KpiRow label="Since the last reset">
         <KpiCard label="Money in" value={money(org, totals.in)} tone="ok" note="Signed top-ups" />
         <KpiCard label="Money out" value={money(org, totals.out)} tone="warn" note="Approved requests" />

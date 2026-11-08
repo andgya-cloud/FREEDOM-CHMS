@@ -121,7 +121,7 @@ export async function requireSelfOrKeeper(caller: { uid: string; profile: UserPr
   return enteredBy;
 }
 
-function directorSelf(callerUid: string, signerUid: string, signer: UserProfile | undefined) {
+export function directorSelf(callerUid: string, signerUid: string, signer: UserProfile | undefined) {
   return callerUid === signerUid && isDirector(signer);
 }
 

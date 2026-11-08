@@ -21,6 +21,7 @@ export { rosterOnStudent, rosterOnPerson } from './rosters.js';
 export { examSheetToLecturer } from './examAssign.js';
 export { commonCourseAccess } from './commonCourses.js';
 export { raisePettyRequest } from './pettyRaise.js';
+export { importPastPetty } from './pettyPast.js';
 export { onPettyCashNotify, pettyCashReminders, sendPettyWhatsapp, sendPettyEmail, listPettyContacts } from './pettyNotify.js';
 export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeReportRequested, scheduledHopeReports } from './hope.js';
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';

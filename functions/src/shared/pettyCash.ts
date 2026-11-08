@@ -80,6 +80,8 @@ export interface PettyCashRequisition {
   mpesaCode?: string | null;
   /** The Family Bank reference number, shown next to the M-Pesa code (Andy, 2026-11-08). */
   refNo?: string | null;
+  /** Added from the past months sheet, already approved on paper (Andy, 2026-11-08). */
+  pastRecord?: boolean;
 }
 
 /** A stakeholder's signature on a requisition. */

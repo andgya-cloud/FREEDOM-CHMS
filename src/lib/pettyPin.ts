@@ -132,3 +132,10 @@ export async function myOwnProof(): Promise<string> {
   if (!me) throw Object.assign(new Error('Please sign in again.'), { code: 'auth/invalid-credential' });
   return `idtoken:${await me.getIdToken(true)}`;
 }
+
+export interface PastImportResult { added: number; skipped: number; spentCents: number; moneyAdded: number; moneyInCents: number; renumbered: number; shift: number; firstAppNumber: string | null }
+/** Adds past months of petty cash from the sheet's rows (Andy, 2026-11-08). */
+export async function importPastPetty(orgId: string, upload: (string | number | null)[][], money: (string | number | null)[][], signerUid: string, pin: string, dryRun = false): Promise<PastImportResult> {
+  const res = await httpsCallable<object, PastImportResult>(functions, 'importPastPetty', { timeout: 120_000 })({ orgId, upload, money, signerUid, pin, dryRun });
+  return res.data;
+}

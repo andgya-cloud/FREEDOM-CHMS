@@ -409,7 +409,7 @@ function Home({ org }: { org: Organization }) {
   // At ADIA the top-up box shows only to the four who may top up (and Andrew Guya and Doreen) (Andy, 2026-10-24).
   const canTopUpHere = p.isKeeper || (p.canAuthorize && canTopUpAlone(org.type, profile?.displayName ?? '', p.isPastor));
   const { receipts } = useReceipts(org);
-  const noReceipt = approved.filter((r) => !receipts.some((rc) => rc.reqId === r.id));
+  const noReceipt = approved.filter((r) => !r.pastRecord && !receipts.some((rc) => rc.reqId === r.id));
   const [topUpOpen, setTopUpOpen] = useState(false);
   const [budgetOpen, setBudgetOpen] = useState(false);
   const lowLine = lowCashLine(p.target.budgetCents);
