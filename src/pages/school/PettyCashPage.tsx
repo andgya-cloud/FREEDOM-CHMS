@@ -13,8 +13,7 @@ import { addReceipt, savePayment, cancelFund, receiptData, rejectRequisition, su
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { takePettyPrefill } from '../../lib/pettyPrefill';
 import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
-import { LineChart } from '../../components/charts';
-import { lowCashLine, moneyLife, nairobiDay } from '../../../functions/src/shared/pettyLife';
+import { lowCashLine } from '../../../functions/src/shared/pettyLife';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 
@@ -24,7 +23,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
 import type { PackGroup } from '../../lib/receiptPack';
 import {
-  categoryLabel, lineAmountCents, pettyLedger, type CategoryBudgetRow,
+  categoryLabel, lineAmountCents, type CategoryBudgetRow,
   ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
   cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
@@ -180,51 +179,6 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
         })}
       </ul>
       <p className="small muted">Solid: approved. Light: waiting for signatures.</p>
-    </section>
-  );
-}
-
-const shortDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-
-/**
- * The Money box (Andy, 2026-11-08): one running pot. Left is the real cash in it now (only money added from
- * the bank with Add money counts; petty cash has no budget of its own since 2026-11-09, 1A 2B), and the life
- * line shows money left over 30 days with a dashed line to the day it runs out.
- */
-function MoneyBox({ org, canChange, onAdd }: { org: Organization; canChange: boolean; onAdd: () => void }) {
-  const p = usePettyCash(org);
-  const s = p.summary;
-  const ledger = useMemo(() => pettyLedger(p.funds, p.requisitions, millis), [p.funds, p.requisitions]);
-  const life = useMemo(() => moneyLife(ledger, Date.now()), [ledger]);
-  const month = nairobiDay(Date.now()).slice(0, 7);
-  const spentMonth = p.requisitions.filter((r) => r.status === 'approved' && nairobiDay(millis(r.approved?.at) ?? Date.now()).startsWith(month)).reduce((n, r) => n + r.totalCents, 0);
-  // An older top-up still waiting for a signature is shown, but only counts once it is finished.
-  const pending = p.funds.find((f) => f.kind === 'topup' && f.status === 'collecting');
-  const lasts = s.remainingCents <= 0 ? 'The money has run out.'
-    : life.daysLeft == null ? 'Nothing spent in the last 30 days, so no run-out date yet.'
-    : life.daysLeft === 0 ? 'At this rate it runs out today.'
-    : `Lasts about ${life.daysLeft} more day${life.daysLeft === 1 ? '' : 's'} (until ${shortDay(life.runOutDay!)}), at ${money(org, life.perDayCents)} a day.`;
-  return (
-    <section className={`card stack money-box money-${life.tone}`} aria-label="Money box">
-      <div className="petty-stats money-stats">
-        <div className="petty-stat petty-stat-spent"><span>Spent this month</span><strong>{money(org, spentMonth)}</strong></div>
-        <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Money left</span><strong>{money(org, s.remainingCents)}</strong>
-          {pending && <small className="petty-stat-pending">+ {money(org, pending.amountCents)} waiting for a signature</small>}
-        </div>
-      </div>
-      <p className={`money-lasts money-lasts-${life.tone}`}><strong>{lasts}</strong></p>
-      {ledger.length > 0 && (
-        <LineChart label="Money left, day by day, and when it runs out at this rate" height={180}
-          labels={life.days.map(shortDay)} format={(v) => money(org, v * 100)}
-          series={[{ name: 'Money left', values: life.left.map((v) => (v == null ? null : v / 100)) },
-            ...(life.daysLeft != null ? [{ name: 'At this rate', values: life.ahead.map((v) => (v == null ? null : v / 100)), dashed: true }] : [])]} />
-      )}
-      {canChange && (
-        <div className="row-actions">
-          <button type="button" className="btn btn-primary" onClick={onAdd}>Add money</button>
-        </div>
-      )}
-      <p className="small muted">Add money only when cash is taken from the bank for petty cash; the plan for spending is the Monthly budget under Financial statements.</p>
     </section>
   );
 }
@@ -420,7 +374,10 @@ function Home({ org }: { org: Organization }) {
           <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
         </p>
       )}
-      {p.seesAll && <MoneyBox org={org} canChange={canTopUpHere && !topUpOpen && !topUpWaiting} onAdd={() => setTopUpOpen(true)} />}
+      {/* No Money box (Andy, 2026-11-09): cash left shows on the Balance Sheet; only the Add money button stays. */}
+      {p.seesAll && canTopUpHere && !topUpOpen && !topUpWaiting && (
+        <div className="row-actions"><button type="button" className="btn btn-primary" onClick={() => setTopUpOpen(true)}>Add money</button></div>
+      )}
       {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting) && <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />}
       {p.seesAll && <DailyBox org={org} />}
       {p.canSign && <BinNotice org={org} />}
