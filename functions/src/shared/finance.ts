@@ -963,3 +963,44 @@ export function budgetWarning(category: string, monthlyCents: number, spentCents
 }
 
 export const FIN_ACCOUNT_SUGGESTIONS = ['Family Bank main account', 'M-Pesa Paybill'];
+
+// ---- Add money comes from a bank line (Andy, 2026-11-09) -----------------------------------------
+
+/** A bank "money out" line that petty cash money can be added from. */
+export interface BankChoice { key: string; d: string; cents: number; text: string }
+
+/** The key of a statement line ("st:<statement>:<line>") or of bank money typed on the day ("dy:<entry>"). */
+export const bankLineKey = (kind: 'st' | 'dy', id: string, index?: number) => (kind === 'st' ? `st:${id}:${index}` : `dy:${id}`);
+
+/** Reads a key back; null when it is not one. */
+export function parseBankLineKey(key: string): { kind: 'st'; id: string; index: number } | { kind: 'dy'; id: string } | null {
+  const st = /^st:([A-Za-z0-9_-]{1,80}):(\d{1,5})$/.exec(key);
+  if (st) return { kind: 'st', id: st[1], index: Number(st[2]) };
+  const dy = /^dy:([A-Za-z0-9_-]{1,80})$/.exec(key);
+  return dy ? { kind: 'dy', id: dy[1] } : null;
+}
+
+/**
+ * The money-out lines that petty cash can be filled from: the bank statements and the bank money typed
+ * day by day, newest first, from `sinceDay` on, leaving out lines already used by a top-up. So no amount
+ * goes into petty cash unless it left the bank (Andy, 2026-11-09).
+ */
+export function bankOutChoices(
+  statements: readonly Pick<BankStatement, 'id' | 'accountKind' | 'lines'>[],
+  daily: readonly Pick<DailyBankEntry, 'id' | 'date' | 'dir' | 'cents' | 'text'>[],
+  used: ReadonlySet<string>, sinceDay: string,
+): BankChoice[] {
+  const out: BankChoice[] = [];
+  for (const s of statements) {
+    if (s.accountKind !== 'bank') continue;
+    s.lines.forEach((l, i) => {
+      const key = bankLineKey('st', s.id, i);
+      if (l.o > 0 && l.d >= sinceDay && !used.has(key)) out.push({ key, d: l.d, cents: l.o, text: l.t });
+    });
+  }
+  for (const e of daily) {
+    const key = bankLineKey('dy', e.id);
+    if (e.dir === 'out' && e.cents > 0 && e.date >= sinceDay && !used.has(key)) out.push({ key, d: e.date, cents: e.cents, text: e.text || 'Bank money typed on the day' });
+  }
+  return out.sort((a, b) => b.d.localeCompare(a.d) || b.cents - a.cents);
+}

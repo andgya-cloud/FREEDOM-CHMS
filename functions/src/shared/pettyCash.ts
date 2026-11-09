@@ -186,6 +186,8 @@ export interface PettyFund {
   doneAt?: unknown;
   /** A short word on why money was added, such as "Fuel for the trip" (Andy, 2026-11-08). */
   note?: string | null;
+  /** The bank line the money came from (see parseBankLineKey); each fills petty cash once (Andy, 2026-11-09). */
+  bankKey?: string;
 }
 
 /** A top-up needs one stakeholder's PIN (Andy, 2026-10-24); a reset still needs two. */

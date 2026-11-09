@@ -1772,7 +1772,8 @@ service cloud.firestore {
       }
       match /pettyFunds/{fundId} {
         allow read: if pcAny() || pc('pettycash.authorize');
-        allow create: if pc('pettycash.authorize') && stampedCreate() && freshRecord()
+        // Money comes in only through topUpWithPin, which checks the bank line it came from (Andy, 2026-11-09).
+        allow create: if false && pc('pettycash.authorize') && stampedCreate() && freshRecord()
           && request.resource.data.keys().hasOnly(['orgId', 'kind', 'amountCents', 'signatures', 'status', 'doneAt',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.orgId == orgId

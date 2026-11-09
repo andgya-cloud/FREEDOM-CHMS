@@ -103,7 +103,9 @@ describe('petty cash', () => {
     await assertFails(setDoc(ref('s1'), fund('s1', { status: 'done' })));
     await assertFails(setDoc(ref('s1'), fund('s1', { signatures: { s1: sig('s1'), s2: sig('s2') } })));
     await assertFails(setDoc(ref('s1'), fund('s1', { kind: 'reset' })));
-    await assertSucceeds(setDoc(ref('s1'), fund('s1')));
+    // Money comes in only through topUpWithPin (Andy, 2026-11-09), so even a stakeholder cannot start one here.
+    await assertFails(setDoc(ref('s1'), fund('s1')));
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'organizations/adia/pettyFunds/f1'), fund('s1')));
     // Nobody signs twice, or for someone else, and the second signature must complete it.
     await assertFails(updateDoc(ref('s1'), { 'signatures.s1.name': 'again', ...touched('s1') }));
     await assertFails(updateDoc(ref('s2'), { 'signatures.s3': sig('s3'), ...touched('s2') }));

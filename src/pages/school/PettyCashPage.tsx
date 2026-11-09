@@ -1,8 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
 import { Greeting } from '../../components/Greeting';
 import { SIGNATORY_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { createPortal } from 'react-dom';
 import { DailyBox } from '../finance/DailyBox';
+import { useDaily, useFinance } from '../../state/useFinance';
+import { bankOutChoices } from '../../../functions/src/shared/finance';
 import { BudgetWarning } from '../finance/BudgetWarning';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -195,14 +197,19 @@ const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: strin
 function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKind; onClose?: () => void }) {
   const p = usePettyCash(org);
   const toast = useToast();
-  const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
-  const amountBox = useRef<HTMLInputElement>(null);
-  const toBudget = 0; // Petty cash has no budget of its own (Andy, 2026-11-09, 1A).
+  // Money comes in only from a bank line (Andy, 2026-11-09): pick it, and its money out is the amount.
+  const fin = useFinance(org);
+  const daily = useDaily(org);
+  const [bankKey, setBankKey] = useState('');
+  const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
+  const used = useMemo(() => new Set(p.funds.filter((f) => !f.deletedAt).map((f) => (f as { bankKey?: string }).bankKey ?? '').filter(Boolean)), [p.funds]);
+  const choices = useMemo(() => bankOutChoices(fin.statements, daily.entries, used, since), [fin.statements, daily.entries, used, since]);
+  const choice = choices.find((c) => c.key === bankKey);
   const [askDelete, setAskDelete] = useState(false);
   const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
   const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
-  const cents = kind === 'topup' ? (open ? open.amountCents : parseAmountCents(amount)) : 0;
+  const cents = kind === 'topup' ? (open ? open.amountCents : choice?.cents ?? null) : 0;
   const ready = kind === 'reset' || (cents != null && cents > 0);
   const text = FUND_TEXT[kind];
   const needed = fundSignaturesNeeded(kind);
@@ -212,9 +219,6 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const [confirming, setConfirming] = useState<((yes: boolean) => void) | null>(null);
   const askConfirm = () => new Promise<boolean>((resolve) => setConfirming(() => resolve));
   const answer = (yes: boolean) => { confirming?.(yes); setConfirming(null); };
-  // Imprest top-up (Andy, 2026-10-24): offer exactly what was spent since the last top-up.
-  const lastTopUp = Math.max(0, ...p.funds.filter((f) => f.kind === 'topup' && f.status === 'done').map((f) => millis(f.doneAt) ?? millis(f.createdAt) ?? 0));
-  const spentSince = p.requisitions.filter((r) => r.status === 'approved' && (millis(r.approved?.at) ?? millis(r.createdAt) ?? 0) > lastTopUp).reduce((n, r) => n + r.totalCents, 0);
   const topUpWho = isPettyOrg(org.type) ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} adds money with their own PIN.` : text.sub;
 
   return (
@@ -231,35 +235,28 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
           <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a signer'}</p>
         ) : (
           <>
-          <label className="field"><span className="petty-caps">Amount to add (KES)</span>
-            <input ref={amountBox} inputMode="decimal" className={ready ? '' : 'petty-amount-empty'} value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="Type the amount here, e.g. 500000" disabled={!p.canAuthorize} />
-            {amount.trim() && (cents != null && cents > 0
-              ? <small className="petty-amount-ok">{money(org, cents)} will be added to the budget as soon as you confirm below.</small>
-              : <small className="petty-amount-bad">Type the amount in numbers only, for example 500000 or 500,000.</small>)}
-            {toBudget > 0 && p.canAuthorize && (
-              <button type="button" className="btn btn-quiet align-start" onClick={() => setAmount(String(toBudget / 100))}>
-                Fill back up to the budget: {money(org, toBudget)}
-              </button>
-            )}
-            {!(toBudget > 0) && spentSince > 0 && p.canAuthorize && (
-              <button type="button" className="btn btn-quiet align-start" onClick={() => setAmount(String(spentSince / 100))}>
-                Fill in {money(org, spentSince)}, spent since money was last added
-              </button>
-            )}
+          <label className="field"><span className="petty-caps">Money taken from the bank</span>
+            <select value={bankKey} onChange={(e) => setBankKey(e.target.value)} disabled={!p.canAuthorize || choices.length === 0}>
+              <option value="">{choices.length ? 'Choose the bank line…' : 'No money out from the bank yet'}</option>
+              {choices.map((c) => <option key={c.key} value={c.key}>{new Date(`${c.d}T12:00:00Z`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'UTC' })} · {money(org, c.cents)} · {c.text.slice(0, 50)}</option>)}
+            </select>
+            {choice
+              ? <small className="petty-amount-ok">{money(org, choice.cents)} will be added to petty cash as soon as you confirm below.</small>
+              : <small className="muted">Only money that left the bank can go in. Upload the bank statement, or type the withdrawal in Today's bank money, and it shows here.</small>}
           </label>
           <label className="field"><span className="petty-caps">What for (optional)</span>
-            <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Cash from the bank" disabled={!p.canAuthorize} />
+            <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Cash for the band" disabled={!p.canAuthorize} />
           </label>
           </>
         ))}
         {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && !amount.trim() && <p className="petty-warn">Step 1: type the amount in the box above. Step 2: choose your name, type your PIN or password and press Add money.</p>}
+        {!ready && <p className="petty-warn">Step 1: choose the bank line above. Step 2: choose your name, type your PIN or password and press Add money.</p>}
         {quickTopUp ? (
           <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Add money"
             sign={async (uid, pin) => {
               if (!(await askConfirm())) return 'Cancelled. Nothing was added.';
-              const who = await topUpWithPin(org.id, cents ?? 0, uid, pin, 'topup', note);
-              setAmount('');
+              const who = await topUpWithPin(org.id, cents ?? 0, uid, pin, 'topup', note, bankKey);
+              setBankKey('');
               setNote('');
               onClose?.();
               return `${who} added ${money(org, cents ?? 0)}. It is in the petty cash now.`;

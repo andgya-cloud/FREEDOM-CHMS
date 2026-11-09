@@ -19,8 +19,8 @@ export async function signWithPin(orgId: string, kind: 'request' | 'fund', docId
 }
 
 /** Tops up petty cash in one step, or starts a reset, as the chosen stakeholder with their PIN. Returns their name. */
-export async function topUpWithPin(orgId: string, amountCents: number, signerUid: string, pin: string, kind: 'topup' | 'reset' = 'topup', note = ''): Promise<string> {
-  const res = await httpsCallable<object, { name: string }>(functions, 'topUpWithPin')({ orgId, amountCents, signerUid, pin, kind, note });
+export async function topUpWithPin(orgId: string, amountCents: number, signerUid: string, pin: string, kind: 'topup' | 'reset' = 'topup', note = '', bankKey = ''): Promise<string> {
+  const res = await httpsCallable<object, { name: string }>(functions, 'topUpWithPin')({ orgId, amountCents, signerUid, pin, kind, note, bankKey });
   return res.data.name;
 }
 

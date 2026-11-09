@@ -9,6 +9,7 @@ import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
 import { requireMonthOpen } from './pettyMonths.js';
 import { formatMoney } from './shared/giving.js';
+import { parseBankLineKey } from './shared/finance.js';
 
 /**
  * Petty cash signing PINs (Andy, 2026-10-23): a stakeholder picks their name on the shared device and
@@ -326,11 +327,32 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
     const waiting = await funds.where('kind', '==', 'reset').where('status', '==', 'collecting').get();
     if (waiting.docs.some((d) => !d.data().deletedAt)) throw new HttpsError('already-exists', 'A reset is already waiting for a signature.');
   }
+  // Money comes in only from a bank line (Andy, 2026-11-09): the amount must be that line's money out,
+  // and each line fills petty cash once, so a made-up amount cannot go in.
+  const bankKey = typeof data.bankKey === 'string' ? data.bankKey : '';
+  const parsed = parseBankLineKey(bankKey);
+  if (!parsed) throw new HttpsError('invalid-argument', 'Choose the bank line the money came from.');
+  let bankDay = '';
+  let bankText = '';
+  let bankCents = 0;
+  if (parsed.kind === 'st') {
+    const st = (await db.doc(`organizations/${orgId}/bankStatements/${parsed.id}`).get()).data() as { deletedAt?: unknown; accountKind?: string; lines?: { d: string; t: string; o: number }[] } | undefined;
+    const line = st && !st.deletedAt && st.accountKind === 'bank' ? st.lines?.[parsed.index] : undefined;
+    if (line) { bankDay = line.d; bankText = line.t; bankCents = line.o; }
+  } else {
+    const e = (await db.doc(`organizations/${orgId}/bankDaily/${parsed.id}`).get()).data() as { deletedAt?: unknown; dir?: string; date: string; text?: string; cents: number } | undefined;
+    if (e && !e.deletedAt && e.dir === 'out') { bankDay = e.date; bankText = e.text || 'Bank money typed on the day'; bankCents = e.cents; }
+  }
+  if (!bankDay || bankCents <= 0) throw new HttpsError('not-found', 'That bank line is no longer there. Choose another one.');
+  if (bankCents !== amountCents) throw new HttpsError('invalid-argument', 'The amount must be the same as the bank line.');
+  const usedBy = await funds.where('bankKey', '==', bankKey).get();
+  if (usedBy.docs.some((d) => !d.data().deletedAt)) throw new HttpsError('already-exists', 'Money from that bank line is already in petty cash.');
   const ref = funds.doc();
   const status = fundStatusAfter(1, kind);
-  const note = typeof data.note === 'string' ? data.note.trim().slice(0, 120) || null : null;
+  const typed = typeof data.note === 'string' ? data.note.trim().slice(0, 120) : '';
+  const note = (typed || `From the bank ${bankDay}: ${bankText}`).slice(0, 120);
   await ref.set({
-    orgId, kind, amountCents, status, note, doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
+    orgId, kind, amountCents, status, note, bankKey, bankDay, bankText: bankText.slice(0, 200), doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
     signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp(), ...proxy } },
     deletedAt: null, deletedBy: null,
     createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
@@ -350,51 +372,7 @@ export const topUpWithPin = onCall(CALLABLE, async (request) => {
  * Only those who may add money (Andrew Guya, Doreen Mayaka, Elias Omondi), each with their own PIN; the
  * Director signed in as himself needs none. Stored in organizations/{org}/pettySettings/money.
  */
-export const setPettyBudget = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request);
-  const data = (request.data ?? {}) as Record<string, unknown>;
-  const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
-  const budgetCents = typeof data.budgetCents === 'number' ? data.budgetCents : parseAmountCents(String(data.budgetCents ?? ''));
-  if (budgetCents == null || !Number.isInteger(budgetCents) || budgetCents < 0 || budgetCents > 100000000000) {
-    throw new HttpsError('invalid-argument', 'Type the budget in numbers, for example 50000.');
-  }
-  requireMember(caller.profile, orgId);
-  const [signerSnap, org] = await Promise.all([db.doc(`users/${signerUid}`).get(), db.doc(`organizations/${orgId}`).get()]);
-  const signer = signerSnap.data() as UserProfile | undefined;
-  const name = signer ? signer.displayName || signer.email : '';
-  const orgType = (org.data() as { type?: string } | undefined)?.type;
-  if (!canSign(signer, orgId, 'fund') || !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage'))) {
-    throw new HttpsError('permission-denied', 'That person cannot set the budget here.');
-  }
-  await requireSelfOrKeeper(caller, signerUid, orgId);
-  if (!directorSelf(caller.uid, signerUid, signer)) await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
-  const ref = db.doc(`organizations/${orgId}/pettySettings/money`);
-  const before = (await ref.get()).get('budgetCents') as number | undefined;
-  const [funds, spent] = await Promise.all([
-    db.collection(`organizations/${orgId}/pettyFunds`).get(),
-    db.collection(`organizations/${orgId}/pettyCash`).where('status', '==', 'approved').get(),
-  ]);
-  const live = <T>(q: FirebaseFirestore.QuerySnapshot) => q.docs.map((d) => d.data()).filter((d) => !d.deletedAt) as T[];
-  const { remainingCents } = fundSummary(live(funds), live(spent), (t) => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : null));
-  const addedCents = data.fill === false ? 0 : Math.max(0, budgetCents - remainingCents);
-  const batch = db.batch();
-  batch.set(ref, { orgId, budgetCents, setBy: name, setByUid: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid });
-  const fund = db.collection(`organizations/${orgId}/pettyFunds`).doc();
-  if (addedCents > 0) {
-    batch.set(fund, {
-      orgId, kind: 'topup', amountCents: addedCents, status: 'done', doneAt: FieldValue.serverTimestamp(), note: 'Filled up to the budget',
-      signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp() } }, deletedAt: null, deletedBy: null,
-      createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
-    });
-  }
-  await batch.commit();
-  if (addedCents > 0) {
-    await writeAudit({ actorUid: signerUid, actorEmail: signer!.email, action: 'petty_topup', path: fund.path, collection: 'pettyFunds', docId: fund.id, orgId, note: `Filled up to the budget with Set budget, on ${caller.profile.displayName || caller.email}'s device` });
-  }
-  await writeAudit({
-    actorUid: signerUid, actorEmail: signer!.email, action: 'petty_budget_set', path: ref.path, collection: 'pettySettings',
-    docId: 'money', orgId, note: `Budget ${formatMoney(before ?? 0)} to ${formatMoney(budgetCents)}, on ${caller.profile.displayName || caller.email}'s device`,
-  });
-  return { name, addedCents };
+export const setPettyBudget = onCall(CALLABLE, async () => {
+  // Petty cash has no budget of its own (Andy, 2026-11-09): money comes in only with Add money from a bank line.
+  throw new HttpsError('failed-precondition', 'Petty cash has no budget now. Use Add money and choose the bank line.');
 });
