@@ -120,3 +120,19 @@ export function groupReminderText(programName: string, when: string, topic: stri
 export function missedText(first: string, programName: string, when: string, topic: string, done: number, total: number, link: string): string {
   return `Hi ${first}, we missed you at ${programName} on ${when} ("${topic}"). You can catch up at a make-up class: just ask the class leader. You have done ${done} of ${total} topics (${percentOf(done, total)}%).${link ? ` Your progress: ${link}` : ''}`;
 }
+
+/**
+ * Online classes on Google Meet (Andy, 2026-11-09): the leader pastes one check-in link in the Meet chat (it works
+ * only in class hours) and says a code word during the class; students type the word with their phone number, so a
+ * forwarded link alone is not enough.
+ */
+export const ONLINE_LINK_INPUT = 'online';
+export const CODE_WORD_INPUT = 'word';
+export const CODE_WORDS = [
+  'CEDAR', 'RIVER', 'EAGLE', 'LAMP', 'HARVEST', 'BREAD', 'ANCHOR', 'CROWN', 'GARDEN', 'MOUNTAIN', 'OLIVE', 'SHIELD',
+  'TORCH', 'VINE', 'WELL', 'ROCK', 'DOVE', 'LION', 'SEED', 'GATE', 'TOWER', 'STAR', 'SHEPHERD', 'FOUNTAIN',
+  'BRIDGE', 'COMPASS', 'KEY', 'HARP', 'ARROW', 'LIGHT', 'PALM', 'FIRE',
+] as const;
+/** The code word from the first hex digits of the class's secret sum. */
+export const codeWordFrom = (hex: string) => CODE_WORDS[parseInt(hex.slice(0, 8), 16) % CODE_WORDS.length]!;
+export const sameWord = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();

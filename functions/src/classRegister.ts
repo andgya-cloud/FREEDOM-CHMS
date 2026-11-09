@@ -7,7 +7,7 @@ import { normalizePhone } from './shared/phone.js';
 import { attendanceIdFor, attended } from './shared/attendance.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { coverage, enrollmentIdFor, type CompletionRule, type PlanEntry, type SessionLike, type Topic } from './shared/programs.js';
-import { isWindowOpen, nextPlanned, percentOf, plannedOn, QR_SLOTS_GOOD, scanWindow, slotNow } from './shared/classRegister.js';
+import { codeWordFrom, CODE_WORD_INPUT, isWindowOpen, nextPlanned, ONLINE_LINK_INPUT, sameWord, percentOf, plannedOn, QR_SLOTS_GOOD, scanWindow, slotNow } from './shared/classRegister.js';
 
 /**
  * The class register's QR check-in (Freedom 252, Andy 2026-11-09, 1A-7A). One callable, several actions:
@@ -67,7 +67,12 @@ async function linkKey(): Promise<string> {
 }
 const tokenFor = (key: string, enrollmentId: string) => `${enrollmentId}.${hmac(key, `progress|${enrollmentId}`).slice(0, 20)}`;
 
+/** The Meet chat link's code: one for the whole class (it still only works in class hours). */
+const isOnlineCode = (key: string, code: string) => same(hmac(key, ONLINE_LINK_INPUT).slice(0, 12), code);
+const codeWordOf = (key: string) => codeWordFrom(hmac(key, CODE_WORD_INPUT));
+
 function codeGood(key: string, code: string): boolean {
+  if (isOnlineCode(key, code)) return true;
   const now = slotNow();
   for (let s = now - QR_SLOTS_GOOD; s <= now + 1; s++) if (same(hmac(key, String(s)).slice(0, 12), code)) return true;
   return false;
@@ -121,6 +126,7 @@ export const classRegister = onCall({ invoker: 'public', memory: '256MiB', timeo
       church: org.name, programme: String(program.get('name') ?? ''), date: ev.get('date'),
       topic: topicNames(program, (ev.get('topicIds') as string[] | undefined) ?? []),
       open: open && fresh, why: !fresh ? 'This code has changed. Please scan the code on the screen again.' : why,
+      needWord: !!key && isOnlineCode(key, text(d.k, 20)),
     };
   }
 
@@ -187,6 +193,7 @@ async function checkIn(request: CallableRequest, orgId: string, org: { tz: strin
   if (!open) throw new HttpsError('failed-precondition', why);
   const phone = normalizePhone(text(d.phone, 30));
   if (!phone) throw new HttpsError('invalid-argument', 'Please type your phone number, for example 0712 345 678.');
+  const needWord = isOnlineCode(key, text(d.k, 20));
 
   const today = localDateKey(new Date(), org.tz);
   const programId = String(ev.get('programId'));
@@ -202,6 +209,10 @@ async function checkIn(request: CallableRequest, orgId: string, org: { tz: strin
     tx.set(countRef, { count: FieldValue.increment(1), date: today }, { merge: true });
     tx.set(senderRef, { count: FieldValue.increment(1), date: today }, { merge: true });
   });
+  // Counted above, so guessing the word is limited too.
+  if (needWord && !sameWord(text(d.word, 30), codeWordOf(key))) {
+    throw new HttpsError('permission-denied', 'That code word is not right. Listen for the code word the leader says in class.');
+  }
 
   const person = await findByPhone(orgId, phone);
   const batch = db.batch();

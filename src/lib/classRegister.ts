@@ -8,7 +8,7 @@ import { createEvent } from './attendanceWrites';
 import type { Organization } from '../state/OrgContext';
 import type { Program } from '../state/usePrograms';
 import { programSessionIdFor, type PlanEntry } from '../../functions/src/shared/programs';
-import { F252_ID, F252_SETUP, percentOf, QR_SLOT_SECONDS, slotNow } from '../../functions/src/shared/classRegister';
+import { CODE_WORD_INPUT, codeWordFrom, ONLINE_LINK_INPUT, F252_ID, F252_SETUP, percentOf, QR_SLOT_SECONDS, slotNow } from '../../functions/src/shared/classRegister';
 import { formatDateKey } from '../../functions/src/shared/datetime';
 import { POWERED_BY, stampPoweredBy } from '../../functions/src/shared/poweredBy';
 import { studentsFromPdf, studentsFromTable } from '../../functions/src/shared/studentList';
@@ -44,13 +44,17 @@ export function openClass(org: Organization, program: Program, date: string, top
 /** The class's secret, so this screen can draw a code that changes every minute (1A). */
 export const classKey = (orgId: string, eventId: string) => call<{ key: string }>({ action: 'key', orgId, eventId }).then((r) => r.key);
 
-/** The code for this minute: the same sum the server checks. */
-export async function codeFor(key: string, slot = slotNow()): Promise<string> {
+async function hmacHex(key: string, text: string): Promise<string> {
   const bytes = new Uint8Array(key.match(/.{2}/g)!.map((h) => parseInt(h, 16)));
   const k = await crypto.subtle.importKey('raw', bytes, { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(String(slot))));
-  return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', k, new TextEncoder().encode(text)));
+  return [...sig].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
+/** The code for this minute: the same sum the server checks. */
+export const codeFor = async (key: string, slot = slotNow()) => (await hmacHex(key, String(slot))).slice(0, 12);
+/** The one link for the Google Meet chat, and the code word said in class. */
+export const onlineCodeFor = async (key: string) => (await hmacHex(key, ONLINE_LINK_INPUT)).slice(0, 12);
+export const codeWordFor = async (key: string) => codeWordFrom(await hmacHex(key, CODE_WORD_INPUT));
 export const secondsLeft = () => QR_SLOT_SECONDS - (Math.floor(Date.now() / 1000) % QR_SLOT_SECONDS);
 
 /** Each student's progress link (5A, for the reminders). */

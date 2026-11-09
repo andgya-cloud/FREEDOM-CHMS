@@ -4,7 +4,7 @@ import { useOrg, type Organization } from '../../state/OrgContext';
 import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useProgramMarks, usePrograms, useProgramSessions, type Program } from '../../state/usePrograms';
-import { APP_URL, classKey, codeFor, openClass, secondsLeft } from '../../lib/classRegister';
+import { APP_URL, classKey, codeFor, codeWordFor, onlineCodeFor, openClass, secondsLeft } from '../../lib/classRegister';
 import { friendlyError } from '../../lib/errors';
 import { attended, doorName } from '../../../functions/src/shared/attendance';
 import { formatDateKey, localDateKey, zonedParts } from '../../../functions/src/shared/datetime';
@@ -44,6 +44,25 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
   const [code, setCode] = useState('');
   const [left, setLeft] = useState(secondsLeft());
   const [qr, setQr] = useState('');
+  const [online, setOnline] = useState<{ link: string; word: string } | null>(null);
+  const [showQr, setShowQr] = useState(false);
+
+  // Google Meet (Andy, 2026-11-09): one link for the Meet chat, and a code word to say in class.
+  useEffect(() => {
+    if (!key) return;
+    let stop = false;
+    void Promise.all([onlineCodeFor(key), codeWordFor(key)]).then(([c, word]) => {
+      if (!stop) setOnline({ link: `${APP_URL}${checkInPath(org.id, eventId, c)}`, word });
+    });
+    return () => { stop = true; };
+  }, [key, org.id, eventId]);
+
+  async function copyLink() {
+    if (!online) return;
+    const text = `Check in for ${program.name} (${topic?.name ?? ''}): ${online.link}\nType your phone number and the code word I say in class.`;
+    try { await navigator.clipboard.writeText(text); toast.show('Copied. Paste it in the Google Meet chat.'); }
+    catch { window.prompt('Copy this and paste it in the Meet chat:', text); }
+  }
 
   const present = useMemo(() => marks
     .filter((m) => m.eventId === eventId && !m.deletedAt && attended(m.status))
@@ -65,7 +84,7 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
 
   // A new code every minute; the countdown every second.
   useEffect(() => {
-    if (!key) return;
+    if (!key || !showQr) return;
     let stop = false;
     const tick = async () => {
       setLeft(secondsLeft());
@@ -75,7 +94,7 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
     void tick();
     const t = window.setInterval(() => void tick(), 1000);
     return () => { stop = true; window.clearInterval(t); };
-  }, [key]);
+  }, [key, showQr]);
 
   const url = code ? `${APP_URL}${checkInPath(org.id, eventId, code)}` : '';
   useEffect(() => {
@@ -112,16 +131,32 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
             )}
             {planned && <p className="muted small">Check-in is open {window_.label}.</p>}
             <button type="button" className="btn btn-primary btn-lg" disabled={busy || !topicId} onClick={() => void start()}>
-              {busy ? 'Opening…' : 'Show the QR code'}
+              {busy ? 'Opening…' : 'Open check-in'}
             </button>
           </div>
         ) : (
           <>
-            {closed && <p className="notice notice-warn">Check-in for this class is open {window_.label}. Scans outside those hours are turned away.</p>}
-            <div className="class-qr-code">
-              {qr ? <img src={qr} alt="Scan to check in" /> : <span className="muted">Making the code…</span>}
-            </div>
-            <p className="class-qr-hint"><strong>Scan with your phone camera</strong>, then type your phone number. <span className="muted">New code in {left}s</span></p>
+            {closed && <p className="notice notice-warn">Check-in for this class is open {window_.label}. Check-ins outside those hours are turned away.</p>}
+            {online && (
+              <div className="card class-online">
+                <h2>Online class (Google Meet)</h2>
+                <button type="button" className="btn btn-primary btn-lg" onClick={() => void copyLink()}>Copy check-in link</button>
+                <p className="small muted">Paste it in the Meet chat. Students tap it, type their phone number and the code word.</p>
+                <p className="class-word-label">Code word to say during the class</p>
+                <p className="class-word">{online.word}</p>
+                <p className="small muted">Say it partway through, so only people in the class can check in.</p>
+              </div>
+            )}
+            {!showQr ? (
+              <button type="button" className="btn btn-quiet" onClick={() => setShowQr(true)}>Show a QR code instead (class in a room)</button>
+            ) : (
+              <>
+                <div className="class-qr-code">
+                  {qr ? <img src={qr} alt="Scan to check in" /> : <span className="muted">Making the code…</span>}
+                </div>
+                <p className="class-qr-hint"><strong>Scan with your phone camera</strong>, then type your phone number. <span className="muted">New code in {left}s</span></p>
+              </>
+            )}
           </>
         )}
 

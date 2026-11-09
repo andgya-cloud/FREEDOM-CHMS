@@ -128,7 +128,7 @@ function ProgramView({ org, program }: { org: Organization; program: Program }) 
 
       {/* The class register (Freedom 252, 2026-11-09): the students scan a QR code; the register shows everyone's %. */}
       <div className="cleanup-head-actions class-actions">
-        {can('attendance.write') && total > 0 && <Link className="btn btn-primary" to={`/class-qr/${org.id}/${program.id}`}>Show class QR code</Link>}
+        {can('attendance.write') && total > 0 && <Link className="btn btn-primary" to={`/class-qr/${org.id}/${program.id}`}>Class check-in</Link>}
         <Link className="btn" to={`/programs/${org.id}/${program.id}/register`}>Register</Link>
       </div>
 

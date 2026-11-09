@@ -5,7 +5,7 @@ import { functions } from '../../firebase';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { progressPath } from '../../../functions/src/shared/classRegister';
 
-type Info = { church: string; programme: string; date: string; topic: string; open: boolean; why: string };
+type Info = { church: string; programme: string; date: string; topic: string; open: boolean; why: string; needWord?: boolean };
 type Done = { ok: boolean; already?: boolean; added?: boolean; firstName: string; topic?: string; done?: number; total?: number; percent?: number; token?: string; needName?: boolean };
 const SAVED = 'classCheckIn.me';
 
@@ -32,6 +32,7 @@ export function ClassCheckInPage() {
   const me = remembered();
   const [phone, setPhone] = useState(me?.phone ?? '');
   const [name, setName] = useState('');
+  const [word, setWord] = useState('');
   const [needName, setNeedName] = useState(false);
   const [notMe, setNotMe] = useState(false);
   const [website, setWebsite] = useState('');
@@ -50,10 +51,11 @@ export function ClassCheckInPage() {
     setError('');
     if (phone.replace(/\D/g, '').length < 9) return setError('Please type your phone number, for example 0712 345 678.');
     if (needName && name.trim().length < 2) return setError('Please type your full name.');
+    if (info?.needWord && !word.trim()) return setError('Please type the code word the leader says in class.');
     setBusy(true);
     try {
       const r = await httpsCallable<Record<string, unknown>, Done>(functions, 'classRegister')({
-        action: 'checkin', orgId, eventId, k, phone, name: needName ? name : '', website,
+        action: 'checkin', orgId, eventId, k, phone, word, name: needName ? name : '', website,
       });
       if (r.data.needName) { setNeedName(true); return; }
       try { localStorage.setItem(SAVED, JSON.stringify({ phone, name: r.data.firstName })); } catch { /* private window */ }
@@ -92,7 +94,7 @@ export function ClassCheckInPage() {
       <img src="/org/freedom-church-logo.png" alt="" width={80} height={80} />
       <h1>{info.programme}</h1>
       <p>{formatDateKey(info.date)}{info.topic ? ` · ${info.topic}` : ''}</p>
-      {!info.open ? <p className="error" role="alert">{info.why}</p> : me && !notMe && !needName ? (
+      {!info.open ? <p className="error" role="alert">{info.why}</p> : me && !notMe && !needName && !info.needWord ? (
         <div className="stack">
           <button type="button" className="btn btn-primary btn-block btn-lg" disabled={busy} onClick={() => void send()}>
             {busy ? 'Checking in…' : `I'm ${me.name || 'here'}: mark me present`}
@@ -103,6 +105,9 @@ export function ClassCheckInPage() {
       ) : (
         <form className="form" onSubmit={send}>
           <label className="field"><span>Your phone number</span><input type="tel" inputMode="tel" autoComplete="tel" value={phone} maxLength={30} onChange={(e) => setPhone(e.target.value)} placeholder="0712 345 678" autoFocus /></label>
+          {info.needWord && (
+            <label className="field"><span>Code word (the leader says it in class)</span><input value={word} maxLength={30} autoCapitalize="characters" autoComplete="off" onChange={(e) => setWord(e.target.value)} /></label>
+          )}
           {needName && (
             <>
               <p className="notice">We don't have this number yet. Type your name to join {info.programme}.</p>

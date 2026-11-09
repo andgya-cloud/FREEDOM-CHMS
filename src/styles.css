@@ -2775,3 +2775,6 @@ a.fin-chip:hover { background: #fdecea; }
 .import-check input:not([type='checkbox']) { min-width: 140px; padding: 6px 8px; min-height: 0; }
 .import-check .input-bad { border-color: #c0392b; }
 .import-check small.error { display: block; }
+.class-online { width: 100%; max-width: 520px; display: grid; gap: 8px; justify-items: center; text-align: center; }
+.class-word-label { margin: 10px 0 0; font-weight: 600; }
+.class-word { font-size: clamp(2rem, 7vw, 3.4rem); font-weight: 800; letter-spacing: .08em; color: var(--green); margin: 0; }

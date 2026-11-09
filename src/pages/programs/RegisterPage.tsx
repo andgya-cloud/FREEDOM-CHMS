@@ -100,7 +100,7 @@ function Register({ org, program }: { org: Organization; program: Program }) {
           <p className="muted">{rows.length} students · {graduated} at 100%{graduation ? ` · Graduation ${formatDateKey(graduation)}` : ''}</p>
         </div>
         <div className="cleanup-head-actions">
-          {can('attendance.write') && <Link className="btn btn-primary" to={`/class-qr/${org.id}/${program.id}`}>Show class QR code</Link>}
+          {can('attendance.write') && <Link className="btn btn-primary" to={`/class-qr/${org.id}/${program.id}`}>Class check-in</Link>}
           <button type="button" className="btn" onClick={() => void download('pdf')}>PDF</button>
           <button type="button" className="btn" onClick={() => void download('xlsx')}>Excel</button>
         </div>
