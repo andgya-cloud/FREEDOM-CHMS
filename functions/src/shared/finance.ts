@@ -183,7 +183,9 @@ function mergeInto(into: StatementCell[], cells: StatementCell[]) {
     const text = tidy(c.text);
     const isMoney = parseMoneyText(text) != null;
     const host = isMoney ? undefined : into.find((h) => parseMoneyText(h.text) == null && (Math.min(h.x1, c.x1) - Math.max(h.x0, c.x0) > 0 || Math.abs(h.x0 - c.x0) < 3));
-    if (host) { host.text = /[-/]$/.test(host.text) ? host.text + text : `${host.text} ${text}`; host.x0 = Math.min(host.x0, c.x0); host.x1 = Math.max(host.x1, c.x1); }
+    // A date's year ("02-JAN-" + "2026") and an amount's last digits ("15,000.0" + "0") join without a space.
+    const glue = /[-/]$/.test(host?.text ?? '') || (/^[\d,]+\.?\d?$/.test(host?.text ?? '') && /^[\d.,]+$/.test(text));
+    if (host) { host.text = glue ? host.text + text : `${host.text} ${text}`; host.x0 = Math.min(host.x0, c.x0); host.x1 = Math.max(host.x1, c.x1); }
     else into.push({ ...c, text });
   }
   into.sort((a, b) => a.x0 - b.x0);
