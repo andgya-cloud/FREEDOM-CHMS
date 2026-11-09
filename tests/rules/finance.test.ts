@@ -72,3 +72,23 @@ describe('daily accounts', () => {
     await assertFails(setDoc(doc(as('admin'), `${ORG}/cashCounts/2026-11-09`), { ...count, updatedBy: 'admin' }));
   });
 });
+
+describe('closing a month', () => {
+  it('lets one person prepare, someone else who signs approve, locks the lines, and only the pastor reopens', async () => {
+    await setDoc(doc(as('daniel'), `${ORG}/bankStatements/s1`), statement('daniel'));
+    const prep = (uid: string) => ({ orgId: 'fcn', month: '2026-10', status: 'prepared', preparedUid: uid, preparedName: 'Finance', preparedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/finMonths/2026-10`), prep('admin')));
+    await assertSucceeds(setDoc(doc(as('finance'), `${ORG}/finMonths/2026-10`), prep('finance')));
+    const row = (await getDoc(doc(as('finance'), `${ORG}/finMonths/2026-10`))).data()!;
+    const close = (uid: string) => ({ orgId: 'fcn', month: '2026-10', status: 'closed', preparedUid: row.preparedUid, preparedName: row.preparedName, preparedAt: row.preparedAt,
+      approvedUid: uid, approvedName: 'Approver', approvedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertFails(setDoc(doc(as('finance'), `${ORG}/finMonths/2026-10`), close('finance')));
+    await assertSucceeds(setDoc(doc(as('daniel'), `${ORG}/finMonths/2026-10`), close('daniel')));
+    await assertFails(updateDoc(doc(as('finance'), `${ORG}/bankStatements/s1`), { lines: [{ ...line, c: 'offerings' }], updatedAt: serverTimestamp(), updatedBy: 'finance' }));
+    await assertFails(setDoc(doc(as('finance'), `${ORG}/finMonths/2026-10`), prep('finance')));
+    const open = (uid: string) => ({ orgId: 'fcn', month: '2026-10', status: 'open', updatedAt: serverTimestamp(), updatedBy: uid });
+    await assertFails(setDoc(doc(as('daniel'), `${ORG}/finMonths/2026-10`), open('daniel')));
+    await assertSucceeds(setDoc(doc(as('pastor'), `${ORG}/finMonths/2026-10`), open('pastor')));
+    await assertSucceeds(updateDoc(doc(as('finance'), `${ORG}/bankStatements/s1`), { lines: [{ ...line, c: 'offerings' }], updatedAt: serverTimestamp(), updatedBy: 'finance' }));
+  });
+});

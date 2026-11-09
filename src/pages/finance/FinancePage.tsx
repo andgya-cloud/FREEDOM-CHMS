@@ -9,12 +9,13 @@ import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
 import { millis, usePettyCash } from '../../state/usePettyCash';
 import { useLedgerMonths } from '../../state/useGiving';
-import { orgKind, useDaily, useFinance, type StatementRow } from '../../state/useFinance';
-import { removeStatement, saveFinBook, saveLines, saveStatement } from '../../lib/financeWrites';
+import { isLocked, orgKind, useDaily, useFinance, type FinMonthRow, type StatementRow } from '../../state/useFinance';
+import { approveFinMonth, prepareFinMonth, removeStatement, reopenFinMonth, saveFinBook, saveLines, saveStatement } from '../../lib/financeWrites';
 import { pettyReport, REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
-import { parseAmountCents } from '../../../functions/src/shared/pettyCash';
+import type { FinSigned } from '../../lib/financePdf';
+import { ADIA_TOPUP_NAMES, parseAmountCents } from '../../../functions/src/shared/pettyCash';
 import {
-  autoCategory, categoriesFor, readyMonth, typedCategory, type FinReport, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey, lineKey,
+  autoCategory, categoriesFor, freeToSpend, potBalances, potLabel, potFor, potNames, readyMonth, spentInMonth, typedCategory, type FinReport, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey, lineKey,
   OWE_KINDS, OWN_KINDS, type BankLine, type FinInput, type OwnedItem, type ParsedStatement, type PettyFigures,
 } from '../../../functions/src/shared/finance';
 
@@ -46,14 +47,15 @@ export default function FinancePage() {
 function Books({ org }: { org: Organization }) {
   const f = useFinance(org);
   if (!f.allowed) return <div className="page narrow"><h1>Financial statements</h1><p>This is for the people who keep the accounts.</p></div>;
-  const needs = f.statements.reduce((n, s) => n + s.lines.filter((l) => !l.s).length, 0);
+  const needs = f.statements.reduce((n, s) => n + s.lines.filter((l) => !l.s && !isLocked(f.months, l.d)).length, 0);
   return (
     <div className="page narrow">
       <div className="page-head"><h1>Financial statements</h1></div>
       <p className="lead">{org.name}. Upload a bank or M-Pesa statement; the app sorts every line and makes the monthly or yearly report.</p>
-      <UploadCard org={org} statements={f.statements} learned={f.learned} />
-      {needs > 0 && <NeedsYouCard org={org} statements={f.statements} learned={f.learned} count={needs} />}
-      {f.statements.length > 0 ? <ReportCard org={org} statements={f.statements} budget={f.budget} owned={f.owned} learned={f.learned} />
+      {f.statements.length > 0 && <FreeCard org={org} statements={f.statements} budget={f.budget} />}
+      <UploadCard org={org} statements={f.statements} learned={f.learned} months={f.months} />
+      {needs > 0 && <NeedsYouCard org={org} statements={f.statements} learned={f.learned} count={needs} months={f.months} />}
+      {f.statements.length > 0 ? <ReportCard org={org} statements={f.statements} budget={f.budget} owned={f.owned} learned={f.learned} months={f.months} />
         : !f.loading && <p className="muted small">No statements yet. Upload the first one above.</p>}
       <OwnedCard org={org} owned={f.owned} />
       <BudgetCard org={org} budget={f.budget} />
@@ -64,7 +66,10 @@ function Books({ org }: { org: Organization }) {
 
 // ---- Upload -------------------------------------------------------------------------------
 
-function UploadCard({ org, statements, learned }: { org: Organization; statements: StatementRow[]; learned: Record<string, string> }) {
+type Months = Record<string, FinMonthRow>;
+const kenyaToday = () => new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+
+function UploadCard({ org, statements, learned, months }: { org: Organization; statements: StatementRow[]; learned: Record<string, string>; months: Months }) {
   const toast = useToast();
   const daily = useDaily(org);
   const accounts = useMemo(() => [...new Set([...statements.map((s) => s.account), ...FIN_ACCOUNT_SUGGESTIONS])], [statements]);
@@ -105,12 +110,14 @@ function UploadCard({ org, statements, learned }: { org: Organization; statement
   const plan = useMemo(() => {
     if (!read || !name) return null;
     const have = new Set(statements.filter((s) => s.account === name).flatMap((s) => s.lines.map((l) => lineKey(name, l))));
-    const fresh = read.lines.filter((l) => !have.has(lineKey(name, l)));
+    // Lines in a month already closed stay out too: that month was approved as it was (5A).
+    const fresh = read.lines.filter((l) => !have.has(lineKey(name, l)) && !isLocked(months, l.d));
+    const closed = read.lines.filter((l) => !have.has(lineKey(name, l)) && isLocked(months, l.d)).length;
     // A line that matches bank money typed on the day takes the category typed then (Andy, 2026-11-09).
     const taken = new Set<string>();
     const lines: BankLine[] = fresh.map((l) => { const c = typedCategory(l, name, daily.entries, taken); return { ...l, ...(c ? { c, s: true } : autoCategory(l, learned, orgKind(org.type))) }; });
-    return { lines, skipped: read.lines.length - fresh.length, sure: lines.filter((l) => l.s).length };
-  }, [read, name, statements, learned, org.type, daily.entries]);
+    return { lines, skipped: read.lines.length - fresh.length - closed, closed, sure: lines.filter((l) => l.s).length };
+  }, [read, name, statements, learned, org.type, daily.entries, months]);
 
   async function save() {
     if (!read || !plan || !file || !name) return;
@@ -158,6 +165,7 @@ function UploadCard({ org, statements, learned }: { org: Organization; statement
             <li><strong>{file?.name}</strong>: {read.lines.length} lines, {day(read.from)} to {day(read.to)}</li>
             <li>Opening {money(org, read.openingCents)} · Money in {money(org, inC)} · Money out {money(org, outC)} · Closing {money(org, read.closingCents)}</li>
             {plan.skipped > 0 && <li>{plan.skipped} line{plan.skipped === 1 ? ' is' : 's are'} already in and will be left out.</li>}
+            {plan.closed > 0 && <li>{plan.closed} line{plan.closed === 1 ? ' falls' : 's fall'} in a month already closed and will be left out.</li>}
             <li>{plan.sure} sorted automatically{plan.lines.length - plan.sure ? `; ${plan.lines.length - plan.sure} will wait for you to confirm` : ''}.</li>
           </ul>
           {(read.problems.length > 0 || read.balanceBreaks > 0) && (
@@ -187,7 +195,7 @@ function CategorySelect({ line, onChange }: { line: BankLine; onChange: (c: stri
 }
 
 /** Choosing a category for a line also sorts every other waiting line like it, and is remembered for next time. */
-async function chooseCategory(orgId: string, statements: StatementRow[], learned: Record<string, string>, target: { sid: string; n: number }, c: string): Promise<number> {
+async function chooseCategory(orgId: string, statements: StatementRow[], learned: Record<string, string>, target: { sid: string; n: number }, c: string, months: Months): Promise<number> {
   const s0 = statements.find((s) => s.id === target.sid)!;
   const line = s0.lines[target.n]!;
   const dir = line.i > 0 ? 'in' : 'out';
@@ -196,9 +204,10 @@ async function chooseCategory(orgId: string, statements: StatementRow[], learned
   const writes: Promise<unknown>[] = [];
   for (const s of statements) {
     let changed = false;
+    if (isLocked(months, s.from) || isLocked(months, s.to)) continue;
     const lines = s.lines.map((l, n) => {
       if (s.id === target.sid && n === target.n) { changed = true; return { ...l, c, s: true }; }
-      if (!l.s && (l.i > 0 ? 'in' : 'out') === dir && learnKey(l.t, dir) === key) { changed = true; others += 1; return { ...l, c, s: true }; }
+      if (!l.s && !isLocked(months, l.d) && (l.i > 0 ? 'in' : 'out') === dir && learnKey(l.t, dir) === key) { changed = true; others += 1; return { ...l, c, s: true }; }
       return l;
     });
     if (changed) writes.push(saveLines(orgId, s.id, lines));
@@ -208,21 +217,21 @@ async function chooseCategory(orgId: string, statements: StatementRow[], learned
   return others;
 }
 
-function NeedsYouCard({ org, statements, learned, count }: { org: Organization; statements: StatementRow[]; learned: Record<string, string>; count: number }) {
+function NeedsYouCard({ org, statements, learned, count, months }: { org: Organization; statements: StatementRow[]; learned: Record<string, string>; count: number; months: Months }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
-  const waiting = useMemo(() => statements.flatMap((s) => s.lines.map((l, n) => ({ l, n, sid: s.id, account: s.account })).filter((x) => !x.l.s))
-    .sort((a, b) => b.l.d.localeCompare(a.l.d)).slice(0, 25), [statements]);
+  const waiting = useMemo(() => statements.flatMap((s) => s.lines.map((l, n) => ({ l, n, sid: s.id, account: s.account })).filter((x) => !x.l.s && !isLocked(months, x.l.d)))
+    .sort((a, b) => b.l.d.localeCompare(a.l.d)).slice(0, 25), [statements, months]);
   async function pick(sid: string, n: number, c: string) {
     try {
-      const others = await chooseCategory(org.id, statements, learned, { sid, n }, c);
+      const others = await chooseCategory(org.id, statements, learned, { sid, n }, c, months);
       if (others) toast.show(`Also sorted ${others} more line${others === 1 ? '' : 's'} like it.`);
     } catch (err) { toast.show(friendlyError(err)); }
   }
   async function acceptAll() {
     setBusy(true);
     try {
-      await Promise.all(statements.filter((s) => s.lines.some((l) => !l.s)).map((s) => saveLines(org.id, s.id, s.lines.map((l) => ({ ...l, s: true })))));
+      await Promise.all(statements.filter((s) => s.lines.some((l) => !l.s) && !isLocked(months, s.from) && !isLocked(months, s.to)).map((s) => saveLines(org.id, s.id, s.lines.map((l) => ({ ...l, s: true })))));
       toast.show('All the guesses are confirmed.');
     } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
@@ -250,7 +259,7 @@ function NeedsYouCard({ org, statements, learned, count }: { org: Organization; 
 // ---- The report -----------------------------------------------------------------------------------
 
 
-function ReportCard({ org, statements, budget, owned, learned }: { org: Organization; statements: StatementRow[]; budget: Record<string, number>; owned: OwnedItem[]; learned: Record<string, string> }) {
+function ReportCard({ org, statements, budget, owned, learned, months }: { org: Organization; statements: StatementRow[]; budget: Record<string, number>; owned: OwnedItem[]; learned: Record<string, string>; months: Months }) {
   const toast = useToast();
   const { can } = useAuth();
   const p = usePettyCash(org);
@@ -265,7 +274,7 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
   const { months: ledger } = useLedgerMonths(church && chosen ? org.id : '', ledgerFrom, ledgerTo);
 
   const daily = useDaily(org);
-  const today = new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+  const today = kenyaToday();
   const build = useCallback((period: string): FinReport => {
     const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
     const pf = (x: string): PettyFigures => {
@@ -294,19 +303,21 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
   const [params] = useSearchParams();
   const showBalance = params.get('show') === 'balance';
 
+  const signed = signedFor(months[chosen]);
+  const approvedBy = signed?.approvedName ?? approver;
   async function make(kind: 'pdf' | 'excel') {
     if (!rep) return;
     setBusy(kind);
     try {
-      if (kind === 'pdf') { const { financeReportPdf } = await import('../../lib/financePdf'); downloadFile(await financeReportPdf(org, rep, approver)); }
-      else { const { financeReportWorkbook } = await import('../../lib/financeExcel'); downloadFile(await financeReportWorkbook(org.name, rep, approver)); }
+      if (kind === 'pdf') { const { financeReportPdf } = await import('../../lib/financePdf'); downloadFile(await financeReportPdf(org, rep, approvedBy, signed)); }
+      else { const { financeReportWorkbook } = await import('../../lib/financeExcel'); downloadFile(await financeReportWorkbook(org.name, rep, approvedBy)); }
     } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
   }
 
   if (!rep) return null;
   return (
     <>
-      {readyRep && <ReadyCard org={org} rep={readyRep} approver={approver} />}
+      {readyRep && <ReadyCard org={org} rep={readyRep} approver={signedFor(months[readyRep.period])?.approvedName ?? approver} signed={signedFor(months[readyRep.period])} />}
       {showBalance && <BalanceCard org={org} rep={rep} />}
       <section className="card stack no-print">
         <h2>Monthly or yearly report</h2>
@@ -316,9 +327,9 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
               {periods.map((x) => <option key={x} value={x}>{x.length === 4 ? `Whole year ${x}` : finPeriodName(x)}</option>)}
             </select>
           </label>
-          <label className="field"><span>Approved by</span>
+          {!signed && <label className="field"><span>Approved by</span>
             <select value={approver} onChange={(e) => setApprover(e.target.value)}>{REPORT_APPROVERS.map((n) => <option key={n} value={n}>{n}</option>)}</select>
-          </label>
+          </label>}
         </div>
         <KpiRow label="The period at a glance">
           <KpiCard label="Income" value={money(org, rep.totalIncome.cents)} />
@@ -333,8 +344,9 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
           <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void make('pdf')}>{busy === 'pdf' ? 'Making PDF…' : 'Download PDF'}</button>
           <button type="button" className="btn" disabled={!!busy} onClick={() => void make('excel')}>{busy === 'excel' ? 'Making Excel…' : 'Download Excel'}</button>
         </div>
+        {chosen.length === 7 && <MonthClose org={org} month={chosen} row={months[chosen]} waiting={rep.needsYou} />}
       </section>
-      <LinesCard org={org} statements={statements} learned={learned} period={chosen} />
+      <LinesCard org={org} statements={statements} learned={learned} period={chosen} months={months} />
     </>
   );
 }
@@ -343,7 +355,7 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
  * The month's statement, ready once the bank statement is in (Andy, 2026-11-09, 4A), with buttons to send
  * it. On a phone the PDF goes straight into WhatsApp or email; on a computer it downloads and the message opens.
  */
-function ReadyCard({ org, rep, approver }: { org: Organization; rep: FinReport; approver: string }) {
+function ReadyCard({ org, rep, approver, signed }: { org: Organization; rep: FinReport; approver: string; signed: FinSigned | null }) {
   const toast = useToast();
   const [busy, setBusy] = useState('');
   const title = `${org.name} · Financial statement · ${rep.name}`;
@@ -352,7 +364,7 @@ function ReadyCard({ org, rep, approver }: { org: Organization; rep: FinReport; 
     setBusy(via);
     try {
       const { financeReportPdf } = await import('../../lib/financePdf');
-      const file = await financeReportPdf(org, rep, approver);
+      const file = await financeReportPdf(org, rep, approver, signed);
       if (via === 'pdf') { downloadFile(file); return; }
       const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
       if (nav.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title, text }); return; }
@@ -366,7 +378,7 @@ function ReadyCard({ org, rep, approver }: { org: Organization; rep: FinReport; 
   const waiting = rep.needsYou;
   return (
     <section className="card stack no-print fin-ready">
-      <h2>{waiting ? `${rep.name} statement: ${waiting} line${waiting === 1 ? '' : 's'} need you first` : `✓ ${rep.name} statement is ready`}</h2>
+      <h2>{waiting ? `${rep.name} statement: ${waiting} line${waiting === 1 ? '' : 's'} need you first` : signed ? `✓ ${rep.name} statement approved by ${signed.approvedName}` : `✓ ${rep.name} statement is ready`}</h2>
       {rep.match && <p className="small muted">Daily records: {rep.match.matched.length} typed bank amount{rep.match.matched.length === 1 ? '' : 's'} found on the statement{rep.match.typedMissing.length ? `, ${rep.match.typedMissing.length} not found` : ''}; {rep.match.topupsMatched} petty cash top-up{rep.match.topupsMatched === 1 ? '' : 's'} found{rep.match.topupsMissing.length ? `, ${rep.match.topupsMissing.length} not found` : ''}.</p>}
       <div className="row-actions">
         <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void go('pdf')}>{busy === 'pdf' ? 'Making PDF…' : 'Download PDF'}</button>
@@ -396,15 +408,32 @@ function BalanceCard({ org, rep }: { org: Organization; rep: FinReport }) {
           {bs.liabilities.length ? bs.liabilities.map((a) => row(a.label, a.cents, a.indent ? 'fin-bs-sub' : '')) : row('Nothing recorded', 0)}
           {row('Total liabilities', bs.totalLiabilities, 'fin-bs-total')}
           {row('Net assets (accumulated fund)', bs.netAssets, 'fin-bs-total')}
+          {bs.restrictedCents !== 0 && row('Held for set purposes (# pots)', bs.restrictedCents, 'fin-bs-sub')}
+          {bs.restrictedCents !== 0 && row('General fund', bs.generalCents, 'fin-bs-sub')}
         </tbody>
       </table>
+      {rep.pots.length > 0 && (
+        <table className="table fin-bs">
+          <tbody>
+            <tr className="fin-bs-head"><td>Held for a set purpose</td><td className="num">Given</td><td className="num">Spent</td><td className="num">Held</td></tr>
+            {rep.pots.map((x) => <tr key={x.name}><td>#{x.name}</td><td className="num">{num(x.inCents)}</td><td className="num">{num(x.outCents)}</td><td className="num">{num(x.closingCents)}</td></tr>)}
+          </tbody>
+        </table>
+      )}
     </section>
   );
 }
 
 /** Every line of the period, to change a category that was sorted wrongly. */
-function LinesCard({ org, statements, learned, period }: { org: Organization; statements: StatementRow[]; learned: Record<string, string>; period: string }) {
+function LinesCard({ org, statements, learned, period, months }: { org: Organization; statements: StatementRow[]; learned: Record<string, string>; period: string; months: Months }) {
   const toast = useToast();
+  const pots = useMemo(() => potNames(statements), [statements]);
+  const [newPot, setNewPot] = useState<{ key: string; text: string } | null>(null);
+  async function setPot(sid: string, n: number, f: string) {
+    const st = statements.find((x) => x.id === sid);
+    if (!st) return;
+    try { await saveLines(org.id, sid, st.lines.map((l, k) => (k === n ? { ...l, f } : l))); } catch (err) { toast.show(friendlyError(err)); }
+  }
   const [q, setQ] = useState('');
   const [shown, setShown] = useState(40);
   const rows = useMemo(() => {
@@ -426,7 +455,23 @@ function LinesCard({ org, statements, learned, period }: { org: Organization; st
                 <span>{l.t}</span>
                 <strong className={l.i ? 'fin-in' : 'fin-out'}>{l.i ? `+ ${money(org, l.i)}` : `- ${money(org, l.o)}`}</strong>
               </div>
-              <CategorySelect line={l} onChange={(c) => void chooseCategory(org.id, statements, learned, { sid, n }, c).catch((err) => toast.show(friendlyError(err)))} />
+              {isLocked(months, l.d) ? <span className="small muted">{finLabel(l.c)}{potFor(l) ? ` · #${potFor(l)}` : ''} · closed</span> : (
+                <div className="fin-line-picks">
+                  <CategorySelect line={l} onChange={(c) => void chooseCategory(org.id, statements, learned, { sid, n }, c, months).catch((err) => toast.show(friendlyError(err)))} />
+                  {newPot?.key === `${sid}-${n}` ? (
+                    <form className="row-actions" onSubmit={(e) => { e.preventDefault(); const v = newPot.text.trim().replace(/^#/, '').toUpperCase().slice(0, 30); if (v) void setPot(sid, n, v); setNewPot(null); }}>
+                      <input aria-label="New purpose" value={newPot.text} maxLength={31} autoFocus placeholder="#PAINTING" onChange={(e) => setNewPot({ key: newPot.key, text: e.target.value })} />
+                      <button type="submit" className="btn btn-quiet">Save</button>
+                    </form>
+                  ) : (
+                    <select aria-label="Purpose" value={potFor(l)} onChange={(e) => (e.target.value === '__new' ? setNewPot({ key: `${sid}-${n}`, text: '#' }) : void setPot(sid, n, e.target.value))}>
+                      <option value="">No set purpose</option>
+                      {[...new Set([...pots, potFor(l)].filter(Boolean))].map((x) => <option key={x} value={x}>#{x}</option>)}
+                      <option value="__new">New purpose…</option>
+                    </select>
+                  )}
+                </div>
+              )}
             </li>
           ))}
         </ul>
@@ -505,7 +550,7 @@ function BudgetCard({ org, budget }: { org: Organization; budget: Record<string,
     <details className="card fold-card no-print">
       <summary>Monthly budget{set ? ` (${set} lines)` : ''}</summary>
       <div className="stack">
-        <p className="small muted">The amount planned for each month. A year report multiplies it by the months so far. Leave blank what you do not budget.</p>
+        <p className="small muted">The amount planned for each month, one budget for everything: petty cash spending counts in its category too. A year report multiplies it by the months so far. Leave blank what you do not budget. Requisitions warn at 80% and 100%.</p>
         <div className="fin-budget">
           {cats.map((c) => (
             <label key={c.id} className="field"><span>{c.label}</span>
@@ -537,5 +582,108 @@ function StatementsCard({ org, statements }: { org: Organization; statements: St
         ))}
       </ul>
     </details>
+  );
+}
+
+// ---- Closing the month (Andy, 2026-11-09, 5A) -------------------------------------------------------
+
+const onDay = (t: unknown) => { const ms = millis(t); return ms ? new Date(ms).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; };
+function signedFor(row: FinMonthRow | undefined): FinSigned | null {
+  if (row?.status !== 'closed') return null;
+  return { preparedName: row.preparedName ?? '', preparedOn: onDay(row.preparedAt), approvedName: row.approvedName ?? '', approvedOn: onDay(row.approvedAt) };
+}
+const plain = (n: string) => n.toLowerCase().replace(/[^a-z]/g, '');
+const APPROVER_NAMES = new Set([...REPORT_APPROVERS, ...ADIA_TOPUP_NAMES].map(plain));
+
+/** Daniel marks the month prepared; Andrew, Doreen or Elias approves it in the app, which locks the month. */
+function MonthClose({ org, month, row, waiting }: { org: Organization; month: string; row: FinMonthRow | undefined; waiting: number }) {
+  const { user, profile, can } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const name = profile?.displayName ?? '';
+  const pastor = can('users.manage');
+  const approver = pastor || APPROVER_NAMES.has(plain(name));
+  async function run(f: () => Promise<unknown>, done: string) {
+    setBusy(true);
+    try { await f(); toast.show(done); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
+  }
+  const status = row?.status ?? 'open';
+  return (
+    <div className="fin-close">
+      <h3>Closing {finPeriodName(month)}</h3>
+      {status === 'closed' ? (
+        <>
+          <p className="small">✓ Closed. Prepared by {row?.preparedName} on {onDay(row?.preparedAt)}; approved by {row?.approvedName} on {onDay(row?.approvedAt)}. Its lines can no longer change.</p>
+          {pastor && <button type="button" className="btn btn-quiet align-start" disabled={busy} onClick={() => void run(() => reopenFinMonth(org.id, month), 'The month is open again.')}>Open the month again</button>}
+        </>
+      ) : status === 'prepared' ? (
+        <>
+          <p className="small">Prepared by {row?.preparedName} on {onDay(row?.preparedAt)}. Waiting for {REPORT_APPROVERS.join(', ').replace(/, ([^,]*)$/, ' or $1')} to approve.</p>
+          {approver && row?.preparedUid !== user?.uid && (
+            <button type="button" className="btn btn-primary align-start" disabled={busy || waiting > 0} onClick={() => void run(() => approveFinMonth(org.id, month, { preparedUid: row!.preparedUid!, preparedName: row!.preparedName!, preparedAt: row!.preparedAt }, name), `${finPeriodName(month)} is approved and closed.`)}>
+              Approve and close the month
+            </button>
+          )}
+          {row?.preparedUid === user?.uid && <p className="small muted">Someone else approves it.</p>}
+        </>
+      ) : (
+        <>
+          <p className="small muted">Upload the bank statement by the 5th of the next month, sort every line, then mark the month prepared for approval.</p>
+          <button type="button" className="btn align-start" disabled={busy || waiting > 0} onClick={() => void run(() => prepareFinMonth(org.id, month, name), 'Marked prepared. The approver can now approve it.')}>
+            {waiting > 0 ? `Sort the ${waiting} waiting line${waiting === 1 ? '' : 's'} first` : 'Mark as prepared'}
+          </button>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---- Free to spend (Andy, 2026-11-09, 3A) ---------------------------------------------------------------
+
+/**
+ * What can be spent now: bank (the latest statement balance plus bank money typed since) and petty cash, less
+ * money held for # purposes and requests waiting for signatures. People give every week, so the card also
+ * says what should be free at the month end once the expected giving is in and the rest of the budget spent.
+ */
+function FreeCard({ org, statements, budget }: { org: Organization; statements: StatementRow[]; budget: Record<string, number> }) {
+  const p = usePettyCash(org);
+  const daily = useDaily(org);
+  const today = kenyaToday();
+  const month = today.slice(0, 7);
+  const f = useMemo(() => {
+    const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
+    const petty = hasPetty ? pettyReport(month, p.funds, p.requisitions, {}, millis).categories : [];
+    const held = potBalances(statements).reduce((n, x) => n + Math.max(0, x.cents), 0);
+    return freeToSpend({
+      statements, entries: daily.entries, pettyNowCents: hasPetty ? p.summary.remainingCents : 0, waitingCents: hasPetty ? p.summary.pendingCents : 0,
+      heldCents: held, budget, spentThisMonth: spentInMonth(month, statements, daily.entries, petty), today,
+    });
+  }, [p.funds, p.requisitions, p.summary, statements, daily.entries, budget, month, today]);
+  const pots = useMemo(() => potBalances(statements).filter((x) => x.cents > 0), [statements]);
+  const asOf = f.accounts.reduce((m, a) => (a.asOf > m ? a.asOf : m), '');
+  return (
+    <section className="card stack no-print">
+      <h2>Free to spend</h2>
+      <KpiRow label="Money free to spend">
+        <KpiCard label="Free to spend now" value={money(org, f.freeCents)} tone={f.freeCents >= 0 ? 'ok' : 'warn'} />
+        <KpiCard label="Bank and petty cash" value={money(org, f.cashCents)} note={asOf ? `Bank as at ${day(asOf)}` : undefined} />
+        <KpiCard label="Held for # purposes" value={money(org, f.heldCents)} />
+        <KpiCard label="Requests waiting" value={money(org, f.waitingCents)} />
+      </KpiRow>
+      <p className="small">
+        People give about {money(org, f.weeklyGivingCents)} a week. With about {money(org, f.expectedCents)} still to come this month
+        {f.budgetLeftCents ? ` and ${money(org, f.budgetLeftCents)} of this month's budget still to spend` : ''}, about <strong>{money(org, f.afterMonthCents)}</strong> should be free at the month end.
+      </p>
+      <details className="small">
+        <summary>How this is worked out</summary>
+        <ul className="plain">
+          {f.accounts.map((a) => <li key={a.account}>{a.account}: {money(org, a.cents)} (statement to {day(a.asOf)}, plus bank money typed since)</li>)}
+          <li>Petty cash left: {money(org, f.pettyCents)}</li>
+          {pots.map((x) => <li key={x.name}>Held for #{x.name} ({potLabel(x.name)}): {money(org, x.cents)}</li>)}
+          <li>Requests waiting for signatures: {money(org, f.waitingCents)}</li>
+          <li>Money given with a code such as #PAINTING is held for that purpose and not counted as free.</li>
+        </ul>
+      </details>
+    </section>
   );
 }

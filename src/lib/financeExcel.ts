@@ -1,5 +1,5 @@
 import writeXlsxFile from 'write-excel-file';
-import { finLabel, periodEnd, type FinReport, type FinRow } from '../../functions/src/shared/finance';
+import { finLabel, periodEnd, potLabel, type FinReport, type FinRow } from '../../functions/src/shared/finance';
 import { REPORT_PREPARED_BY } from '../../functions/src/shared/pettyReport';
 import { POWERED_BY } from '../../functions/src/shared/poweredBy';
 
@@ -41,7 +41,10 @@ export async function financeReportWorkbook(orgName: string, rep: FinReport, app
   const balance: Cell[][] = [title, [text(`As at ${periodEnd(rep.period).split('-').reverse().join('/')}`)], [], head(['', 'KES']),
     [bold('WHAT WE OWN (ASSETS)')], ...bs.assets.map((a) => row(a.label, a.cents, a.indent)), row('Total assets', bs.totalAssets, false, true),
     [], [bold('WHAT WE OWE (LIABILITIES)')], ...bs.liabilities.map((a) => row(a.label, a.cents, a.indent)), row('Total liabilities', bs.totalLiabilities, false, true),
-    [], row('NET ASSETS (ACCUMULATED FUND)', bs.netAssets, false, true), [], foot];
+    [], row('NET ASSETS (ACCUMULATED FUND)', bs.netAssets, false, true),
+    ...(bs.restrictedCents ? [row('Held for set purposes (# pots)', bs.restrictedCents, true), row('General fund', bs.generalCents, true)] : []), [], foot];
+  const potsSheet: Cell[][] = [title, [], head(['Purpose', 'At the start (KES)', 'Given (KES)', 'Spent (KES)', 'Held at the end (KES)']),
+    ...rep.pots.map((x) => [text(`#${x.name} · ${potLabel(x.name)}`), kes(x.openingCents), kes(x.inCents), kes(x.outCents), kes(x.closingCents)] as Cell[]), [], foot];
   const flow: Cell[][] = [title, [], head(['', 'KES']), ...rep.cashFlow.map((c) => row(c.label, c.cents, c.indent, c.strong)), [], foot];
   const recon: Cell[][] = [title, [], head(['Account', 'Opening (KES)', 'Money in (KES)', 'Money out (KES)', 'Should be (KES)', 'Statement balance (KES)', 'Difference (KES)', 'Lines']),
     ...rep.accounts.map((a) => [text(a.account), kes(a.openingCents), kes(a.inCents), kes(a.outCents), kes(a.closingCents), kes(a.statementCents), kes(a.statementCents - a.closingCents), { value: a.lines, type: Number }] as Cell[]),
@@ -61,9 +64,9 @@ export async function financeReportWorkbook(orgName: string, rep: FinReport, app
     ...mt.topupsMissing.map((t) => [text('Not found'), day(t.date), null, null, null, kes(t.cents)] as Cell[]),
     [bold('Statement lines nobody typed'), { value: mt.untyped.count, type: Number }],
     [], foot] : [];
-  const sheets = ['Summary', 'Income & Expenditure', 'Balance sheet', 'Cash flow', 'Reconciliation', ...(rep.budget.length ? ['Budget vs actual'] : []), ...(mt ? ['Daily vs bank'] : []), 'Lines'];
-  const data = [summary, income, balance, flow, recon, ...(rep.budget.length ? [budget] : []), ...(mt ? [dailySheet] : []), lines];
-  const widths = [[36, 22, 18, 18], [40, 18, 18, 22], [42, 18], [42, 18], [30, 16, 16, 16, 16, 20, 16, 8], ...(rep.budget.length ? [[38, 16, 16, 18, 8]] : []), ...(mt ? [[13, 8, 36, 24, 28, 15, 18]] : []), [13, 24, 50, 18, 30, 15, 15, 15, 10]];
+  const sheets = ['Summary', 'Income & Expenditure', 'Balance sheet', 'Cash flow', 'Reconciliation', ...(rep.pots.length ? ['Set purposes'] : []), ...(rep.budget.length ? ['Budget vs actual'] : []), ...(mt ? ['Daily vs bank'] : []), 'Lines'];
+  const data = [summary, income, balance, flow, recon, ...(rep.pots.length ? [potsSheet] : []), ...(rep.budget.length ? [budget] : []), ...(mt ? [dailySheet] : []), lines];
+  const widths = [[36, 22, 18, 18], [40, 18, 18, 22], [42, 18], [42, 18], [30, 16, 16, 16, 16, 20, 16, 8], ...(rep.pots.length ? [[36, 18, 16, 16, 20]] : []), ...(rep.budget.length ? [[38, 16, 16, 18, 8]] : []), ...(mt ? [[13, 8, 36, 24, 28, 15, 18]] : []), [13, 24, 50, 18, 30, 15, 15, 15, 10]];
   const blob = await writeXlsxFile(data as never, { sheets, columns: widths.map((ws) => ws.map((width) => ({ width }))) } as never) as unknown as Blob;
   return new File([blob], `${orgName.replace(/[^A-Za-z0-9]+/g, '-')}-financial-report-${rep.period}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }

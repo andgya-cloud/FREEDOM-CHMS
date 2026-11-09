@@ -14,6 +14,14 @@ export function useFinAccess(): boolean {
 
 export const orgKind = (type: string | undefined): OrgKind => (type === 'church_campus' ? 'church' : type === 'ministry' ? 'hope' : 'school');
 
+/** A month's close (Andy, 2026-11-09, 5A): prepared, then approved and closed; the pastor can open it again. */
+export interface FinMonthRow {
+  id: string; month: string; status: 'prepared' | 'closed' | 'open';
+  preparedUid?: string; preparedName?: string; preparedAt?: unknown; approvedUid?: string; approvedName?: string; approvedAt?: unknown;
+}
+/** Whether a day (YYYY-MM-DD) falls in a closed month. */
+export const isLocked = (months: Readonly<Record<string, FinMonthRow>>, d: string) => months[d.slice(0, 7)]?.status === 'closed';
+
 export interface StatementRow extends BankStatement { deletedAt?: unknown }
 
 /** An organization's uploaded statements, the remembered choices, the budget and what it owns and owes. */
@@ -25,8 +33,10 @@ export function useFinance(org: Organization) {
   const learned = useLiveDoc<{ learned?: Record<string, string> }>(() => (on ? doc(db, 'organizations', org.id, 'finBooks', 'learned') : null), [org.id, on]);
   const budget = useLiveDoc<{ budget?: Record<string, number> }>(() => (on ? doc(db, 'organizations', org.id, 'finBooks', 'budget') : null), [org.id, on]);
   const owned = useLiveDoc<{ owned?: OwnedItem[] }>(() => (on ? doc(db, 'organizations', org.id, 'finBooks', 'owned') : null), [org.id, on]);
+  const m = useLiveQuery<FinMonthRow>(() => (on ? collection(db, 'organizations', org.id, 'finMonths') : null), [org.id, on]);
+  const months = useMemo(() => Object.fromEntries(m.rows.map((x) => [x.id, x])), [m.rows]);
   return {
-    allowed, statements, loading: res.loading,
+    allowed, statements, loading: res.loading, months,
     learned: learned.data?.learned ?? {}, budget: budget.data?.budget ?? {}, owned: owned.data?.owned ?? [],
   };
 }

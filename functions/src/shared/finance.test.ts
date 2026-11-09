@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoCategory, dailyBook, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, sheetCells,
+  autoCategory, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, sheetCells,
   type BankStatement, type DailyBankEntry, type StatementCell,
 } from './finance';
 
@@ -134,7 +134,8 @@ describe('the financial report', () => {
     expect(r.totalIncome).toEqual({ cents: 310_000, beforeCents: 200_000, lastYearCents: 0 });
     expect(r.totalExpenses.cents).toBe(50_000 + 60_000);
     expect(r.surplus.cents).toBe(200_000);
-    expect(r.expenses.map((e) => e.label)).toEqual(['Electricity and water', 'Petty cash spending', 'Hospitality']);
+    expect(r.expenses.map((e) => [e.label, e.cents])).toEqual([['Electricity and water', 50_000], ['Food and refreshments', 60_000]]);
+    expect(r.pettyOutCents).toBe(60_000);
     expect(r.capital[0]!.cents).toBe(40_000);
     expect(r.accounts[0]).toMatchObject({ openingCents: 300_000, inCents: 310_000, outCents: 190_000, statementCents: 420_000, breaks: 0, missingMonths: [] });
     // Cash: bank 300,000 + petty 0 at the start; bank 420,000 + petty 40,000 at the end.
@@ -145,7 +146,7 @@ describe('the financial report', () => {
     expect(r.balanceSheet.netAssets).toBe(1_460_000 - 200_000);
     expect(r.budget[0]).toMatchObject({ id: 'utilities', budgetCents: 40_000, actualCents: 50_000, diffCents: -10_000 });
     expect(r.needsYou).toBe(1);
-    expect(r.checks.filter((c) => !c.ok).map((c) => c.text)).toEqual(['1 line still needs a category confirmed.']);
+    expect(r.checks.filter((c) => !c.ok).map((c) => c.text)).toEqual(['1 line still needs a category confirmed.', 'Over budget: Electricity and water used 125% (500.00 of 400.00).']);
     expect(r.summary[0]).toContain('up 55% on last month');
   });
 
@@ -209,5 +210,55 @@ describe('daily accounts', () => {
   it('offers the latest ended month as ready', () => {
     expect(readyMonth([st], '2026-11-09')).toBe('2026-10');
     expect(readyMonth([st], '2026-10-20')).toBeNull();
+  });
+});
+
+describe('purpose pots and free to spend', () => {
+  it('reads a pot from "#code" and keeps ordinary giving out of pots', () => {
+    expect(potOf('MPESA C2B FCC#PAINTING JOHN')).toBe('PAINTING');
+    expect(potOf('Paybill 222118 #building-fund')).toBe('BUILDING FUND');
+    expect(potOf('FCC#TITHE')).toBe('');
+    expect(potOf('KPLC TOKEN')).toBe('');
+    expect(potFor({ t: 'FCC#PAINTING', r: '', f: '' })).toBe('');
+  });
+
+  it('tracks a pot and splits net assets into held for a purpose and general', () => {
+    const st: BankStatement = {
+      id: 's', account: 'Family Bank', accountKind: 'bank', fileName: 'x', from: '2026-09-01', to: '2026-10-31', openingCents: 0, closingCents: 0,
+      lines: [
+        { d: '2026-09-10', t: 'FCC#PAINTING A', r: '', i: 100_000, o: 0, b: 100_000, c: 'fundraising', s: true },
+        { d: '2026-10-10', t: 'FCC#PAINTING B', r: '', i: 50_000, o: 0, b: 150_000, c: 'fundraising', s: true },
+        { d: '2026-10-12', t: 'PAINT SHOP', r: '', i: 0, o: 30_000, b: 120_000, c: 'repairs', s: true, f: 'PAINTING' },
+        { d: '2026-10-13', t: 'TITHE', r: '', i: 80_000, o: 0, b: 200_000, c: 'tithes', s: true },
+      ],
+    };
+    const r = financialReport('2026-10', { statements: [st], owned: [], budget: {} });
+    expect(r.pots).toEqual([{ name: 'PAINTING', openingCents: 100_000, inCents: 50_000, outCents: 30_000, closingCents: 120_000 }]);
+    expect(r.balanceSheet).toMatchObject({ netAssets: 200_000, restrictedCents: 120_000, generalCents: 80_000 });
+    expect(potBalances([st])).toEqual([{ name: 'PAINTING', cents: 120_000 }]);
+    const money = (c: number) => (c / 100).toFixed(0);
+    expect(budgetWarning('repairs', 1000, 700, 50, money)).toBe(null);
+    expect(budgetWarning('repairs', 1000, 700, 100, money)?.level).toBe('near');
+    expect(budgetWarning('repairs', 1000, 700, 400, money)?.level).toBe('over');
+  });
+
+  it('works out what is free to spend, counting the weekly giving still to come', () => {
+    const st: BankStatement = {
+      id: 's', account: 'Family Bank', accountKind: 'bank', fileName: 'x', from: '2026-10-01', to: '2026-11-08', openingCents: 0, closingCents: 0,
+      lines: [
+        ...Array.from({ length: 8 }, (_, n) => ({ d: `2026-${n < 4 ? '10' : '11'}-${String(n < 4 ? 4 + n * 7 : 1 + (n - 4) * 2).padStart(2, '0')}`, t: 'OFFERING', r: '', i: 70_000, o: 0, b: 70_000 * (n + 1), c: 'offerings', s: true })),
+      ],
+    };
+    const f = freeToSpend({
+      statements: [st], entries: [{ id: 'e', date: '2026-11-09', dir: 'out', cents: 10_000, account: 'Family Bank', text: '', category: 'rent' }],
+      pettyNowCents: 5_000, waitingCents: 2_000, heldCents: 100_000, budget: { rent: 30_000 }, spentThisMonth: { rent: 10_000 }, today: '2026-11-09',
+    });
+    expect(f.bankCents).toBe(560_000 - 10_000);
+    expect(f.cashCents).toBe(555_000);
+    expect(f.freeCents).toBe(555_000 - 100_000 - 2_000);
+    expect(f.weeklyGivingCents).toBe(70_000);
+    expect(f.budgetLeftCents).toBe(20_000);
+    expect(f.expectedCents).toBe(Math.round(70_000 * (21 / 7)));
+    expect(f.afterMonthCents).toBe(f.freeCents + f.expectedCents - 20_000);
   });
 });

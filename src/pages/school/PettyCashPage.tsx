@@ -3,6 +3,7 @@ import { Greeting } from '../../components/Greeting';
 import { SIGNATORY_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { createPortal } from 'react-dom';
 import { DailyBox } from '../finance/DailyBox';
+import { BudgetWarning } from '../finance/BudgetWarning';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -642,6 +643,7 @@ function NewRequisition({ org }: { org: Organization }) {
             {catRow.spentCents + catRow.pendingCents + total > catRow.allocatedCents ? ' This request goes over the category budget; it can still be sent and will show as over budget.' : ''}
           </p>
         )}
+        {p.seesAll && category && <BudgetWarning org={org} category={category} addingCents={total} />}
         <h3>Expense items</h3>
         <div className="petty-lines">
           {lines.map((l, n) => (

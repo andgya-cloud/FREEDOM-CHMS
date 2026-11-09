@@ -68,6 +68,7 @@ export interface BankLine {
   /** Balance after the line, cents. */ b: number;
   /** Category id. */ c: string;
   /** Sure: a person chose it, or a clear rule did. Lines that are not sure wait in "Needs you". */ s: boolean;
+  /** The purpose pot ("PAINTING" from "#painting"); '' when a person said it belongs to no pot. Read from the description when missing. */ f?: string;
 }
 
 export interface BankStatement {
@@ -361,6 +362,40 @@ export function autoCategory(line: Pick<BankLine, 't' | 'r' | 'i' | 'o'>, learne
 /** The same line in two uploads: same day, same amounts and the same balance after it. */
 export const lineKey = (account: string, l: Pick<BankLine, 'd' | 'i' | 'o' | 'b'>) => `${account}|${l.d}|${l.i}|${l.o}|${l.b}`;
 
+/** Petty cash categories, as the main category each one counts in (one budget, Andy 2026-11-09, 2A). */
+export const PETTY_TO_FIN: Readonly<Record<string, string>> = {
+  'Training materials': 'learning', 'Office & supplies': 'office', 'Staff Payments': 'salaries', Transport: 'transport',
+  'Repairs & maintenance': 'repairs', Utilities: 'utilities', Other: 'otherExpense', "Children's needs": 'welfare',
+  'Programmes & activities': 'ministry', 'Ministry & programmes': 'ministry', Hospitality: 'food', 'Freedom Hope Center': 'otherExpense',
+};
+export const pettyToFin = (category: string): string => PETTY_TO_FIN[category] ?? 'otherExpense';
+
+/** Words after "#" that are ordinary giving, not a purpose pot. */
+const NOT_A_POT = new Set(['TITHE', 'TITHES', 'OFFERING', 'OFFERINGS', 'SADAKA', 'GENERAL', 'FEES', 'FEE', 'SCHOOLFEES', 'GIVING', 'DONATION']);
+/**
+ * Money given for a set purpose carries a code after "#" (FCC#PAINTING, "#Building"): each code is its
+ * own pot (Andy, 2026-11-09, 4A). Gives the pot's name in capitals, or ''.
+ */
+export function potOf(text: string): string {
+  const m = /#\s?([A-Za-z][A-Za-z0-9_-]{1,29})/.exec(text);
+  const name = m ? m[1]!.toUpperCase().replace(/[_-]+/g, ' ').trim() : '';
+  return name && !NOT_A_POT.has(name.replace(/ /g, '')) ? name : '';
+}
+/** A line's pot: what a person chose, otherwise what the description says. */
+export const potFor = (l: Pick<BankLine, 't' | 'r' | 'f'>): string => (l.f !== undefined ? l.f : potOf(`${l.t} ${l.r}`));
+export const potLabel = (name: string) => name.charAt(0) + name.slice(1).toLowerCase();
+/** Every pot's balance over all the statements: given with its code, less what was spent from it. */
+export function potBalances(statements: readonly BankStatement[]): { name: string; cents: number }[] {
+  const m = new Map<string, number>();
+  for (const s of statements) for (const l of s.lines) {
+    const name = potFor(l);
+    if (name && finCategory(l.c).group !== 'transfer') m.set(name, (m.get(name) ?? 0) + l.i - l.o);
+  }
+  return [...m].map(([name, cents]) => ({ name, cents })).sort((a, b) => a.name.localeCompare(b.name));
+}
+/** The pots people have used so far, for the dropdown. */
+export const potNames = (statements: readonly BankStatement[]): string[] => potBalances(statements).map((p) => p.name);
+
 // ---- What we own and owe, and the budget --------------------------------------------------
 
 export const OWN_KINDS = ['Land and buildings', 'Vehicles', 'Equipment and furniture', 'Money owed to us', 'Savings and investments', 'Other things we own'] as const;
@@ -402,13 +437,18 @@ export interface FinReport {
   accounts: AccountFigures[]; petty: PettyFigures | null;
   cash: { openingCents: number; closingCents: number };
   cashFlow: { label: string; cents: number; strong?: boolean; indent?: boolean }[];
-  balanceSheet: { assets: { label: string; cents: number; indent?: boolean }[]; liabilities: { label: string; cents: number; indent?: boolean }[]; totalAssets: number; totalLiabilities: number; netAssets: number };
+  balanceSheet: { assets: { label: string; cents: number; indent?: boolean }[]; liabilities: { label: string; cents: number; indent?: boolean }[]; totalAssets: number; totalLiabilities: number; netAssets: number;
+    /** Net assets split: held for set purposes, and the general fund. */ restrictedCents: number; generalCents: number };
   budget: { id: string; label: string; budgetCents: number; actualCents: number; diffCents: number; used: number }[];
   /** Month by month (a year), or the last six months up to this one (a month), for the chart. */
   trend: { period: string; label: string; inCents: number; outCents: number }[];
   checks: { text: string; ok: boolean }[];
   /** The daily records against the statement, when any were kept. */
   match: DailyMatch | null;
+  /** Money held for a set purpose, pot by pot. */
+  pots: { name: string; openingCents: number; inCents: number; outCents: number; closingCents: number }[];
+  /** Petty cash spending in the period, already inside the categories above. */
+  pettyOutCents: number;
   summary: string[];
   needsYou: number;
   lines: (BankLine & { account: string })[];
@@ -440,14 +480,15 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
   all.sort((a, b) => a.d.localeCompare(b.d) || a.from.localeCompare(b.from) || a.order - b.order);
   const inP = (d: string, p: string) => d.startsWith(p);
 
+  // One budget (Andy, 2026-11-09, 2A): petty cash spending counts in the main category it belongs to.
   const sumBy = (p: string, petty: PettyFigures | null | undefined) => {
     const m = new Map<string, number>();
     for (const l of all) if (inP(l.d, p)) { const g = finCategory(l.c).group; if (g !== 'transfer') m.set(l.c, (m.get(l.c) ?? 0) + l.i - l.o); }
-    const pc = new Map<string, number>();
-    for (const c of petty?.categories ?? []) pc.set(c.category, (pc.get(c.category) ?? 0) + c.cents);
-    const pettyOther = petty ? petty.outCents - (petty.categories ?? []).reduce((n, c) => n + c.cents, 0) : 0;
-    if (pettyOther > 0) pc.set('Other petty cash', (pc.get('Other petty cash') ?? 0) + pettyOther);
-    return { m, pc };
+    let pettyOut = 0;
+    for (const c of petty?.categories ?? []) { const id = pettyToFin(c.category); m.set(id, (m.get(id) ?? 0) - c.cents); pettyOut += c.cents; }
+    const pettyOther = petty ? petty.outCents - pettyOut : 0;
+    if (pettyOther > 0) { m.set('otherExpense', (m.get('otherExpense') ?? 0) - pettyOther); pettyOut += pettyOther; }
+    return { m, pettyOut };
   };
   // A period with no statement lines is not compared (its petty cash alone would mislead).
   const hasBefore = all.some((l) => inP(l.d, before));
@@ -459,15 +500,7 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
     .map((c) => ({ id: c.id, label: c.label, cents: sign * (now.m.get(c.id) ?? 0), beforeCents: sign * (bef.m.get(c.id) ?? 0), lastYearCents: sign * (lyr.m.get(c.id) ?? 0) }))
     .filter((r) => r.cents || r.beforeCents || r.lastYearCents);
   const income = rowsFor('income', 1);
-  const bankExpenses = rowsFor('expense', -1);
-  const pettyNames = [...new Set([...now.pc.keys(), ...bef.pc.keys(), ...lyr.pc.keys()])];
-  const pettyRows: FinRow[] = pettyNames.map((name) => ({ id: `petty:${name}`, label: name, cents: now.pc.get(name) ?? 0, beforeCents: bef.pc.get(name) ?? 0, lastYearCents: lyr.pc.get(name) ?? 0, indent: true }))
-    .filter((r) => r.cents || r.beforeCents || r.lastYearCents).sort((a, b) => b.cents - a.cents);
-  const expenses: FinRow[] = [...bankExpenses];
-  if (pettyRows.length) {
-    const tot = (k: 'cents' | 'beforeCents' | 'lastYearCents') => pettyRows.reduce((n, r) => n + r[k], 0);
-    expenses.push({ id: 'petty', label: 'Petty cash spending', cents: tot('cents'), beforeCents: tot('beforeCents'), lastYearCents: tot('lastYearCents') }, ...pettyRows);
-  }
+  const expenses = rowsFor('expense', -1);
   const capital = rowsFor('capital', -1);
   const total = (rows: FinRow[]): FinTotals => {
     const top = rows.filter((r) => !r.indent);
@@ -547,6 +580,17 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
   const totalAssets = assets.filter((a) => !a.indent).reduce((n, a) => n + a.cents, 0);
   const totalLiabilities = liabilities.filter((a) => !a.indent).reduce((n, a) => n + a.cents, 0);
 
+  // Purpose pots (4A): money given with a "#code", less what was spent from that pot.
+  const potNames = [...new Set(all.map((l) => potFor(l)).filter(Boolean))].sort();
+  const pots = potNames.map((name) => {
+    const ls = all.filter((l) => potFor(l) === name && finCategory(l.c).group !== 'transfer');
+    const op = ls.filter((l) => l.d < start).reduce((n, l) => n + l.i - l.o, 0);
+    const mine = ls.filter((l) => l.d >= start && l.d <= end);
+    const inC = mine.reduce((n, l) => n + l.i, 0); const outC = mine.reduce((n, l) => n + l.o, 0);
+    return { name, openingCents: op, inCents: inC, outCents: outC, closingCents: op + inC - outC };
+  }).filter((x) => x.openingCents || x.inCents || x.outCents);
+  const restrictedCents = pots.reduce((n, x) => n + Math.max(0, x.closingCents), 0);
+
   // Budget against actual.
   const today = input.today ?? '9999-12-31';
   const monthsSoFar = year ? Math.max(1, monthsIn(period).filter((m) => m <= today.slice(0, 7)).length) : 1;
@@ -585,6 +629,13 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
       ? { text: `Giving recorded in the app (${money(input.givingRecordedCents)}) matches giving found in the statements.`, ok: true }
       : { text: `Giving recorded in the app is ${money(input.givingRecordedCents)}; the statements show ${money(found)} (${diff > 0 ? `${money(diff)} more in the bank` : `${money(-diff)} not yet in the bank`}).`, ok: false });
   }
+  // Budget warnings at 80% and 100% (7A).
+  for (const b of budget) {
+    if (finCategory(b.id).group === 'income' || !b.budgetCents) continue;
+    if (b.used >= 1) checks.push({ text: `Over budget: ${b.label} used ${Math.round(b.used * 100)}% (${money(b.actualCents)} of ${money(b.budgetCents)}).`, ok: false });
+    else if (b.used >= 0.8) checks.push({ text: `Near the budget: ${b.label} has used ${Math.round(b.used * 100)}% (${money(b.actualCents)} of ${money(b.budgetCents)}).`, ok: false });
+  }
+  for (const x of pots) if (x.closingCents < 0) checks.push({ text: `The ${potLabel(x.name)} pot has spent ${money(-x.closingCents)} more than was given for it.`, ok: false });
   const unmatched = transfersNet;
   if (unmatched) checks.push({ text: `${money(Math.abs(unmatched))} moved between accounts has no matching line on the other side. Upload the other account's statement, or change the category.`, ok: false });
   if (!accounts.length) checks.push({ text: 'No bank or M-Pesa statement covers this period yet.', ok: false });
@@ -618,13 +669,16 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
   if (!year && hasLastYear && totalIncome.lastYearCents) { const p = pct(totalIncome.cents, totalIncome.lastYearCents); if (p != null) summary.push(`Compared with ${finPeriodName(ly)}, income is ${p === 0 ? 'the same' : `${p > 0 ? 'up' : 'down'} ${Math.abs(p)}%`}.`); }
   if (capitalOut) summary.push(`${money(-capitalOut)} went on equipment, building or land; this is in the Cash Flow and not counted as a running cost.`);
   summary.push(`Cash and bank at the end: ${money(cash.closingCents)}${cash.openingCents ? ` (${cash.closingCents >= cash.openingCents ? 'up' : 'down'} ${money(Math.abs(cash.closingCents - cash.openingCents))} from the start)` : ''}.`);
+  if (now.pettyOut) summary.push(`Running costs include ${money(now.pettyOut)} paid from petty cash.`);
+  if (pots.length) summary.push(`Held for set purposes at the end: ${pots.filter((x) => x.closingCents > 0).map((x) => `${potLabel(x.name)} ${money(x.closingCents)}`).join(', ') || 'nothing'}.`);
   const over = budget.filter((b) => finCategory(b.id).group !== 'income' && b.actualCents > b.budgetCents);
   if (over.length) summary.push(`Over budget: ${over.map((b) => b.label.toLowerCase()).join(', ')}.`);
 
   return {
     period, name: nm, beforeName: finPeriodName(before), lastYearName: finPeriodName(ly), year,
     income, expenses, capital, totalIncome, totalExpenses, surplus, accounts, petty, cash, cashFlow,
-    balanceSheet: { assets, liabilities, totalAssets, totalLiabilities, netAssets: totalAssets - totalLiabilities },
+    balanceSheet: { assets, liabilities, totalAssets, totalLiabilities, netAssets: totalAssets - totalLiabilities, restrictedCents, generalCents: totalAssets - totalLiabilities - restrictedCents },
+    pots, pettyOutCents: now.pettyOut,
     budget, trend, checks, match, summary, needsYou,
     lines: periodLines.map(({ order: _o, from: _f, kind: _k, ...l }) => l),
   };
@@ -753,6 +807,78 @@ export function readyMonth(statements: readonly BankStatement[], today: string):
     const last = statements.flatMap((s) => s.lines).filter((l) => l.d.startsWith(m)).reduce((x, l) => (l.d > x ? l.d : x), '');
     if (m < today.slice(0, 7) || last >= periodEnd(m).slice(0, 8) + '28') return m;
   }
+  return null;
+}
+
+// ---- Free to spend (Andy, 2026-11-09, 3A) -----------------------------------------------------------
+
+export interface FreeToSpend {
+  /** Each account's balance now: the last statement balance, plus bank money typed since. */
+  accounts: { account: string; cents: number; asOf: string }[];
+  bankCents: number; pettyCents: number; cashCents: number;
+  heldCents: number; waitingCents: number; freeCents: number;
+  /** Average giving a week over the last eight weeks of statements, and what the rest of the month should bring. */
+  weeklyGivingCents: number; weeksLeft: number; expectedCents: number;
+  /** This month's budget still to spend (running costs). */
+  budgetLeftCents: number;
+  afterMonthCents: number;
+}
+
+/**
+ * What is free to spend now: cash and bank (latest statement balances plus bank money typed since, and
+ * petty cash), less money held for set purposes and requests waiting for signatures. Then, because people
+ * give every week, the giving still expected this month is added and the rest of the month's budget taken off.
+ */
+export function freeToSpend(x: {
+  statements: readonly BankStatement[]; entries: readonly DailyBankEntry[]; pettyNowCents: number; waitingCents: number; heldCents: number;
+  budget: Readonly<Record<string, number>>; spentThisMonth: Readonly<Record<string, number>>; today: string;
+}): FreeToSpend {
+  const names = [...new Set(x.statements.map((s) => s.account))];
+  const accounts = names.map((account) => {
+    const ls = x.statements.filter((s) => s.account === account).flatMap((s) => s.lines.map((l, n) => ({ ...l, from: s.from, n })))
+      .sort((a, b) => a.d.localeCompare(b.d) || a.from.localeCompare(b.from) || a.n - b.n);
+    const last = ls[ls.length - 1];
+    const asOf = last?.d ?? '';
+    const typed = x.entries.filter((e) => e.account === account && e.date > asOf && e.date <= x.today).reduce((n, e) => n + (e.dir === 'in' ? e.cents : -e.cents), 0);
+    return { account, cents: (last?.b ?? 0) + typed, asOf };
+  });
+  const bankCents = accounts.reduce((n, a) => n + a.cents, 0);
+  const cashCents = bankCents + x.pettyNowCents;
+  const freeCents = cashCents - x.heldCents - x.waitingCents;
+  const lastDay = accounts.reduce((m, a) => (a.asOf > m ? a.asOf : m), '');
+  const from = lastDay ? new Date(Date.parse(`${lastDay}T00:00:00Z`) - 55 * 86_400_000).toISOString().slice(0, 10) : '';
+  const given = x.statements.flatMap((s) => s.lines).filter((l) => lastDay && l.d >= from && l.d <= lastDay && finCategory(l.c).group === 'income' && !potFor(l))
+    .reduce((n, l) => n + l.i - l.o, 0);
+  const weeklyGivingCents = Math.round(given / 8);
+  const end = periodEnd(x.today.slice(0, 7));
+  const weeksLeft = Math.max(0, dayGap(end, x.today)) / 7;
+  const expectedCents = Math.round(weeklyGivingCents * weeksLeft);
+  const budgetLeftCents = Object.entries(x.budget).filter(([id, c]) => c > 0 && finCategory(id).group === 'expense')
+    .reduce((n, [id, c]) => n + Math.max(0, c - (x.spentThisMonth[id] ?? 0)), 0);
+  return { accounts, bankCents, pettyCents: x.pettyNowCents, cashCents, heldCents: x.heldCents, waitingCents: x.waitingCents, freeCents, weeklyGivingCents, weeksLeft, expectedCents, budgetLeftCents,
+    afterMonthCents: freeCents + expectedCents - budgetLeftCents };
+}
+
+/** This month's running costs per category so far: statement lines, bank money typed, and petty cash paid. */
+export function spentInMonth(month: string, statements: readonly BankStatement[], entries: readonly DailyBankEntry[], petty: readonly { category: string; cents: number }[]): Record<string, number> {
+  const out: Record<string, number> = {};
+  const add = (id: string, c: number) => { if (finCategory(id).group === 'expense') out[id] = (out[id] ?? 0) + c; };
+  const lines = statements.flatMap((s) => s.lines).filter((l) => l.d.startsWith(month));
+  const lastLine = lines.reduce((m, l) => (l.d > m ? l.d : m), '');
+  for (const l of lines) add(l.c, l.o - l.i);
+  // Typed money counts only after the statement's last day, so nothing is counted twice.
+  for (const e of entries) if (e.dir === 'out' && e.date.startsWith(month) && e.date > lastLine) add(e.category, e.cents);
+  for (const p of petty) add(pettyToFin(p.category), p.cents);
+  return out;
+}
+
+/** The 80% and 100% warning for one category this month (7A), or null. */
+export function budgetWarning(category: string, monthlyCents: number, spentCents: number, addingCents: number, money: (c: number) => string): { level: 'near' | 'over'; text: string } | null {
+  if (!monthlyCents) return null;
+  const after = spentCents + addingCents;
+  const pct = Math.round((after / monthlyCents) * 100);
+  if (after > monthlyCents) return { level: 'over', text: `This takes ${finLabel(category).toLowerCase()} over this month's budget: ${money(after)} of ${money(monthlyCents)} (${pct}%).` };
+  if (after >= monthlyCents * 0.8) return { level: 'near', text: `${finLabel(category)} will have used ${pct}% of this month's budget (${money(after)} of ${money(monthlyCents)}).` };
   return null;
 }
 

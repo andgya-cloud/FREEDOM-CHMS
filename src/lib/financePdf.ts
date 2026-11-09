@@ -1,6 +1,6 @@
 import { formatMoney } from '../../functions/src/shared/giving';
 import { drawFooter, drawLetterhead, GOLD, GOLD_SOFT, GREEN, GREY, INK, letterheadFor, NAVY, RED } from '../../functions/src/shared/pettyVoucher';
-import { finChange, finLabel, periodEnd, type FinReport, type FinRow } from '../../functions/src/shared/finance';
+import { finChange, finLabel, periodEnd, potLabel, type FinReport, type FinRow } from '../../functions/src/shared/finance';
 import { REPORT_PREPARED_BY } from '../../functions/src/shared/pettyReport';
 import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 import type { Organization } from '../state/OrgContext';
@@ -20,7 +20,10 @@ interface TRow { cells: string[]; bold?: boolean; head?: boolean; indent?: boole
  * a chart, the Income and Expenditure statement, the Balance Sheet, the Cash Flow, the Bank Reconciliation,
  * Budget vs Actual, the checks and the sign-off. "Powered by Insight-IQ" at the bottom.
  */
-export async function financeReportPdf(org: Organization, rep: FinReport, approvedBy: string): Promise<File> {
+/** A month prepared and approved in the app (5A): who and when, printed in place of the signature lines. */
+export interface FinSigned { preparedName: string; preparedOn: string; approvedName: string; approvedOn: string }
+
+export async function financeReportPdf(org: Organization, rep: FinReport, approvedBy: string, signed?: FinSigned | null): Promise<File> {
   const pdf = await newPdf('a4');
   const w = pdf.internal.pageSize.getWidth();
   const H = pdf.internal.pageSize.getHeight();
@@ -170,7 +173,15 @@ export async function financeReportPdf(org: Organization, rep: FinReport, approv
     ...(bs.liabilities.length ? bs.liabilities.map((a) => ({ cells: [a.label, num(a.cents)], indent: a.indent })) : [{ cells: ['Nothing recorded', num(0)] }]),
     { cells: ['Total liabilities', num(bs.totalLiabilities)], bold: true },
     { cells: ['NET ASSETS (ACCUMULATED FUND)', num(bs.netAssets)], bold: true, tone: bs.netAssets >= 0 ? NAVY : RED },
+    ...(bs.restrictedCents ? [{ cells: ['Held for set purposes (# pots)', num(bs.restrictedCents)], indent: true }, { cells: ['General fund', num(bs.generalCents)], indent: true }] : []),
   ]);
+  // Money given for a set purpose (Andy, 2026-11-09, 4A).
+  if (rep.pots.length) {
+    section('Money held for a set purpose', 7.5 + (rep.pots.length + 1) * 6.5);
+    table([{ label: 'Purpose', x: 17, width: 60 }, { label: 'At the start', x: 110, right: true, width: 26 }, { label: 'Given', x: 138, right: true, width: 26 }, { label: 'Spent', x: 166, right: true, width: 26 }, { label: 'Held at the end', x: w - 17, right: true, width: 28 }],
+      [...rep.pots.map((x) => ({ cells: [`#${x.name} · ${potLabel(x.name)}`, num(x.openingCents), num(x.inCents), num(x.outCents), num(x.closingCents)], tone: x.closingCents < 0 ? RED : undefined })),
+        { cells: ['Total held', '', '', '', num(rep.pots.reduce((n, x) => n + Math.max(0, x.closingCents), 0))], bold: true }]);
+  }
 
   // 3. Cash Flow.
   section('3. Cash Flow statement', 7.5 + rep.cashFlow.length * 6.5);
@@ -219,10 +230,15 @@ export async function financeReportPdf(org: Organization, rep: FinReport, approv
   // Sign-off (Andy 6A): prepared by the accountant, approved by Andrew Guya, Doreen Guya or Elias Omondi.
   section('Sign-off', 27);
   const sw = (w - 28 - 10) / 2;
-  [{ role: `Prepared by · ${REPORT_PREPARED_BY.role}`, name: REPORT_PREPARED_BY.name }, { role: 'Approved by', name: approvedBy }].forEach((s, i) => {
+  [{ role: `Prepared by · ${REPORT_PREPARED_BY.role}`, name: signed?.preparedName ?? REPORT_PREPARED_BY.name, on: signed?.preparedOn },
+    { role: 'Approved by', name: signed?.approvedName ?? approvedBy, on: signed?.approvedOn }].forEach((s, i) => {
     const x = 14 + i * (sw + 10);
     pdf.setFontSize(7); pdf.setTextColor(...GREY); pdf.text(s.role.toUpperCase(), x, y + 3);
     pdf.setFontSize(10.5); pdf.setFont('helvetica', 'bold'); pdf.setTextColor(...INK); pdf.text(s.name, x, y + 9.5); pdf.setFont('helvetica', 'normal');
+    if (s.on) {
+      pdf.setFontSize(8.3); pdf.setTextColor(...GREEN); pdf.text(`${i ? 'Approved' : 'Prepared'} in the app on ${s.on}`, x, y + 16);
+      return;
+    }
     pdf.setDrawColor(...GOLD); pdf.setLineWidth(0.25);
     pdf.line(x, y + 21, x + sw * 0.62, y + 21); pdf.line(x + sw * 0.68, y + 21, x + sw, y + 21);
     pdf.setFontSize(7); pdf.setTextColor(...GREY); pdf.text('Signature', x, y + 25); pdf.text('Date', x + sw * 0.68, y + 25);

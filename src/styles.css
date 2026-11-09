@@ -2730,6 +2730,10 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .fin-chip-menu a + a { border-top: 1px solid var(--border); }
 .fin-chip-menu a:hover { background: #fdecea; }
 .fin-ready { border-left: 4px solid #15803d; }
+.fin-line-picks { display: flex; flex-wrap: wrap; gap: 6px; }
+.fin-line-picks select, .fin-line-picks input { max-width: 200px; }
+.fin-close { border-top: 1px solid var(--line, #e5e7eb); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; }
+.fin-close h3 { margin: 0; font-size: 1rem; }
 .fin-bs .fin-bs-head td { font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 0.8rem; padding-top: 14px; }
 .fin-bs .fin-bs-sub td:first-child { padding-left: 20px; color: var(--muted); font-size: 0.9rem; }
 .fin-bs .fin-bs-total td { font-weight: 700; }

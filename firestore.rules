@@ -1504,6 +1504,38 @@ service cloud.firestore {
         return canAccessOrg(orgId) && (has('finance.reports') || has('pettycash.approve') || has('pettycash.check')
           || has('pettycash.authorize') || has('users.manage'));
       }
+      // A closed month's statement lines stay as they were approved (Andy, 2026-11-09, 5A).
+      function finClosed(day) {
+        return exists(/databases/$(database)/documents/organizations/$(orgId)/finMonths/$(day.split('-')[0] + '-' + day.split('-')[1]))
+          && get(/databases/$(database)/documents/organizations/$(orgId)/finMonths/$(day.split('-')[0] + '-' + day.split('-')[1])).data.status == 'closed';
+      }
+      // Daniel (or anyone keeping the books) prepares a month; someone else who signs petty cash approves it,
+      // which closes it; only the pastor opens it again.
+      match /finMonths/{month} {
+        allow read: if finBooks();
+        allow create, update: if finBooks() && month.matches('^[0-9]{4}-[0-9]{2}$')
+          && request.resource.data.orgId == orgId && request.resource.data.month == month
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time
+          && (
+            (request.resource.data.status == 'prepared'
+              && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'preparedUid', 'preparedName', 'preparedAt', 'updatedAt', 'updatedBy'])
+              && request.resource.data.preparedUid == request.auth.uid && request.resource.data.preparedAt == request.time
+              && shortText(request.resource.data.preparedName, 120)
+              && (resource == null || resource.data.status != 'closed'))
+            || (request.resource.data.status == 'closed'
+              && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'preparedUid', 'preparedName', 'preparedAt', 'approvedUid', 'approvedName', 'approvedAt', 'updatedAt', 'updatedBy'])
+              && resource != null && resource.data.status == 'prepared'
+              && request.resource.data.preparedUid == resource.data.preparedUid && request.resource.data.preparedName == resource.data.preparedName
+              && request.resource.data.preparedAt == resource.data.preparedAt
+              && request.resource.data.approvedUid == request.auth.uid && request.auth.uid != resource.data.preparedUid
+              && request.resource.data.approvedAt == request.time && shortText(request.resource.data.approvedName, 120)
+              && (has('pettycash.authorize') || has('users.manage')))
+            || (request.resource.data.status == 'open'
+              && request.resource.data.keys().hasOnly(['orgId', 'month', 'status', 'updatedAt', 'updatedBy'])
+              && resource != null && resource.data.status == 'closed' && has('users.manage'))
+          );
+        allow delete: if false;
+      }
       match /bankStatements/{statementId} {
         allow read: if finBooks();
         allow create: if finBooks() && stampedCreate() && freshRecord()
@@ -1518,7 +1550,8 @@ service cloud.firestore {
           && request.resource.data.lines is list && request.resource.data.lines.size() >= 1 && request.resource.data.lines.size() <= 2000;
         allow update: if finBooks() && stampedUpdate() && validSoftDelete()
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lines', 'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
-          && request.resource.data.lines is list && request.resource.data.lines.size() == resource.data.lines.size();
+          && request.resource.data.lines is list && request.resource.data.lines.size() == resource.data.lines.size()
+          && !finClosed(resource.data.from) && !finClosed(resource.data.to);
         allow delete: if false;
       }
       // Daily accounts (Andy, 2026-11-09, 1C): bank money typed on the day, and the petty cash box counted.

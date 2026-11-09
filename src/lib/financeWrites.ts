@@ -61,3 +61,22 @@ export function removeBankDaily(orgId: string, id: string): Promise<unknown> {
 export function saveCashCount(orgId: string, date: string, countedCents: number, name: string): Promise<unknown> {
   return trackWrite(setDoc(doc(db, 'organizations', orgId, 'cashCounts', date), { orgId, date, countedCents, name: name.slice(0, 120), updatedAt: serverTimestamp(), updatedBy: me() }));
 }
+
+/**
+ * Closing a month (Andy, 2026-11-09, 5A): Daniel prepares it, Andrew, Doreen or Elias approves in the app and
+ * the month locks. Only the pastor opens it again.
+ */
+export function prepareFinMonth(orgId: string, month: string, name: string): Promise<unknown> {
+  return trackWrite(setDoc(doc(db, 'organizations', orgId, 'finMonths', month), {
+    orgId, month, status: 'prepared', preparedUid: me(), preparedName: name.slice(0, 120), preparedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: me(),
+  }));
+}
+export function approveFinMonth(orgId: string, month: string, prepared: { preparedUid: string; preparedName: string; preparedAt: unknown }, name: string): Promise<unknown> {
+  return trackWrite(setDoc(doc(db, 'organizations', orgId, 'finMonths', month), {
+    orgId, month, status: 'closed', preparedUid: prepared.preparedUid, preparedName: prepared.preparedName, preparedAt: prepared.preparedAt,
+    approvedUid: me(), approvedName: name.slice(0, 120), approvedAt: serverTimestamp(), updatedAt: serverTimestamp(), updatedBy: me(),
+  }));
+}
+export function reopenFinMonth(orgId: string, month: string): Promise<unknown> {
+  return trackWrite(setDoc(doc(db, 'organizations', orgId, 'finMonths', month), { orgId, month, status: 'open', updatedAt: serverTimestamp(), updatedBy: me() }));
+}
