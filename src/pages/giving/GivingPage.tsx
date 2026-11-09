@@ -8,6 +8,7 @@ import { addStandardFunds, resolveReview, reviewOutbox } from '../../lib/givingW
 import { friendlyError } from '../../lib/errors';
 import { OrgGate } from '../../components/OrgGate';
 import { GiftRow } from '../../components/GiftRow';
+import { DayGiving } from './DayGiving';
 import { formatMoney, fundNamed, GIFT_METHOD_LABELS } from '../../../functions/src/shared/giving';
 import { formatDateKey, localDateKey, zonedParts } from '../../../functions/src/shared/datetime';
 
@@ -71,8 +72,11 @@ function Giving({ org }: { org: Organization }) {
         </div>
       )}
 
+      {/* A day's giving on any day, in one go (Andy, 2026-11-09). */}
+      {canRecord && church && !fundsLoading && <DayGiving org={org} funds={funds} />}
+
       {canRecord && (church || funds.length > 0) && (
-        <Link to="/giving/new" className="btn btn-primary btn-block giving-record">Record a gift</Link>
+        <Link to="/giving/new" className={`btn ${church ? '' : 'btn-primary '}btn-block giving-record`}>Record a gift</Link>
       )}
 
       {(can('giving.person.read') || canRecord) && (
