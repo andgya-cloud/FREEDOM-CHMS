@@ -39,7 +39,7 @@ async function pdfRows(file: File, password?: string): Promise<StatementCell[][]
       if (!it.str || !it.transform || !it.str.trim()) continue;
       items.push({ text: it.str, x: it.transform[4]!, y: it.transform[5]!, w: it.width ?? it.str.length * 4 });
     }
-    rows.push(...pdfItemsToRows(items));
+    rows.push(...pdfItemsToRows(items), []);
     page.cleanup();
   }
   await doc.destroy();

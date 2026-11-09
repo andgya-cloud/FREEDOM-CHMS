@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoCategory, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, sheetCells,
-  type BankStatement, type DailyBankEntry, type StatementCell,
+  autoCategory, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, pdfItemsToRows, sheetCells,
+  type BankStatement, type DailyBankEntry, type PdfTextItem, type StatementCell,
 } from './finance';
 
 /** A PDF-like row: each text at an x position, 40 points wide. */
@@ -260,5 +260,44 @@ describe('purpose pots and free to spend', () => {
     expect(f.budgetLeftCents).toBe(20_000);
     expect(f.expectedCents).toBe(Math.round(70_000 * (21 / 7)));
     expect(f.afterMonthCents).toBe(f.freeCents + f.expectedCents - 20_000);
+  });
+});
+
+describe('Family Bank statement layout (Andy, 2026-11-09)', () => {
+  // Positions as Family Bank prints them: header over three lines, dates and amounts wrapping onto the next line,
+  // the branch code "034" after the balance. Names are made up.
+  const page = (y0: number, rows: { txt: string[]; amt: string; out: boolean; bal: string }[]): PdfTextItem[] => {
+    const it: PdfTextItem[] = [
+      { text: '37134', x: 7.2, y: 783.6, w: 25 }, { text: 'UTAWALA BRANCH', x: 407.9, y: 771.1, w: 93 }, { text: 'ACCOUNT NAME:', x: 7.2, y: 648.3, w: 77 },
+      { text: 'TRANSACTI', x: 7.7, y: 539.1, w: 52 }, { text: 'CLEARING', x: 72.4, y: 539.1, w: 47 }, { text: 'CHQ', x: 277.6, y: 539.4, w: 22 }, { text: 'TOTAL', x: 445.4, y: 539.4, w: 33 }, { text: 'TXN', x: 512, y: 537, w: 20 },
+      { text: 'PARTICULARS', x: 162.3, y: 533.4, w: 72 }, { text: 'IN', x: 327.7, y: 533.4, w: 10 }, { text: 'OUT', x: 376.1, y: 533.4, w: 21 },
+      { text: 'ON DATE', x: 13.4, y: 528.4, w: 40 }, { text: 'DATE', x: 84.9, y: 528.4, w: 24 }, { text: 'NO', x: 282.6, y: 527.5, w: 15 }, { text: 'BALANCE', x: 439, y: 527.5, w: 49 },
+    ];
+    let y = y0;
+    for (const r of rows) {
+      it.push({ text: '02-JAN-', x: 9.7, y, w: 33 }, { text: '2026', x: 7.2, y: y - 15.7, w: 20 }, { text: '31-DEC-', x: 71, y, w: 35 }, { text: '2025', x: 71, y: y - 15.7, w: 20 });
+      r.txt.forEach((t, n) => it.push({ text: t, x: 134.1, y: y - n * 17.3, w: 100 }));
+      it.push(r.out ? { text: r.amt, x: 371.9, y, w: 25 } : { text: r.amt, x: 318, y: y - 17.3, w: 39 }, { text: r.bal, x: 438.5, y, w: 44.5 }, { text: '034', x: 514.5, y: y + 0.9, w: 15 });
+      y -= 17.3 * (r.txt.length + 1);
+    }
+    return it;
+  };
+  it('joins the wrapped lines and reads money in and out by column', () => {
+    const rows = [
+      ...pdfItemsToRows([...page(486.4, [
+        { txt: ['Paybill Credit From Paybill:', '222118, Ref :', 'UA10L2J9L7, Sender:', 'JANE DOE , Narration:', 'FCC TITHE', '034000012730 FREEDOM', 'IN CHRIST CHURCH'], amt: '1,000.00', out: false, bal: '38,133.50' },
+        { txt: ['Mobile Alert Transaction', 'Alert Charge', '034UC2B253650159', '034000012730 FREEDOM', 'IN CHRIST CHURCH'], amt: '10.00', out: true, bal: '38,123.50' },
+      ]), { text: '*OPENING BALANCE*', x: 134.1, y: 503, w: 95 }, { text: '37,133.50', x: 433.7, y: 502.8, w: 44.5 }]), [],
+      ...pdfItemsToRows(page(486.4, [{ txt: ['Excise Duty Transaction', 'Alert Charge', '034UC2B253650159'], amt: '2.00', out: true, bal: '38,121.50' }])), [],
+    ];
+    const r = parseStatementRows(rows);
+    expect(r.balanceBreaks).toBe(0);
+    expect(r.openingCents).toBe(3_713_350);
+    expect(r.lines.map((l) => [l.d, l.t, l.r, l.i, l.o, l.b])).toEqual([
+      ['2026-01-02', 'FCC TITHE · JANE DOE · Paybill 222118', 'UA10L2J9L7', 100_000, 0, 3_813_350],
+      ['2026-01-02', 'Mobile Alert Transaction Alert Charge 034UC2B253650159', '', 0, 1_000, 3_812_350],
+      ['2026-01-02', 'Excise Duty Transaction Alert Charge 034UC2B253650159', '', 0, 200, 3_812_150],
+    ]);
+    expect(learnKey(r.lines[0]!.t, 'in')).toBe('in:FCC TITHE');
   });
 });

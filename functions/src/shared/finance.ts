@@ -140,11 +140,11 @@ export interface StatementCell { text: string; x0: number; x1: number; value?: n
 type Col = 'date' | 'desc' | 'ref' | 'in' | 'out' | 'amount' | 'balance';
 
 const HEADERS: [Col, RegExp][] = [
-  ['in', /^(credit|credits|credit amount|cr amount|paid in|deposits?|money in|receipts?|lodgements?|credit \(kes\))$/i],
-  ['out', /^(debit|debits|debit amount|dr amount|withdrawn|withdrawals?|paid out|money out|payments?|debit \(kes\))$/i],
-  ['balance', /^(balance|running balance|book balance|ledger balance|closing balance|balance \(kes\)|available balance)$/i],
+  ['in', /^(in|credit|credits|credit amount|cr amount|paid in|deposits?|money in|receipts?|lodgements?|credit \(kes\))$/i],
+  ['out', /^(out|debit|debits|debit amount|dr amount|withdrawn|withdrawals?|paid out|money out|payments?|debit \(kes\))$/i],
+  ['balance', /^(balance|total balance|running balance|book balance|ledger balance|closing balance|balance \(kes\)|available balance)$/i],
   ['amount', /^(amount|transaction amount|amount \(kes\))$/i],
-  ['date', /^(date|trans\.? date|transaction date|txn date|tran date|posting date|post date|completion time|book date|value date)$/i],
+  ['date', /^(date|trans\.? date|transacti ?on date|clearing date|transaction date|txn date|tran date|posting date|post date|completion time|book date|value date)$/i],
   ['desc', /^(description|details|narrative|narration|particulars|transaction details|remarks|transaction description|transaction type)$/i],
   ['ref', /^(reference|ref|ref\.? no\.?|reference no\.?|cheque|cheque no\.?|chq no\.?|receipt no\.?|transaction id|doc no\.?|instrument)$/i],
 ];
@@ -168,8 +168,81 @@ export interface ParsedStatement {
   problems: string[];
 }
 
+/** Column names in a row: three or more, one of them for money. */
+function headerOf(cells: StatementCell[]): { col: Col; x0: number; x1: number }[] | null {
+  const named = cells.map((c) => ({ c, col: HEADERS.find(([, re]) => re.test(tidy(c.text).replace(/[:*]/g, '').trim()))?.[0] ?? null }));
+  if (named.filter((n) => n.col).length >= 3 && named.some((n) => n.col === 'balance' || n.col === 'in' || n.col === 'out' || n.col === 'amount')) {
+    return named.filter((n) => n.col).map((n) => ({ col: n.col!, x0: n.c.x0, x1: n.c.x1 }));
+  }
+  return null;
+}
+
+/** Cells of the next row put into the cells above them (same place across the page), or added beside them. */
+function mergeInto(into: StatementCell[], cells: StatementCell[]) {
+  for (const c of cells) {
+    const text = tidy(c.text);
+    const isMoney = parseMoneyText(text) != null;
+    const host = isMoney ? undefined : into.find((h) => parseMoneyText(h.text) == null && (Math.min(h.x1, c.x1) - Math.max(h.x0, c.x0) > 0 || Math.abs(h.x0 - c.x0) < 3));
+    if (host) { host.text = /[-/]$/.test(host.text) ? host.text + text : `${host.text} ${text}`; host.x0 = Math.min(host.x0, c.x0); host.x1 = Math.max(host.x1, c.x1); }
+    else into.push({ ...c, text });
+  }
+  into.sort((a, b) => a.x0 - b.x0);
+}
+
+/** A date with its year on the next line, as Family Bank prints it ("02-JAN-" then "2026"). */
+const DATE_PART = /^(\d{1,2}[-/ .][A-Za-z]{3,9}[-/ .]?|\d{1,2}[-/.]\d{1,2}[-/.]?)$/;
+const hasDate = (cells: StatementCell[]) => cells.slice(0, 3).some((c) => c.value instanceof Date || !!parseDateText(tidy(c.text)) || DATE_PART.test(tidy(c.text)));
+const hasMoney = (cells: StatementCell[]) => cells.some((c) => typeof c.value === 'number' || parseMoneyText(tidy(c.text)) != null);
+
+/**
+ * Some banks print one transaction over several lines: the date's year, the rest of the description and even
+ * the amount sit on the lines below (Family Bank, Andy's statement 2026-11-09). Such lines are joined into
+ * one row, and a column header printed over two or three lines is joined too. An empty row is a new page.
+ */
+export function joinWrappedRows(rows: StatementCell[][]): StatementCell[][] {
+  const out: StatementCell[][] = [];
+  let cur: StatementCell[] | null = null;
+  const clean = (row: StatementCell[]) => row.filter((c) => tidy(c.text) || c.value instanceof Date || typeof c.value === 'number');
+  const headerAt = (n: number): { k: number; cells: StatementCell[]; cols: { col: Col }[] } | null => {
+    let best: { k: number; cells: StatementCell[]; cols: { col: Col }[] } | null = null;
+    for (let k = 1; k <= 3; k++) {
+      const parts = rows.slice(n, n + k).map(clean);
+      if (parts.length < k || parts.some((p) => !p.length || hasDate(p) || hasMoney(p))) break;
+      const merged = parts[0]!.map((c) => ({ ...c, text: tidy(c.text) }));
+      for (const p of parts.slice(1)) mergeInto(merged, p);
+      const cols = headerOf(merged);
+      if (cols && (!best || cols.length >= best.cols.length)) best = { k, cells: merged, cols };
+    }
+    return best;
+  };
+  for (let n = 0; n < rows.length; n++) {
+    const cells = clean(rows[n]!);
+    if (!cells.length) { cur = null; out.push([]); continue; }
+    // A header over up to three lines, none with a date or money. If the header read from the next line
+    // names more columns, this line is not part of it.
+    const here = headerAt(n);
+    if (here && !((headerAt(n + 1)?.cols.length ?? 0) > here.cols.length)) { out.push(here.cells); cur = null; n += here.k - 1; continue; }
+    const joined = cells.map((c) => tidy(c.text)).join(' ');
+    if (hasDate(cells)) { cur = cells.map((c) => ({ ...c, text: tidy(c.text) })); out.push(cur); continue; }
+    if (cur && !headerOf(cells) && !OPENING.test(joined) && !CLOSING.test(joined) && !SKIP.test(joined)) { mergeInto(cur, cells); continue; }
+    cur = null;
+    out.push(cells);
+  }
+  return out;
+}
+
+/** Family Bank's own account number and name at the end of every description, and its Paybill wording, made short. */
+export function tidyBankText(t: string): { t: string; r: string } {
+  let text = t.replace(/\b\d{9,14}\s+FREEDOM\s+(IN\s+CHRIST\s+CHURCH|HOPE\s+CENT(ER|RE)|CHURCH)\b/gi, '').replace(/\s+/g, ' ').trim();
+  const m = /^Paybill Credit From Paybill:\s*(\d+),\s*Ref\s*:\s*([A-Z0-9]+),\s*Sender:\s*(.*?)\s*,\s*Narration:\s*(.*)$/i.exec(text);
+  if (m) return { t: `${m[4]!.trim() || 'Paybill'} · ${m[3]!.trim()} · Paybill ${m[1]}`, r: m[2]! };
+  text = text.replace(/\s+,/g, ',');
+  return { t: text, r: '' };
+}
+
 /** Reads statement rows (from a PDF or a spreadsheet) into lines with money in, money out and the balance. */
-export function parseStatementRows(rows: StatementCell[][]): ParsedStatement {
+export function parseStatementRows(input: StatementCell[][]): ParsedStatement {
+  const rows = joinWrappedRows(input);
   let header: { col: Col; x0: number; x1: number }[] | null = null;
   let opening: number | null = null;
   let closing: number | null = null;
@@ -186,17 +259,15 @@ export function parseStatementRows(rows: StatementCell[][]): ParsedStatement {
     return best;
   };
 
+  // A description may run onto the next line, but never across a page.
+  let open = false;
   for (const row of rows) {
     const cells = row.map((c) => ({ ...c, text: tidy(c.text) })).filter((c) => c.text || c.value instanceof Date || typeof c.value === 'number');
-    if (!cells.length) continue;
+    if (!cells.length) { open = false; continue; }
     const joined = cells.map((c) => c.text).join(' ');
-    // A header row: three or more cells that name columns.
-    const named = cells.map((c) => ({ c, col: HEADERS.find(([, re]) => re.test(c.text.replace(/[:*]/g, '').trim()))?.[0] ?? null }));
-    if (named.filter((n) => n.col).length >= 3 && named.some((n) => n.col === 'balance' || n.col === 'in' || n.col === 'out' || n.col === 'amount')) {
-      header = named.filter((n) => n.col).map((n) => ({ col: n.col!, x0: n.c.x0, x1: n.c.x1 }));
-      // Two date columns (transaction and value date): the first is the date.
-      continue;
-    }
+    // A header row: three or more cells that name columns. (Two date columns: the first is the date.)
+    const h = headerOf(cells);
+    if (h) { header = h; continue; }
     const moneyCol = (c: StatementCell) => { const col = colFor(c); return !header || col === 'in' || col === 'out' || col === 'amount' || col === 'balance'; };
     const money = cells.map((c) => ({ c, cents: typeof c.value === 'number' ? Math.round(c.value * 100) : parseMoneyText(c.text) }))
       .filter((x) => x.cents != null && moneyCol(x.c)) as { c: StatementCell; cents: number }[];
@@ -209,13 +280,18 @@ export function parseStatementRows(rows: StatementCell[][]): ParsedStatement {
 
     if (date && money.length) {
       const words: string[] = []; const refs: string[] = [];
+      // Anything printed to the right of the balance (Family Bank's branch code "034") is not description.
+      const balEnd = header?.find((x) => x.col === 'balance')?.x1 ?? Infinity;
       for (const c of cells) {
         if (c === dateCell || money.some((x) => x.c === c)) continue;
+        if (c.x0 > balEnd + 2) continue;
         if (c.value instanceof Date || (parseDateText(c.text) && c.text.length <= 20 && words.length === 0)) continue; // a value date
         if (colFor(c) === 'ref') refs.push(c.text); else words.push(c.text);
       }
-      raw.push({ d: date, t: tidy(words.join(' ')), r: tidy(refs.join(' ')), amounts: money.map((x) => ({ cents: x.cents, col: colFor(x.c) })) });
-    } else if (!date && !money.length && raw.length && cells.every((c) => !HEADERS.some(([, re]) => re.test(c.text)))) {
+      const neat = tidyBankText(tidy(words.join(' ')));
+      raw.push({ d: date, t: neat.t, r: tidy([...refs, neat.r].join(' ')), amounts: money.map((x) => ({ cents: x.cents, col: colFor(x.c) })) });
+      open = true;
+    } else if (open && !date && !money.length && raw.length && cells.every((c) => !HEADERS.some(([, re]) => re.test(c.text)))) {
       // A description that runs onto the next line.
       const last = raw[raw.length - 1]!;
       const more = cells.filter((c) => colFor(c) !== 'ref').map((c) => c.text).join(' ');
@@ -313,7 +389,8 @@ export function pdfItemsToRows(items: readonly PdfTextItem[]): StatementCell[][]
 
 /** The words of a description that stay the same from month to month, for remembering choices. */
 export function learnKey(text: string, dir: 'in' | 'out'): string {
-  const words = text.toUpperCase().replace(/[^A-Z ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 2 && !['TO', 'FROM', 'THE', 'AND', 'OF', 'FOR', 'REF', 'KES', 'KSH', 'NO'].includes(w));
+  // "FCC TITHE · JOHN KAMAU · Paybill 222118": only the part before the sender counts.
+  const words = text.split(' · ')[0]!.toUpperCase().replace(/[^A-Z ]+/g, ' ').split(/\s+/).filter((w) => w.length >= 2 && !['TO', 'FROM', 'THE', 'AND', 'OF', 'FOR', 'REF', 'KES', 'KSH', 'NO'].includes(w));
   return `${dir}:${words.slice(0, 5).join(' ')}`.slice(0, 80);
 }
 
