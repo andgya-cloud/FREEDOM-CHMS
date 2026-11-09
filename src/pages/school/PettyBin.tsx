@@ -13,7 +13,7 @@ import {
   type BinAction, type BinEntry, type BinKind, type BinSignature,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
-import { PettyGate, PettyNav, ReportsNav } from './PettyCashPage';
+import { PettyGate, PettyNav } from './PettyCashPage';
 import { PettySignBox } from './PettySignBox';
 import type { Organization } from '../../state/OrgContext';
 
@@ -144,7 +144,7 @@ function BinView({ org }: { org: Organization }) {
         <h1>Bin</h1>
         {p.seesRegister && <button type="button" className="btn btn-quiet no-print" onClick={() => window.print()}>Print register</button>}
       </div>
-      <PettyNav org={org} /><ReportsNav org={org} />
+      <PettyNav org={org} />
       <p className="muted small no-print">{p.isPastor ? 'You can delete, delete forever and put back on your own. Only you can put entries back, even ones deleted forever, from the register below. Other signers need any two of them to delete.' : 'Deleting and deleting forever each need any two signers. Whoever asks signs first. Only the Director can put an entry back.'}{p.isPastor ? ' Every step is recorded below.' : ''}</p>
 
       <section className="card stack no-print">

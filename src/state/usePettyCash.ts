@@ -94,6 +94,13 @@ export function usePettyMonths(org: Organization) {
   const access = usePettyCashAccess();
   const on = !!org.id && access.any && !!access.uid;
   const res = useLiveQuery<MonthRow>(() => (on ? collection(db, 'organizations', org.id, 'pettyMonths') : null), [org.id, on]);
-  const byMonth = useMemo(() => Object.fromEntries(res.rows.map((m) => [m.id, m])) as Record<string, MonthRow>, [res.rows]);
-  return { months: byMonth, loading: res.loading };
+  // One month close (Andy, 2026-11-09, 1A): a month closed in Financial statements counts as closed here too.
+  const finOn = on && (access.canSign || access.isPastor);
+  const fin = useLiveQuery<{ id: string; status?: string }>(() => (finOn ? collection(db, 'organizations', org.id, 'finMonths') : null), [org.id, finOn]);
+  const byMonth = useMemo(() => {
+    const out = Object.fromEntries(res.rows.map((m) => [m.id, m])) as Record<string, MonthRow>;
+    for (const f of fin.rows) if (f.status === 'closed' && out[f.id]?.status !== 'closed') out[f.id] = { ...(out[f.id] ?? { signatures: {}, history: [] }), id: f.id, status: 'closed' } as MonthRow;
+    return out;
+  }, [res.rows, fin.rows]);
+  return { months: byMonth, loading: res.loading || fin.loading };
 }

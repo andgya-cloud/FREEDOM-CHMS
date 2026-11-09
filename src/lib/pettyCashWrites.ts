@@ -1,9 +1,9 @@
 import { collection, doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
 import { auth, db } from '../firebase';
-import { createStamps, updateRecord, updateStamps } from './records';
+import { createStamps, updateRecord } from './records';
 import { trackWrite } from './sync';
-import { fundStatusAfter, itemsTotalCents, MAX_RECEIPT_BYTES, MAX_RECEIPT_PARTS, receiptTypeOf, SHRINK_PHOTOS_OVER_BYTES, splitReceiptData, type PettyCashCategory, type PettyCashItem, type PettyFund, type PettyFundKind } from '../../functions/src/shared/pettyCash';
+import { itemsTotalCents, MAX_RECEIPT_BYTES, MAX_RECEIPT_PARTS, receiptTypeOf, SHRINK_PHOTOS_OVER_BYTES, splitReceiptData, type PettyCashCategory, type PettyCashItem } from '../../functions/src/shared/pettyCash';
 
 const me = () => {
   const u = auth.currentUser;
@@ -39,37 +39,6 @@ export async function confirmOwnPassword(password: string) {
   const u = auth.currentUser;
   if (!u?.email) throw new Error('Please sign in again.');
   await reauthenticateWithCredential(u, EmailAuthProvider.credential(u.email, password));
-}
-
-const fundRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'pettyFunds', id);
-
-/** Starts a top-up or a reset with the first signature. Two more stakeholders must sign it. */
-export function startFund(orgId: string, kind: PettyFundKind, amountCents: number, name: string) {
-  const ref = doc(collection(db, 'organizations', orgId, 'pettyFunds'));
-  return trackWrite(setDoc(ref, {
-    orgId, kind, amountCents: kind === 'topup' ? amountCents : 0,
-    signatures: { [me()]: { name, at: serverTimestamp() } }, status: 'collecting', doneAt: null, ...createStamps(),
-  }));
-}
-
-/** Adds this person's signature; the third one completes it. */
-export function signFund(orgId: string, fund: Pick<PettyFund, 'id' | 'signatures'>, name: string) {
-  const uid = me();
-  const status = fundStatusAfter(Object.keys(fund.signatures).length + 1);
-  return updateRecord(fundRef(orgId, fund.id), {
-    [`signatures.${uid}`]: { name, at: serverTimestamp() }, status, ...(status === 'done' ? { doneAt: serverTimestamp() } : {}),
-  });
-}
-
-/** Marks a requisition deleted: it leaves every list and total but stays on record. */
-
-export function cancelFund(orgId: string, id: string) {
-  return updateRecord(fundRef(orgId, id), { status: 'cancelled' });
-}
-
-/** Each category's share of the budget, in cents. */
-export function saveAllocations(orgId: string, allocations: Record<string, number>) {
-  return trackWrite(setDoc(doc(db, 'organizations', orgId, 'pettySettings', 'budget'), { orgId, allocations, ...updateStamps() }));
 }
 
 function readAsDataUrl(file: Blob): Promise<string> {

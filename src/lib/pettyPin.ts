@@ -18,18 +18,6 @@ export async function signWithPin(orgId: string, kind: 'request' | 'fund', docId
   return res.data.name;
 }
 
-/** Tops up petty cash in one step, or starts a reset, as the chosen stakeholder with their PIN. Returns their name. */
-export async function topUpWithPin(orgId: string, amountCents: number, signerUid: string, pin: string, kind: 'topup' | 'reset' = 'topup', note = '', bankKey = ''): Promise<string> {
-  const res = await httpsCallable<object, { name: string }>(functions, 'topUpWithPin')({ orgId, amountCents, signerUid, pin, kind, note, bankKey });
-  return res.data.name;
-}
-
-/** Sets the size the petty cash pot should be and fills the box up to it (Andy, 2026-11-08). */
-export async function setPettyBudget(orgId: string, budgetCents: number, signerUid: string, pin: string): Promise<{ name: string; addedCents: number }> {
-  const res = await httpsCallable<object, { name: string; addedCents?: number }>(functions, 'setPettyBudget')({ orgId, budgetCents, signerUid, pin });
-  return { name: res.data.name, addedCents: res.data.addedCents ?? 0 };
-}
-
 /**
  * Sets a stakeholder's PIN on this device: they type their own password once, through a short-lived
  * sign-in that never touches the account already signed in here.
@@ -113,11 +101,6 @@ export async function passwordProof(uid: string, emails: string | string[], pass
   throw last ?? Object.assign(new Error('No sign-in email'), { code: 'auth/invalid-credential' });
 }
 
-/** Month-end close: one stakeholder's signature; the second closes the month. */
-export async function closePettyMonth(orgId: string, month: string, signerUid: string, pin: string): Promise<{ status: 'closing' | 'closed'; name: string }> {
-  const res = await httpsCallable<object, { status: 'closing' | 'closed'; name: string }>(functions, 'closePettyMonth')({ orgId, month, signerUid, pin });
-  return res.data;
-}
 /** Only the Director reopens a closed month, with a reason. */
 export async function reopenPettyMonth(orgId: string, month: string, reason: string) {
   await httpsCallable(functions, 'reopenPettyMonth')({ orgId, month, reason });
@@ -134,8 +117,3 @@ export async function myOwnProof(): Promise<string> {
 }
 
 export interface PastImportResult { added: number; skipped: number; spentCents: number; moneyAdded: number; moneyInCents: number; renumbered: number; shift: number; firstAppNumber: string | null }
-/** Adds past months of petty cash from the sheet's rows (Andy, 2026-11-08). */
-export async function importPastPetty(orgId: string, upload: (string | number | null)[][], money: (string | number | null)[][], signerUid: string, pin: string, dryRun = false): Promise<PastImportResult> {
-  const res = await httpsCallable<object, PastImportResult>(functions, 'importPastPetty', { timeout: 120_000 })({ orgId, upload, money, signerUid, pin, dryRun });
-  return res.data;
-}

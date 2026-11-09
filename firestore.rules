@@ -1605,9 +1605,12 @@ service cloud.firestore {
       }
       // Who may sign a requisition: the accountant, the board members and the signing stakeholders.
       // A month two stakeholders have closed: nothing in it changes (Andy, 2026-10-24).
+      // One month close (Andy, 2026-11-09, 1A): a month closed in Financial statements locks petty cash too.
       function pcMonthOpen(month) {
-        return !exists(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month))
-          || get(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month)).data.status != 'closed';
+        return (!exists(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month))
+            || get(/databases/$(database)/documents/organizations/$(orgId)/pettyMonths/$(month)).data.status != 'closed')
+          && (!exists(/databases/$(database)/documents/organizations/$(orgId)/finMonths/$(month))
+            || get(/databases/$(database)/documents/organizations/$(orgId)/finMonths/$(month)).data.status != 'closed');
       }
       // Who was paid, the M-Pesa code (10 letters and digits) and a reference number; all optional.
       function pcPaymentFields(d) {

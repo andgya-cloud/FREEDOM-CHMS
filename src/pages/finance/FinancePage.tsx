@@ -9,6 +9,7 @@ import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
 import { millis, usePettyCash } from '../../state/usePettyCash';
 import { approvedAfter, useBankMoney } from './BankMoney';
+import { reopenPettyMonth } from '../../lib/pettyPin';
 import { useLedgerMonths } from '../../state/useGiving';
 import { isLocked, orgKind, useDaily, useFinance, type FinMonthRow, type StatementRow } from '../../state/useFinance';
 import { approveFinMonth, prepareFinMonth, removeStatement, reopenFinMonth, saveFinBook, saveLines, saveStatement } from '../../lib/financeWrites';
@@ -600,19 +601,28 @@ function MonthClose({ org, month, row, waiting }: { org: Organization; month: st
     try { await f(); toast.show(done); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
   const status = row?.status ?? 'open';
+  // One month close (Andy, 2026-11-09, 1A): it locks the month's requisitions too, so none may still wait for signatures.
+  const p = usePettyCash(org);
+  const reqsWaiting = p.requisitions.filter((r) => r.month === month && (r.status === 'submitted' || r.status === 'checked'));
+  const blocked = waiting > 0 || reqsWaiting.length > 0;
+  const reopen = async () => {
+    await reopenFinMonth(org.id, month);
+    // A month closed earlier on the old petty cash Month end page opens with it.
+    await reopenPettyMonth(org.id, month, 'Opened again in Financial statements').catch(() => undefined);
+  };
   return (
     <div className="fin-close">
       <h3>Closing {finPeriodName(month)}</h3>
       {status === 'closed' ? (
         <>
-          <p className="small">✓ Closed. Prepared by {row?.preparedName} on {onDay(row?.preparedAt)}; approved by {row?.approvedName} on {onDay(row?.approvedAt)}. Its lines can no longer change.</p>
-          {pastor && <button type="button" className="btn btn-quiet align-start" disabled={busy} onClick={() => void run(() => reopenFinMonth(org.id, month), 'The month is open again.')}>Open the month again</button>}
+          <p className="small">✓ Closed. Prepared by {row?.preparedName} on {onDay(row?.preparedAt)}; approved by {row?.approvedName} on {onDay(row?.approvedAt)}. Its bank lines and requisitions can no longer change.</p>
+          {pastor && <button type="button" className="btn btn-quiet align-start" disabled={busy} onClick={() => void run(reopen, 'The month is open again.')}>Open the month again</button>}
         </>
       ) : status === 'prepared' ? (
         <>
           <p className="small">Prepared by {row?.preparedName} on {onDay(row?.preparedAt)}. Waiting for {REPORT_APPROVERS.join(', ').replace(/, ([^,]*)$/, ' or $1')} to approve.</p>
           {approver && row?.preparedUid !== user?.uid && (
-            <button type="button" className="btn btn-primary align-start" disabled={busy || waiting > 0} onClick={() => void run(() => approveFinMonth(org.id, month, { preparedUid: row!.preparedUid!, preparedName: row!.preparedName!, preparedAt: row!.preparedAt }, name), `${finPeriodName(month)} is approved and closed.`)}>
+            <button type="button" className="btn btn-primary align-start" disabled={busy || blocked} onClick={() => void run(() => approveFinMonth(org.id, month, { preparedUid: row!.preparedUid!, preparedName: row!.preparedName!, preparedAt: row!.preparedAt }, name), `${finPeriodName(month)} is approved and closed.`)}>
               Approve and close the month
             </button>
           )}
@@ -620,8 +630,9 @@ function MonthClose({ org, month, row, waiting }: { org: Organization; month: st
         </>
       ) : (
         <>
-          <p className="small muted">Upload the bank statement by the 5th of the next month, sort every line, then mark the month prepared for approval.</p>
-          <button type="button" className="btn align-start" disabled={busy || waiting > 0} onClick={() => void run(() => prepareFinMonth(org.id, month, name), 'Marked prepared. The approver can now approve it.')}>
+          <p className="small muted">Upload the bank statement by the 5th of the next month, sort every line, then mark the month prepared for approval. Closing it also locks the month's petty cash requisitions and receipts.</p>
+          {reqsWaiting.length > 0 && <p className="petty-warn small">Approve or reject the waiting requisitions first ({reqsWaiting.map((r) => r.number ?? 'new').slice(0, 5).join(', ')}).</p>}
+          <button type="button" className="btn align-start" disabled={busy || blocked} onClick={() => void run(() => prepareFinMonth(org.id, month, name), 'Marked prepared. The approver can now approve it.')}>
             {waiting > 0 ? `Sort the ${waiting} waiting line${waiting === 1 ? '' : 's'} first` : 'Mark as prepared'}
           </button>
         </>

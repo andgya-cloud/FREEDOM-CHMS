@@ -2729,6 +2729,8 @@ details.hr-fold[open] > summary { margin-bottom: .8rem; }
 .fin-chip-menu a { padding: 12px 16px; color: #c62828; font-weight: 600; text-decoration: none; }
 .fin-chip-menu a + a { border-top: 1px solid var(--border); }
 .fin-chip-menu a:hover { background: #fdecea; }
+a.fin-chip { padding: 0 14px !important; min-height: 38px; text-decoration: none; }
+a.fin-chip:hover { background: #fdecea; }
 .fin-ready { border-left: 4px solid #15803d; }
 .fin-line-picks { display: flex; flex-wrap: wrap; gap: 6px; }
 .fin-line-picks select, .fin-line-picks input { max-width: 200px; }

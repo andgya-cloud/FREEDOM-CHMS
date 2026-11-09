@@ -138,6 +138,19 @@ export interface PettyMonth {
 export const MPESA_CODE = /^[A-Z0-9]{10}$/;
 export const cleanMpesaCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '');
 
+/**
+ * One "Payment code" box (Andy, 2026-11-09, 5A): an M-Pesa code (10 letters and numbers) is kept as the
+ * M-Pesa code, so a repeat is still noticed; anything else is kept as the bank reference.
+ */
+export function splitPaymentCode(text: string): { mpesaCode: string | null; refNo: string | null } {
+  const clean = cleanMpesaCode(text);
+  if (MPESA_CODE.test(clean) && /[A-Z]/.test(clean) && /\d/.test(clean)) return { mpesaCode: clean, refNo: null };
+  const ref = text.trim().toUpperCase().slice(0, 40);
+  return { mpesaCode: null, refNo: ref || null };
+}
+/** The one code to show: the M-Pesa code, else the bank reference. */
+export const paymentCodeOf = (r: { mpesaCode?: string | null; refNo?: string | null }) => r.mpesaCode || r.refNo || '';
+
 /** Possible repeats (Andy, 2026-10-24): same person, same amount, same category, within 7 days. */
 export const DUPLICATE_DAYS = 7;
 export function possibleDuplicates<T extends Pick<PettyCashRequisition, 'id' | 'requesterId' | 'requesterName' | 'totalCents' | 'category' | 'status'>>(
@@ -186,8 +199,6 @@ export interface PettyFund {
   doneAt?: unknown;
   /** A short word on why money was added, such as "Fuel for the trip" (Andy, 2026-11-08). */
   note?: string | null;
-  /** The bank line the money came from (see parseBankLineKey); each fills petty cash once (Andy, 2026-11-09). */
-  bankKey?: string;
 }
 
 /** A top-up needs one stakeholder's PIN (Andy, 2026-10-24); a reset still needs two. */

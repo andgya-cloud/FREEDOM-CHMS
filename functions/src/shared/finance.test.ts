@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoCategory, bankMoney, bankOutChoices, parseBankLineKey, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, pdfItemsToRows, sheetCells,
+  autoCategory, bankMoney, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, pdfItemsToRows, sheetCells,
   type BankStatement, type DailyBankEntry, type PdfTextItem, type StatementCell,
 } from './finance';
 
@@ -305,23 +305,6 @@ describe('Family Bank statement layout (Andy, 2026-11-09)', () => {
       ['2026-01-02', 'Excise Duty Transaction Alert Charge 034UC2B253650159', '', 0, 200, 2_312_150],
     ]);
     expect(learnKey(r.lines[0]!.t, 'in')).toBe('in:FCC TITHE');
-  });
-});
-
-describe('bankOutChoices', () => {
-  it('offers only money out from the bank, unused, newest first', () => {
-    const st = [{ id: 'a', accountKind: 'bank' as const, lines: [
-      { d: '2026-11-02', t: 'CASH WITHDRAWAL', r: '', i: 0, o: 2170000, b: 0, c: '', s: true },
-      { d: '2026-11-03', t: 'OFFERING', r: '', i: 500000, o: 0, b: 0, c: '', s: true },
-      { d: '2026-10-01', t: 'OLD', r: '', i: 0, o: 100, b: 0, c: '', s: true },
-      { d: '2026-11-04', t: 'USED', r: '', i: 0, o: 900, b: 0, c: '', s: true },
-    ] }, { id: 'm', accountKind: 'mpesa' as const, lines: [{ d: '2026-11-05', t: 'MPESA', r: '', i: 0, o: 5, b: 0, c: '', s: true }] }];
-    const daily = [{ id: 'x', date: '2026-11-06', dir: 'out' as const, cents: 300000, text: 'Cash for petty' }, { id: 'y', date: '2026-11-06', dir: 'in' as const, cents: 1, text: '' }];
-    const got = bankOutChoices(st, daily, new Set(['st:a:3']), '2026-10-15');
-    expect(got.map((c) => c.key)).toEqual(['dy:x', 'st:a:0']);
-    expect(parseBankLineKey('st:a:0')).toEqual({ kind: 'st', id: 'a', index: 0 });
-    expect(parseBankLineKey('dy:x')).toEqual({ kind: 'dy', id: 'x' });
-    expect(parseBankLineKey('nope')).toBeNull();
   });
 });
 

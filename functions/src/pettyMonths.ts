@@ -24,8 +24,10 @@ const monthName = (m: string) => new Date(`${m}-01T12:00:00Z`).toLocaleDateStrin
 export async function requireMonthOpen(tx: FirebaseFirestore.Transaction | null, orgId: string, month: unknown) {
   if (typeof month !== 'string' || !month) return;
   const ref = monthRef(orgId, month);
-  const snap = tx ? await tx.get(ref) : await ref.get();
-  if (snap.get('status') === 'closed') {
+  // One month close (Andy, 2026-11-09, 1A): closing the month in Financial statements locks petty cash too.
+  const fin = db.doc(`organizations/${orgId}/finMonths/${month}`);
+  const [snap, finSnap] = tx ? [await tx.get(ref), await tx.get(fin)] : await Promise.all([ref.get(), fin.get()]);
+  if (snap.get('status') === 'closed' || finSnap.get('status') === 'closed') {
     throw new HttpsError('failed-precondition', `${monthName(month)} is closed, so nothing in it can change. Only the Director can reopen it.`);
   }
 }

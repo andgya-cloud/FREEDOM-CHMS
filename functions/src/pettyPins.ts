@@ -9,7 +9,7 @@ import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
 import { requireMonthOpen } from './pettyMonths.js';
 import { formatMoney } from './shared/giving.js';
-import { bankMoney, parseBankLineKey, type BankStatement } from './shared/finance.js';
+import { bankMoney, type BankStatement } from './shared/finance.js';
 
 /**
  * Petty cash signing PINs (Andy, 2026-10-23): a stakeholder picks their name on the shared device and
@@ -306,70 +306,9 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
  * types the amount and their own PIN, and the money is in the budget straight away. At ADIA only
  * Andrew Guya, Daniel Ojwang', Doreen Mayaka and Elias Omondi may do this.
  */
-export const topUpWithPin = onCall(CALLABLE, async (request) => {
+export const topUpWithPin = onCall(CALLABLE, async () => {
   // Petty cash is paid from the bank now (Andy, 2026-11-09, 2A): there is no box to add money to.
-  if (request.data !== 'never') throw new HttpsError('failed-precondition', 'Petty cash is paid from the bank now. Upload the bank statement instead of adding money.');
-  const caller = await requireCaller(request);
-  const data = (request.data ?? {}) as Record<string, unknown>;
-  const orgId = requireString(data.orgId, 'the organization', { max: 80 });
-  const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
-  // Budget resets were removed: month end carries the balance forward (Andy, 2026-10-24).
-  if (data.kind === 'reset') throw new HttpsError('failed-precondition', 'Budget reset is no longer used. Month end carries the balance forward.');
-  const kind = 'topup' as 'topup' | 'reset';
-  const amountCents = kind === 'reset' ? 0 : typeof data.amountCents === 'number' ? data.amountCents : parseAmountCents(String(data.amountCents ?? ''));
-  if (kind === 'topup' && (amountCents == null || !Number.isInteger(amountCents) || amountCents <= 0 || amountCents > 100000000000)) {
-    throw new HttpsError('invalid-argument', 'Type the top-up amount in numbers, for example 500000.');
-  }
-  requireMember(caller.profile, orgId);
-  const [signerSnap, org] = await Promise.all([db.doc(`users/${signerUid}`).get(), db.doc(`organizations/${orgId}`).get()]);
-  const signer = signerSnap.data() as UserProfile | undefined;
-  const name = signer ? signer.displayName || signer.email : '';
-  const orgType = (org.data() as { type?: string } | undefined)?.type;
-  if (!canSign(signer, orgId, 'fund') || (kind === 'topup' && !canTopUpAlone(orgType, name, (signer!.permissions ?? []).includes('users.manage')))) {
-    throw new HttpsError('permission-denied', kind === 'topup' ? 'That person cannot top up here.' : 'That person cannot sign a reset.');
-  }
-  const proxy = await requireSelfOrKeeper(caller, signerUid, orgId);
-  if (!directorSelf(caller.uid, signerUid, signer)) await verifyPin(signerUid, typeof data.pin === 'string' ? data.pin.trim() : '');
-  const funds = db.collection(`organizations/${orgId}/pettyFunds`);
-  if (kind === 'reset') {
-    const waiting = await funds.where('kind', '==', 'reset').where('status', '==', 'collecting').get();
-    if (waiting.docs.some((d) => !d.data().deletedAt)) throw new HttpsError('already-exists', 'A reset is already waiting for a signature.');
-  }
-  // Money comes in only from a bank line (Andy, 2026-11-09): the amount must be that line's money out,
-  // and each line fills petty cash once, so a made-up amount cannot go in.
-  const bankKey = typeof data.bankKey === 'string' ? data.bankKey : '';
-  const parsed = parseBankLineKey(bankKey);
-  if (!parsed) throw new HttpsError('invalid-argument', 'Choose the bank line the money came from.');
-  let bankDay = '';
-  let bankText = '';
-  let bankCents = 0;
-  if (parsed.kind === 'st') {
-    const st = (await db.doc(`organizations/${orgId}/bankStatements/${parsed.id}`).get()).data() as { deletedAt?: unknown; accountKind?: string; lines?: { d: string; t: string; o: number }[] } | undefined;
-    const line = st && !st.deletedAt && st.accountKind === 'bank' ? st.lines?.[parsed.index] : undefined;
-    if (line) { bankDay = line.d; bankText = line.t; bankCents = line.o; }
-  } else {
-    const e = (await db.doc(`organizations/${orgId}/bankDaily/${parsed.id}`).get()).data() as { deletedAt?: unknown; dir?: string; date: string; text?: string; cents: number } | undefined;
-    if (e && !e.deletedAt && e.dir === 'out') { bankDay = e.date; bankText = e.text || 'Bank money typed on the day'; bankCents = e.cents; }
-  }
-  if (!bankDay || bankCents <= 0) throw new HttpsError('not-found', 'That bank line is no longer there. Choose another one.');
-  if (bankCents !== amountCents) throw new HttpsError('invalid-argument', 'The amount must be the same as the bank line.');
-  const usedBy = await funds.where('bankKey', '==', bankKey).get();
-  if (usedBy.docs.some((d) => !d.data().deletedAt)) throw new HttpsError('already-exists', 'Money from that bank line is already in petty cash.');
-  const ref = funds.doc();
-  const status = fundStatusAfter(1, kind);
-  const typed = typeof data.note === 'string' ? data.note.trim().slice(0, 120) : '';
-  const note = (typed || `From the bank ${bankDay}: ${bankText}`).slice(0, 120);
-  await ref.set({
-    orgId, kind, amountCents, status, note, bankKey, bankDay, bankText: bankText.slice(0, 200), doneAt: status === 'done' ? FieldValue.serverTimestamp() : null,
-    signatures: { [signerUid]: { name, at: FieldValue.serverTimestamp(), ...proxy } },
-    deletedAt: null, deletedBy: null,
-    createdAt: FieldValue.serverTimestamp(), createdBy: signerUid, updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
-  });
-  await writeAudit({
-    actorUid: signerUid, actorEmail: signer!.email, action: kind === 'topup' ? 'petty_topup' : 'petty_reset_start', path: ref.path, collection: 'pettyFunds',
-    docId: ref.id, orgId, note: `${kind === 'topup' ? 'Top-up' : 'Reset signed'} with PIN on ${caller.profile.displayName || caller.email}'s device`,
-  });
-  return { name, id: ref.id };
+  throw new HttpsError('failed-precondition', 'Petty cash is paid from the bank now. Upload the bank statement instead of adding money.');
 });
 
 /**

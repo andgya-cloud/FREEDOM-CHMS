@@ -22,13 +22,12 @@ import { downloadFile } from '../../lib/givingPdf';
 import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
 import type { PackGroup } from '../../lib/receiptPack';
 import {
-  categoryLabel, lineAmountCents, type CategoryBudgetRow,
+  categoryLabel, lineAmountCents,
   itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory,
-  cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
+  DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, overDirectorLimit, paymentCodeOf, splitPaymentCode, possibleDuplicates, waitingForDirector,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
-import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
@@ -112,8 +111,8 @@ export function PettyNav({ org }: { org: Organization }) {
   const p = usePettyCashAccess();
   const base = pettyCashBase(org.type);
   const { pathname } = useLocation();
-  // Four tabs (Andy, 2026-10-24); Reports holds the balance sheet, month end, budget tracker and bin.
-  const inReports = REPORT_PAGES.some((x) => pathname === `${base}/${x}`);
+  // Four tabs (Andy, 2026-11-09, 3A): Reports holds the monthly report, the approved list, the charts and the Bin.
+  const inReports = ['reports', 'bin'].some((x) => pathname === `${base}/${x}`);
   const items: [string, string, boolean, boolean | undefined][] = [
     [base, 'Overview', true, undefined], [`${base}/new`, 'New requisition', p.canRequest, undefined], [`${base}/receipts`, 'Receipts', p.seesAll, undefined],
     [`${base}/reports`, 'Reports', p.seesAll, inReports],
@@ -122,62 +121,10 @@ export function PettyNav({ org }: { org: Organization }) {
     <>
       <nav className="chips petty-nav no-print" aria-label="Petty cash">
         {items.filter((i) => i[2]).map(([to, text, , forced]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip${isActive || forced ? ' chip-on' : ''}`}>{text}</NavLink>)}
-        {/* Financial statements, in red in the same row with a dropdown (Andy, 2026-11-09, 5A 6A). */}
-        {p.seesAll && (
-          <details className="chip fin-chip">
-            <summary>Financial statements ▾</summary>
-            <div className="fin-chip-menu">
-              <Link to="/finance">Financial Statement</Link>
-              <Link to="/finance?show=balance">Balance Sheet</Link>
-            </div>
-          </details>
-        )}
+        {/* Financial statements, in red in the same row (Andy, 2026-11-09, 3A: one button, no dropdown). */}
+        {p.seesAll && <Link to="/finance" className="chip fin-chip">Financial statements</Link>}
       </nav>
     </>
-  );
-}
-
-const REPORT_PAGES = ['reports', 'balance-sheet', 'month-end', 'budget', 'bin'];
-/** The second row of tabs inside Reports. */
-export function ReportsNav({ org }: { org: Organization }) {
-  const p = usePettyCashAccess();
-  const base = pettyCashBase(org.type);
-  const items: [string, string, boolean][] = [
-    [`${base}/reports`, 'Approved', true], [`${base}/balance-sheet`, 'Balance sheet & Excel', true], [`${base}/month-end`, 'Month end', true],
-[`${base}/bin`, 'Bin', p.isPastor || p.seesRegister],
-  ];
-  return (
-    <nav className="chips petty-nav petty-subnav no-print" aria-label="Reports">
-      {items.filter((i) => i[2]).map(([to, text]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip chip-small${isActive ? ' chip-on' : ''}`}>{text}</NavLink>)}
-    </nav>
-  );
-}
-
-/** Each category's allowance as a bar: approved spending, then what is waiting, against what was set aside. */
-export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryBudgetRow[] }) {
-  const set = rows.filter((r) => r.allocatedCents > 0);
-  if (set.length === 0) return null;
-  return (
-    <section className="card stack petty-health" aria-label="Budget by category">
-      <h2>Budget by category</h2>
-      <ul className="petty-health-list">
-        {set.map((r) => {
-          const used = Math.min(100, (r.spentCents / r.allocatedCents) * 100);
-          const waiting = Math.min(100 - used, (r.pendingCents / r.allocatedCents) * 100);
-          const over = r.spentCents + r.pendingCents > r.allocatedCents;
-          return (
-            <li key={r.category}>
-              <div className="petty-health-head"><strong>{r.category}</strong><span className={over ? 'danger-text' : 'muted'}>{money(org, r.spentCents)} of {money(org, r.allocatedCents)}</span></div>
-              <div className="petty-health-bar" role="img" aria-label={`${r.category}: ${Math.round(used)}% spent, ${Math.round(waiting)}% waiting`}>
-                <span className={`petty-health-used${over ? ' over' : ''}`} style={{ width: `${used}%` }} />
-                <span className="petty-health-wait" style={{ width: `${waiting}%` }} />
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="small muted">Solid: approved. Light: waiting for signatures.</p>
-    </section>
   );
 }
 
@@ -216,31 +163,19 @@ function Home({ org }: { org: Organization }) {
   const actor = { uid: p.uid, canCheck: p.canCheck, canApprove: p.canApprove, canSign: p.canSign, isAccountant: p.isAccountant, isDirector: p.isPastor };
   const waiting = p.requisitions.filter((r) => nextStepFor(r, actor));
   const mine = p.requisitions.filter((r) => r.requesterId === p.uid);
-  const approved = p.requisitions.filter((r) => r.status === 'approved');
   const { profile } = useAuth();
-  const { receipts } = useReceipts(org);
-  const noReceipt = approved.filter((r) => !r.pastRecord && !receipts.some((rc) => rc.reqId === r.id));
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
       {profile?.roleId === SIGNATORY_ROLE_ID && <Greeting />}
-      <div className="page-head">
-        <h1>Petty cash</h1>
-        {p.canRequest && <Link to={`${pettyCashBase(org.type)}/new`} className="btn btn-primary">New requisition</Link>}
-      </div>
+      <div className="page-head"><h1>Petty cash</h1></div>
       <PettyNav org={org} />
-      {/* Simplicity (Andy 5A, 2026-10-30): what waits for you comes first; the top-up is a button; charts fold away. */}
+      {/* Simplicity (Andy, 2026-11-09, 4A): only what waits for you, the money in the bank and your own requests. */}
       {p.canSign && (
         <section className="card stack">
           <h2>Waiting for you</h2>
           <RequisitionList org={org} rows={waiting} empty="Nothing needs your signature." />
         </section>
-      )}
-      {p.seesAll && noReceipt.length > 0 && (
-        <p className="petty-warn">
-          {noReceipt.length} approved requisition{noReceipt.length === 1 ? ' still needs' : 's still need'} a receipt ({noReceipt.slice(0, 3).map(label).join(', ')}{noReceipt.length > 3 ? '…' : ''}).{' '}
-          <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
-        </p>
       )}
       {/* Petty cash is paid from the bank (Andy, 2026-11-09, 1A 2A 5A): no box, no Add money, no typed bank money. */}
       {p.seesAll && <BankMoneyCard org={org} />}
@@ -250,12 +185,6 @@ function Home({ org }: { org: Organization }) {
           <h2>My requests</h2>
           <RequisitionList org={org} rows={mine} empty="You have not made a request yet." />
         </section>
-      )}
-      {p.seesAll && !p.loading && (
-        <details className="card fold-card">
-          <summary>See spending charts</summary>
-          <PettyInsights org={org} month={p.month} requisitions={p.requisitions} summary={p.summary} />
-        </details>
       )}
       {p.loading && <p className="muted small">Loading…</p>}
     </div>
@@ -288,8 +217,8 @@ function NewRequisition({ org }: { org: Organization }) {
   const [lines, setLines] = useState<Line[]>(() => prefill?.lines.length ? prefill.lines.map((l, i) => ({ key: i + 1, ...l })) : [{ key: 1, description: '', quantity: '1', unitPrice: '' }]);
   const [copyFrom, setCopyFrom] = useState('');
   const [payee, setPayee] = useState(prefill?.payee ?? '');
-  const [mpesa, setMpesa] = useState('');
-  const [refNo, setRefNo] = useState('');
+  const [payCode, setPayCode] = useState('');
+  const paid = splitPaymentCode(payCode);
   const parsed = lines.map((l) => {
     const quantity = parseQuantity(l.quantity);
     const unitPriceCents = parseAmountCents(l.unitPrice);
@@ -328,18 +257,17 @@ function NewRequisition({ org }: { org: Organization }) {
     if (!category) return 'Choose a category.';
     if (category === 'Other' && !note.trim()) return 'Say what "Other" is for.';
     if (parsed.some((i) => !i.description || i.quantity == null || i.unitPriceCents == null || !i.amountCents)) return 'Fill in a description, quantity and unit price for every item.';
-    if (mpesa && !MPESA_CODE.test(cleanMpesaCode(mpesa))) return 'An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.';
     return null;
   }
   // Warnings only (Andy, 2026-10-24): a possible repeat, a reused M-Pesa code, and the Director's limit.
   const dupes = category && total ? possibleDuplicates({ requesterId: chosen?.uid ?? p.uid, requesterName: chosen?.name ?? profile?.displayName ?? '', totalCents: total, category },
     p.requisitions, Date.now(), (r) => millis(r.createdAt)) : [];
-  const codeUsed = mpesa ? p.requisitions.find((r) => r.mpesaCode && r.mpesaCode === cleanMpesaCode(mpesa)) : undefined;
+  const codeUsed = paid.mpesaCode ? p.requisitions.find((r) => r.mpesaCode && r.mpesaCode === paid.mpesaCode) : undefined;
   const bigOne = total > DIRECTOR_LIMIT_CENTS && !(p.isPastor && !chosen);
   const input = () => ({
     category: category as PettyCashCategory, categoryNote: category === 'Other' ? note.trim().slice(0, 120) : null,
     items: parsed.map((i) => ({ description: i.description.slice(0, 200), quantity: i.quantity!, unitPriceCents: i.unitPriceCents!, amountCents: i.amountCents! })), month: p.month,
-    payee: payee.trim().slice(0, 120) || null, mpesaCode: cleanMpesaCode(mpesa) || null, refNo: refNo.trim().slice(0, 40) || null,
+    payee: payee.trim().slice(0, 120) || null, mpesaCode: paid.mpesaCode, refNo: paid.refNo,
   });
   /** ADIA: the chosen stakeholder raises it as theirs on this device, with their PIN. */
   async function raiseForChosen() {
@@ -440,8 +368,7 @@ function NewRequisition({ org }: { org: Organization }) {
         <h3 className="pay-head">Payment details <small className="muted">(optional, can be added later with the receipts)</small></h3>
         <div className="field-row pay-row">
           <label className="field"><span>Paid to</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
-          <label className="field"><span>M-Pesa code</span><input value={mpesa} maxLength={14} autoCapitalize="characters" onChange={(e) => setMpesa(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
-          <label className="field"><span>Family Bank ref. no.</span><input value={refNo} maxLength={40} autoCapitalize="characters" onChange={(e) => setRefNo(e.target.value.toUpperCase())} placeholder="From the bank SMS or slip" /></label>
+          <label className="field"><span>Payment code</span><input value={payCode} maxLength={40} autoCapitalize="characters" onChange={(e) => setPayCode(e.target.value.toUpperCase())} placeholder="M-Pesa code or Family Bank ref. no." /></label>
         </div>
         {codeUsed && <p className="petty-warn small">This M-Pesa code is already on {label(codeUsed)} ({codeUsed.requesterName}, {money(org, codeUsed.totalCents)}). Check it is not the same payment.</p>}
         {bigOne && <p className="petty-warn small">This request is over {money(org, DIRECTOR_LIMIT_CENTS)}, so the Director must be one of the two signatures.</p>}
@@ -691,13 +618,11 @@ function PaymentDetails({ org, r, locked }: { org: Organization; r: RequisitionR
   const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [payee, setPayee] = useState(r.payee ?? '');
-  const [code, setCode] = useState(r.mpesaCode ?? '');
-  const [ref, setRef] = useState(r.refNo ?? '');
+  const [code, setCode] = useState(paymentCodeOf(r));
   const canEdit = !locked && r.status !== 'rejected' && (r.requesterId === p.uid || p.canSign);
   function save() {
-    const clean = cleanMpesaCode(code);
-    if (clean && !MPESA_CODE.test(clean)) { toast.show('An M-Pesa code has 10 letters and numbers, such as SJK4H2XQ7P.'); return; }
-    savePayment(org.id, r.id, payee.trim().slice(0, 120) || null, clean || null, ref.trim().slice(0, 40) || null).catch((err) => toast.show(friendlyError(err)));
+    const c = splitPaymentCode(code);
+    savePayment(org.id, r.id, payee.trim().slice(0, 120) || null, c.mpesaCode, c.refNo).catch((err) => toast.show(friendlyError(err)));
     setEditing(false);
     toast.show('Payment details saved.');
   }
@@ -705,8 +630,7 @@ function PaymentDetails({ org, r, locked }: { org: Organization; r: RequisitionR
     <div className="stack no-print">
       <div className="field-row pay-row">
         <label className="field"><span>Paid to</span><input value={payee} maxLength={120} onChange={(e) => setPayee(e.target.value)} placeholder="For example: Kenya Power" /></label>
-        <label className="field"><span>M-Pesa code</span><input value={code} maxLength={14} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="SJK4H2XQ7P" /></label>
-        <label className="field"><span>Family Bank ref. no.</span><input value={ref} maxLength={40} onChange={(e) => setRef(e.target.value.toUpperCase())} placeholder="From the bank SMS or slip" /></label>
+        <label className="field"><span>Payment code</span><input value={code} maxLength={40} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="M-Pesa code or Family Bank ref. no." /></label>
       </div>
       <div className="row-actions"><button type="button" className="btn btn-primary" onClick={save}>Save</button><button type="button" className="btn btn-quiet" onClick={() => setEditing(false)}>Cancel</button></div>
     </div>
@@ -715,8 +639,7 @@ function PaymentDetails({ org, r, locked }: { org: Organization; r: RequisitionR
     <div className="pay-facts">
       <dl>
         <div><dt>Paid to</dt><dd>{r.payee || '—'}</dd></div>
-        <div><dt>M-Pesa code</dt><dd>{r.mpesaCode || '—'}</dd></div>
-        <div><dt>Family Bank ref. no.</dt><dd>{r.refNo || '—'}</dd></div>
+        <div><dt>Payment code</dt><dd>{paymentCodeOf(r) || '—'}</dd></div>
       </dl>
       {canEdit && <button type="button" className="btn btn-quiet no-print" onClick={() => setEditing(true)}>{r.payee || r.mpesaCode || r.refNo ? 'Change payment details' : 'Add payment details'}</button>}
     </div>
