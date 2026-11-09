@@ -277,14 +277,13 @@ function ReportCard({ org, statements, budget, owned, learned, months }: { org: 
   const today = kenyaToday();
   const build = useCallback((period: string): FinReport => {
     const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
-    // Money put in the box by Set budget ("Filled up to the budget") did not come from the bank (Andy, 2026-11-09):
-    // it counts as cash already held, not as a top-up the bank statement should show.
+    // Money put in the box by Set budget ("Filled up to the budget") was not real money (Andy, 2026-11-09, 2B):
+    // the petty cash figures leave it out, and it is never looked for on the bank statement.
     const dayOf = (t: unknown) => new Date((millis(t) ?? Date.now()) + 3 * 3_600_000).toISOString().slice(0, 10);
     const isFill = (f: { note?: string | null }) => f.note === 'Filled up to the budget';
     const pf = (x: string): PettyFigures => {
       const r = pettyReport(x, p.funds, p.requisitions, {}, millis);
-      const fills = p.funds.filter((f) => f.kind === 'topup' && f.status === 'done' && isFill(f as { note?: string }) && dayOf(f.doneAt).startsWith(x)).reduce((n, f) => n + f.amountCents, 0);
-      return { openingCents: r.openingCents + fills, inCents: r.inCents - fills, outCents: r.outCents, closingCents: r.closingCents, categories: r.categories.map((c) => ({ category: c.category, cents: c.cents })) };
+      return { openingCents: r.openingCents, inCents: r.inCents, outCents: r.outCents, closingCents: r.closingCents, categories: r.categories.map((c) => ({ category: c.category, cents: c.cents })) };
     };
     const prev = (x: string) => (x.length === 4 ? String(+x - 1) : (() => { const [y, m] = x.split('-').map(Number) as [number, number]; return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })());
     const lastYear = period.length === 4 ? String(+period - 1) : `${+period.slice(0, 4) - 1}${period.slice(4)}`;

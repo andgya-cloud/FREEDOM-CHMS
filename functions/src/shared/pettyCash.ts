@@ -225,12 +225,20 @@ export interface FundSummary {
  * Budget, spending and what is left since the last reset. Only completed top-ups count, and only approved
  * requests are spent. `millis` reads a stored time; a time still being saved (null) counts as now.
  */
+/**
+ * Money "Set budget" put in the box (note "Filled up to the budget") was not real money (Andy, 2026-11-09, 2B):
+ * petty cash shows only money that came from the bank with Add money, so these never count.
+ */
+export const BUDGET_FILL_NOTE = 'Filled up to the budget';
+export const isBudgetFill = (f: { note?: string | null }) => f.note === BUDGET_FILL_NOTE;
+
 export function fundSummary(
-  funds: readonly Pick<PettyFund, 'kind' | 'amountCents' | 'status' | 'doneAt'>[],
+  allFunds: readonly (Pick<PettyFund, 'kind' | 'amountCents' | 'status' | 'doneAt'> & { note?: string | null })[],
   requisitions: readonly Pick<PettyCashRequisition, 'status' | 'totalCents' | 'approved'>[],
   millis: (t: unknown) => number | null,
   now = Date.now(),
 ): FundSummary {
+  const funds = allFunds.filter((f) => !isBudgetFill(f));
   const at = (t: unknown) => millis(t) ?? now;
   let periodStart = -Infinity;
   for (const f of funds) if (f.kind === 'reset' && f.status === 'done') periodStart = Math.max(periodStart, at(f.doneAt));
@@ -279,7 +287,7 @@ export function pettyLedger(
   const at = (t: unknown) => millis(t) ?? now;
   const lines: Omit<LedgerLine, 'balanceCents'>[] = [];
   for (const f of funds) {
-    if (f.status !== 'done') continue;
+    if (f.status !== 'done' || isBudgetFill(f)) continue;
     lines.push(f.kind === 'topup'
       ? { id: f.id, at: at(f.doneAt), kind: 'topup', description: `Money added${f.note ? ` · ${f.note}` : ''}`, creditCents: f.amountCents, debitCents: 0 }
       : { id: f.id, at: at(f.doneAt), kind: 'reset', description: 'Budget reset to zero, signed by 3 stakeholders', creditCents: 0, debitCents: 0 });

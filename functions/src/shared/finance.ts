@@ -450,13 +450,14 @@ export const PETTY_TO_FIN: Readonly<Record<string, string>> = {
 export const pettyToFin = (category: string): string => PETTY_TO_FIN[category] ?? 'otherExpense';
 
 /** Words after "#" that are ordinary giving, not a purpose pot. */
-const NOT_A_POT = new Set(['TITHE', 'TITHES', 'OFFERING', 'OFFERINGS', 'SADAKA', 'GENERAL', 'FEES', 'FEE', 'SCHOOLFEES', 'GIVING', 'DONATION']);
+const NOT_A_POT = new Set(['TITHE', 'TITHES', 'TITHING', 'OFFERING', 'OFFERINGS', 'OFFERTORY', 'THANKSGIVING', 'THANKS', 'SADAKA', 'GENERAL', 'FEES', 'FEE', 'SCHOOLFEES', 'GIVING', 'DONATION', 'DONATIONS', 'SEED', 'FIRSTFRUIT', 'FIRSTFRUITS', 'CHURCH', 'FREEDOM']);
 /**
  * Money given for a set purpose carries a code after "#" (FCC#PAINTING, "#Building"): each code is its
  * own pot (Andy, 2026-11-09, 4A). Gives the pot's name in capitals, or ''.
  */
 export function potOf(text: string): string {
-  const m = /#\s?([A-Za-z][A-Za-z0-9_-]{1,29})/.exec(text);
+  // "#PAINT" or, as givers really type it on the Paybill, "FCC PAINT" (Andy, 2026-11-09: both the same).
+  const m = /#\s?([A-Za-z][A-Za-z0-9_-]{1,29})/.exec(text) ?? /\bFCC[\s:]+([A-Za-z][A-Za-z0-9_-]{1,29})/i.exec(text);
   const name = m ? m[1]!.toUpperCase().replace(/[_-]+/g, ' ').trim() : '';
   return name && !NOT_A_POT.has(name.replace(/ /g, '')) ? name : '';
 }

@@ -12,7 +12,7 @@ import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, 
 import { addReceipt, savePayment, cancelFund, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { takePettyPrefill } from '../../lib/pettyPrefill';
-import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, setPettyBudget, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
 import { LineChart } from '../../components/charts';
 import { lowCashLine, moneyLife, nairobiDay } from '../../../functions/src/shared/pettyLife';
 import { PettySignBox } from './PettySignBox';
@@ -24,7 +24,7 @@ import { downloadFile } from '../../lib/givingPdf';
 import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/receiptNames';
 import type { PackGroup } from '../../lib/receiptPack';
 import {
-  categoryBudgets, categoryLabel, lineAmountCents, pettyLedger, type CategoryBudgetRow,
+  categoryLabel, lineAmountCents, pettyLedger, type CategoryBudgetRow,
   ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
   PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
   cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
@@ -147,7 +147,7 @@ export function ReportsNav({ org }: { org: Organization }) {
   const base = pettyCashBase(org.type);
   const items: [string, string, boolean][] = [
     [`${base}/reports`, 'Approved', true], [`${base}/balance-sheet`, 'Balance sheet & Excel', true], [`${base}/month-end`, 'Month end', true],
-    [`${base}/budget`, 'Budget tracker', true], [`${base}/bin`, 'Bin', p.isPastor || p.seesRegister],
+[`${base}/bin`, 'Bin', p.isPastor || p.seesRegister],
   ];
   return (
     <nav className="chips petty-nav petty-subnav no-print" aria-label="Reports">
@@ -187,18 +187,17 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
 const shortDay = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'UTC' });
 
 /**
- * The Money box (Andy, 2026-11-08): one running pot. Budget is the size it should be, Left is the cash in
- * it now, and the life line shows money left over 30 days with a dashed line to the day it runs out.
+ * The Money box (Andy, 2026-11-08): one running pot. Left is the real cash in it now (only money added from
+ * the bank with Add money counts; petty cash has no budget of its own since 2026-11-09, 1A 2B), and the life
+ * line shows money left over 30 days with a dashed line to the day it runs out.
  */
-function MoneyBox({ org, canChange, onAdd, onSetBudget }: { org: Organization; canChange: boolean; onAdd: () => void; onSetBudget: () => void }) {
+function MoneyBox({ org, canChange, onAdd }: { org: Organization; canChange: boolean; onAdd: () => void }) {
   const p = usePettyCash(org);
   const s = p.summary;
-  const budget = p.target.budgetCents;
   const ledger = useMemo(() => pettyLedger(p.funds, p.requisitions, millis), [p.funds, p.requisitions]);
-  const life = useMemo(() => moneyLife(ledger, Date.now(), budget), [ledger, budget]);
+  const life = useMemo(() => moneyLife(ledger, Date.now()), [ledger]);
   const month = nairobiDay(Date.now()).slice(0, 7);
   const spentMonth = p.requisitions.filter((r) => r.status === 'approved' && nairobiDay(millis(r.approved?.at) ?? Date.now()).startsWith(month)).reduce((n, r) => n + r.totalCents, 0);
-  const pct = budget > 0 ? Math.max(0, Math.round((s.remainingCents / budget) * 100)) : null;
   // An older top-up still waiting for a signature is shown, but only counts once it is finished.
   const pending = p.funds.find((f) => f.kind === 'topup' && f.status === 'collecting');
   const lasts = s.remainingCents <= 0 ? 'The money has run out.'
@@ -208,9 +207,8 @@ function MoneyBox({ org, canChange, onAdd, onSetBudget }: { org: Organization; c
   return (
     <section className={`card stack money-box money-${life.tone}`} aria-label="Money box">
       <div className="petty-stats money-stats">
-        <div className="petty-stat petty-stat-budget"><span>Budget</span><strong>{budget > 0 ? money(org, budget) : 'Not set'}</strong></div>
         <div className="petty-stat petty-stat-spent"><span>Spent this month</span><strong>{money(org, spentMonth)}</strong></div>
-        <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Left{pct != null ? ` · ${pct}%` : ''}</span><strong>{money(org, s.remainingCents)}</strong>
+        <div className={`petty-stat petty-stat-left${s.remainingCents < 0 ? ' petty-stat-over' : ''}`}><span>Money left</span><strong>{money(org, s.remainingCents)}</strong>
           {pending && <small className="petty-stat-pending">+ {money(org, pending.amountCents)} waiting for a signature</small>}
         </div>
       </div>
@@ -224,40 +222,9 @@ function MoneyBox({ org, canChange, onAdd, onSetBudget }: { org: Organization; c
       {canChange && (
         <div className="row-actions">
           <button type="button" className="btn btn-primary" onClick={onAdd}>Add money</button>
-          <button type="button" className="btn" onClick={onSetBudget}>Set budget</button>
         </div>
       )}
-      {budget > 0 && p.target.setBy && <p className="small muted">Budget set by {p.target.setBy}{p.target.setAt ? `, ${when(p.target.setAt)}` : ''}.</p>}
-    </section>
-  );
-}
-
-/** Set budget: the size the pot should be. One PIN from Andy, Doreen or Elias; Andy needs none (2026-11-08). */
-function SetBudgetCard({ org, onClose }: { org: Organization; onClose: () => void }) {
-  const p = usePettyCash(org);
-  const [amount, setAmount] = useState(p.target.budgetCents ? String(p.target.budgetCents / 100) : '');
-  const cents = parseAmountCents(amount);
-  const ready = cents != null && cents > 0;
-  return (
-    <section className="petty-auth petty-auth-topup" aria-label="Set budget">
-      <div className="petty-auth-head">
-        <div className="petty-auth-title"><h2>Set budget</h2><p>How much the petty cash should hold. Saving it fills the box up to this amount, so it is ready to spend.</p></div>
-      </div>
-      <div className="petty-auth-body">
-        <label className="field"><span className="petty-caps">Budget (KES)</span>
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="e.g. 50000" />
-          {amount.trim() && (ready
-            ? <small className="petty-amount-ok">Budget {money(org, cents)}.{cents > p.summary.remainingCents ? ` ${money(org, cents - p.summary.remainingCents)} is added now, so ${money(org, cents)} is left to spend.` : ` The box already holds ${money(org, p.summary.remainingCents)}, so nothing is added.`} The low warning shows below {money(org, lowCashLine(cents))}.</small>
-            : <small className="petty-amount-bad">Type the amount in numbers only, for example 50000.</small>)}
-        </label>
-        <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Save budget"
-          sign={async (uid, pin) => {
-            const { name: who, addedCents } = await setPettyBudget(org.id, cents ?? 0, uid, pin);
-            onClose();
-            return `Budget set to ${money(org, cents ?? 0)} by ${who}.${addedCents > 0 ? ` ${money(org, addedCents)} was added, so it is ready to spend.` : ''}`;
-          }} />
-        <div className="row-actions"><button type="button" className="btn btn-quiet" onClick={onClose}>Close</button></div>
-      </div>
+      <p className="small muted">Add money only when cash is taken from the bank for petty cash; the plan for spending is the Monthly budget under Financial statements.</p>
     </section>
   );
 }
@@ -277,7 +244,7 @@ function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKi
   const [amount, setAmount] = useState('');
   const [note, setNote] = useState('');
   const amountBox = useRef<HTMLInputElement>(null);
-  const toBudget = p.target.budgetCents - p.summary.remainingCents;
+  const toBudget = 0; // Petty cash has no budget of its own (Andy, 2026-11-09, 1A).
   const [askDelete, setAskDelete] = useState(false);
   const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
   const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
@@ -425,8 +392,7 @@ function Home({ org }: { org: Organization }) {
   const { receipts } = useReceipts(org);
   const noReceipt = approved.filter((r) => !r.pastRecord && !receipts.some((rc) => rc.reqId === r.id));
   const [topUpOpen, setTopUpOpen] = useState(false);
-  const [budgetOpen, setBudgetOpen] = useState(false);
-  const lowLine = lowCashLine(p.target.budgetCents);
+  const lowLine = lowCashLine();
   // An older top-up still waiting for a signature stays open so it can be finished.
   const topUpWaiting = p.funds.some((f) => f.kind === 'topup' && f.status === 'collecting');
   if (!p.any) return <NoAccess />;
@@ -446,7 +412,7 @@ function Home({ org }: { org: Organization }) {
         </section>
       )}
       {p.seesAll && !p.loading && p.summary.remainingCents < lowLine && (
-        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, lowLine)}{p.target.budgetCents > 0 ? ' (a fifth of the budget)' : ''}.{canTopUpHere ? ' Press Add money below.' : ` Ask ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} to add money.`}</p>
+        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, lowLine)}.{canTopUpHere ? ' Press Add money below.' : ` Ask ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} to add money.`}</p>
       )}
       {p.seesAll && noReceipt.length > 0 && (
         <p className="petty-warn">
@@ -454,10 +420,8 @@ function Home({ org }: { org: Organization }) {
           <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
         </p>
       )}
-      {p.seesAll && <MoneyBox org={org} canChange={canTopUpHere && !topUpOpen && !topUpWaiting && !budgetOpen}
-        onAdd={() => setTopUpOpen(true)} onSetBudget={() => setBudgetOpen(true)} />}
+      {p.seesAll && <MoneyBox org={org} canChange={canTopUpHere && !topUpOpen && !topUpWaiting} onAdd={() => setTopUpOpen(true)} />}
       {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting) && <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />}
-      {p.seesAll && canTopUpHere && budgetOpen && <SetBudgetCard org={org} onClose={() => setBudgetOpen(false)} />}
       {p.seesAll && <DailyBox org={org} />}
       {p.canSign && <BinNotice org={org} />}
       {p.canRequest && (
@@ -511,7 +475,6 @@ function NewRequisition({ org }: { org: Organization }) {
   });
   const total = itemsTotalCents(parsed.map((i) => ({ amountCents: i.amountCents ?? 0 })));
   const previous = useMemo(() => p.requisitions.filter((r) => r.requesterId === p.uid || p.seesAll).slice(0, 30), [p.requisitions, p.uid, p.seesAll]);
-  const cats = useMemo(() => categoryBudgets(pettyCashCategoriesFor(org.type), p.allocations, p.requisitions, p.periodStart, millis), [org.type, p.allocations, p.requisitions, p.periodStart]);
   // The requester is picked from the stakeholders (Andy: ADIA 2026-10-23, Church and Hope 2026-10-30); anyone but the person signed in types their PIN.
   const isAdia = isPettyOrg(org.type);
   const [signers, setSigners] = useState<PettySigner[] | null>(null);
@@ -585,13 +548,11 @@ function NewRequisition({ org }: { org: Organization }) {
     toast.show(SUBMITTED_TEXT);
     navigate(`${pettyCashBase(org.type)}/${id}`);
   }
-  const catRow = cats.find((c) => c.category === category);
 
   return (
     <div className="page narrow">
       <div className="page-head"><h1>New requisition</h1></div>
       <PettyNav org={org} />
-      {p.seesAll && <BudgetHealth org={org} rows={cats} />}
       {/* A small link, so the form comes first (Andy 6A, 2026-10-30). */}
       {previous.length > 0 && (
         <details className="petty-copy">
@@ -636,12 +597,6 @@ function NewRequisition({ org }: { org: Organization }) {
         {chosen && <p className="small muted">This is saved as {chosen.name}'s request, so {chosen.name} cannot sign it.</p>}
         {category === 'Other' && (
           <label className="field"><span>What is "Other" for?</span><input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="For example: generator fuel" /></label>
-        )}
-        {p.seesAll && catRow && catRow.allocatedCents > 0 && (
-          <p className={`small${catRow.spentCents + catRow.pendingCents + total > catRow.allocatedCents ? ' danger-text' : ' muted'}`}>
-            {category}: {money(org, catRow.allocatedCents - catRow.spentCents - catRow.pendingCents)} left of {money(org, catRow.allocatedCents)} before this request.
-            {catRow.spentCents + catRow.pendingCents + total > catRow.allocatedCents ? ' This request goes over the category budget; it can still be sent and will show as over budget.' : ''}
-          </p>
         )}
         {p.seesAll && category && <BudgetWarning org={org} category={category} addingCents={total} />}
         <h3>Expense items</h3>
@@ -704,8 +659,6 @@ function Requisition({ org }: { org: Organization }) {
   const waitingToSign = r.signatures ? r.status === 'submitted' : r.status === 'submitted' || r.status === 'checked';
   const dupes = r.status === 'submitted' ? possibleDuplicates(r, p.requisitions, millis(r.createdAt) ?? Date.now(), (x) => millis(x.createdAt)) : [];
   const codeTwice = r.mpesaCode ? p.requisitions.filter((x) => x.id !== r.id && x.mpesaCode === r.mpesaCode) : [];
-  const catRow = p.seesAll ? categoryBudgets(pettyCashCategoriesFor(org.type), p.allocations, p.requisitions, p.periodStart, millis).find((c) => c.category === r.category) : undefined;
-  const overBudget = !!catRow && catRow.allocatedCents > 0 && catRow.spentCents + catRow.pendingCents > catRow.allocatedCents;
   const name = profile?.displayName ?? 'Staff';
   const act = (write: Promise<unknown>, done: string) => { write.catch((err) => toast.show(friendlyError(err))); toast.show(done); };
   const sigs = signaturesOf(r);
@@ -828,7 +781,7 @@ function Requisition({ org }: { org: Organization }) {
       <section className="card stack">
         <ul className="petty-figures petty-details">
           <li><span>Requester</span><strong>{r.requesterName}</strong></li>
-          <li><span>Category</span><strong>{categoryLabel(r)}{overBudget && <span className="badge badge-warn"> Over budget</span>}</strong></li>
+          <li><span>Category</span><strong>{categoryLabel(r)}</strong></li>
           <li><span>Date</span><strong>{when(r.createdAt)}</strong></li>
           <li><span>Status</span><strong className={needsReceipt(r, receipts.length) ? 'danger-text' : undefined}>{r.signatures && r.status === 'submitted' ? `${sigs.length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status])}</strong></li>
         </ul>

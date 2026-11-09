@@ -123,3 +123,16 @@ describe('petty cash', () => {
     expect(checkPin(1234)).toBeNull();
   });
 });
+
+describe('Set budget fill-ups (Andy, 2026-11-09, 2B)', () => {
+  it('never count as money in the box', () => {
+    const ms = (t: unknown) => (typeof t === 'number' ? t : null);
+    const funds = [
+      { id: 'a', kind: 'topup' as const, amountCents: 19_000_000, status: 'done' as const, doneAt: 1, note: 'Filled up to the budget' },
+      { id: 'b', kind: 'topup' as const, amountCents: 5_000_000, status: 'done' as const, doneAt: 2, note: null },
+    ];
+    const reqs = [{ id: 'r', number: 'FCN-1', status: 'approved' as const, totalCents: 2_170_000, approved: { at: 3 } as never, requesterName: 'X', category: 'Other' as const }];
+    expect(fundSummary(funds, reqs, ms).remainingCents).toBe(2_830_000);
+    expect(pettyLedger(funds, reqs, ms).map((l) => l.balanceCents)).toEqual([5_000_000, 2_830_000]);
+  });
+});

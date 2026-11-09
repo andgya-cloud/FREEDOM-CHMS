@@ -4,12 +4,12 @@
  * needed, and a "life" line shows money left and when it runs out at the present rate of spending.
  * Shared by the app and the functions, in all three organizations.
  */
-import { LOW_CASH_CENTS, type LedgerLine } from './pettyCash.js';
+import type { LedgerLine } from './pettyCash.js';
 
-/** Low warning when a fifth of the budget is left (Andy 5A); KES 5,000 when no budget is set. */
-export const LOW_SHARE = 0.2;
-export function lowCashLine(budgetCents: number | null | undefined): number {
-  return budgetCents && budgetCents > 0 ? Math.round(budgetCents * LOW_SHARE) : LOW_CASH_CENTS;
+/** Low warning below a fixed KES 20,000 (Andy, 2026-11-09, 5A): petty cash no longer has its own budget. */
+export const LOW_LINE_CENTS = 2_000_000;
+export function lowCashLine(_budgetCents?: number | null): number {
+  return LOW_LINE_CENTS;
 }
 
 /** Kenya keeps East Africa Time (UTC+3) all year. */
@@ -72,6 +72,7 @@ export function moneyLife(ledger: readonly LedgerLine[], now: number, budgetCent
   const runOutDay = daysLeft == null || leftCents <= 0 ? (leftCents <= 0 && ledger.length ? today : null)
     : new Date(Date.parse(`${today}T00:00:00Z`) + daysLeft * DAY_MS).toISOString().slice(0, 10);
   const lowLine = lowCashLine(budgetCents);
-  const tone: LifeTone = leftCents < lowLine ? 'low' : budgetCents > 0 && leftCents < budgetCents / 2 ? 'watch' : 'good';
+  // Amber when it runs out within two weeks at this rate.
+  const tone: LifeTone = leftCents < lowLine ? 'low' : daysLeft != null && daysLeft <= 14 ? 'watch' : 'good';
   return { days: [...past, ...futureDays], left: [...left, ...futureDays.map(() => null)], ahead, leftCents, perDayCents, daysLeft, runOutDay, tone };
 }

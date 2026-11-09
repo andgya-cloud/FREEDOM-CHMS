@@ -219,6 +219,10 @@ describe('purpose pots and free to spend', () => {
     expect(potOf('Paybill 222118 #building-fund')).toBe('BUILDING FUND');
     expect(potOf('FCC#TITHE')).toBe('');
     expect(potOf('KPLC TOKEN')).toBe('');
+    expect(potOf('FCC PAINT · Jane Doe · Paybill 222118')).toBe('PAINT');
+    expect(potOf('FCC#PAINT')).toBe('PAINT');
+    expect(potOf('FCC THANKSGIVING · John · Paybill 222118')).toBe('');
+    expect(potOf('FCC OFFERING · John · Paybill 222118')).toBe('');
     expect(potFor({ t: 'FCC#PAINTING', r: '', f: '' })).toBe('');
   });
 

@@ -52,11 +52,11 @@ export function PettyInsights({ org, month, requisitions, summary }: { org: Orga
         <KpiCard label="Average request" value={kes(approved.length ? total / approved.length : 0)} note={`${approved.length} approved`} />
       </KpiRow>
       <div className="dash-grid">
-        <Panel title="Budget used">
-          <Gauge value={summary.spentCents} max={summary.budgetCents} label="Since the last reset"
+        <Panel title="Money used">
+          <Gauge value={summary.spentCents} max={summary.budgetCents} label="Of all money added"
             display={summary.budgetCents ? `${Math.round(used * 100)}%` : '–'}
-            caption={summary.budgetCents ? `${kes(summary.spentCents)} of ${kes(summary.budgetCents)}` : 'No budget added yet'} />
-          {summary.remainingCents < 0 && <p className="notice notice-warn small">Spending is {kes(-summary.remainingCents)} over the budget.</p>}
+            caption={summary.budgetCents ? `${kes(summary.spentCents)} of ${kes(summary.budgetCents)}` : 'No money added yet'} />
+          {summary.remainingCents < 0 && <p className="notice notice-warn small">Spending is {kes(-summary.remainingCents)} more than the money added. Add money from the bank.</p>}
         </Panel>
         <Panel title="Approved each month">
           <ColumnChart label="Approved petty cash each month" rows={months.map((m) => ({ label: shortMonth(m), value: perMonth(m) / 100 }))} format={(v) => kes(v * 100)} height={170} />
