@@ -12,6 +12,7 @@ import { needsReceipt, receiptStatus } from '../../lib/receiptNames';
 import type { Organization } from '../../state/OrgContext';
 import { pettyReport, periodName, REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
 import { PettyInsights } from '../../components/PettyInsights';
+import { BankMatchCard } from './BankMatchCard';
 
 /** Every requisition's receipts in one place, one folder per requisition, for those who see all requisitions. */
 export function PettyReceiptsPage() {
@@ -72,6 +73,7 @@ function Receipts({ org }: { org: Organization }) {
         </label>
       </div>
       {!month && <p className="small muted">Pick a month to download all its approved requisitions' receipts in one PDF.</p>}
+      <BankMatchCard org={org} />
       <KpiRow label="Receipts">
         <KpiCard label="Receipts kept" value={String(inView.reduce((n, r) => n + receiptsOf(r.id).length, 0))} />
         <KpiCard label="Complete" value={String(approved.length - missing.length)} tone="ok" note="Approved, with a receipt" />
@@ -92,7 +94,7 @@ function Receipts({ org }: { org: Organization }) {
                 <button type="button" className="petty-folder" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? null : r.id)}>
                   <span className="petty-folder-name">{r.number ?? 'New request'} · {r.requesterName}</span>
                   <span className="small muted">{money(org, r.totalCents)} · {categoryLabel(r)} · {receiptStatus(r, n, PETTY_CASH_STATUS_LABELS[r.status])}</span>
-                  <span className={`badge${n || r.status !== 'approved' ? '' : ' badge-warn'}`}>{n ? `📎 ${n} receipt${n === 1 ? '' : 's'}` : 'No receipt yet'}</span>
+                  <span className={`badge${n || r.bankProof || r.status !== 'approved' ? '' : ' badge-warn'}`}>{n ? `📎 ${n} receipt${n === 1 ? '' : 's'}` : r.bankProof ? '🏦 Bank payment' : 'No receipt yet'}</span>
                 </button>
                 {isOpen && <ReceiptsBox org={org} req={r} receipts={mine} locked={monthRecs[r.month]?.status === 'closed'} />}
               </li>

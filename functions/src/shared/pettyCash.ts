@@ -82,6 +82,10 @@ export interface PettyCashRequisition {
   refNo?: string | null;
   /** Added from the past months sheet, already approved on paper (Andy, 2026-11-08). */
   pastRecord?: boolean;
+  /** The bank payment matched to it from an uploaded list; it stands as the receipt (Andy, 2026-11-09, 4A). */
+  bankProof?: { day: string; ref: string; cents: number; payee?: string; byName?: string } | null;
+  /** The amount asked before it was set to what the bank sent (2A). */
+  originalCents?: number;
 }
 
 /** A stakeholder's signature on a requisition. */

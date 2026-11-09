@@ -40,8 +40,16 @@ const label = (r: RequisitionRow) => r.number ?? 'New request';
 /** A requisition and its receipts, as they go into a receipt pack. */
 export const packGroup = (org: Organization, r: RequisitionRow, receipts: ReceiptRow[]): PackGroup => ({
   number: label(r), requesterName: r.requesterName, amount: money(org, r.totalCents), category: categoryLabel(r),
-  status: receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status]), items: r.items, receipts,
+  status: receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status]), items: r.items, receipts, bank: bankLine(org, r),
 });
+
+/** "15 Jun 2026 · ref 1161133356 · KES 18,700", for a requisition matched to a bank payment. */
+export function bankLine(org: Organization, r: Pick<RequisitionRow, 'bankProof'>) {
+  const b = r.bankProof;
+  if (!b) return null;
+  const day = new Date(`${b.day}T12:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${day} · ref ${b.ref} · ${money(org, b.cents)}`;
+}
 
 /** Saves a receipt pack PDF, or says why it could not. */
 export async function savePack(org: Organization, title: string, fileName: string, groups: PackGroup[], toast: { show: (m: string) => void }) {
@@ -144,6 +152,7 @@ export function RequisitionList({ org, rows, empty }: { org: Organization; rows:
               <span className="link-detail">{money(org, r.totalCents)} · {r.signatures && r.status === 'submitted' ? `${Object.keys(r.signatures).length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : receiptStatus(r, counts[r.id] ?? 0, PETTY_CASH_STATUS_LABELS[r.status])} · {categoryLabel(r)}</span>
               {p.seesAll && r.status !== 'rejected' && (counts[r.id]
                 ? <span className="badge">📎 {counts[r.id]} receipt{counts[r.id] === 1 ? '' : 's'}</span>
+                : r.bankProof ? <span className="badge">🏦 Bank payment</span>
                 : needsReceipt(r, 0) && <span className="badge badge-warn">No receipt yet</span>)}
             </Link>
           </li>
@@ -535,6 +544,7 @@ function Requisition({ org }: { org: Organization }) {
           <li><span>Category</span><strong>{categoryLabel(r)}</strong></li>
           <li><span>Date</span><strong>{when(r.createdAt)}</strong></li>
           <li><span>Status</span><strong className={needsReceipt(r, receipts.length) ? 'danger-text' : undefined}>{r.signatures && r.status === 'submitted' ? `${sigs.length} of ${REQUEST_SIGNATURES_NEEDED} signatures` : receiptStatus(r, receipts.length, PETTY_CASH_STATUS_LABELS[r.status])}</strong></li>
+          {r.bankProof && <li><span>Bank payment</span><strong>{bankLine(org, r)}{r.originalCents ? ` (asked ${money(org, r.originalCents)})` : ''}</strong></li>}
         </ul>
         <h2>Expense items</h2>
         <div className="exam-table-wrap">

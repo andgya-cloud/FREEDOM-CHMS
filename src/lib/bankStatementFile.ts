@@ -18,6 +18,11 @@ export async function readBankStatement(file: File, password?: string): Promise<
   return parseStatementRows(sheetCells(await readStatementFile(file)));
 }
 
+/** The text of every page as plain rows, for reading a list of payments (Andy, 2026-11-09). */
+export async function pdfTextRows(file: File, password?: string): Promise<string[][]> {
+  return (await pdfRows(file, password)).map((r) => r.map((c) => c.text));
+}
+
 /** The text of every page, as rows of cells with where they sit across the page. */
 async function pdfRows(file: File, password?: string): Promise<StatementCell[][]> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');

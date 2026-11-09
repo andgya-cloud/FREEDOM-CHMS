@@ -14,6 +14,8 @@ export interface PackReceipt { id: string; name: string; type: string; itemIndex
 export interface PackGroup {
   number: string; requesterName: string; amount: string; category: string; status: string;
   items: { description: string }[]; receipts: PackReceipt[];
+  /** The matched bank payment, which stands as the receipt (Andy, 2026-11-09). */
+  bank?: string | null;
 }
 
 const A4: [number, number] = [595.28, 841.89];
@@ -69,7 +71,8 @@ export async function buildReceiptPack(orgName: string, title: string, groups: P
   line(title, 12, bold, 12);
   for (const g of groups) {
     line(`${g.number} · ${g.requesterName} · ${g.amount} · ${g.category} · ${g.status}`, 10, bold, 3);
-    if (!g.receipts.length) line('   No receipt yet', 9, font, 3);
+    if (g.bank) line(`   Bank payment: ${g.bank}`, 9, font, 3);
+    else if (!g.receipts.length) line('   No receipt yet', 9, font, 3);
     g.receipts.forEach((r, i) => line(`   ${receiptCode(g.number, i + 1)} · ${itemLabel(g.items, r.itemIndex)} · ${r.name}`, 9, font, 3));
     y -= 6;
   }

@@ -40,7 +40,7 @@ export interface PettyReport {
 }
 
 type Req = Pick<PettyCashRequisition, 'id' | 'number' | 'status' | 'totalCents' | 'approved' | 'requesterName' | 'category' | 'signatures'>
-  & { createdAt?: unknown; categoryNote?: string | null; payee?: string | null; mpesaCode?: string | null; refNo?: string | null; pastRecord?: boolean };
+  & { createdAt?: unknown; categoryNote?: string | null; payee?: string | null; mpesaCode?: string | null; refNo?: string | null; pastRecord?: boolean; bankProof?: unknown };
 type Fund = Pick<PettyFund, 'id' | 'kind' | 'amountCents' | 'status' | 'doneAt' | 'signatures'> & { note?: string | null; pastRecord?: boolean };
 
 export function pettyReport(period: string, funds: readonly Fund[], requisitions: readonly Req[], receiptCounts: Readonly<Record<string, number>>,
@@ -73,7 +73,7 @@ export function pettyReport(period: string, funds: readonly Fund[], requisitions
   const signers = (r: Req) => Object.values(r.signatures ?? {}).map((s) => s.name).join(' & ');
   const vouchers: ReportVoucher[] = mine.map((r) => ({
     id: r.id, number: r.number ?? '', date: dayOf(at(r.approved?.at)), requester: r.requesterName, category: categoryLabel(r), payee: r.payee ?? '',
-    mpesaCode: r.mpesaCode ?? '', refNo: r.refNo ?? '', approvedBy: signers(r), cents: r.totalCents, receipts: receiptCounts[r.id] ?? 0, past: !!r.pastRecord,
+    mpesaCode: r.mpesaCode ?? '', refNo: r.refNo ?? '', approvedBy: signers(r), cents: r.totalCents, receipts: (receiptCounts[r.id] ?? 0) || (r.bankProof ? 1 : 0), past: !!r.pastRecord,
   }));
   const moneyIn: ReportMoneyIn[] = funds.filter((f) => f.kind === 'topup' && f.status === 'done' && inP(at(f.doneAt)))
     .sort((a, b) => at(a.doneAt) - at(b.doneAt))
