@@ -2,20 +2,17 @@ import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from '
 import { Greeting } from '../../components/Greeting';
 import { SIGNATORY_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { createPortal } from 'react-dom';
-import { DailyBox } from '../finance/DailyBox';
-import { useDaily, useFinance } from '../../state/useFinance';
-import { bankOutChoices } from '../../../functions/src/shared/finance';
+import { BankMoneyCard, useBankMoney } from '../finance/BankMoney';
 import { BudgetWarning } from '../finance/BudgetWarning';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
-import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, type FundRow, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
-import { addReceipt, savePayment, cancelFund, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
+import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, type ReceiptRow, type RequisitionRow } from '../../state/usePettyCash';
+import { addReceipt, savePayment, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { takePettyPrefill } from '../../lib/pettyPrefill';
-import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, topUpWithPin, type PettySigner } from '../../lib/pettyPin';
-import { lowCashLine } from '../../../functions/src/shared/pettyLife';
+import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 
@@ -26,8 +23,8 @@ import { itemLabel, needsReceipt, receiptCode, receiptStatus } from '../../lib/r
 import type { PackGroup } from '../../lib/receiptPack';
 import {
   categoryLabel, lineAmountCents, type CategoryBudgetRow,
-  ADIA_TOPUP_NAMES, canTopUpAlone, fundSignaturesNeeded, itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
-  PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory, type PettyFundKind,
+  itemsTotalCents, waitingForAccountant, MAX_RECEIPTS_PER_REQUEST, REQUEST_SIGNATURES_NEEDED, MAX_PETTY_CASH_ITEMS, nextStepFor, parseAmountCents, RECEIPT_ACCEPT, receiptKindLabel,
+  PETTY_CASH_ORG_TYPES, pettyCashBase, pettyCashCategoriesFor, PETTY_CASH_STATUS_LABELS, type PettyCashCategory,
   cleanMpesaCode, DIRECTOR_LIMIT_CENTS, DUPLICATE_DAYS, MPESA_CODE, overDirectorLimit, possibleDuplicates, waitingForDirector,
 } from '../../../functions/src/shared/pettyCash';
 import { money } from './common';
@@ -35,7 +32,6 @@ import { PettyInsights } from '../../components/PettyInsights';
 import { useOrg } from '../../state/OrgContext';
 import type { Organization } from '../../state/OrgContext';
 import { PasswordInput } from '../../components/PasswordInput';
-import { ConfirmDialog } from '../../components/ConfirmDialog';
 import type { Timestamp } from 'firebase/firestore';
 
 const when = (t: unknown) => (t && typeof (t as Timestamp).toDate === 'function'
@@ -185,122 +181,6 @@ export function BudgetHealth({ org, rows }: { org: Organization; rows: CategoryB
   );
 }
 
-const FUND_TEXT: Record<PettyFundKind, { title: string; sub: string; done: string }> = {
-  topup: { title: 'Add money', sub: 'Any one signer adds money with their own PIN.', done: 'Top-up complete. The money is now in the budget.' },
-  reset: { title: 'Reset Budget Authorization', sub: 'Any two signers approve the reset: each picks their name and types their PIN.', done: 'Budget reset. It now starts again from zero.' },
-};
-
-/**
- * A top-up (one stakeholder's PIN, Andy 2026-10-24) or a reset collecting its two signatures. An older
- * top-up still waiting for a second signature is finished by the next PIN.
- */
-function FundCard({ org, kind, onClose }: { org: Organization; kind: PettyFundKind; onClose?: () => void }) {
-  const p = usePettyCash(org);
-  const toast = useToast();
-  const [note, setNote] = useState('');
-  // Money comes in only from a bank line (Andy, 2026-11-09): pick it, and its money out is the amount.
-  const fin = useFinance(org);
-  const daily = useDaily(org);
-  const [bankKey, setBankKey] = useState('');
-  const since = new Date(Date.now() - 120 * 86400000).toISOString().slice(0, 10);
-  const used = useMemo(() => new Set(p.funds.filter((f) => !f.deletedAt).map((f) => (f as { bankKey?: string }).bankKey ?? '').filter(Boolean)), [p.funds]);
-  const choices = useMemo(() => bankOutChoices(fin.statements, daily.entries, used, since), [fin.statements, daily.entries, used, since]);
-  const choice = choices.find((c) => c.key === bankKey);
-  const [askDelete, setAskDelete] = useState(false);
-  const open: FundRow | undefined = p.funds.find((f) => f.kind === kind && f.status === 'collecting');
-  const signed = open ? Object.entries(open.signatures).sort(([, a], [, b]) => ((a.at as Timestamp)?.toMillis?.() ?? Date.now()) - ((b.at as Timestamp)?.toMillis?.() ?? Date.now())) : [];
-  const cents = kind === 'topup' ? (open ? open.amountCents : choice?.cents ?? null) : 0;
-  const ready = kind === 'reset' || (cents != null && cents > 0);
-  const text = FUND_TEXT[kind];
-  const needed = fundSignaturesNeeded(kind);
-  const slots = Math.max(needed, signed.length + (open ? 1 : 0));
-  const quickTopUp = kind === 'topup' && !open;
-  // "Add KES … to the budget?" before any money moves, to catch a mistyped amount.
-  const [confirming, setConfirming] = useState<((yes: boolean) => void) | null>(null);
-  const askConfirm = () => new Promise<boolean>((resolve) => setConfirming(() => resolve));
-  const answer = (yes: boolean) => { confirming?.(yes); setConfirming(null); };
-  const topUpWho = isPettyOrg(org.type) ? `Any one of ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} adds money with their own PIN.` : text.sub;
-
-  return (
-    <section className={`petty-auth petty-auth-${kind}`} aria-label={text.title}>
-      <div className="petty-auth-head">
-        <div className="petty-auth-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d={kind === 'topup' ? 'M9 3h6l-1.5 3h-3zM6 10c0-2 2.7-4 6-4s6 2 6 4l1 8a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3zM12 10v7M10 12.5c0-.8.9-1.5 2-1.5s2 .7 2 1.5-1 1-2 1.3-2 .6-2 1.4.9 1.3 2 1.3 2-.6 2-1.3' : 'M20 11a8 8 0 0 0-14.6-4.5M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5M20 20v-4h-4'} /></svg>
-        </div>
-        <div className="petty-auth-title"><h2>{text.title}</h2><p>{kind === 'topup' ? topUpWho : text.sub}</p></div>
-        {!quickTopUp && <span className="petty-auth-count">{signed.length}/{slots}</span>}
-      </div>
-      <div className="petty-auth-body">
-        {kind === 'topup' && (open ? (
-          <p className="petty-auth-amount">Top-up of <strong>{money(org, open.amountCents)}</strong>, started by {signed[0]?.[1].name ?? 'a signer'}</p>
-        ) : (
-          <>
-          <label className="field"><span className="petty-caps">Money taken from the bank</span>
-            <select value={bankKey} onChange={(e) => setBankKey(e.target.value)} disabled={!p.canAuthorize || choices.length === 0}>
-              <option value="">{choices.length ? 'Choose the bank line…' : 'No money out from the bank yet'}</option>
-              {choices.map((c) => <option key={c.key} value={c.key}>{new Date(`${c.d}T12:00:00Z`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', timeZone: 'UTC' })} · {money(org, c.cents)} · {c.text.slice(0, 50)}</option>)}
-            </select>
-            {choice
-              ? <small className="petty-amount-ok">{money(org, choice.cents)} will be added to petty cash as soon as you confirm below.</small>
-              : <small className="muted">Only money that left the bank can go in. Upload the bank statement, or type the withdrawal in Today's bank money, and it shows here.</small>}
-          </label>
-          <label className="field"><span className="petty-caps">What for (optional)</span>
-            <input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Cash for the band" disabled={!p.canAuthorize} />
-          </label>
-          </>
-        ))}
-        {kind === 'reset' && <p className="petty-warn">Resetting sets the total budget and spending back to zero. Requests still waiting for a signature carry over.</p>}
-        {!ready && <p className="petty-warn">Step 1: choose the bank line above. Step 2: choose your name, type your PIN or password and press Add money.</p>}
-        {quickTopUp ? (
-          <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} topUpOnly directorMode ready={ready} exclude={[]} confirmLabel="✓ Add money"
-            sign={async (uid, pin) => {
-              if (!(await askConfirm())) return 'Cancelled. Nothing was added.';
-              const who = await topUpWithPin(org.id, cents ?? 0, uid, pin, 'topup', note, bankKey);
-              setBankKey('');
-              setNote('');
-              onClose?.();
-              return `${who} added ${money(org, cents ?? 0)}. It is in the petty cash now.`;
-            }} />
-        ) : (
-        <ol className="petty-signers">
-          {Array.from({ length: slots }, (_, n) => {
-            const s = signed[n];
-            return (
-              <li key={n} className={s ? 'signed' : ''}>
-                <div className="petty-signer-head"><span className="petty-signer-no">{s ? '✓' : n + 1}</span><h3>Authorizer {n + 1}</h3>{s && <span className="petty-signer-when">{when(s[1].at)}</span>}</div>
-                {s ? (
-                  <p className="petty-signer-name">Signed by {s[1].name}{(s[1] as { enteredBy?: string }).enteredBy ? ` (entered by ${(s[1] as { enteredBy?: string }).enteredBy})` : ''}</p>
-                ) : n === signed.length && (open || p.canAuthorize) ? (
-                  <PettySignBox label="Choose your name and type your PIN or password." orgId={org.id} fundOnly directorMode exclude={open ? Object.keys(open.signatures) : []}
-                    sign={async (uid, pin) => {
-                      if (!open) return `Signed by ${await topUpWithPin(org.id, 0, uid, pin, kind)}. ${needed - 1} more signature${needed - 1 === 1 ? '' : 's'} needed.`;
-                      const who = await signWithPin(org.id, 'fund', open.id, uid, pin);
-                      const last = signed.length + 1 >= needed;
-                      if (last && kind === 'reset') onClose?.();
-                      return last ? `Signed by ${who}. ${text.done}` : `Signed by ${who}.`;
-                    }} />
-                ) : (
-                  <p className="petty-signer-name muted">Waiting for the signature above</p>
-                )}
-              </li>
-            );
-          })}
-        </ol>
-        )}
-        <div className="row-actions">
-          {open && open.createdBy !== p.uid && p.canSign && <button type="button" className="btn btn-quiet danger-text" onClick={() => setAskDelete(true)}>Delete this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
-          {open && open.createdBy === p.uid && <button type="button" className="btn btn-quiet danger-text" onClick={() => { cancelFund(org.id, open.id).catch((err) => toast.show(friendlyError(err))); toast.show('Cancelled'); }}>Cancel this {kind === 'topup' ? 'top-up' : 'reset'}</button>}
-          {onClose && !open && <button type="button" className="btn btn-quiet" onClick={onClose}>Close</button>}
-        </div>
-        <ConfirmDialog open={!!confirming} title={`Add ${money(org, cents ?? 0)}?`} body={`The ${org.name} petty cash goes up by ${money(org, cents ?? 0)} straight away.`}
-          confirmLabel="Confirm" onConfirm={() => answer(true)} onCancel={() => answer(false)} />
-        {open && <AskDeleteDialog org={org} kind="fund" targetId={open.id} open={askDelete} onClose={() => setAskDelete(false)}
-          title={`Delete this ${kind === 'topup' ? 'top-up' : 'reset'}?`} body={kind === 'topup' ? `Top-up of ${money(org, open.amountCents)}.` : 'Budget reset.'} />}
-      </div>
-    </section>
-  );
-}
-
 export function RequisitionList({ org, rows, empty }: { org: Organization; rows: RequisitionRow[]; empty: string }) {
   const p = usePettyCashAccess();
   const { receipts } = useReceipts(org);
@@ -338,14 +218,8 @@ function Home({ org }: { org: Organization }) {
   const mine = p.requisitions.filter((r) => r.requesterId === p.uid);
   const approved = p.requisitions.filter((r) => r.status === 'approved');
   const { profile } = useAuth();
-  // At ADIA the top-up box shows only to the four who may top up (and Andrew Guya and Doreen) (Andy, 2026-10-24).
-  const canTopUpHere = p.isKeeper || (p.canAuthorize && canTopUpAlone(org.type, profile?.displayName ?? '', p.isPastor));
   const { receipts } = useReceipts(org);
   const noReceipt = approved.filter((r) => !r.pastRecord && !receipts.some((rc) => rc.reqId === r.id));
-  const [topUpOpen, setTopUpOpen] = useState(false);
-  const lowLine = lowCashLine();
-  // An older top-up still waiting for a signature stays open so it can be finished.
-  const topUpWaiting = p.funds.some((f) => f.kind === 'topup' && f.status === 'collecting');
   if (!p.any) return <NoAccess />;
   return (
     <div className="page narrow">
@@ -362,21 +236,14 @@ function Home({ org }: { org: Organization }) {
           <RequisitionList org={org} rows={waiting} empty="Nothing needs your signature." />
         </section>
       )}
-      {p.seesAll && !p.loading && p.summary.remainingCents < lowLine && (
-        <p className="petty-warn">Petty cash is low: {money(org, p.summary.remainingCents)} left, below {money(org, lowLine)}.{canTopUpHere ? ' Press Add money below.' : ` Ask ${ADIA_TOPUP_NAMES.join(', ').replace(/, ([^,]*)$/, ' or $1')} to add money.`}</p>
-      )}
       {p.seesAll && noReceipt.length > 0 && (
         <p className="petty-warn">
           {noReceipt.length} approved requisition{noReceipt.length === 1 ? ' still needs' : 's still need'} a receipt ({noReceipt.slice(0, 3).map(label).join(', ')}{noReceipt.length > 3 ? '…' : ''}).{' '}
           <Link to={`${pettyCashBase(org.type)}/receipts`}>Add receipts</Link>
         </p>
       )}
-      {/* No Money box (Andy, 2026-11-09): cash left shows on the Balance Sheet; only the Add money button stays. */}
-      {p.seesAll && canTopUpHere && !topUpOpen && !topUpWaiting && (
-        <div className="row-actions"><button type="button" className="btn btn-primary" onClick={() => setTopUpOpen(true)}>Add money</button></div>
-      )}
-      {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting) && <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />}
-      {p.seesAll && <DailyBox org={org} />}
+      {/* Petty cash is paid from the bank (Andy, 2026-11-09, 1A 2A 5A): no box, no Add money, no typed bank money. */}
+      {p.seesAll && <BankMoneyCard org={org} />}
       {p.canSign && <BinNotice org={org} />}
       {p.canRequest && (
         <section className="card stack">
@@ -410,6 +277,7 @@ export function NewRequisitionPage() {
 
 function NewRequisition({ org }: { org: Organization }) {
   const p = usePettyCash(org);
+  const bank = useBankMoney(org);
   const { profile } = useAuth();
   const toast = useToast();
   const navigate = useNavigate();
@@ -579,7 +447,7 @@ function NewRequisition({ org }: { org: Organization }) {
         {bigOne && <p className="petty-warn small">This request is over {money(org, DIRECTOR_LIMIT_CENTS)}, so the Director must be one of the two signatures.</p>}
         {dupes.length > 0 && <p className="petty-warn small">Possible repeat: {dupes.map((d) => `${label(d)} (${when(d.createdAt)})`).join(', ')} asked for the same amount in {category} within {DUPLICATE_DAYS} days. You can still submit it if it is a new expense.</p>}
       </section>
-      {p.seesAll && <p className="petty-left">Remaining in the budget after this request: <strong>{money(org, p.summary.remainingCents - total)}</strong></p>}
+      {p.seesAll && bank.asOf && <p className="petty-left">Money in the bank available after this request: <strong>{money(org, bank.availableCents - total)}</strong></p>}
       <button type="button" className="btn btn-primary" onClick={submit} disabled={busy}>{busy ? 'Submitting…' : chosen ? `Submit requisition for ${chosen.name}` : 'Submit requisition'}</button>
     </div>
   );
@@ -592,6 +460,7 @@ export function RequisitionPage() {
 function Requisition({ org }: { org: Organization }) {
   const { reqId = '' } = useParams();
   const p = usePettyCash(org);
+  const bank = useBankMoney(org);
   const { profile } = useAuth();
   const toast = useToast();
   const [rejecting, setRejecting] = useState(false);
@@ -617,8 +486,9 @@ function Requisition({ org }: { org: Organization }) {
   const act = (write: Promise<unknown>, done: string) => { write.catch((err) => toast.show(friendlyError(err))); toast.show(done); };
   const sigs = signaturesOf(r);
   // The last signature may not take the cash left below zero (Andy, 2026-10-24).
-  const shortOfCash = waitingToSign && sigs.length + 1 >= REQUEST_SIGNATURES_NEEDED && p.summary.remainingCents - r.totalCents < 0;
-  const cashNote = shortOfCash && <p className="petty-warn">Not enough petty cash to approve this: {money(org, Math.max(0, p.summary.remainingCents))} left, and this request is {money(org, r.totalCents)}. Add money first, then sign.</p>;
+  // Paid from the bank (Andy, 2026-11-09, 4A): the last signature may not go above the money available.
+  const shortOfCash = waitingToSign && bank.ready && sigs.length + 1 >= REQUEST_SIGNATURES_NEEDED && (!bank.asOf || bank.availableCents - r.totalCents < 0);
+  const cashNote = shortOfCash && <p className="petty-warn">{bank.asOf ? `Not enough money in the bank to approve this: ${money(org, Math.max(0, bank.availableCents))} available, and this request is ${money(org, r.totalCents)}. Upload the latest bank statement, then sign.` : 'Upload the bank statement first (Financial statements), then sign.'}</p>;
   const signOffs = r.signatures
     ? Array.from({ length: REQUEST_SIGNATURES_NEEDED }, (_, n) => {
       const s = sigs[n];

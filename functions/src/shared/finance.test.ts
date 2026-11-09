@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoCategory, bankOutChoices, parseBankLineKey, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, pdfItemsToRows, sheetCells,
+  autoCategory, bankMoney, bankOutChoices, parseBankLineKey, budgetWarning, dailyBook, freeToSpend, potBalances, potFor, potOf, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, pdfItemsToRows, sheetCells,
   type BankStatement, type DailyBankEntry, type PdfTextItem, type StatementCell,
 } from './finance';
 
@@ -255,7 +255,7 @@ describe('purpose pots and free to spend', () => {
     };
     const f = freeToSpend({
       statements: [st], entries: [{ id: 'e', date: '2026-11-09', dir: 'out', cents: 10_000, account: 'Family Bank', text: '', category: 'rent' }],
-      pettyNowCents: 5_000, waitingCents: 2_000, heldCents: 100_000, budget: { rent: 30_000 }, spentThisMonth: { rent: 10_000 }, today: '2026-11-09',
+      paidSinceCents: -5_000, waitingCents: 2_000, heldCents: 100_000, budget: { rent: 30_000 }, spentThisMonth: { rent: 10_000 }, today: '2026-11-09',
     });
     expect(f.bankCents).toBe(560_000 - 10_000);
     expect(f.cashCents).toBe(555_000);
@@ -322,5 +322,18 @@ describe('bankOutChoices', () => {
     expect(parseBankLineKey('st:a:0')).toEqual({ kind: 'st', id: 'a', index: 0 });
     expect(parseBankLineKey('dy:x')).toEqual({ kind: 'dy', id: 'x' });
     expect(parseBankLineKey('nope')).toBeNull();
+  });
+});
+
+describe('bankMoney', () => {
+  it('takes the latest bank balance less requisitions approved since', () => {
+    const st = [
+      { account: 'Family Bank', accountKind: 'bank' as const, from: '2026-11-01', lines: [
+        { d: '2026-11-01', t: '', r: '', i: 0, o: 0, b: 100_000, c: '', s: true }, { d: '2026-11-05', t: '', r: '', i: 0, o: 0, b: 80_000, c: '', s: true }] },
+      { account: 'M-Pesa', accountKind: 'mpesa' as const, from: '2026-11-01', lines: [{ d: '2026-11-07', t: '', r: '', i: 0, o: 0, b: 9, c: '', s: true }] },
+    ];
+    const m = bankMoney(st, [{ day: '2026-11-05', cents: 1 }, { day: '2026-11-06', cents: 30_000 }]);
+    expect(m).toEqual({ bankCents: 80_000, asOf: '2026-11-05', paidSinceCents: 30_000, paidSince: 1, availableCents: 50_000 });
+    expect(bankMoney([], [{ day: '2026-11-06', cents: 5 }]).asOf).toBe('');
   });
 });

@@ -895,7 +895,8 @@ export function readyMonth(statements: readonly BankStatement[], today: string):
 export interface FreeToSpend {
   /** Each account's balance now: the last statement balance, plus bank money typed since. */
   accounts: { account: string; cents: number; asOf: string }[];
-  bankCents: number; pettyCents: number; cashCents: number;
+  /** Requisitions approved after the statement's last day: paid, but not on the statement yet. */
+  bankCents: number; paidSinceCents: number; cashCents: number;
   heldCents: number; waitingCents: number; freeCents: number;
   /** Average giving a week over the last eight weeks of statements, and what the rest of the month should bring. */
   weeklyGivingCents: number; weeksLeft: number; expectedCents: number;
@@ -910,7 +911,7 @@ export interface FreeToSpend {
  * give every week, the giving still expected this month is added and the rest of the month's budget taken off.
  */
 export function freeToSpend(x: {
-  statements: readonly BankStatement[]; entries: readonly DailyBankEntry[]; pettyNowCents: number; waitingCents: number; heldCents: number;
+  statements: readonly BankStatement[]; entries: readonly DailyBankEntry[]; paidSinceCents: number; waitingCents: number; heldCents: number;
   budget: Readonly<Record<string, number>>; spentThisMonth: Readonly<Record<string, number>>; today: string;
 }): FreeToSpend {
   const names = [...new Set(x.statements.map((s) => s.account))];
@@ -923,7 +924,7 @@ export function freeToSpend(x: {
     return { account, cents: (last?.b ?? 0) + typed, asOf };
   });
   const bankCents = accounts.reduce((n, a) => n + a.cents, 0);
-  const cashCents = bankCents + x.pettyNowCents;
+  const cashCents = bankCents - x.paidSinceCents;
   const freeCents = cashCents - x.heldCents - x.waitingCents;
   const lastDay = accounts.reduce((m, a) => (a.asOf > m ? a.asOf : m), '');
   const from = lastDay ? new Date(Date.parse(`${lastDay}T00:00:00Z`) - 55 * 86_400_000).toISOString().slice(0, 10) : '';
@@ -935,7 +936,7 @@ export function freeToSpend(x: {
   const expectedCents = Math.round(weeklyGivingCents * weeksLeft);
   const budgetLeftCents = Object.entries(x.budget).filter(([id, c]) => c > 0 && finCategory(id).group === 'expense')
     .reduce((n, [id, c]) => n + Math.max(0, c - (x.spentThisMonth[id] ?? 0)), 0);
-  return { accounts, bankCents, pettyCents: x.pettyNowCents, cashCents, heldCents: x.heldCents, waitingCents: x.waitingCents, freeCents, weeklyGivingCents, weeksLeft, expectedCents, budgetLeftCents,
+  return { accounts, bankCents, paidSinceCents: x.paidSinceCents, cashCents, heldCents: x.heldCents, waitingCents: x.waitingCents, freeCents, weeklyGivingCents, weeksLeft, expectedCents, budgetLeftCents,
     afterMonthCents: freeCents + expectedCents - budgetLeftCents };
 }
 
@@ -1003,4 +1004,41 @@ export function bankOutChoices(
     if (e.dir === 'out' && e.cents > 0 && e.date >= sinceDay && !used.has(key)) out.push({ key, d: e.date, cents: e.cents, text: e.text || 'Bank money typed on the day' });
   }
   return out.sort((a, b) => b.d.localeCompare(a.d) || b.cents - a.cents);
+}
+
+// ---- Petty cash is paid from the bank (Andy, 2026-11-09, 1A 2A 4A) ------------------------------------
+
+export interface BankMoney {
+  /** The last balance of each bank account on the uploaded statements, added up. */
+  bankCents: number;
+  /** The latest day on those statements ('' when none is uploaded). */
+  asOf: string;
+  /** Requisitions approved after that day: paid, or about to be, but not on the statement yet. */
+  paidSinceCents: number; paidSince: number;
+  /** What can still be approved. */
+  availableCents: number;
+}
+
+/**
+ * The money petty cash requisitions can use: the bank balance from the latest uploaded statement, less the
+ * requisitions approved after the statement's last day. No separate cash box and no typed amounts.
+ */
+export function bankMoney(
+  statements: readonly Pick<BankStatement, 'account' | 'accountKind' | 'from' | 'lines'>[],
+  approved: readonly { day: string; cents: number }[],
+): BankMoney {
+  const bank = statements.filter((s) => s.accountKind === 'bank');
+  let bankCents = 0;
+  let asOf = '';
+  for (const account of new Set(bank.map((s) => s.account))) {
+    const ls = bank.filter((s) => s.account === account).flatMap((s) => s.lines.map((l, n) => ({ ...l, from: s.from, n })))
+      .sort((a, b) => a.d.localeCompare(b.d) || a.from.localeCompare(b.from) || a.n - b.n);
+    const last = ls[ls.length - 1];
+    if (!last) continue;
+    bankCents += last.b;
+    if (last.d > asOf) asOf = last.d;
+  }
+  const since = asOf ? approved.filter((a) => a.day > asOf) : [];
+  const paidSinceCents = since.reduce((n, a) => n + a.cents, 0);
+  return { bankCents, asOf, paidSinceCents, paidSince: since.length, availableCents: bankCents - paidSinceCents };
 }

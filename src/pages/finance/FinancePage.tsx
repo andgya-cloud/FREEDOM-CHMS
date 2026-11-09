@@ -8,15 +8,16 @@ import { downloadFile } from '../../lib/givingPdf';
 import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
 import { millis, usePettyCash } from '../../state/usePettyCash';
+import { approvedAfter, useBankMoney } from './BankMoney';
 import { useLedgerMonths } from '../../state/useGiving';
 import { isLocked, orgKind, useDaily, useFinance, type FinMonthRow, type StatementRow } from '../../state/useFinance';
 import { approveFinMonth, prepareFinMonth, removeStatement, reopenFinMonth, saveFinBook, saveLines, saveStatement } from '../../lib/financeWrites';
-import { pettyReport, REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
+import { REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
 import type { FinSigned } from '../../lib/financePdf';
 import { ADIA_TOPUP_NAMES, parseAmountCents } from '../../../functions/src/shared/pettyCash';
 import {
   autoCategory, categoriesFor, freeToSpend, potBalances, potLabel, potFor, potNames, readyMonth, spentInMonth, typedCategory, type FinReport, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey, lineKey,
-  OWE_KINDS, OWN_KINDS, type BankLine, type FinInput, type OwnedItem, type ParsedStatement, type PettyFigures,
+  OWE_KINDS, OWN_KINDS, type BankLine, type FinInput, type OwnedItem, type ParsedStatement,
 } from '../../../functions/src/shared/finance';
 
 const num = (c: number) => { const t = (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return c < 0 ? `(${t})` : t; };
@@ -276,28 +277,15 @@ function ReportCard({ org, statements, budget, owned, learned, months }: { org: 
   const daily = useDaily(org);
   const today = kenyaToday();
   const build = useCallback((period: string): FinReport => {
-    const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
-    // Money put in the box by Set budget ("Filled up to the budget") was not real money (Andy, 2026-11-09, 2B):
-    // the petty cash figures leave it out, and it is never looked for on the bank statement.
-    const dayOf = (t: unknown) => new Date((millis(t) ?? Date.now()) + 3 * 3_600_000).toISOString().slice(0, 10);
-    const isFill = (f: { note?: string | null }) => f.note === 'Filled up to the budget';
-    const pf = (x: string): PettyFigures => {
-      const r = pettyReport(x, p.funds, p.requisitions, {}, millis);
-      return { openingCents: r.openingCents, inCents: r.inCents, outCents: r.outCents, closingCents: r.closingCents, categories: r.categories.map((c) => ({ category: c.category, cents: c.cents })) };
-    };
-    const prev = (x: string) => (x.length === 4 ? String(+x - 1) : (() => { const [y, m] = x.split('-').map(Number) as [number, number]; return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })());
-    const lastYear = period.length === 4 ? String(+period - 1) : `${+period.slice(0, 4) - 1}${period.slice(4)}`;
-    const trendMonths: string[] = period.length === 4 ? Array.from({ length: 12 }, (_, n) => `${period}-${String(n + 1).padStart(2, '0')}`)
-      : Array.from({ length: 6 }, (_, n) => { let x = period; for (let k = 0; k < 5 - n; k++) x = prev(x); return x; });
-    const topups = p.funds.filter((f) => f.kind === 'topup' && f.status === 'done' && !(f as { pastRecord?: boolean }).pastRecord && !isFill(f as { note?: string }))
-      .map((f) => ({ date: dayOf(f.doneAt), cents: f.amountCents }));
     const input: FinInput = {
       statements, owned, budget,
-      petty: hasPetty ? { now: pf(period), before: pf(prev(period)), lastYear: pf(lastYear) } : null,
-      pettyOutByMonth: hasPetty ? Object.fromEntries(trendMonths.map((m) => [m, pf(m).outCents])) : {},
+      // Petty cash is paid from the bank (Andy, 2026-11-09, 1A): its payments are already statement lines,
+      // so the vouchers are not added again and there is no petty cash box on the Balance Sheet.
+      petty: null,
+      pettyOutByMonth: {},
       givingRecordedCents: church && period === chosen ? ledger.reduce((n, m) => n + (m.totalCents ?? 0), 0) : null,
       today,
-      daily: { entries: daily.entries, topups },
+      daily: null,
     };
     return financialReport(period, input, (c) => money(org, c));
   }, [statements, owned, budget, p.funds, p.requisitions, church, chosen, ledger, org, daily.entries, today]);
@@ -651,18 +639,19 @@ function MonthClose({ org, month, row, waiting }: { org: Organization; month: st
  */
 function FreeCard({ org, statements, budget }: { org: Organization; statements: StatementRow[]; budget: Record<string, number> }) {
   const p = usePettyCash(org);
-  const daily = useDaily(org);
+  const bank = useBankMoney(org);
   const today = kenyaToday();
   const month = today.slice(0, 7);
   const f = useMemo(() => {
-    const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
-    const petty = hasPetty ? pettyReport(month, p.funds, p.requisitions, {}, millis).categories : [];
+    const hasPetty = p.requisitions.length > 0;
+    // Requisitions are paid from the bank (Andy, 2026-11-09): only those approved after the statement are not in its lines yet.
+    const petty = approvedAfter(p.requisitions, bank.asOf, month);
     const held = potBalances(statements).reduce((n, x) => n + Math.max(0, x.cents), 0);
     return freeToSpend({
-      statements, entries: daily.entries, pettyNowCents: hasPetty ? p.summary.remainingCents : 0, waitingCents: hasPetty ? p.summary.pendingCents : 0,
-      heldCents: held, budget, spentThisMonth: spentInMonth(month, statements, daily.entries, petty), today,
+      statements, entries: [], paidSinceCents: bank.paidSinceCents, waitingCents: hasPetty ? p.summary.pendingCents : 0,
+      heldCents: held, budget, spentThisMonth: spentInMonth(month, statements, [], petty), today,
     });
-  }, [p.funds, p.requisitions, p.summary, statements, daily.entries, budget, month, today]);
+  }, [p.requisitions, p.summary, statements, budget, month, today, bank.paidSinceCents, bank.asOf]);
   const pots = useMemo(() => potBalances(statements).filter((x) => x.cents > 0), [statements]);
   const asOf = f.accounts.reduce((m, a) => (a.asOf > m ? a.asOf : m), '');
   return (
@@ -670,7 +659,7 @@ function FreeCard({ org, statements, budget }: { org: Organization; statements: 
       <h2>Free to spend</h2>
       <KpiRow label="Money free to spend">
         <KpiCard label="Free to spend now" value={money(org, f.freeCents)} tone={f.freeCents >= 0 ? 'ok' : 'warn'} />
-        <KpiCard label="Bank and petty cash" value={money(org, f.cashCents)} note={asOf ? `Bank as at ${day(asOf)}` : undefined} />
+        <KpiCard label="Bank, less approved since" value={money(org, f.cashCents)} note={asOf ? `Bank as at ${day(asOf)}` : undefined} />
         <KpiCard label="Held for # purposes" value={money(org, f.heldCents)} />
         <KpiCard label="Requests waiting" value={money(org, f.waitingCents)} />
       </KpiRow>
@@ -682,7 +671,7 @@ function FreeCard({ org, statements, budget }: { org: Organization; statements: 
         <summary>How this is worked out</summary>
         <ul className="plain">
           {f.accounts.map((a) => <li key={a.account}>{a.account}: {money(org, a.cents)} (statement to {day(a.asOf)}, plus bank money typed since)</li>)}
-          <li>Petty cash left: {money(org, f.pettyCents)}</li>
+          <li>Requisitions approved since the statement: {money(org, f.paidSinceCents)}</li>
           {pots.map((x) => <li key={x.name}>Held for #{x.name} ({potLabel(x.name)}): {money(org, x.cents)}</li>)}
           <li>Requests waiting for signatures: {money(org, f.waitingCents)}</li>
           <li>Money given with a code such as #PAINTING is held for that purpose and not counted as free.</li>

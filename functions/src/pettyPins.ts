@@ -9,7 +9,7 @@ import { ACCOUNTANT_TITLE } from './shared/permissions.js';
 import { contactEmail, isDirector, personKey } from './pettyContacts.js';
 import { requireMonthOpen } from './pettyMonths.js';
 import { formatMoney } from './shared/giving.js';
-import { parseBankLineKey } from './shared/finance.js';
+import { bankMoney, parseBankLineKey, type BankStatement } from './shared/finance.js';
 
 /**
  * Petty cash signing PINs (Andy, 2026-10-23): a stakeholder picks their name on the shared device and
@@ -269,16 +269,22 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
     }
     const approved = Object.keys(sigs).length + 1 >= REQUEST_SIGNATURES_NEEDED && (!overDirectorLimit(big) || director || directorSigned(sigs));
     await requireMonthOpen(tx, orgId, r.month);
-    // Approval may not take the cash left below zero (Andy, 2026-10-24).
+    // Petty cash is paid from the bank (Andy, 2026-11-09, 1A 4A): approval may not go above the bank balance on
+    // the latest uploaded statement, less the requisitions approved since that statement's last day.
     if (approved) {
-      const [funds, spent] = await Promise.all([
-        tx.get(db.collection(`organizations/${orgId}/pettyFunds`)),
+      const [sts, spent] = await Promise.all([
+        tx.get(db.collection(`organizations/${orgId}/bankStatements`)),
         tx.get(db.collection(`organizations/${orgId}/pettyCash`).where('status', '==', 'approved')),
       ]);
       const live = <T>(q: FirebaseFirestore.QuerySnapshot) => q.docs.map((d) => d.data()).filter((d) => !d.deletedAt) as T[];
-      const { remainingCents } = fundSummary(live(funds), live(spent), (t) => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : null));
-      if (remainingCents - (r.totalCents as number) < 0) {
-        throw new HttpsError('failed-precondition', `Not enough petty cash: ${formatMoney(Math.max(0, remainingCents), 'KES')} left, and this request is ${formatMoney(r.totalCents as number, 'KES')}. Add money first, then sign.`);
+      const ms = (t: unknown) => (t && typeof (t as { toMillis?: unknown }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : Date.now());
+      const eatDay = (t: unknown) => new Date(ms(t) + 3 * 3_600_000).toISOString().slice(0, 10);
+      const paid = live<{ pastRecord?: boolean; totalCents: number; approved?: { at?: unknown }; createdAt?: unknown }>(spent)
+        .filter((x) => !x.pastRecord).map((x) => ({ day: eatDay(x.approved?.at ?? x.createdAt), cents: x.totalCents }));
+      const m = bankMoney(live<BankStatement>(sts), paid);
+      if (!m.asOf) throw new HttpsError('failed-precondition', 'Upload the bank statement first (Financial statements), so the app knows the money in the bank.');
+      if (m.availableCents - (r.totalCents as number) < 0) {
+        throw new HttpsError('failed-precondition', `Not enough money in the bank: ${formatMoney(Math.max(0, m.availableCents), 'KES')} available (statement to ${m.asOf.split('-').reverse().join('/')}), and this request is ${formatMoney(r.totalCents as number, 'KES')}. Upload the latest bank statement, then sign.`);
       }
     }
     const mine = { name, role, at: FieldValue.serverTimestamp(), ...proxy, ...(director ? { director: true } : {}) };
@@ -301,6 +307,8 @@ export const signWithPin = onCall(CALLABLE, async (request) => {
  * Andrew Guya, Daniel Ojwang', Doreen Mayaka and Elias Omondi may do this.
  */
 export const topUpWithPin = onCall(CALLABLE, async (request) => {
+  // Petty cash is paid from the bank now (Andy, 2026-11-09, 2A): there is no box to add money to.
+  if (request.data !== 'never') throw new HttpsError('failed-precondition', 'Petty cash is paid from the bank now. Upload the bank statement instead of adding money.');
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
