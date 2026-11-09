@@ -36,7 +36,7 @@ export default function FinancePage() {
   if (current && FIN_TYPES.includes(current.type)) return <Books org={current} />;
   const orgs = organizations.filter((o) => FIN_TYPES.includes(o.type) && !o.deletedAt);
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <h1>Financial statements</h1>
       <div className="card">
         <p>Which organization?</p>
@@ -48,10 +48,10 @@ export default function FinancePage() {
 
 function Books({ org }: { org: Organization }) {
   const f = useFinance(org);
-  if (!f.allowed) return <div className="page narrow"><h1>Financial statements</h1><p>This is for the people who keep the accounts.</p></div>;
+  if (!f.allowed) return <div className="page narrow fin-wide"><h1>Financial statements</h1><p>This is for the people who keep the accounts.</p></div>;
   const needs = f.statements.reduce((n, s) => n + s.lines.filter((l) => !l.s && !isLocked(f.months, l.d)).length, 0);
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <div className="page-head"><h1>Financial statements</h1></div>
       <p className="lead">{org.name}. Upload a bank or M-Pesa statement; the app sorts every line and makes the monthly or yearly report.</p>
       {f.statements.length > 0 && <FreeCard org={org} statements={f.statements} budget={f.budget} />}

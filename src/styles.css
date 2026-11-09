@@ -2739,3 +2739,6 @@ a.fin-chip:hover { background: #fdecea; }
 .fin-bs .fin-bs-head td { font-weight: 700; color: var(--muted); text-transform: uppercase; font-size: 0.8rem; padding-top: 14px; }
 .fin-bs .fin-bs-sub td:first-child { padding-left: 20px; color: var(--muted); font-size: 0.9rem; }
 .fin-bs .fin-bs-total td { font-weight: 700; }
+
+/* Financial statements use the whole width to the right (Andy, 2026-11-09). */
+.page.narrow.fin-wide, .petty-light .page.narrow.fin-wide { max-width: none; width: 100%; }
