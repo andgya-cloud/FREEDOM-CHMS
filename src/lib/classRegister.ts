@@ -11,6 +11,8 @@ import { programSessionIdFor, type PlanEntry } from '../../functions/src/shared/
 import { F252_ID, F252_SETUP, percentOf, QR_SLOT_SECONDS, slotNow } from '../../functions/src/shared/classRegister';
 import { formatDateKey } from '../../functions/src/shared/datetime';
 import { POWERED_BY, stampPoweredBy } from '../../functions/src/shared/poweredBy';
+import { studentsFromPdf, studentsFromTable } from '../../functions/src/shared/studentList';
+import { tidyName } from '../../functions/src/shared/people';
 
 /**
  * Freedom 252 class register (Andy, 2026-11-09, 1A-7A): the QR check-in, the register grid, ticks by hand and the
@@ -59,25 +61,27 @@ export interface StudentImportRow { name: string; phone: string; email: string; 
 export const importStudents = (orgId: string, programId: string, rows: StudentImportRow[]) =>
   call<{ added: number; enrolled: number; already: number; problems: string[] }>({ action: 'import', orgId, programId, rows });
 
-/** Reads a students list: a column with "name", and optionally phone, email, preferred contact and message. */
+/** Reads a students list from Excel, CSV or PDF (Andy, 2026-11-09, 1A): a Name column, and if there Phone, Email, Preferred contact, Message. */
 export async function readStudentsFile(file: File): Promise<StudentImportRow[]> {
-  let table: string[][];
-  if (/\.csv$/i.test(file.name)) {
-    table = (await file.text()).split(/\r?\n/).map((l) => l.split(',').map((c) => c.replace(/^"|"$/g, '').trim()));
+  let rows: StudentImportRow[];
+  if (/\.pdf$/i.test(file.name) || file.type === 'application/pdf') {
+    const { pdfRows } = await import('./bankStatementFile');
+    rows = studentsFromPdf(await pdfRows(file));
+  } else if (/\.csv$/i.test(file.name)) {
+    rows = studentsFromTable((await file.text()).split(/\r?\n/).map((l) => l.split(',').map((c) => c.replace(/^"|"$/g, '').trim())));
   } else {
     const { default: readXlsxFile } = await import('read-excel-file');
-    table = (await readXlsxFile(file)).map((r) => r.map((c) => (c == null ? '' : String(c).trim())));
+    rows = studentsFromTable((await readXlsxFile(file)).map((r) => r.map((c) => (c == null ? '' : String(c).trim()))));
   }
-  const headAt = table.findIndex((r) => r.some((c) => /name/i.test(c)));
-  if (headAt < 0) throw new Error('The file needs a column called Name.');
-  const head = table[headAt]!.map((c) => c.toLowerCase());
-  const col = (re: RegExp) => head.findIndex((c) => re.test(c));
-  const n = col(/name/), p = col(/phone|mobile|number/), e = col(/mail/), c = col(/contact|prefer/), m = col(/message|note/);
-  return table.slice(headAt + 1).map((r) => ({
-    name: r[n] ?? '', phone: p >= 0 ? r[p] ?? '' : '', email: e >= 0 ? r[e] ?? '' : '',
-    whatsapp: c >= 0 ? !/phone call|email/i.test(r[c] ?? '') || /whatsapp/i.test(r[c] ?? '') : true,
-    note: m >= 0 && r[m] && r[m] !== '-' ? r[m]! : '',
-  })).filter((r) => r.name.trim());
+  return rows.map((r) => ({ ...r, name: tidyName(r.name) }));
+}
+
+/** A blank list to fill in (4A). */
+export async function blankStudentsExcel(programName: string): Promise<File> {
+  const head = ['Name', 'Phone', 'Email', 'Preferred contact', 'Message'].map((h) => ({ value: h, type: String, fontWeight: 'bold' }));
+  const example = ['Grace Wanjiku', '0712 345 678', 'grace@example.com', 'WhatsApp', ''].map((v) => ({ value: v, type: String }));
+  const blob = await writeXlsxFile([head, example] as never, { columns: [32, 16, 30, 18, 34].map((width) => ({ width })) } as never) as unknown as Blob;
+  return new File([blob], `${safe(programName)}-students-list.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 const enrolRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'enrollments', id);

@@ -6,7 +6,7 @@ import { usePeople, type Person } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useEnrollments, useProgramMarks, usePrograms, useProgramSessions, type Enrollment, type Program } from '../../state/usePrograms';
 import {
-  APP_URL, importStudents, keepStudent, progressLinks, readStudentsFile, registerExcel, registerPdf, removeStudent, tickTopic,
+  APP_URL, blankStudentsExcel, importStudents, keepStudent, progressLinks, readStudentsFile, registerExcel, registerPdf, removeStudent, tickTopic,
   type GridRow, type StudentImportRow,
 } from '../../lib/classRegister';
 import { downloadFile } from '../../lib/givingPdf';
@@ -14,7 +14,7 @@ import { friendlyError } from '../../lib/errors';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { attended } from '../../../functions/src/shared/attendance';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
-import { formatPhone } from '../../../functions/src/shared/phone';
+import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { whatsappLink } from '../../../functions/src/shared/followups';
 import { coverage, type Coverage } from '../../../functions/src/shared/programs';
 import {
@@ -280,36 +280,78 @@ function Reminders({ org, program, rows, links, today, marks }: { org: Organizat
   );
 }
 
-/** Add students from an Excel or CSV list: Name, and if there, Phone, Email, Preferred contact and Message. */
+/**
+ * Add students from a list (Andy, 2026-11-09, 1A-5A): Excel, CSV or PDF. The list shows first so names and numbers
+ * can be fixed and anyone unticked (2A); a number that is not right is flagged, and the person is still added (5A).
+ */
 function AddStudents({ org, program }: { org: Organization; program: Program }) {
   const toast = useToast();
-  const [rows, setRows] = useState<StudentImportRow[] | null>(null);
+  const [rows, setRows] = useState<(StudentImportRow & { on: boolean })[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ added: number; enrolled: number; already: number; problems: string[] } | null>(null);
+  const chosen = rows?.filter((r) => r.on && r.name.trim()) ?? [];
+  const badPhone = (p: string) => !!p.trim() && !normalizePhone(p);
 
   async function pick(file: File | undefined) {
     if (!file) return;
     setResult(null);
-    try { setRows(await readStudentsFile(file)); } catch (err) { toast.show(friendlyError(err)); }
-  }
-  async function add() {
-    if (!rows?.length) return;
     setBusy(true);
-    try { setResult(await importStudents(org.id, program.id, rows)); setRows(null); }
+    try {
+      const found = await readStudentsFile(file);
+      if (!found.length) throw new Error('No students found in this file.');
+      setRows(found.map((r) => ({ ...r, on: true })));
+    } catch (err) { toast.show(friendlyError(err)); }
+    finally { setBusy(false); }
+  }
+  const edit = (i: number, change: Partial<StudentImportRow & { on: boolean }>) => setRows((rs) => rs?.map((r, j) => (j === i ? { ...r, ...change } : r)) ?? null);
+  async function add() {
+    if (!chosen.length) return;
+    setBusy(true);
+    try { setResult(await importStudents(org.id, program.id, chosen.map(({ on: _on, ...r }) => r))); setRows(null); }
     catch (err) { toast.show(friendlyError(err)); }
     finally { setBusy(false); }
+  }
+  async function blank() {
+    try { downloadFile(await blankStudentsExcel(program.name)); } catch (err) { toast.show(friendlyError(err)); }
   }
 
   return (
     <section className="card">
-      <details className="fold">
-        <summary><strong>Add students from a list</strong> <span className="muted">· Excel or CSV</span></summary>
+      <details className="fold" open={rows || result ? true : undefined}>
+        <summary><strong>Add students from a list</strong> <span className="muted">· Excel or PDF</span></summary>
         <p className="muted small">The list needs a Name column; Phone, Email, Preferred contact and Message are used if there. Anyone already in People is matched by phone or email, not added twice.</p>
-        <input type="file" accept=".xlsx,.csv" onChange={(e) => void pick(e.target.files?.[0])} />
+        <div className="cleanup-head-actions class-actions">
+          <label className="btn btn-primary">
+            {busy && !rows ? 'Reading…' : 'Choose Excel or PDF file'}
+            <input type="file" className="visually-hidden" accept=".xlsx,.csv,.pdf,application/pdf" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+          </label>
+          <button type="button" className="btn btn-quiet" onClick={() => void blank()}>Download blank Excel</button>
+        </div>
         {rows && (
           <div className="stack">
-            <p>{rows.length} students in the file: {rows.slice(0, 4).map((r) => r.name).join(', ')}{rows.length > 4 ? '…' : ''}</p>
-            <button type="button" className="btn btn-primary" disabled={busy || !rows.length} onClick={() => void add()}>{busy ? 'Adding…' : `Add and enrol ${rows.length} students`}</button>
+            <p><strong>{rows.length} found.</strong> Check them, fix anything wrong, untick anyone to leave out.</p>
+            <div className="reg-scroll">
+              <table className="reg-grid import-check">
+                <thead><tr><th /><th className="reg-name">Name</th><th>Phone</th><th>Email</th></tr></thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i} className={r.on ? '' : 'muted'}>
+                      <td><input type="checkbox" checked={r.on} aria-label={`Add ${r.name}`} onChange={(e) => edit(i, { on: e.target.checked })} /></td>
+                      <td><input value={r.name} maxLength={120} onChange={(e) => edit(i, { name: e.target.value })} aria-label="Name" /></td>
+                      <td>
+                        <input type="tel" value={r.phone} maxLength={30} className={badPhone(r.phone) ? 'input-bad' : ''} onChange={(e) => edit(i, { phone: e.target.value })} aria-label="Phone" />
+                        {badPhone(r.phone) && <small className="error">Number not right</small>}
+                      </td>
+                      <td className="small">{r.email}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="cleanup-head-actions">
+              <button type="button" className="btn btn-quiet" onClick={() => setRows(null)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={busy || !chosen.length} onClick={() => void add()}>{busy ? 'Adding…' : `Add and enrol ${chosen.length} students`}</button>
+            </div>
           </div>
         )}
         {result && (

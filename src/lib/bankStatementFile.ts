@@ -24,7 +24,7 @@ export async function pdfTextRows(file: File, password?: string): Promise<string
 }
 
 /** The text of every page, as rows of cells with where they sit across the page. */
-async function pdfRows(file: File, password?: string): Promise<StatementCell[][]> {
+export async function pdfRows(file: File, password?: string): Promise<StatementCell[][]> {
   const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
   const { default: workerUrl } = await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url');
   pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;

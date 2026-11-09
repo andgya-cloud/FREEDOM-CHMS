@@ -2771,3 +2771,7 @@ a.fin-chip:hover { background: #fdecea; }
 .reg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); vertical-align: middle; }
 .reg-hand { color: rgb(176 137 52); font-weight: 700; }
 .reg-pct { font-weight: 700; padding-left: 8px !important; white-space: nowrap; }
+.import-check td { text-align: left; padding: 3px 4px; vertical-align: top; }
+.import-check input:not([type='checkbox']) { min-width: 140px; padding: 6px 8px; min-height: 0; }
+.import-check .input-bad { border-color: #c0392b; }
+.import-check small.error { display: block; }
