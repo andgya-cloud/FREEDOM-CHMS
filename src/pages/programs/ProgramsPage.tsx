@@ -71,7 +71,7 @@ function Programs({ org }: { org: Organization }) {
       {needs252 && (
         <div className="notice">
           <strong>Freedom 252 starts Tuesday 10 November</strong>
-          <span>Put in the 24 topics and class dates from the 2027 calendar (Tuesdays 8:00pm, graduation 15 Aug 2027).</span>
+          <span>Put in the 24 topics and class dates from the 2027 calendar (Tuesdays 8:00pm to 9:00pm, graduation 15 Aug 2027).</span>
           <button type="button" className="btn btn-primary align-start" onClick={setUp252}>Put in the Freedom 252 calendar</button>
         </div>
       )}

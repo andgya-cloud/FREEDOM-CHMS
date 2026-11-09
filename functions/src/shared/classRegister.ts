@@ -51,11 +51,11 @@ export const F252_SETUP: ProgramConfig = {
   completionRule: { type: 'all_topics' },
   pipelineStageId: 'freedom_252',
   completedLabel: 'Graduated',
-  schedule: 'Tuesdays 8:00pm',
+  schedule: 'Tuesdays 8:00pm to 9:00pm',
   active: true,
   plan: F252_PLAN,
   classStart: '20:00',
-  classEnd: '22:00',
+  classEnd: '21:00',
 };
 
 /** Minutes the QR check-in opens before a planned class starts (2A). */
