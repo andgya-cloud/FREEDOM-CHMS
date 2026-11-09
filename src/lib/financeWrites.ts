@@ -13,19 +13,25 @@ function me(): string {
   return u.uid;
 }
 
-/** Saves an uploaded statement (in parts of up to 2,000 lines). */
+/**
+ * Saves an uploaded statement, one saved part for each month (and at most 2,000 lines a part). A year's
+ * statement is uploaded once; keeping each month apart means closing one month locks only that month.
+ */
 export async function saveStatement(orgId: string, s: Omit<BankStatement, 'id'>): Promise<void> {
   const col = collection(db, 'organizations', orgId, 'bankStatements');
+  const byMonth = new Map<string, BankLine[]>();
+  for (const l of s.lines) { const m = l.d.slice(0, 7); byMonth.set(m, [...(byMonth.get(m) ?? []), l]); }
   const writes: Promise<unknown>[] = [];
-  for (let n = 0; n < s.lines.length; n += LINES_PER_PART) {
-    const part = s.lines.slice(n, n + LINES_PER_PART).map((l) => ({ ...l, t: l.t.slice(0, 200), r: l.r.slice(0, 60) }));
-    const first = part[0]!; const last = part[part.length - 1]!;
-    writes.push(trackWrite(setDoc(doc(col), {
-      orgId, account: s.account.slice(0, 80), accountKind: s.accountKind, fileName: s.fileName.slice(0, 120),
-      from: n === 0 ? s.from || first.d : first.d, to: n + LINES_PER_PART >= s.lines.length ? s.to || last.d : last.d,
-      openingCents: n === 0 ? s.openingCents : first.b - first.i + first.o, closingCents: last.b,
-      lines: part, ...createStamps(),
-    })));
+  for (const monthLines of byMonth.values()) {
+    for (let n = 0; n < monthLines.length; n += LINES_PER_PART) {
+      const part = monthLines.slice(n, n + LINES_PER_PART).map((l) => ({ ...l, t: l.t.slice(0, 200), r: l.r.slice(0, 60) }));
+      const first = part[0]!; const last = part[part.length - 1]!;
+      writes.push(trackWrite(setDoc(doc(col), {
+        orgId, account: s.account.slice(0, 80), accountKind: s.accountKind, fileName: s.fileName.slice(0, 120),
+        from: first.d, to: last.d, openingCents: first.b - first.i + first.o, closingCents: last.b,
+        lines: part, ...createStamps(),
+      })));
+    }
   }
   await Promise.all(writes);
 }

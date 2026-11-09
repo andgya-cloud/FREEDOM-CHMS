@@ -126,7 +126,7 @@ function UploadCard({ org, statements, learned, months }: { org: Organization; s
     try {
       await saveStatement(org.id, { account: name, accountKind: isMpesa(name) ? 'mpesa' : 'bank', fileName: file.name, from: plan.lines[0]!.d, to: plan.lines[plan.lines.length - 1]!.d,
         openingCents: plan.lines[0]!.b - plan.lines[0]!.i + plan.lines[0]!.o, closingCents: plan.lines[plan.lines.length - 1]!.b, lines: plan.lines });
-      toast.show(`Saved ${plan.lines.length} lines from ${file.name}.`);
+      toast.show(`Saved ${plan.lines.length} lines from ${file.name}, month by month.`);
       setFile(null); setRead(null); setAccount(name);
     } catch (err) {
       toast.show(friendlyError(err));
