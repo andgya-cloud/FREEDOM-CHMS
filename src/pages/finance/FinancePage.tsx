@@ -277,16 +277,21 @@ function ReportCard({ org, statements, budget, owned, learned, months }: { org: 
   const today = kenyaToday();
   const build = useCallback((period: string): FinReport => {
     const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
+    // Money put in the box by Set budget ("Filled up to the budget") did not come from the bank (Andy, 2026-11-09):
+    // it counts as cash already held, not as a top-up the bank statement should show.
+    const dayOf = (t: unknown) => new Date((millis(t) ?? Date.now()) + 3 * 3_600_000).toISOString().slice(0, 10);
+    const isFill = (f: { note?: string | null }) => f.note === 'Filled up to the budget';
     const pf = (x: string): PettyFigures => {
       const r = pettyReport(x, p.funds, p.requisitions, {}, millis);
-      return { openingCents: r.openingCents, inCents: r.inCents, outCents: r.outCents, closingCents: r.closingCents, categories: r.categories.map((c) => ({ category: c.category, cents: c.cents })) };
+      const fills = p.funds.filter((f) => f.kind === 'topup' && f.status === 'done' && isFill(f as { note?: string }) && dayOf(f.doneAt).startsWith(x)).reduce((n, f) => n + f.amountCents, 0);
+      return { openingCents: r.openingCents + fills, inCents: r.inCents - fills, outCents: r.outCents, closingCents: r.closingCents, categories: r.categories.map((c) => ({ category: c.category, cents: c.cents })) };
     };
     const prev = (x: string) => (x.length === 4 ? String(+x - 1) : (() => { const [y, m] = x.split('-').map(Number) as [number, number]; return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })());
     const lastYear = period.length === 4 ? String(+period - 1) : `${+period.slice(0, 4) - 1}${period.slice(4)}`;
     const trendMonths: string[] = period.length === 4 ? Array.from({ length: 12 }, (_, n) => `${period}-${String(n + 1).padStart(2, '0')}`)
       : Array.from({ length: 6 }, (_, n) => { let x = period; for (let k = 0; k < 5 - n; k++) x = prev(x); return x; });
-    const topups = p.funds.filter((f) => f.kind === 'topup' && f.status === 'done' && !(f as { pastRecord?: boolean }).pastRecord)
-      .map((f) => ({ date: new Date((millis(f.doneAt) ?? Date.now()) + 3 * 3_600_000).toISOString().slice(0, 10), cents: f.amountCents }));
+    const topups = p.funds.filter((f) => f.kind === 'topup' && f.status === 'done' && !(f as { pastRecord?: boolean }).pastRecord && !isFill(f as { note?: string }))
+      .map((f) => ({ date: dayOf(f.doneAt), cents: f.amountCents }));
     const input: FinInput = {
       statements, owned, budget,
       petty: hasPetty ? { now: pf(period), before: pf(prev(period)), lastYear: pf(lastYear) } : null,
