@@ -407,6 +407,8 @@ export interface FinReport {
   /** Month by month (a year), or the last six months up to this one (a month), for the chart. */
   trend: { period: string; label: string; inCents: number; outCents: number }[];
   checks: { text: string; ok: boolean }[];
+  /** The daily records against the statement, when any were kept. */
+  match: DailyMatch | null;
   summary: string[];
   needsYou: number;
   lines: (BankLine & { account: string })[];
@@ -426,6 +428,8 @@ export interface FinInput {
   pettyOutByMonth?: Readonly<Record<string, number>>;
   /** Today, YYYY-MM-DD, so a year in progress budgets only the months so far. */
   today?: string;
+  /** Bank money typed day by day and petty cash top-ups, checked against the statement (Andy, 2026-11-09, 3A). */
+  daily?: { entries: readonly DailyBankEntry[]; topups: readonly { date: string; cents: number }[] } | null;
 }
 
 export function financialReport(period: string, input: FinInput, money: (cents: number) => string = (c) => (c / 100).toFixed(2)): FinReport {
@@ -584,6 +588,18 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
   const unmatched = transfersNet;
   if (unmatched) checks.push({ text: `${money(Math.abs(unmatched))} moved between accounts has no matching line on the other side. Upload the other account's statement, or change the category.`, ok: false });
   if (!accounts.length) checks.push({ text: 'No bank or M-Pesa statement covers this period yet.', ok: false });
+  let match: DailyMatch | null = null;
+  if (input.daily && (input.daily.entries.some((e) => inP(e.date, period)) || input.daily.topups.some((t) => inP(t.date, period)))) {
+    match = matchDaily(period, input.statements, input.daily.entries, input.daily.topups);
+    const typed = match.matched.length + match.typedMissing.length;
+    if (typed) checks.push(match.typedMissing.length
+      ? { text: `${match.typedMissing.length} of ${typed} bank amounts typed during the period ${match.typedMissing.length === 1 ? 'is' : 'are'} not on the statement: ${match.typedMissing.slice(0, 5).map((e) => `${e.date.split('-').reverse().join('/')} ${e.text || finLabel(e.category)} ${money(e.cents)}`).join('; ')}${match.typedMissing.length > 5 ? '…' : ''}.`, ok: false }
+      : { text: `All ${typed} bank amounts typed during the period are on the statement.`, ok: true });
+    const tops = match.topupsMatched + match.topupsMissing.length;
+    if (tops) checks.push(match.topupsMissing.length
+      ? { text: `${match.topupsMissing.length} of ${tops} petty cash top-ups could not be found leaving the bank: ${match.topupsMissing.slice(0, 5).map((t) => `${t.date.split('-').reverse().join('/')} ${money(t.cents)}`).join('; ')}.`, ok: false }
+      : { text: `All ${tops} petty cash top-ups are found leaving the bank.`, ok: true });
+  }
 
   // A short summary in plain words.
   const pct = (a: number, b: number) => (b ? Math.round(((a - b) / Math.abs(b)) * 100) : null);
@@ -609,7 +625,7 @@ export function financialReport(period: string, input: FinInput, money: (cents: 
     period, name: nm, beforeName: finPeriodName(before), lastYearName: finPeriodName(ly), year,
     income, expenses, capital, totalIncome, totalExpenses, surplus, accounts, petty, cash, cashFlow,
     balanceSheet: { assets, liabilities, totalAssets, totalLiabilities, netAssets: totalAssets - totalLiabilities },
-    budget, trend, checks, summary, needsYou,
+    budget, trend, checks, match, summary, needsYou,
     lines: periodLines.map(({ order: _o, from: _f, kind: _k, ...l }) => l),
   };
 }
@@ -625,6 +641,119 @@ export function finChange(now: number, before: number): string {
   if (!before) return now ? 'new' : '–';
   const pct = Math.round(((now - before) / Math.abs(before)) * 100);
   return pct === 0 ? 'same' : `${pct > 0 ? '+' : '-'}${Math.abs(pct)}%`;
+}
+
+// ---- Daily accounts (Andy, 2026-11-09, 1C 2B 3A 7A) ------------------------------------------------
+
+/** Bank money typed on the day (a Sunday offering banked, a cheque paid), before the statement comes. */
+export interface DailyBankEntry { id: string; date: string; dir: 'in' | 'out'; cents: number; account: string; text: string; category: string }
+/** The cash in the petty cash box, counted on a day. */
+export interface CashCount { date: string; countedCents: number; name: string }
+
+export interface DayRow {
+  date: string;
+  openingCents: number; inCents: number; outCents: number; closingCents: number;
+  vouchers: number; topups: number;
+  bankInCents: number; bankOutCents: number; bankEntries: number;
+  countedCents: number | null; diffCents: number | null; countedBy: string;
+}
+
+/**
+ * The daily cash book: each day's petty cash opening, money in, money out and closing (from the
+ * approved vouchers and top-ups), the bank money typed that day, and the cash count with any
+ * difference. Days close by themselves (2B); only days with something in them are listed, plus today.
+ */
+export function dailyBook(
+  petty: readonly { day: string; creditCents: number; debitCents: number; balanceCents: number; kind: string }[],
+  entries: readonly DailyBankEntry[], counts: readonly CashCount[], today: string,
+): DayRow[] {
+  const days = new Set<string>([today, ...petty.map((l) => l.day), ...entries.map((e) => e.date), ...counts.map((c) => c.date)]);
+  const sorted = [...days].filter((d) => d <= today).sort();
+  const rows: DayRow[] = [];
+  let balance = 0; let n = 0;
+  for (const day of sorted) {
+    const opening = balance;
+    let inC = 0, outC = 0, vouchers = 0, topups = 0;
+    while (n < petty.length && petty[n]!.day <= day) {
+      const l = petty[n]!;
+      if (l.day === day) { inC += l.creditCents; outC += l.debitCents; if (l.kind === 'request') vouchers += 1; if (l.kind === 'topup') topups += 1; }
+      balance = l.balanceCents; n += 1;
+    }
+    const es = entries.filter((e) => e.date === day);
+    const count = counts.find((c) => c.date === day);
+    rows.push({
+      date: day, openingCents: opening, inCents: inC, outCents: outC, closingCents: balance, vouchers, topups,
+      bankInCents: es.filter((e) => e.dir === 'in').reduce((t, e) => t + e.cents, 0), bankOutCents: es.filter((e) => e.dir === 'out').reduce((t, e) => t + e.cents, 0), bankEntries: es.length,
+      countedCents: count ? count.countedCents : null, diffCents: count ? count.countedCents - balance : null, countedBy: count?.name ?? '',
+    });
+  }
+  return rows.reverse();
+}
+
+const dayGap = (a: string, b: string) => Math.abs(Date.parse(`${a}T00:00:00Z`) - Date.parse(`${b}T00:00:00Z`)) / 86_400_000;
+
+export interface DailyMatch {
+  matched: { entry: DailyBankEntry; line: BankLine & { account: string } }[];
+  typedMissing: DailyBankEntry[];
+  topupsMatched: number;
+  topupsMissing: { date: string; cents: number }[];
+  /** Statement lines nobody typed: how many and how much. */
+  untyped: { count: number; inCents: number; outCents: number };
+}
+
+/**
+ * Month end (3A): each typed bank amount is found on the statement (same direction and amount, within
+ * three days, the same account first), and each petty cash top-up is found leaving the bank (within
+ * five days, a "Moved to petty cash" line first). Each statement line matches once.
+ */
+export function matchDaily(period: string, statements: readonly BankStatement[], entries: readonly DailyBankEntry[], topups: readonly { date: string; cents: number }[]): DailyMatch {
+  const lines = statements.flatMap((s) => s.lines.map((l) => ({ ...l, account: s.account }))).filter((l) => l.d.startsWith(period) || entries.some((e) => e.date.startsWith(period) && dayGap(e.date, l.d) <= 5));
+  const used = new Set<number>();
+  const pick = (ok: (l: (typeof lines)[number]) => boolean, date: string, days: number, prefer: (l: (typeof lines)[number]) => boolean) => {
+    let best = -1; let bestScore = Infinity;
+    lines.forEach((l, n) => {
+      if (used.has(n) || !ok(l)) return;
+      const gap = dayGap(l.d, date);
+      if (gap > days) return;
+      const score = gap + (prefer(l) ? 0 : 10);
+      if (score < bestScore) { bestScore = score; best = n; }
+    });
+    if (best >= 0) used.add(best);
+    return best;
+  };
+  const matched: DailyMatch['matched'] = []; const typedMissing: DailyBankEntry[] = [];
+  for (const e of [...entries].filter((x) => x.date.startsWith(period)).sort((a, b) => a.date.localeCompare(b.date))) {
+    const n = pick((l) => (e.dir === 'in' ? l.i : l.o) === e.cents, e.date, 3, (l) => l.account === e.account);
+    if (n >= 0) matched.push({ entry: e, line: lines[n]! }); else typedMissing.push(e);
+  }
+  let topupsMatched = 0; const topupsMissing: { date: string; cents: number }[] = [];
+  for (const t of topups.filter((x) => x.date.startsWith(period))) {
+    const n = pick((l) => l.o === t.cents, t.date, 5, (l) => l.c === 'toPetty');
+    if (n >= 0) topupsMatched += 1; else topupsMissing.push(t);
+  }
+  const rest = lines.filter((l, n) => !used.has(n) && l.d.startsWith(period));
+  return { matched, typedMissing, topupsMatched, topupsMissing, untyped: { count: rest.length, inCents: rest.reduce((t, l) => t + l.i, 0), outCents: rest.reduce((t, l) => t + l.o, 0) } };
+}
+
+/** A typed amount that matches a statement line gives the line its category (and the line counts as sorted). */
+export function typedCategory(line: Pick<BankLine, 'd' | 'i' | 'o'>, account: string, entries: readonly DailyBankEntry[], taken: Set<string>): string | null {
+  const dir = line.i > 0 ? 'in' : 'out'; const cents = line.i || line.o;
+  const cands = entries.filter((e) => !taken.has(e.id) && e.dir === dir && e.cents === cents && dayGap(e.date, line.d) <= 3 && isFinCategory(e.category))
+    .sort((a, b) => (a.account === account ? 0 : 1) - (b.account === account ? 0 : 1) || dayGap(a.date, line.d) - dayGap(b.date, line.d));
+  const e = cands[0];
+  if (!e) return null;
+  taken.add(e.id);
+  return e.category;
+}
+
+/** The month whose statement to offer as ready: the latest month with lines that has ended, or reaches its last days. */
+export function readyMonth(statements: readonly BankStatement[], today: string): string | null {
+  const months = [...new Set(statements.flatMap((s) => s.lines.map((l) => l.d.slice(0, 7))))].sort().reverse();
+  for (const m of months) {
+    const last = statements.flatMap((s) => s.lines).filter((l) => l.d.startsWith(m)).reduce((x, l) => (l.d > x ? l.d : x), '');
+    if (m < today.slice(0, 7) || last >= periodEnd(m).slice(0, 8) + '28') return m;
+  }
+  return null;
 }
 
 export const FIN_ACCOUNT_SUGGESTIONS = ['Family Bank main account', 'M-Pesa Paybill'];

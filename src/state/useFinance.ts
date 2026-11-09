@@ -3,7 +3,7 @@ import { collection, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
-import type { BankStatement, OrgKind, OwnedItem } from '../../functions/src/shared/finance';
+import type { BankStatement, CashCount, DailyBankEntry, OrgKind, OwnedItem } from '../../functions/src/shared/finance';
 import type { Organization } from './OrgContext';
 
 /** Who keeps the financial statements: the petty cash signatories, finance and the pastor (Andy, 2026-11-08, 6A). */
@@ -29,4 +29,14 @@ export function useFinance(org: Organization) {
     allowed, statements, loading: res.loading,
     learned: learned.data?.learned ?? {}, budget: budget.data?.budget ?? {}, owned: owned.data?.owned ?? [],
   };
+}
+
+export interface DailyRow extends DailyBankEntry { deletedAt?: unknown }
+/** Bank money typed day by day and the cash counts (Andy, 2026-11-09). */
+export function useDaily(org: Organization) {
+  const on = useFinAccess() && !!org.id;
+  const e = useLiveQuery<DailyRow>(() => (on ? collection(db, 'organizations', org.id, 'bankDaily') : null), [org.id, on]);
+  const c = useLiveQuery<CashCount & { id: string }>(() => (on ? collection(db, 'organizations', org.id, 'cashCounts') : null), [org.id, on]);
+  const entries = useMemo(() => e.rows.filter((x) => !x.deletedAt).sort((a, b) => b.date.localeCompare(a.date)), [e.rows]);
+  return { on, entries, counts: c.rows };
 }

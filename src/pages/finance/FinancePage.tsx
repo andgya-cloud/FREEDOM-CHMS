@@ -1,4 +1,5 @@
-import { useMemo, useState, type ChangeEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useOrg, type Organization } from '../../state/OrgContext';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -8,15 +9,16 @@ import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
 import { millis, usePettyCash } from '../../state/usePettyCash';
 import { useLedgerMonths } from '../../state/useGiving';
-import { orgKind, useFinance, type StatementRow } from '../../state/useFinance';
+import { orgKind, useDaily, useFinance, type StatementRow } from '../../state/useFinance';
 import { removeStatement, saveFinBook, saveLines, saveStatement } from '../../lib/financeWrites';
 import { pettyReport, REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
 import { parseAmountCents } from '../../../functions/src/shared/pettyCash';
 import {
-  autoCategory, categoriesFor, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey, lineKey,
+  autoCategory, categoriesFor, readyMonth, typedCategory, type FinReport, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey, lineKey,
   OWE_KINDS, OWN_KINDS, type BankLine, type FinInput, type OwnedItem, type ParsedStatement, type PettyFigures,
 } from '../../../functions/src/shared/finance';
 
+const num = (c: number) => { const t = (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return c < 0 ? `(${t})` : t; };
 const FIN_TYPES = ['church_campus', 'college', 'ministry'];
 const day = (d: string) => d.split('-').reverse().join('/');
 const isMpesa = (name: string) => /m-?pesa|paybill|till/i.test(name);
@@ -64,6 +66,7 @@ function Books({ org }: { org: Organization }) {
 
 function UploadCard({ org, statements, learned }: { org: Organization; statements: StatementRow[]; learned: Record<string, string> }) {
   const toast = useToast();
+  const daily = useDaily(org);
   const accounts = useMemo(() => [...new Set([...statements.map((s) => s.account), ...FIN_ACCOUNT_SUGGESTIONS])], [statements]);
   const [account, setAccount] = useState(accounts[0] ?? FIN_ACCOUNT_SUGGESTIONS[0]!);
   const [newName, setNewName] = useState('');
@@ -103,9 +106,11 @@ function UploadCard({ org, statements, learned }: { org: Organization; statement
     if (!read || !name) return null;
     const have = new Set(statements.filter((s) => s.account === name).flatMap((s) => s.lines.map((l) => lineKey(name, l))));
     const fresh = read.lines.filter((l) => !have.has(lineKey(name, l)));
-    const lines: BankLine[] = fresh.map((l) => ({ ...l, ...autoCategory(l, learned, orgKind(org.type)) }));
+    // A line that matches bank money typed on the day takes the category typed then (Andy, 2026-11-09).
+    const taken = new Set<string>();
+    const lines: BankLine[] = fresh.map((l) => { const c = typedCategory(l, name, daily.entries, taken); return { ...l, ...(c ? { c, s: true } : autoCategory(l, learned, orgKind(org.type))) }; });
     return { lines, skipped: read.lines.length - fresh.length, sure: lines.filter((l) => l.s).length };
-  }, [read, name, statements, learned, org.type]);
+  }, [read, name, statements, learned, org.type, daily.entries]);
 
   async function save() {
     if (!read || !plan || !file || !name) return;
@@ -244,7 +249,6 @@ function NeedsYouCard({ org, statements, learned, count }: { org: Organization; 
 
 // ---- The report -----------------------------------------------------------------------------------
 
-const ZERO: PettyFigures = { openingCents: 0, inCents: 0, outCents: 0, closingCents: 0, categories: [] };
 
 function ReportCard({ org, statements, budget, owned, learned }: { org: Organization; statements: StatementRow[]; budget: Record<string, number>; owned: OwnedItem[]; learned: Record<string, string> }) {
   const toast = useToast();
@@ -260,27 +264,35 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
   const ledgerTo = chosen.length === 4 ? `${chosen}-12` : chosen;
   const { months: ledger } = useLedgerMonths(church && chosen ? org.id : '', ledgerFrom, ledgerTo);
 
-  const rep = useMemo(() => {
-    if (!chosen) return null;
+  const daily = useDaily(org);
+  const today = new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10);
+  const build = useCallback((period: string): FinReport => {
     const hasPetty = p.funds.length > 0 || p.requisitions.length > 0;
-    const pf = (period: string): PettyFigures => {
-      const r = pettyReport(period, p.funds, p.requisitions, {}, millis);
+    const pf = (x: string): PettyFigures => {
+      const r = pettyReport(x, p.funds, p.requisitions, {}, millis);
       return { openingCents: r.openingCents, inCents: r.inCents, outCents: r.outCents, closingCents: r.closingCents, categories: r.categories.map((c) => ({ category: c.category, cents: c.cents })) };
     };
     const prev = (x: string) => (x.length === 4 ? String(+x - 1) : (() => { const [y, m] = x.split('-').map(Number) as [number, number]; return m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, '0')}`; })());
-    const lastYear = chosen.length === 4 ? String(+chosen - 1) : `${+chosen.slice(0, 4) - 1}${chosen.slice(4)}`;
-    const trendMonths: string[] = chosen.length === 4 ? Array.from({ length: 12 }, (_, n) => `${chosen}-${String(n + 1).padStart(2, '0')}`)
-      : Array.from({ length: 6 }, (_, n) => { let x = chosen; for (let k = 0; k < 5 - n; k++) x = prev(x); return x; });
+    const lastYear = period.length === 4 ? String(+period - 1) : `${+period.slice(0, 4) - 1}${period.slice(4)}`;
+    const trendMonths: string[] = period.length === 4 ? Array.from({ length: 12 }, (_, n) => `${period}-${String(n + 1).padStart(2, '0')}`)
+      : Array.from({ length: 6 }, (_, n) => { let x = period; for (let k = 0; k < 5 - n; k++) x = prev(x); return x; });
+    const topups = p.funds.filter((f) => f.kind === 'topup' && f.status === 'done' && !(f as { pastRecord?: boolean }).pastRecord)
+      .map((f) => ({ date: new Date((millis(f.doneAt) ?? Date.now()) + 3 * 3_600_000).toISOString().slice(0, 10), cents: f.amountCents }));
     const input: FinInput = {
       statements, owned, budget,
-      petty: hasPetty ? { now: pf(chosen), before: pf(prev(chosen)), lastYear: pf(lastYear) } : { now: ZERO, before: ZERO, lastYear: ZERO },
+      petty: hasPetty ? { now: pf(period), before: pf(prev(period)), lastYear: pf(lastYear) } : null,
       pettyOutByMonth: hasPetty ? Object.fromEntries(trendMonths.map((m) => [m, pf(m).outCents])) : {},
-      givingRecordedCents: church ? ledger.reduce((n, m) => n + (m.totalCents ?? 0), 0) : null,
-      today: new Date(Date.now() + 3 * 3_600_000).toISOString().slice(0, 10),
+      givingRecordedCents: church && period === chosen ? ledger.reduce((n, m) => n + (m.totalCents ?? 0), 0) : null,
+      today,
+      daily: { entries: daily.entries, topups },
     };
-    if (!hasPetty) input.petty = null;
-    return financialReport(chosen, input, (c) => money(org, c));
-  }, [chosen, statements, owned, budget, p.funds, p.requisitions, church, ledger, org]);
+    return financialReport(period, input, (c) => money(org, c));
+  }, [statements, owned, budget, p.funds, p.requisitions, church, chosen, ledger, org, daily.entries, today]);
+  const rep = useMemo(() => (chosen ? build(chosen) : null), [build, chosen]);
+  const ready = useMemo(() => readyMonth(statements, today), [statements, today]);
+  const readyRep = useMemo(() => (ready ? (ready === chosen ? rep : build(ready)) : null), [ready, chosen, rep, build]);
+  const [params] = useSearchParams();
+  const showBalance = params.get('show') === 'balance';
 
   async function make(kind: 'pdf' | 'excel') {
     if (!rep) return;
@@ -294,6 +306,8 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
   if (!rep) return null;
   return (
     <>
+      {readyRep && <ReadyCard org={org} rep={readyRep} approver={approver} />}
+      {showBalance && <BalanceCard org={org} rep={rep} />}
       <section className="card stack no-print">
         <h2>Monthly or yearly report</h2>
         <div className="field-row">
@@ -314,7 +328,7 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
         </KpiRow>
         <p className="small">{rep.summary.join(' ')}</p>
         {rep.checks.some((c) => !c.ok) && <div className="petty-warn small">{rep.checks.filter((c) => !c.ok).map((c) => <div key={c.text}>{c.text}</div>)}</div>}
-        <p className="small muted">Income and Expenditure, Balance Sheet, Cash Flow, Bank Reconciliation and Budget vs Actual, with charts. Prepared by {REPORT_PREPARED_BY.name} ({REPORT_PREPARED_BY.role}).</p>
+        <p className="small muted">Income and Expenditure, Balance Sheet, Cash Flow, Bank Reconciliation, Budget vs Actual and the daily records against the bank, with charts. Prepared by {REPORT_PREPARED_BY.name} ({REPORT_PREPARED_BY.role}).</p>
         <div className="row-actions">
           <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void make('pdf')}>{busy === 'pdf' ? 'Making PDF…' : 'Download PDF'}</button>
           <button type="button" className="btn" disabled={!!busy} onClick={() => void make('excel')}>{busy === 'excel' ? 'Making Excel…' : 'Download Excel'}</button>
@@ -322,6 +336,69 @@ function ReportCard({ org, statements, budget, owned, learned }: { org: Organiza
       </section>
       <LinesCard org={org} statements={statements} learned={learned} period={chosen} />
     </>
+  );
+}
+
+/**
+ * The month's statement, ready once the bank statement is in (Andy, 2026-11-09, 4A), with buttons to send
+ * it. On a phone the PDF goes straight into WhatsApp or email; on a computer it downloads and the message opens.
+ */
+function ReadyCard({ org, rep, approver }: { org: Organization; rep: FinReport; approver: string }) {
+  const toast = useToast();
+  const [busy, setBusy] = useState('');
+  const title = `${org.name} · Financial statement · ${rep.name}`;
+  const text = `${title}. ${rep.summary.slice(0, 2).join(' ')}`;
+  async function go(via: 'pdf' | 'wa' | 'mail') {
+    setBusy(via);
+    try {
+      const { financeReportPdf } = await import('../../lib/financePdf');
+      const file = await financeReportPdf(org, rep, approver);
+      if (via === 'pdf') { downloadFile(file); return; }
+      const nav = navigator as Navigator & { canShare?: (d: { files: File[] }) => boolean };
+      if (nav.canShare?.({ files: [file] })) { await navigator.share({ files: [file], title, text }); return; }
+      downloadFile(file);
+      if (via === 'wa') window.open(`https://wa.me/?text=${encodeURIComponent(`${text}\n\n(The PDF has been downloaded: attach it to this message.)`)}`, '_blank', 'noopener');
+      else window.location.href = `mailto:?subject=${encodeURIComponent(title)}&body=${encodeURIComponent(`${text}\n\nThe PDF statement is attached.`)}`;
+    } catch (err) {
+      if ((err as { name?: string }).name !== 'AbortError') toast.show(friendlyError(err));
+    } finally { setBusy(''); }
+  }
+  const waiting = rep.needsYou;
+  return (
+    <section className="card stack no-print fin-ready">
+      <h2>{waiting ? `${rep.name} statement: ${waiting} line${waiting === 1 ? '' : 's'} need you first` : `✓ ${rep.name} statement is ready`}</h2>
+      {rep.match && <p className="small muted">Daily records: {rep.match.matched.length} typed bank amount{rep.match.matched.length === 1 ? '' : 's'} found on the statement{rep.match.typedMissing.length ? `, ${rep.match.typedMissing.length} not found` : ''}; {rep.match.topupsMatched} petty cash top-up{rep.match.topupsMatched === 1 ? '' : 's'} found{rep.match.topupsMissing.length ? `, ${rep.match.topupsMissing.length} not found` : ''}.</p>}
+      <div className="row-actions">
+        <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => void go('pdf')}>{busy === 'pdf' ? 'Making PDF…' : 'Download PDF'}</button>
+        <button type="button" className="btn" disabled={!!busy} onClick={() => void go('mail')}>Send Email</button>
+        <button type="button" className="btn" disabled={!!busy} onClick={() => void go('wa')}>Send WhatsApp</button>
+      </div>
+    </section>
+  );
+}
+
+/** The Balance Sheet on screen, opened from the Financial statements dropdown (Andy, 2026-11-09, 5A). */
+function BalanceCard({ org, rep }: { org: Organization; rep: FinReport }) {
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => { ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, []);
+  const bs = rep.balanceSheet;
+  const row = (label: string, cents: number, cls = '') => <tr key={label + cents} className={cls}><td>{label}</td><td className="num">{num(cents)}</td></tr>;
+  return (
+    <section ref={ref} className="card stack">
+      <h2>Balance Sheet · {rep.name}</h2>
+      <p className="small muted">At the end of the period chosen below. Amounts in {org.currency || 'KES'}. Add land, vehicles and loans under "What we own and owe".</p>
+      <table className="table fin-bs">
+        <tbody>
+          <tr className="fin-bs-head"><td colSpan={2}>What we own (assets)</td></tr>
+          {bs.assets.map((a) => row(a.label, a.cents, a.indent ? 'fin-bs-sub' : ''))}
+          {row('Total assets', bs.totalAssets, 'fin-bs-total')}
+          <tr className="fin-bs-head"><td colSpan={2}>What we owe (liabilities)</td></tr>
+          {bs.liabilities.length ? bs.liabilities.map((a) => row(a.label, a.cents, a.indent ? 'fin-bs-sub' : '')) : row('Nothing recorded', 0)}
+          {row('Total liabilities', bs.totalLiabilities, 'fin-bs-total')}
+          {row('Net assets (accumulated fund)', bs.netAssets, 'fin-bs-total')}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

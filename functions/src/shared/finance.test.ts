@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  autoCategory, financialReport, finPeriods, learnKey, parseDateText, parseMoneyText, parseStatementRows, sheetCells,
-  type BankStatement, type StatementCell,
+  autoCategory, dailyBook, financialReport, finPeriods, matchDaily, readyMonth, typedCategory, learnKey, parseDateText, parseMoneyText, parseStatementRows, sheetCells,
+  type BankStatement, type DailyBankEntry, type StatementCell,
 } from './finance';
 
 /** A PDF-like row: each text at an x position, 40 points wide. */
@@ -160,5 +160,54 @@ describe('the financial report', () => {
 
   it('lists months then years, newest first', () => {
     expect(finPeriods([bank])).toEqual(['2026-10', '2026-09', '2026']);
+  });
+});
+
+describe('daily accounts', () => {
+  const st: BankStatement = {
+    id: 's', account: 'Family Bank', accountKind: 'bank', fileName: 'x', from: '2026-10-01', to: '2026-10-31', openingCents: 0, closingCents: 0,
+    lines: [
+      { d: '2026-10-05', t: 'DEPOSIT', r: '', i: 50_000, o: 0, b: 50_000, c: 'giving', s: false },
+      { d: '2026-10-06', t: 'TRF', r: '', i: 0, o: 20_000, b: 30_000, c: 'toPetty', s: true },
+      { d: '2026-10-07', t: 'CHG', r: '', i: 0, o: 100, b: 29_900, c: 'bankCharges', s: true },
+    ],
+  };
+  const entries: DailyBankEntry[] = [
+    { id: 'e1', date: '2026-10-04', dir: 'in', cents: 50_000, account: 'Family Bank', text: 'Sunday offering banked', category: 'offerings' },
+    { id: 'e2', date: '2026-10-20', dir: 'out', cents: 9_999, account: 'Family Bank', text: 'Cheque to plumber', category: 'repairs' },
+  ];
+
+  it('keeps a daily cash book with the cash count difference', () => {
+    const rows = dailyBook([
+      { day: '2026-10-06', creditCents: 20_000, debitCents: 0, balanceCents: 20_000, kind: 'topup' },
+      { day: '2026-10-08', creditCents: 0, debitCents: 5_000, balanceCents: 15_000, kind: 'request' },
+    ], entries, [{ date: '2026-10-08', countedCents: 14_500, name: 'Daniel' }], '2026-10-09');
+    expect(rows.map((r) => r.date)).toEqual(['2026-10-09', '2026-10-08', '2026-10-06', '2026-10-04']);
+    expect(rows[1]).toMatchObject({ openingCents: 20_000, outCents: 5_000, closingCents: 15_000, vouchers: 1, countedCents: 14_500, diffCents: -500 });
+    expect(rows[0]).toMatchObject({ openingCents: 15_000, closingCents: 15_000 });
+    expect(rows[3]).toMatchObject({ bankInCents: 50_000, bankEntries: 1 });
+  });
+
+  it('matches typed bank money and top-ups against the statement', () => {
+    const m = matchDaily('2026-10', [st], entries, [{ date: '2026-10-06', cents: 20_000 }, { date: '2026-10-15', cents: 7_000 }]);
+    expect(m.matched.map((x) => x.entry.id)).toEqual(['e1']);
+    expect(m.typedMissing.map((x) => x.id)).toEqual(['e2']);
+    expect(m.topupsMatched).toBe(1);
+    expect(m.topupsMissing).toEqual([{ date: '2026-10-15', cents: 7_000 }]);
+    expect(m.untyped).toEqual({ count: 1, inCents: 0, outCents: 100 });
+    const r = financialReport('2026-10', { statements: [st], owned: [], budget: {}, daily: { entries, topups: [{ date: '2026-10-06', cents: 20_000 }] } });
+    expect(r.checks.some((c) => !c.ok && c.text.startsWith('1 of 2 bank amounts'))).toBe(true);
+    expect(r.checks.some((c) => c.ok && c.text.includes('top-ups are found'))).toBe(true);
+  });
+
+  it('gives a statement line the category typed on the day', () => {
+    const taken = new Set<string>();
+    expect(typedCategory(st.lines[0]!, 'Family Bank', entries, taken)).toBe('offerings');
+    expect(typedCategory(st.lines[0]!, 'Family Bank', entries, taken)).toBeNull();
+  });
+
+  it('offers the latest ended month as ready', () => {
+    expect(readyMonth([st], '2026-11-09')).toBe('2026-10');
+    expect(readyMonth([st], '2026-10-20')).toBeNull();
   });
 });

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type ReactNode 
 import { Greeting } from '../../components/Greeting';
 import { SIGNATORY_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { createPortal } from 'react-dom';
+import { DailyBox } from '../finance/DailyBox';
 import { Link, NavLink, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -123,9 +124,17 @@ export function PettyNav({ org }: { org: Organization }) {
     <>
       <nav className="chips petty-nav no-print" aria-label="Petty cash">
         {items.filter((i) => i[2]).map(([to, text, , forced]) => <NavLink key={to} to={to} end className={({ isActive }) => `chip${isActive || forced ? ' chip-on' : ''}`}>{text}</NavLink>)}
+        {/* Financial statements, in red in the same row with a dropdown (Andy, 2026-11-09, 5A 6A). */}
+        {p.seesAll && (
+          <details className="chip fin-chip">
+            <summary>Financial statements ▾</summary>
+            <div className="fin-chip-menu">
+              <Link to="/finance">Financial Statement</Link>
+              <Link to="/finance?show=balance">Balance Sheet</Link>
+            </div>
+          </details>
+        )}
       </nav>
-      {/* Financial statements from the bank statements, in red on its own card so it is easy to find (Andy, 2026-11-08). */}
-      {p.seesAll && <Link to="/finance" className="card fin-card-link no-print">Financial statements <span aria-hidden="true">›</span></Link>}
     </>
   );
 }
@@ -448,6 +457,7 @@ function Home({ org }: { org: Organization }) {
         onAdd={() => setTopUpOpen(true)} onSetBudget={() => setBudgetOpen(true)} />}
       {p.seesAll && canTopUpHere && (topUpOpen || topUpWaiting) && <FundCard org={org} kind="topup" onClose={topUpWaiting ? undefined : () => setTopUpOpen(false)} />}
       {p.seesAll && canTopUpHere && budgetOpen && <SetBudgetCard org={org} onClose={() => setBudgetOpen(false)} />}
+      {p.seesAll && <DailyBox org={org} />}
       {p.canSign && <BinNotice org={org} />}
       {p.canRequest && (
         <section className="card stack">

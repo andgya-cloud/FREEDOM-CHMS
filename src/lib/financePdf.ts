@@ -1,6 +1,6 @@
 import { formatMoney } from '../../functions/src/shared/giving';
 import { drawFooter, drawLetterhead, GOLD, GOLD_SOFT, GREEN, GREY, INK, letterheadFor, NAVY, RED } from '../../functions/src/shared/pettyVoucher';
-import { finChange, periodEnd, type FinReport, type FinRow } from '../../functions/src/shared/finance';
+import { finChange, finLabel, periodEnd, type FinReport, type FinRow } from '../../functions/src/shared/finance';
 import { REPORT_PREPARED_BY } from '../../functions/src/shared/pettyReport';
 import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
 import type { Organization } from '../state/OrgContext';
@@ -191,6 +191,19 @@ export async function financeReportPdf(org: Organization, rep: FinReport, approv
     section(`5. Budget vs Actual${rep.year ? ' (budget for the months so far)' : ''}`, 7.5 + rep.budget.length * 6.5);
     table([{ label: 'Category', x: 17, width: 70 }, { label: 'Budget', x: 120, right: true, width: 28 }, { label: 'Actual', x: 148, right: true, width: 28 }, { label: 'Over / under', x: 176, right: true, width: 28 }, { label: 'Used', x: w - 17, right: true, width: 14 }],
       rep.budget.map((b) => ({ cells: [b.label, num(b.budgetCents), num(b.actualCents), num(b.diffCents), `${Math.round(b.used * 100)}%`], tone: b.diffCents < 0 ? RED : undefined })));
+  }
+
+  // Daily records against the bank (Andy, 2026-11-09, 3A).
+  if (rep.match) {
+    const mt = rep.match;
+    section(`${rep.budget.length ? 6 : 5}. Daily records against the bank statement`, 7.5 + (Math.min(mt.matched.length, 40) + mt.typedMissing.length + 3) * 6.5);
+    const dc: Col[] = [{ label: 'Typed on', x: 17, width: 20 }, { label: 'What it was', x: 40, width: 60 }, { label: 'Account', x: 102, width: 34 }, { label: 'On statement', x: 138, width: 24 }, { label: `Amount (${cur})`, x: w - 17, right: true, width: 28 }];
+    const dd = (d: string) => d.split('-').reverse().join('/');
+    table(dc, [
+      ...mt.matched.slice(0, 40).map((x) => ({ cells: [dd(x.entry.date), `${x.entry.dir === 'in' ? 'In: ' : 'Out: '}${x.entry.text || finLabel(x.entry.category)}`, x.entry.account, `Yes, ${dd(x.line.d)}`, num(x.entry.cents)] })),
+      ...mt.typedMissing.map((e) => ({ cells: [dd(e.date), `${e.dir === 'in' ? 'In: ' : 'Out: '}${e.text || finLabel(e.category)}`, e.account, 'Not found', num(e.cents)], tone: RED })),
+    ] as TRow[]);
+    para(`Petty cash top-ups found leaving the bank: ${mt.topupsMatched} of ${mt.topupsMatched + mt.topupsMissing.length}. Statement lines nobody typed: ${mt.untyped.count} (in ${num(mt.untyped.inCents)}, out ${num(mt.untyped.outCents)}).`, 7.8, GREY);
   }
 
   // Checks.

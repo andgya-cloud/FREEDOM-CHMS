@@ -53,9 +53,17 @@ export async function financeReportWorkbook(orgName: string, rep: FinReport, app
     ...rep.lines.map((l) => [day(l.d), text(l.account), text(l.t), text(l.r), text(finLabel(l.c)), l.i ? kes(l.i) : null, l.o ? kes(l.o) : null, kes(l.b), text(l.s ? 'Yes' : 'Not yet')] as Cell[]),
     [], foot];
 
-  const sheets = ['Summary', 'Income & Expenditure', 'Balance sheet', 'Cash flow', 'Reconciliation', ...(rep.budget.length ? ['Budget vs actual'] : []), 'Lines'];
-  const data = [summary, income, balance, flow, recon, ...(rep.budget.length ? [budget] : []), lines];
-  const widths = [[36, 22, 18, 18], [40, 18, 18, 22], [42, 18], [42, 18], [30, 16, 16, 16, 16, 20, 16, 8], ...(rep.budget.length ? [[38, 16, 16, 18, 8]] : []), [13, 24, 50, 18, 30, 15, 15, 15, 10]];
+  const mt = rep.match;
+  const dailySheet: Cell[][] = mt ? [title, [], head(['Typed on', 'Money', 'What it was', 'Account', 'Category', 'Amount (KES)', 'On the statement']),
+    ...mt.matched.map((x) => [day(x.entry.date), text(x.entry.dir === 'in' ? 'In' : 'Out'), text(x.entry.text), text(x.entry.account), text(finLabel(x.entry.category)), kes(x.entry.cents), text(`Yes, ${x.line.d.split('-').reverse().join('/')}`)] as Cell[]),
+    ...mt.typedMissing.map((e) => [day(e.date), text(e.dir === 'in' ? 'In' : 'Out'), text(e.text), text(e.account), text(finLabel(e.category)), kes(e.cents), bold('Not found')] as Cell[]),
+    [], [bold('Petty cash top-ups found leaving the bank'), text(`${mt.topupsMatched} of ${mt.topupsMatched + mt.topupsMissing.length}`)],
+    ...mt.topupsMissing.map((t) => [text('Not found'), day(t.date), null, null, null, kes(t.cents)] as Cell[]),
+    [bold('Statement lines nobody typed'), { value: mt.untyped.count, type: Number }],
+    [], foot] : [];
+  const sheets = ['Summary', 'Income & Expenditure', 'Balance sheet', 'Cash flow', 'Reconciliation', ...(rep.budget.length ? ['Budget vs actual'] : []), ...(mt ? ['Daily vs bank'] : []), 'Lines'];
+  const data = [summary, income, balance, flow, recon, ...(rep.budget.length ? [budget] : []), ...(mt ? [dailySheet] : []), lines];
+  const widths = [[36, 22, 18, 18], [40, 18, 18, 22], [42, 18], [42, 18], [30, 16, 16, 16, 16, 20, 16, 8], ...(rep.budget.length ? [[38, 16, 16, 18, 8]] : []), ...(mt ? [[13, 8, 36, 24, 28, 15, 18]] : []), [13, 24, 50, 18, 30, 15, 15, 15, 10]];
   const blob = await writeXlsxFile(data as never, { sheets, columns: widths.map((ws) => ws.map((width) => ({ width }))) } as never) as unknown as Blob;
   return new File([blob], `${orgName.replace(/[^A-Za-z0-9]+/g, '-')}-financial-report-${rep.period}.xlsx`, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }

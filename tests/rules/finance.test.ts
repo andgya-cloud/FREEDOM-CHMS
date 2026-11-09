@@ -57,3 +57,18 @@ describe('financial statements', () => {
     await assertFails(setDoc(doc(as('admin'), `${ORG}/finBooks/budget`), { orgId: 'fcn', updatedAt: serverTimestamp(), updatedBy: 'admin', budget: {} }));
   });
 });
+
+describe('daily accounts', () => {
+  it('lets the money people type bank money and count the cash; not other staff', async () => {
+    const entry = { orgId: 'fcn', date: '2026-11-09', dir: 'in', cents: 500000, account: 'Family Bank main account', text: 'Sunday offering', category: 'offerings' };
+    await assertSucceeds(setDoc(doc(as('daniel'), `${ORG}/bankDaily/e1`), { ...entry, ...created('daniel') }));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/bankDaily/e2`), { ...entry, ...created('admin') }));
+    await assertFails(setDoc(doc(as('daniel'), `${ORG}/bankDaily/e3`), { ...entry, cents: 0, ...created('daniel') }));
+    await assertFails(updateDoc(doc(as('daniel'), `${ORG}/bankDaily/e1`), { cents: 1, updatedAt: serverTimestamp(), updatedBy: 'daniel' }));
+    await assertSucceeds(updateDoc(doc(as('daniel'), `${ORG}/bankDaily/e1`), { deletedAt: serverTimestamp(), deletedBy: 'daniel', updatedAt: serverTimestamp(), updatedBy: 'daniel' }));
+    const count = { orgId: 'fcn', date: '2026-11-09', countedCents: 1500, name: 'Daniel', updatedAt: serverTimestamp() };
+    await assertSucceeds(setDoc(doc(as('daniel'), `${ORG}/cashCounts/2026-11-09`), { ...count, updatedBy: 'daniel' }));
+    await assertFails(setDoc(doc(as('daniel'), `${ORG}/cashCounts/2026-11-08`), { ...count, updatedBy: 'daniel' }));
+    await assertFails(setDoc(doc(as('admin'), `${ORG}/cashCounts/2026-11-09`), { ...count, updatedBy: 'admin' }));
+  });
+});

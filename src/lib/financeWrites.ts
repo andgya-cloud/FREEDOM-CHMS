@@ -2,7 +2,7 @@ import { collection, doc, serverTimestamp, setDoc, updateDoc } from 'firebase/fi
 import { auth, db } from '../firebase';
 import { createStamps, updateStamps } from './records';
 import { trackWrite } from './sync';
-import type { BankLine, BankStatement, OwnedItem } from '../../functions/src/shared/finance';
+import type { BankLine, BankStatement, DailyBankEntry, OwnedItem } from '../../functions/src/shared/finance';
 
 /** A year's statement can hold thousands of lines; each saved part keeps well under Firestore's 1 MB a document. */
 export const LINES_PER_PART = 2000;
@@ -46,4 +46,18 @@ export function saveFinBook(orgId: string, id: 'budget', data: Record<string, nu
 export function saveFinBook(orgId: string, id: 'owned', data: OwnedItem[]): Promise<unknown>;
 export function saveFinBook(orgId: string, id: 'learned' | 'budget' | 'owned', data: unknown): Promise<unknown> {
   return trackWrite(setDoc(doc(db, 'organizations', orgId, 'finBooks', id), { orgId, [id]: data, updatedAt: serverTimestamp(), updatedBy: me() }));
+}
+
+/** Bank money typed on the day (Andy, 2026-11-09, 1C). */
+export function addBankDaily(orgId: string, e: Omit<DailyBankEntry, 'id'>): Promise<unknown> {
+  return trackWrite(setDoc(doc(collection(db, 'organizations', orgId, 'bankDaily')), {
+    orgId, date: e.date, dir: e.dir, cents: e.cents, account: e.account.slice(0, 80), text: e.text.slice(0, 120), category: e.category, ...createStamps(),
+  }));
+}
+export function removeBankDaily(orgId: string, id: string): Promise<unknown> {
+  return trackWrite(updateDoc(doc(db, 'organizations', orgId, 'bankDaily', id), { deletedAt: serverTimestamp(), deletedBy: me(), ...updateStamps() }));
+}
+/** The cash in the petty cash box, counted on a day. */
+export function saveCashCount(orgId: string, date: string, countedCents: number, name: string): Promise<unknown> {
+  return trackWrite(setDoc(doc(db, 'organizations', orgId, 'cashCounts', date), { orgId, date, countedCents, name: name.slice(0, 120), updatedAt: serverTimestamp(), updatedBy: me() }));
 }

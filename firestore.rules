@@ -1521,6 +1521,29 @@ service cloud.firestore {
           && request.resource.data.lines is list && request.resource.data.lines.size() == resource.data.lines.size();
         allow delete: if false;
       }
+      // Daily accounts (Andy, 2026-11-09, 1C): bank money typed on the day, and the petty cash box counted.
+      match /bankDaily/{entryId} {
+        allow read: if finBooks();
+        allow create: if finBooks() && stampedCreate() && freshRecord()
+          && request.resource.data.keys().hasOnly(['orgId', 'date', 'dir', 'cents', 'account', 'text', 'category',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && isDate(request.resource.data.date)
+          && request.resource.data.dir in ['in', 'out']
+          && request.resource.data.cents is int && request.resource.data.cents > 0 && request.resource.data.cents <= 10000000000
+          && shortText(request.resource.data.account, 80) && shortText(request.resource.data.text, 120) && shortText(request.resource.data.category, 40);
+        allow update: if finBooks() && stampedUpdate() && validSoftDelete()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deletedAt', 'deletedBy', 'updatedAt', 'updatedBy']);
+        allow delete: if false;
+      }
+      match /cashCounts/{day} {
+        allow read: if finBooks();
+        allow write: if finBooks() && day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'date', 'countedCents', 'name', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.date == day
+          && request.resource.data.countedCents is int && request.resource.data.countedCents >= 0 && request.resource.data.countedCents <= 10000000000
+          && shortText(request.resource.data.name, 120)
+          && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
+      }
       match /finBooks/{bookId} {
         allow read: if finBooks();
         allow write: if finBooks() && bookId in ['learned', 'budget', 'owned']
