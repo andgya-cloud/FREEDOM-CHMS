@@ -61,7 +61,7 @@ function Giving({ org }: { org: Organization }) {
   }, [church, canRecord, fundsLoading, funds, org.id, toast]);
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <h1>Giving</h1>
 
       {canRecord && !church && !fundsLoading && funds.length === 0 && (

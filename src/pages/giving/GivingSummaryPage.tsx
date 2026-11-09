@@ -71,7 +71,7 @@ function Summary({ org }: { org: Organization }) {
     : [];
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p className="no-print"><Link to="/giving">← Giving</Link></p>
       <div className="page-head">
         <h1>{monthLabel(month)}</h1>

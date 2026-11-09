@@ -157,7 +157,7 @@ function RecordGift({ org }: { org: Organization }) {
 
   if (!church && !loading && funds.length === 0) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <h1>Record Giving</h1>
         <p>No funds are set up yet. <Link to="/giving">Back to Giving</Link></p>
       </div>
@@ -165,7 +165,7 @@ function RecordGift({ org }: { org: Organization }) {
   }
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to="/giving">← Giving</Link></p>
       <h1>Record Giving</h1>
       <details className="more mpesa-paste">

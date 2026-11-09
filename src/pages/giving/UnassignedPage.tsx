@@ -26,7 +26,7 @@ function Unassigned({ org }: { org: Organization }) {
   const { active: funds } = useFunds(org.id);
   const total = gifts.reduce((s, g) => s + g.amountCents, 0);
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to="/giving">← Giving</Link></p>
       <h1>Unassigned</h1>
       <p className="lead">{gifts.length ? `${gifts.length} ${gifts.length === 1 ? 'payment' : 'payments'} · ${formatMoney(total)}` : loading ? 'Loading…' : 'Nothing waiting. Every payment has a person and fund.'}</p>

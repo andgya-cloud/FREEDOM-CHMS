@@ -52,7 +52,7 @@ export function EventPage() {
   // Names come from the selected organization's people on this device.
   if (org && currentId !== orgId) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <p><Link to="/attendance">← Attendance</Link></p>
         <div className="notice">
           <p>This belongs to {org.name}.</p>
@@ -63,7 +63,7 @@ export function EventPage() {
   }
   if (!org || !event || event.deletedAt) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <p><Link to="/attendance">← Attendance</Link></p>
         <p>{missing || event?.deletedAt ? 'This was not found. It may have been deleted.' : 'Loading…'}</p>
       </div>
@@ -72,7 +72,7 @@ export function EventPage() {
 
   if (trainer && !mine) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <p><Link to="/attendance">← Attendance</Link></p>
         <p>This isn't one of your classes.</p>
       </div>
@@ -89,7 +89,7 @@ export function EventPage() {
 
   const isClass = event.type === 'class' || event.type === 'group' || !!linked.roster;
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to={linked.back.to}>← {linked.back.label}</Link></p>
       <div className="person-head">
         <div>

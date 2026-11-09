@@ -2740,5 +2740,5 @@ a.fin-chip:hover { background: #fdecea; }
 .fin-bs .fin-bs-sub td:first-child { padding-left: 20px; color: var(--muted); font-size: 0.9rem; }
 .fin-bs .fin-bs-total td { font-weight: 700; }
 
-/* Financial statements use the whole width to the right (Andy, 2026-11-09). */
+/* Financial statements, Giving and Sunday (Service) pages use the whole width (Andy, 2026-11-09). */
 .page.narrow.fin-wide, .petty-light .page.narrow.fin-wide { max-width: none; width: 100%; }

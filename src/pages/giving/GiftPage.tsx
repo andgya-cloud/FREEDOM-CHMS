@@ -38,7 +38,7 @@ export function GiftPage() {
 
   if (!org || !gift) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <p><Link to="/giving">← Giving</Link></p>
         <p>{loading ? 'Loading…' : error === 'permission-denied' ? 'Only the pastor, or the person who recorded it, can open this gift.' : 'This gift was not found.'}</p>
       </div>
@@ -97,7 +97,7 @@ export function GiftPage() {
   if (gift.status === 'void') details.push(['Voided', `${gift.voidReason ?? ''}${gift.voidedAt ? ` (${formatDateTime(gift.voidedAt.toDate(), org.timeZone)})` : ''}`]);
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to="/giving">← Giving</Link></p>
       <div className="person-head">
         <div>

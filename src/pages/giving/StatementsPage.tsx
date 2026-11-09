@@ -75,7 +75,7 @@ function Statements({ org }: { org: Organization }) {
   }
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to="/giving">← Giving</Link></p>
       <h1>Giving statements</h1>
       <div className="field-row">

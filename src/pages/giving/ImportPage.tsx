@@ -109,7 +109,7 @@ function Import({ org }: { org: Organization }) {
 
   if (!online && !review) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <p><Link to="/giving">← Giving</Link></p>
         <h1>Import M-Pesa statement</h1>
         <div className="notice">Importing checks every M-Pesa code with the server so nothing is counted twice, so it needs internet. Gifts can still be recorded one at a time offline.</div>
@@ -118,7 +118,7 @@ function Import({ org }: { org: Organization }) {
   }
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to="/giving">← Giving</Link></p>
       <h1>Import M-Pesa statement</h1>
 

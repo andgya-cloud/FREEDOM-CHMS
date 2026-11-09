@@ -20,9 +20,9 @@ const OTHER = '__other';
 export function PledgesPage() {
   const { current } = useOrg();
   const { can } = useAuth();
-  if (!current) return <div className="page narrow"><p>Choose an organization at the top.</p></div>;
+  if (!current) return <div className="page narrow fin-wide"><p>Choose an organization at the top.</p></div>;
   if (!can('giving.person.read')) {
-    return <div className="page narrow"><p><Link to="/giving">← Giving</Link></p><p>Only the pastor can see pledges.</p></div>;
+    return <div className="page narrow fin-wide"><p><Link to="/giving">← Giving</Link></p><p>Only the pastor can see pledges.</p></div>;
   }
   return <Pledges org={current} />;
 }
@@ -51,7 +51,7 @@ function Pledges({ org }: { org: Organization }) {
   }
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <p><Link to="/giving">← Giving</Link></p>
       <div className="person-head">
         <h1>Pledges</h1>

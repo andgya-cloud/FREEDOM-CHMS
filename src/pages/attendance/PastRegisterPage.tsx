@@ -34,9 +34,9 @@ const dayLabel = (d: string) => {
 export function PastRegisterPage() {
   const { profile } = useAuth();
   const { current } = useOrg();
-  if (!current || current.type !== 'college') return <div className="page narrow"><p>Past registers are for ADIA Training Centre.</p></div>;
+  if (!current || current.type !== 'college') return <div className="page narrow fin-wide"><p>Past registers are for ADIA Training Centre.</p></div>;
   if (!BACKDATE_ROLES.includes(profile?.roleId ?? '')) {
-    return <div className="page narrow"><p><Link to="/attendance">← Attendance</Link></p><p>Only the Director, admin and the principal fill in past registers.</p></div>;
+    return <div className="page narrow fin-wide"><p><Link to="/attendance">← Attendance</Link></p><p>Only the Director, admin and the principal fill in past registers.</p></div>;
   }
   return <PastRegister orgId={current.id} tz={current.timeZone || 'Africa/Nairobi'} />;
 }

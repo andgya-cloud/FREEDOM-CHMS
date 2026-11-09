@@ -100,7 +100,7 @@ export function AttendancePage() {
 
   if (isCombined || !current) {
     return (
-      <div className="page narrow">
+      <div className="page narrow fin-wide">
         <h1>Attendance</h1>
         {organizations.length === 0 ? (
           <p className="muted">Add an organization in Settings first.</p>
@@ -163,7 +163,7 @@ export function AttendancePage() {
   }
 
   return (
-    <div className="page narrow">
+    <div className="page narrow fin-wide">
       <h1>Attendance</h1>
 
       {canRecord && (
@@ -304,7 +304,7 @@ function SundayPage({ org, date, setDate, today, todays, events, loading, canRec
   const [chosen, setChosen] = useState('');
   const pick = { day: date, service: todays.some((e) => e.name === chosen) ? chosen : '' };
   return (
-    <div className="page narrow sunday-page">
+    <div className="page narrow sunday-page fin-wide">
       <h1>Service</h1>
       {/* Pick the day on a calendar and the time beside it (Andy, 2026-11-03, 2A). */}
       <section className="card when-card">
