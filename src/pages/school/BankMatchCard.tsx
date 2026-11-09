@@ -59,7 +59,11 @@ export function BankMatchCard({ org }: { org: Organization }) {
   const best = useMemo(() => {
     if (!payments) return '';
     let top = ''; let n = 0;
-    for (const x of payees) { const m = matchPayments(payments, candidates(x.key)).length; if (m > n) { n = m; top = x.key; } }
+    // An exact amount counts double, so a file of monthly shares is not taken for someone's weekly payments.
+    for (const x of payees) {
+      const m = matchPayments(payments, candidates(x.key)).reduce((k, y) => k + (y.cents === y.reqCents ? 2 : 1), 0);
+      if (m > n) { n = m; top = x.key; }
+    }
     return top;
   }, [payments, payees]);
   const who = payee || best;
@@ -86,7 +90,7 @@ export function BankMatchCard({ org }: { org: Organization }) {
   return (
     <section className="card stack">
       <h2>Match bank payments</h2>
-      <p className="small muted">Upload the list of bank payments to one person (Excel or PDF). The app finds their requisitions of the same week that have no payment code. Once confirmed, each takes the amount the bank sent and the bank payment counts as its receipt.</p>
+      <p className="small muted">Upload the list of bank payments to one person (Excel or PDF). The app finds their requisitions of the same week (or a monthly voucher paid in several lines on one day) that have no payment code. Once confirmed, each takes the amount the bank sent and the bank payment counts as its receipt.</p>
       <label className="btn btn-quiet">
         {reading ? 'Reading…' : payments ? 'Choose another file' : 'Upload payments (Excel or PDF)'}
         <input type="file" accept=".xlsx,.pdf,.csv" className="visually-hidden" onChange={(e) => void choose(e)} disabled={reading} />
@@ -116,8 +120,8 @@ export function BankMatchCard({ org }: { org: Organization }) {
                         <td>{byId.get(m.reqId)?.number ?? 'Requisition'}<br /><span className="small muted">{showDay(m.reqDay)}</span></td>
                         <td className="num nowrap">{money(org, m.reqCents)}</td>
                         <td className="nowrap">{showDay(m.day)}</td>
-                        <td>{m.ref}</td>
-                        <td className={`num nowrap${m.cents !== m.reqCents ? ' danger-text' : ''}`}>{money(org, m.cents)}</td>
+                        <td>{m.ref || '—'}</td>
+                        <td className={`num nowrap${m.cents !== m.reqCents ? ' danger-text' : ''}`}>{money(org, m.cents)}{m.lines.length > 1 && <><br /><span className="small muted">{m.lines.map((l) => money(org, l.cents)).join(' + ')}</span></>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -126,7 +130,7 @@ export function BankMatchCard({ org }: { org: Organization }) {
               <PettySignBox topUpOnly label="Andrew, Doreen or Elias confirms all the matches with one PIN." orgId={org.id} exclude={[]}
                 confirmLabel={`✓ Confirm all ${matches.length}`}
                 sign={async (signerUid, pin) => {
-                  const res = await matchBankPayments({ orgId: org.id, signerUid, pin, payee: whoLabel, matches: matches.map(({ reqId, day, ref, cents }) => ({ reqId, day, ref, cents })) });
+                  const res = await matchBankPayments({ orgId: org.id, signerUid, pin, payee: whoLabel, matches: matches.map(({ reqId, lines }) => ({ reqId, lines })) });
                   setPayments(null); setPayee('');
                   const msg = `${res.matched} requisitions matched to the bank${res.changed ? `, ${res.changed} amounts set to what the bank sent` : ''}.`;
                   setDone(msg);

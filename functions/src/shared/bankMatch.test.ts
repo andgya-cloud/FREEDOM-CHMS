@@ -45,4 +45,15 @@ describe('matchPayments', () => {
     const m = matchPayments([{ day: '2026-04-07', ref: 'SMALL', cents: 250_000 }, { day: '2026-04-07', ref: 'MAIN', cents: 1_970_000 }], [req('a', '2026-04-05')]);
     expect(m.map((x) => x.ref)).toEqual(['MAIN']);
   });
+  it('matches a monthly voucher to two lines of one day that add up to it, with no reference', () => {
+    const reqs = [req('mar', '2026-03-31', 1_900_000), req('apr', '2026-04-30', 1_900_000)];
+    const pays = [{ day: '2026-03-28', ref: '', cents: 1_500_000 }, { day: '2026-03-28', ref: '', cents: 400_000 },
+      { day: '2026-05-12', ref: '', cents: 1_500_000 }, { day: '2026-05-12', ref: '', cents: 400_000 }];
+    const m = matchPayments(pays, reqs);
+    expect(m.map((x) => [x.reqId, x.day, x.cents, x.lines.length])).toEqual([['mar', '2026-03-28', 1_900_000, 2], ['apr', '2026-05-12', 1_900_000, 2]]);
+  });
+  it('reads lines that have no bank reference', () => {
+    const rows = [['Date', 'Bank reference', 'Amount (KES)'], ['28 Mar 2026', '', 15000], ['28 Mar 2026', '', 4000]];
+    expect(readPayments(rows).payments).toHaveLength(2);
+  });
 });

@@ -119,7 +119,7 @@ export async function myOwnProof(): Promise<string> {
 export interface PastImportResult { added: number; skipped: number; spentCents: number; moneyAdded: number; moneyInCents: number; renumbered: number; shift: number; firstAppNumber: string | null }
 
 /** Confirms uploaded bank payments matched to requisitions (Andy, 2026-11-09, 5A). */
-export async function matchBankPayments(args: { orgId: string; signerUid: string; pin: string; payee: string; matches: { reqId: string; day: string; ref: string; cents: number }[] }) {
+export async function matchBankPayments(args: { orgId: string; signerUid: string; pin: string; payee: string; matches: { reqId: string; lines: { day: string; ref: string; cents: number }[] }[] }) {
   const res = await httpsCallable<typeof args, { matched: number; changed: number }>(functions, 'matchBankPayments', { timeout: 120_000 })(args);
   return res.data;
 }

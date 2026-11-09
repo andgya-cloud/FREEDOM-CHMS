@@ -3,7 +3,7 @@ import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProf
 import { canSign, directorSelf, requireMember, requireSelfOrKeeper, verifyPin } from './pettyPins.js';
 import { requireMonthOpen } from './pettyMonths.js';
 import { PETTY_CASH_ORG_TYPES, canTopUpAlone, type PettyCashItem } from './shared/pettyCash.js';
-import { MATCH_DAYS_AFTER, MATCH_DAYS_BEFORE, MAX_MATCHES, closeEnough, daysBetween, readDay } from './shared/bankMatch.js';
+import { GROUP_DAYS_AFTER, GROUP_DAYS_BEFORE, MATCH_DAYS_AFTER, MATCH_DAYS_BEFORE, MAX_GROUP_LINES, MAX_MATCHES, closeEnough, daysBetween, readDay } from './shared/bankMatch.js';
 
 /**
  * Confirms the matches between uploaded bank payments and requisitions without a payment code
@@ -20,16 +20,26 @@ export const matchBankPayments = onCall(CALLABLE, async (request) => {
   const signerUid = requireString(data.signerUid, 'the stakeholder', { max: 128 });
   const payee = typeof data.payee === 'string' ? data.payee.trim().slice(0, 120) : '';
   if (!Array.isArray(data.matches) || !data.matches.length || data.matches.length > MAX_MATCHES) throw new HttpsError('invalid-argument', 'There are no matches to confirm.');
-  const matches = data.matches.map((m) => {
-    const x = (m ?? {}) as Record<string, unknown>;
-    const reqId = typeof x.reqId === 'string' ? x.reqId : '';
+  const readLine = (v: unknown) => {
+    const x = (v ?? {}) as Record<string, unknown>;
     const day = typeof x.day === 'string' ? readDay(x.day) : null;
     const ref = typeof x.ref === 'string' ? x.ref.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 40) : '';
     const cents = typeof x.cents === 'number' && Number.isInteger(x.cents) && x.cents > 0 && x.cents <= 100_000_000_000 ? x.cents : 0;
-    if (!reqId || reqId.includes('/') || !day || !ref || !cents) throw new HttpsError('invalid-argument', 'One of the matches is not complete.');
-    return { reqId, day, ref, cents };
+    if (!day || !cents) throw new HttpsError('invalid-argument', 'One of the matches is not complete.');
+    return { day, ref, cents };
+  };
+  const matches = data.matches.map((m) => {
+    const x = (m ?? {}) as Record<string, unknown>;
+    const reqId = typeof x.reqId === 'string' ? x.reqId : '';
+    const lines = Array.isArray(x.lines) && x.lines.length ? x.lines.slice(0, MAX_GROUP_LINES + 1).map(readLine) : [readLine(x)];
+    if (!reqId || reqId.includes('/') || lines.length > MAX_GROUP_LINES) throw new HttpsError('invalid-argument', 'One of the matches is not complete.');
+    if (lines.length > 1 && lines.some((l) => l.day !== lines[0]!.day)) throw new HttpsError('invalid-argument', 'Lines matched together must be from one day.');
+    const ref = [...new Set(lines.map((l) => l.ref).filter(Boolean))].join(' ').slice(0, 40);
+    return { reqId, lines, day: lines[0]!.day, ref, cents: lines.reduce((n, l) => n + l.cents, 0) };
   });
-  if (new Set(matches.map((m) => m.reqId)).size !== matches.length || new Set(matches.map((m) => m.ref)).size !== matches.length) {
+  // A reference may repeat only on shares of one split transfer.
+  const refs = matches.flatMap((m) => m.lines.filter((l) => l.ref).map((l) => `${l.ref}|${l.day}|${l.cents}`));
+  if (new Set(matches.map((m) => m.reqId)).size !== matches.length || new Set(refs).size !== refs.length) {
     throw new HttpsError('invalid-argument', 'A payment or requisition appears twice.');
   }
   requireMember(caller.profile, orgId);
@@ -46,7 +56,7 @@ export const matchBankPayments = onCall(CALLABLE, async (request) => {
 
   const col = db.collection(`organizations/${orgId}/pettyCash`);
   const all = await col.get();
-  const usedRefs = new Set(all.docs.filter((d) => !d.get('deletedAt')).flatMap((d) => [d.get('refNo'), d.get('bankProof')?.ref]).filter(Boolean).map((r) => String(r).toUpperCase()));
+  const usedRefs = new Set(all.docs.filter((d) => !d.get('deletedAt')).flatMap((d) => [d.get('refNo'), d.get('bankProof')?.ref]).filter(Boolean).flatMap((r) => String(r).toUpperCase().split(' ')).filter(Boolean));
   const byId = new Map(all.docs.map((d) => [d.id, d]));
   const toMs = (t: unknown) => (t && typeof (t as { toMillis?: () => number }).toMillis === 'function' ? (t as { toMillis: () => number }).toMillis() : null);
   const plan = matches.map((m) => {
@@ -54,11 +64,15 @@ export const matchBankPayments = onCall(CALLABLE, async (request) => {
     const r = d?.data();
     if (!d || !r || r.deletedAt || r.status !== 'approved') throw new HttpsError('failed-precondition', 'A requisition in the list is no longer approved. Upload the file again.');
     if (r.mpesaCode || r.refNo || r.bankProof) throw new HttpsError('failed-precondition', `${r.number ?? 'A requisition'} already has a payment code. Upload the file again.`);
-    if (usedRefs.has(m.ref)) throw new HttpsError('failed-precondition', `Bank reference ${m.ref} is already on another requisition.`);
+    const taken = m.lines.length === 1 ? m.lines.find((l) => l.ref && usedRefs.has(l.ref)) : undefined;
+    if (taken) throw new HttpsError('failed-precondition', `Bank reference ${taken.ref} is already on another requisition.`);
     const at = toMs(r.approved?.at) ?? toMs(r.createdAt);
     const reqDay = at == null ? m.day : new Date(at + 3 * 3_600_000).toISOString().slice(0, 10);
     const gap = daysBetween(reqDay, m.day);
-    if (gap < -MATCH_DAYS_BEFORE || gap > MATCH_DAYS_AFTER || !closeEnough(m.cents, r.totalCents)) throw new HttpsError('invalid-argument', `The payment for ${r.number ?? 'a requisition'} is too far from its date or amount.`);
+    const fits = m.lines.length > 1
+      ? gap >= -GROUP_DAYS_BEFORE && gap <= GROUP_DAYS_AFTER && m.cents === r.totalCents
+      : gap >= -MATCH_DAYS_BEFORE && gap <= MATCH_DAYS_AFTER && closeEnough(m.cents, r.totalCents);
+    if (!fits) throw new HttpsError('invalid-argument', `The payment for ${r.number ?? 'a requisition'} is too far from its date or amount.`);
     return { d, r, m };
   });
   for (const month of new Set(plan.map((p) => p.r.month as string))) await requireMonthOpen(null, orgId, month);
@@ -69,7 +83,8 @@ export const matchBankPayments = onCall(CALLABLE, async (request) => {
     for (const { d, r, m } of plan.slice(i, i + 400)) {
       const items = r.items as PettyCashItem[];
       const update: Record<string, unknown> = {
-        refNo: m.ref, bankProof: { day: m.day, ref: m.ref, cents: m.cents, ...(payee ? { payee } : {}), by: signerUid, byName: name, at: FieldValue.serverTimestamp() },
+        ...(m.ref ? { refNo: m.ref } : {}),
+        bankProof: { day: m.day, ref: m.ref, cents: m.cents, ...(m.lines.length > 1 ? { lines: m.lines } : {}), ...(payee ? { payee } : {}), by: signerUid, byName: name, at: FieldValue.serverTimestamp() },
         updatedAt: FieldValue.serverTimestamp(), updatedBy: signerUid,
       };
       // 2A: what the bank sent is what was paid. A requisition with several items keeps its items.

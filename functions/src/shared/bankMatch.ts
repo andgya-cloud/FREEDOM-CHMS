@@ -9,12 +9,21 @@
 
 export interface BankPayment { day: string; cents: number; ref: string }
 export interface MatchCandidate { id: string; day: string; cents: number }
-export interface BankMatch { reqId: string; reqDay: string; reqCents: number; day: string; cents: number; ref: string }
+/** The bank lines that paid one requisition: usually one, or several paid the same day that add up to it. */
+export interface BankMatch { reqId: string; reqDay: string; reqCents: number; day: string; cents: number; ref: string; lines: BankPayment[] }
 
 /** A payment may come up to 2 days before the requisition date, or up to 7 days after it. */
 export const MATCH_DAYS_BEFORE = 2;
 export const MATCH_DAYS_AFTER = 7;
 export const MAX_MATCHES = 300;
+/**
+ * Monthly vouchers paid as several lines on one day (the caretakers: 15,000 and 4,000 on one voucher;
+ * Andy, 2026-11-09): the lines must add up exactly to the voucher, and may come a week before it or up to
+ * two weeks after it.
+ */
+export const GROUP_DAYS_BEFORE = 7;
+export const GROUP_DAYS_AFTER = 14;
+export const MAX_GROUP_LINES = 4;
 
 const dayNumber = (day: string) => Math.round(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
 export const daysBetween = (from: string, to: string) => dayNumber(to) - dayNumber(from);
@@ -27,24 +36,65 @@ export const closeEnough = (paid: number, asked: number) => paid * 2 >= asked &&
  * twice as far, since payment usually follows), then the nearest amount.
  */
 export function matchPayments(payments: readonly BankPayment[], reqs: readonly MatchCandidate[]): BankMatch[] {
+  const usedP = new Set<number>();
+  const usedR = new Set<number>();
+  const out: BankMatch[] = [];
+  const combine = (req: MatchCandidate, idx: number[]): BankMatch => {
+    const lines = idx.map((i) => payments[i]!);
+    return { reqId: req.id, reqDay: req.day, reqCents: req.cents, day: lines[0]!.day, cents: lines.reduce((n, l) => n + l.cents, 0), ref: [...new Set(lines.map((l) => l.ref).filter(Boolean))].join(' '), lines };
+  };
+  // First, lines of one day that add up exactly to a requisition, nearest day first.
+  [...reqs.keys()].sort((a, b) => reqs[a]!.day.localeCompare(reqs[b]!.day)).forEach((r) => {
+    const req = reqs[r]!;
+    const days = new Map<string, number[]>();
+    payments.forEach((pay, p) => {
+      const gap = daysBetween(req.day, pay.day);
+      if (!usedP.has(p) && gap >= -GROUP_DAYS_BEFORE && gap <= GROUP_DAYS_AFTER) days.set(pay.day, [...(days.get(pay.day) ?? []), p]);
+    });
+    const order = [...days.keys()].sort((a, b) => {
+      const ga = daysBetween(req.day, a); const gb = daysBetween(req.day, b);
+      return (ga >= 0 ? ga : -2 * ga) - (gb >= 0 ? gb : -2 * gb);
+    });
+    for (const day of order) {
+      const ids = days.get(day)!;
+      if (ids.length < 2) continue;
+      const hit = subsetSum(ids, (i) => payments[i]!.cents, req.cents);
+      if (hit) { hit.forEach((i) => usedP.add(i)); usedR.add(r); out.push(combine(req, hit)); return; }
+    }
+  });
+  // Then one line to one requisition.
   const pairs: { p: number; r: number; far: number; diff: number }[] = [];
   payments.forEach((pay, p) => reqs.forEach((req, r) => {
+    if (usedP.has(p) || usedR.has(r)) return;
     const gap = daysBetween(req.day, pay.day);
     if (gap >= -MATCH_DAYS_BEFORE && gap <= MATCH_DAYS_AFTER && closeEnough(pay.cents, req.cents)) {
       pairs.push({ p, r, far: gap >= 0 ? gap : -2 * gap, diff: Math.abs(pay.cents - req.cents) });
     }
   }));
   pairs.sort((a, b) => a.far - b.far || a.diff - b.diff || a.p - b.p || a.r - b.r);
-  const usedP = new Set<number>();
-  const usedR = new Set<number>();
-  const out: BankMatch[] = [];
   for (const x of pairs) {
     if (usedP.has(x.p) || usedR.has(x.r)) continue;
     usedP.add(x.p); usedR.add(x.r);
-    const pay = payments[x.p]!; const req = reqs[x.r]!;
-    out.push({ reqId: req.id, reqDay: req.day, reqCents: req.cents, day: pay.day, cents: pay.cents, ref: pay.ref });
+    const req = reqs[x.r]!;
+    out.push(combine(req, [x.p]));
   }
   return out.sort((a, b) => a.reqDay.localeCompare(b.reqDay) || a.reqId.localeCompare(b.reqId));
+}
+
+/** Two to four of the lines that add up exactly to the amount, or null. */
+function subsetSum(ids: number[], cents: (i: number) => number, total: number): number[] | null {
+  const pick: number[] = [];
+  const go = (from: number, left: number): boolean => {
+    if (left === 0 && pick.length >= 2) return true;
+    if (left <= 0 || pick.length === MAX_GROUP_LINES) return false;
+    for (let k = from; k < ids.length; k++) {
+      pick.push(ids[k]!);
+      if (go(k + 1, left - cents(ids[k]!))) return true;
+      pick.pop();
+    }
+    return false;
+  };
+  return go(0, total) ? [...pick] : null;
 }
 
 type Cell = string | number | Date | boolean | null | undefined;
@@ -91,8 +141,11 @@ export function readPayments(rows: readonly (readonly Cell[])[]): { payments: Ba
   const payments: BankPayment[] = [];
   let skipped = 0;
   const seen = new Set<string>();
+  // Some bank transfers carry no reference (Account to Account before September 2026): those still count.
   const add = (p: BankPayment | null, looked: boolean) => {
-    if (p && !seen.has(p.ref)) { seen.add(p.ref); payments.push(p); } else if (looked && !p) skipped++;
+    // One transfer split between people (a 29,000 salaries transfer) keeps its reference on each share.
+    const key = p ? `${p.ref}|${p.day}|${p.cents}` : '';
+    if (p && (!p.ref || !seen.has(key))) { if (p.ref) seen.add(key); payments.push(p); } else if (looked && !p) skipped++;
   };
   if (head >= 0) {
     const h = rows[head]!.map(text);
@@ -102,7 +155,7 @@ export function readPayments(rows: readonly (readonly Cell[])[]): { payments: Ba
       if (!r.some((c) => text(c) || c instanceof Date)) continue;
       const day = readDay(r[dCol]); const ref = cleanRef(text(r[rCol])); const cents = readCents(r[aCol]);
       if (!day && /total/i.test(r.map(text).join(' '))) continue;
-      add(day && ref && cents ? { day, ref, cents } : null, true);
+      add(day && cents ? { day, ref, cents } : null, true);
     }
     return { payments, skipped };
   }
@@ -122,4 +175,4 @@ export function readPayments(rows: readonly (readonly Cell[])[]): { payments: Ba
 }
 
 /** What the matched bank line is kept as on the requisition. */
-export interface BankProof { day: string; ref: string; cents: number; payee?: string }
+export interface BankProof { day: string; ref: string; cents: number; payee?: string; lines?: BankPayment[] }

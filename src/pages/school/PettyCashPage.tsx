@@ -48,7 +48,7 @@ export function bankLine(org: Organization, r: Pick<RequisitionRow, 'bankProof'>
   const b = r.bankProof;
   if (!b) return null;
   const day = new Date(`${b.day}T12:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
-  return `${day} · ref ${b.ref} · ${money(org, b.cents)}`;
+  return `${day}${b.ref ? ` · ref ${b.ref}` : ''} · ${money(org, b.cents)}${b.lines && b.lines.length > 1 ? ` (${b.lines.map((l) => money(org, l.cents)).join(' + ')})` : ''}`;
 }
 
 /** Saves a receipt pack PDF, or says why it could not. */
