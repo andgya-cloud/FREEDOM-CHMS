@@ -118,3 +118,14 @@ describe('missed group meetings', () => {
     expect(missedMeetings([], 'tuesday', '2026-10-19', '2026-10-21').inARow).toBe(1);
   });
 });
+
+describe('topics ticked by hand (Freedom 252, 2026-11-09)', () => {
+  it('count alongside classes and keep the earliest date', () => {
+    const topics = [{ id: 'a', name: 'A' }, { id: 'b', name: 'B' }];
+    const sessions = [{ id: 's1', date: '2026-11-10', topicIds: ['a'] }];
+    const c = coverage(topics, { type: 'all_topics' }, sessions, [{ eventId: 's1', status: 'present' }], { b: '2026-11-12', zz: '2026-11-01' });
+    expect(c.count).toBe(2);
+    expect(c.complete).toBe(true);
+    expect(c.completedDate).toBe('2026-11-12');
+  });
+});

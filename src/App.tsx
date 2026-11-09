@@ -31,6 +31,10 @@ const ProgramPage = lazy(() => import('./pages/programs/ProgramPage').then((m) =
 const ProgramFormPage = lazy(() => import('./pages/programs/ProgramFormPage').then((m) => ({ default: m.ProgramFormPage })));
 const TeamPage = lazy(() => import('./pages/programs/TeamPage').then((m) => ({ default: m.TeamPage })));
 const GroupPage = lazy(() => import('./pages/programs/GroupPage').then((m) => ({ default: m.GroupPage })));
+const ClassQrPage = lazy(() => import('./pages/programs/ClassQrPage').then((m) => ({ default: m.ClassQrPage })));
+const RegisterPage = lazy(() => import('./pages/programs/RegisterPage').then((m) => ({ default: m.RegisterPage })));
+const ClassCheckInPage = lazy(() => import('./pages/classes/ClassCheckInPage').then((m) => ({ default: m.ClassCheckInPage })));
+const ClassProgressPage = lazy(() => import('./pages/classes/ClassProgressPage').then((m) => ({ default: m.ClassProgressPage })));
 const GroupFormPage = lazy(() => import('./pages/programs/GroupFormPage').then((m) => ({ default: m.GroupFormPage })));
 const WelcomeCardPage = lazy(() => import('./pages/people/WelcomeCardPage').then((m) => ({ default: m.WelcomeCardPage })));
 const JoinFamilyPage = lazy(() => import('./pages/people/JoinFamilyPage').then((m) => ({ default: m.JoinFamilyPage })));
@@ -119,7 +123,8 @@ export function App() {
   const { user, profile, loading, signOut } = useAuth();
   const settings = useAppSettings();
   const path = useLocation().pathname;
-  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path === '/install';
+  // The class check-in and a student's progress page are open to anyone too (Freedom 252, 2026-11-09).
+  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path === '/install';
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -136,6 +141,8 @@ export function App() {
           <Routes>
             <Route path="/welcome/:orgId" element={<WelcomeCardPage />} />
             <Route path="/join/:orgId" element={<JoinFamilyPage />} />
+            <Route path="/class/:orgId/p/:token" element={<ClassProgressPage />} />
+            <Route path="/class/:orgId/:eventId" element={<ClassCheckInPage />} />
             <Route path="/install" element={<InstallPage />} />
           </Routes>
         </div>
@@ -162,6 +169,7 @@ export function App() {
     <Routes>
       {/* The door tablet fills the screen, without the menus. */}
       <Route path="/door/:orgId/:eventId" element={<RequirePermission permission="attendance.write"><DoorModePage /></RequirePermission>} />
+      <Route path="/class-qr/:orgId/:programId" element={<RequirePermission permission="attendance.write"><ClassQrPage /></RequirePermission>} />
       <Route path="*" element={<AppRoutes />} />
     </Routes>
     </Suspense>
@@ -189,6 +197,7 @@ function AppRoutes() {
         <Route path="/programs" element={<RequirePermission permission="people.read"><ProgramsPage /></RequirePermission>} />
         <Route path="/programs/:orgId/new" element={<RequirePermission permission="settings.manage"><ProgramFormPage /></RequirePermission>} />
         <Route path="/programs/:orgId/:programId" element={<RequirePermission permission="people.read"><ProgramPage /></RequirePermission>} />
+        <Route path="/programs/:orgId/:programId/register" element={<RequirePermission permission="people.read"><RegisterPage /></RequirePermission>} />
         <Route path="/programs/:orgId/:programId/edit" element={<RequirePermission permission="settings.manage"><ProgramFormPage /></RequirePermission>} />
         <Route path="/teams/:orgId/:teamId" element={<RequirePermission permission="people.read"><TeamPage /></RequirePermission>} />
         <Route path="/groups/:orgId/new" element={<RequirePermission permission="programs.write"><GroupFormPage /></RequirePermission>} />

@@ -2742,3 +2742,32 @@ a.fin-chip:hover { background: #fdecea; }
 
 /* Financial statements, Giving and Sunday (Service) pages use the whole width (Andy, 2026-11-09). */
 .page.narrow.fin-wide, .petty-light .page.narrow.fin-wide { max-width: none; width: 100%; }
+
+/* ---- Class register: QR check-in, progress page and the register grid (Freedom 252, 2026-11-09) ---- */
+.class-actions { margin: 4px 0 12px; flex-wrap: wrap; }
+.class-qr-main { align-items: center; text-align: center; }
+.class-qr-main .class-qr-topic { font-size: clamp(1.6rem, 4.5vw, 3rem); line-height: 1.15; }
+.class-qr-start { width: 100%; max-width: 480px; text-align: left; }
+.class-qr-code { background: #fff; padding: 14px; border-radius: 18px; box-shadow: 0 6px 28px rgb(0 0 0 / .14); width: min(78vw, 62vh, 560px); aspect-ratio: 1; display: grid; place-items: center; }
+.class-qr-code img { width: 100%; height: 100%; image-rendering: pixelated; }
+.class-qr-hint { font-size: 1.15rem; margin: 0; }
+.class-qr-names { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 720px; }
+.class-pct { font-size: 3rem; font-weight: 700; margin: 8px 0 0; color: var(--green); }
+.welcome-card .progress { margin: 6px auto 4px; max-width: 320px; height: 10px; }
+.class-topics { list-style: none; padding: 0; margin: 16px 0 0; text-align: left; display: grid; gap: 8px; }
+.class-topics li { display: flex; gap: 10px; align-items: flex-start; }
+.class-topics li > span:last-child { display: grid; }
+.class-tick { flex: none; width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--border, #cfd6cf); display: grid; place-items: center; font-size: .8rem; font-weight: 700; }
+.class-topics li.done .class-tick { background: var(--green); border-color: var(--green); color: #fff; }
+.reg-scroll { overflow-x: auto; max-width: 100%; -webkit-overflow-scrolling: touch; }
+.reg-grid { border-collapse: collapse; font-size: .85rem; min-width: 100%; }
+.reg-grid th, .reg-grid td { padding: 2px; text-align: center; border-bottom: 1px solid var(--border, rgb(0 0 0 / .08)); }
+.reg-grid thead th { font-weight: 600; color: var(--muted); min-width: 26px; }
+.reg-grid .reg-name { text-align: left; white-space: nowrap; position: sticky; left: 0; background: var(--surface, #fff); padding-right: 10px; font-weight: 500; z-index: 1; max-width: 44vw; overflow: hidden; text-overflow: ellipsis; }
+.reg-cell { width: 26px; height: 26px; min-height: 0; padding: 0; border-radius: 6px; border: 1px solid var(--border, rgb(0 0 0 / .14)); background: transparent; display: grid; place-items: center; font-weight: 700; font-size: .75rem; color: rgb(176 137 52); cursor: pointer; }
+.reg-cell:disabled { cursor: default; opacity: 1; }
+.reg-cell.class { background: rgb(31 122 77 / .12); border-color: transparent; }
+.reg-cell.hand { background: rgb(176 137 52 / .14); border-color: transparent; }
+.reg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); vertical-align: middle; }
+.reg-hand { color: rgb(176 137 52); font-weight: 700; }
+.reg-pct { font-weight: 700; padding-left: 8px !important; white-space: nowrap; }

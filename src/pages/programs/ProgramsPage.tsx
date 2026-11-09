@@ -14,6 +14,8 @@ import {
   useTeams,
 } from '../../state/usePrograms';
 import { addStandardPrograms, addTeam } from '../../lib/programWrites';
+import { setUpFreedom252 } from '../../lib/classRegister';
+import { F252_ID } from '../../../functions/src/shared/classRegister';
 import { friendlyError } from '../../lib/errors';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { CampusGate } from '../../components/CampusGate';
@@ -54,9 +56,25 @@ function Programs({ org }: { org: Organization }) {
     toast.show(saved('Growth Track, Freedom 252 and Communication Master Class added'));
   }
 
+  // Freedom 252 2026-27 (Andy, 2026-11-09): the 24 real topics and class dates from the 2027 calendar, in one tap.
+  const f252 = programs.find((p) => p.id === F252_ID);
+  const needs252 = canSetUp && !loading && org.type === 'church_campus' && !f252?.plan?.length;
+  function setUp252() {
+    setUpFreedom252(org.id, !!f252).catch((err) => toast.show(friendlyError(err)));
+    toast.show(saved('Freedom 252: 24 topics and class dates put in'));
+  }
+
   return (
     <div className="page narrow">
       <h1>Programmes</h1>
+
+      {needs252 && (
+        <div className="notice">
+          <strong>Freedom 252 starts Tuesday 10 November</strong>
+          <span>Put in the 24 topics and class dates from the 2027 calendar (Tuesdays 8:00pm, graduation 15 Aug 2027).</span>
+          <button type="button" className="btn btn-primary align-start" onClick={setUp252}>Put in the Freedom 252 calendar</button>
+        </div>
+      )}
 
       <section className="stack">
         <div className="page-head">

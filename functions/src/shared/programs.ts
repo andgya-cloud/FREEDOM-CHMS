@@ -31,6 +31,18 @@ export interface ProgramConfig {
   /** When classes usually meet, for example "Tuesday 20:00". */
   schedule: string;
   active: boolean;
+  /** The class calendar (Freedom 252, Andy 2026-11-09): which topic is taught on which day. */
+  plan?: PlanEntry[];
+  /** When a planned class starts and ends ("20:00", "22:00"): the QR check-in is open from 30 minutes before. */
+  classStart?: string;
+  classEnd?: string;
+}
+
+export interface PlanEntry {
+  topicId: string;
+  date: string;
+  /** "Semester 1 · Week 1" */
+  label: string;
 }
 
 /**
@@ -159,6 +171,8 @@ export function coverage(
   rule: CompletionRule,
   sessions: readonly SessionLike[],
   marks: readonly MarkLike[],
+  /** Topics ticked by hand (caught up another way): topic id -> date. */
+  manual?: Readonly<Record<string, string>> | null,
 ): Coverage {
   const known = new Set(topics.map((t) => t.id));
   const attendedIds = new Set(marks.filter((m) => !m.deletedAt && attended(m.status)).map((m) => m.eventId));
@@ -166,6 +180,11 @@ export function coverage(
   const ordered = sessions.filter((s) => !s.deletedAt && attendedIds.has(s.id)).sort((a, b) => a.date.localeCompare(b.date));
   for (const s of ordered) {
     for (const t of s.topicIds ?? []) if (known.has(t) && !covered.has(t)) covered.set(t, s.date);
+  }
+  for (const [t, date] of Object.entries(manual ?? {})) {
+    if (!known.has(t) || typeof date !== 'string') continue;
+    const had = covered.get(t);
+    if (!had || date < had) covered.set(t, date);
   }
   const needed = topicsNeeded(rule, topics.length);
   const complete = covered.size >= needed;

@@ -371,7 +371,7 @@ service cloud.firestore {
                'programId', 'groupId', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && recordId == request.resource.data.eventId + '_' + request.resource.data.personId
           && request.resource.data.status in ['present', 'late', 'absent', 'excused']
-          && request.resource.data.method in ['staff', 'door', 'register']
+          && request.resource.data.method in ['staff', 'door', 'register', 'self']
           && request.resource.data.checkedInAt is timestamp
           && (resource == null || (request.resource.data.eventId == resource.data.eventId
                                    && request.resource.data.personId == resource.data.personId))
@@ -410,7 +410,7 @@ service cloud.firestore {
         allow create, update: if orgWrite(orgId, 'settings.manage')
           && programId.matches('^[a-z0-9_]{2,60}$')
           && request.resource.data.keys().hasOnly(['orgId', 'name', 'description', 'topics', 'completionRule',
-               'pipelineStageId', 'completedLabel', 'schedule', 'active',
+               'pipelineStageId', 'completedLabel', 'schedule', 'active', 'plan', 'classStart', 'classEnd',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && request.resource.data.name is string && request.resource.data.name.size() >= 2 && request.resource.data.name.size() <= 80
           && shortText(request.resource.data.description, 500)
@@ -422,7 +422,10 @@ service cloud.firestore {
           && (request.resource.data.pipelineStageId == null || request.resource.data.pipelineStageId is string)
           && shortText(request.resource.data.completedLabel, 30)
           && shortText(request.resource.data.schedule, 80)
-          && request.resource.data.active is bool;
+          && request.resource.data.active is bool
+          && (!('plan' in request.resource.data) || (request.resource.data.plan is list && request.resource.data.plan.size() <= 60))
+          && (!('classStart' in request.resource.data) || shortText(request.resource.data.classStart, 5))
+          && (!('classEnd' in request.resource.data) || shortText(request.resource.data.classEnd, 5));
         allow delete: if false;
       }
 
@@ -448,7 +451,7 @@ service cloud.firestore {
         allow read: if programsRead();
         allow create, update: if orgWrite(orgId, 'programs.write')
           && request.resource.data.keys().hasOnly(['orgId', 'programId', 'personId', 'cohortId', 'status', 'enrolledDate',
-               'completedDate', 'completedAuto', 'topicsCovered', 'notes',
+               'completedDate', 'completedAuto', 'topicsCovered', 'notes', 'manualTopics', 'selfAdded',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && enrollmentId == request.resource.data.programId + '_' + request.resource.data.personId
           && existsInOrg('programs', request.resource.data.programId)
@@ -459,7 +462,9 @@ service cloud.firestore {
           && optionalDate(request.resource.data.completedDate)
           && request.resource.data.completedAuto is bool
           && request.resource.data.topicsCovered is list && request.resource.data.topicsCovered.size() <= 60
-          && shortText(request.resource.data.notes, 1000);
+          && shortText(request.resource.data.notes, 1000)
+          && (!('manualTopics' in request.resource.data) || (request.resource.data.manualTopics is map && request.resource.data.manualTopics.size() <= 60))
+          && (!('selfAdded' in request.resource.data) || request.resource.data.selfAdded is bool);
         allow delete: if false;
       }
 

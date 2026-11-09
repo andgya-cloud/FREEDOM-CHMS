@@ -32,6 +32,10 @@ export interface Enrollment extends Stamped {
   completedAuto: boolean;
   topicsCovered: string[];
   notes: string;
+  /** Topics ticked by hand (caught up another way): topic id -> date (4A). */
+  manualTopics?: Record<string, string>;
+  /** Added by scanning the class QR code: on the leader's "Check these" list until they tap OK (3A). */
+  selfAdded?: boolean;
 }
 
 export interface Team extends Stamped {

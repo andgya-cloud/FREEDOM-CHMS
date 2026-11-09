@@ -29,7 +29,8 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 };
 
 /** staff: from the check-in screen; door: the tablet at the door; register: a class register. */
-export const CHECK_IN_METHODS = ['staff', 'door', 'register'] as const;
+/** 'self': the person scanned the class QR code on their own phone (Freedom 252, 2026-11-09). */
+export const CHECK_IN_METHODS = ['staff', 'door', 'register', 'self'] as const;
 export type CheckInMethod = (typeof CHECK_IN_METHODS)[number];
 
 export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'] as const;

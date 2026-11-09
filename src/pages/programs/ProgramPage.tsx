@@ -90,7 +90,7 @@ function ProgramView({ org, program }: { org: Organization; program: Program }) 
     .map((e) => {
       const person = byId(e.personId);
       if (!person) return null;
-      const progress = coverage(program.topics, program.completionRule, sessions, marks.filter((m) => m.personId === e.personId));
+      const progress = coverage(program.topics, program.completionRule, sessions, marks.filter((m) => m.personId === e.personId), e.manualTopics);
       const next = nextEnrollmentState({ status: e.status, completedDate: e.completedDate, completedAuto: e.completedAuto }, progress);
       return { enrollment: e, name: person.fullName, progress, status: next.status, completedDate: next.completedDate };
     })
@@ -125,6 +125,12 @@ function ProgramView({ org, program }: { org: Organization; program: Program }) 
           {can('settings.manage') && <Link className="btn align-start" to={`/programs/${org.id}/${program.id}/edit`}>Add topics</Link>}
         </div>
       )}
+
+      {/* The class register (Freedom 252, 2026-11-09): the students scan a QR code; the register shows everyone's %. */}
+      <div className="cleanup-head-actions class-actions">
+        {can('attendance.write') && total > 0 && <Link className="btn btn-primary" to={`/class-qr/${org.id}/${program.id}`}>Show class QR code</Link>}
+        <Link className="btn" to={`/programs/${org.id}/${program.id}/register`}>Register</Link>
+      </div>
 
       {can('attendance.write') && <StartClass org={org} program={program} cohorts={cohorts.filter((c) => c.active)} sessions={sessions} />}
 
@@ -197,7 +203,7 @@ function ProgramView({ org, program }: { org: Organization; program: Program }) 
             {sessions.map((s) => (
               <li key={s.id}>
                 <Link to={`/attendance/${org.id}/${s.id}`}>
-                  <span className="link-title">{formatDateKey(s.date)} · {s.cohortId ? cohortName(s.cohortId) : 'Make-up class'}</span>
+                  <span className="link-title">{formatDateKey(s.date)} · {s.cohortId ? cohortName(s.cohortId) : program.plan?.some((p) => p.date === s.date) ? 'Class' : 'Make-up class'}</span>
                   <span className="link-detail">
                     {(s.topicIds ?? []).map((t) => topicName.get(t) ?? 'Removed topic').join(', ') || 'No topic chosen'}
                     {s.mentor ? ` · ${s.mentor}` : ''} · {presentAt(s.id)} present

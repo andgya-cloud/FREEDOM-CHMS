@@ -62,7 +62,7 @@ export const syncProgrammes = onDocumentWritten('organizations/{orgId}/{collecti
     case 'enrollments': {
       if (!after) return;
       // A new enrolment counts classes the person already attended (a make-up class, say).
-      if (!before || before.cohortId !== after.cohortId || (before.deletedAt && !after.deletedAt)) {
+      if (!before || before.cohortId !== after.cohortId || (before.deletedAt && !after.deletedAt) || !same(before.manualTopics, after.manualTopics)) {
         await recount(orgId, after.programId as string, after.personId as string);
       }
       if (!live(after)) return;
@@ -93,10 +93,11 @@ export const syncProgrammes = onDocumentWritten('organizations/{orgId}/{collecti
 async function recount(orgId: string, programId: string, personId: string): Promise<void> {
   const base = `organizations/${orgId}`;
   const ref = db.doc(`${base}/enrollments/${enrollmentIdFor(programId, personId)}`);
-  const [program, sessions, marks] = await Promise.all([
+  const [program, sessions, marks, enrolment] = await Promise.all([
     db.doc(`${base}/programs/${programId}`).get(),
     db.collection(`${base}/events`).where('programId', '==', programId).get(),
     db.collection(`${base}/attendance`).where('programId', '==', programId).where('personId', '==', personId).get(),
+    ref.get(),
   ]);
   if (!program.exists) return;
   const topics = (program.get('topics') as Topic[] | undefined) ?? [];
@@ -106,6 +107,7 @@ async function recount(orgId: string, programId: string, personId: string): Prom
     rule,
     sessions.docs.map((d) => ({ id: d.id, ...d.data() }) as SessionLike),
     marks.docs.map((d) => ({ eventId: d.get('eventId'), status: d.get('status'), deletedAt: d.get('deletedAt') })),
+    (enrolment.get('manualTopics') as Record<string, string> | undefined) ?? null,
   );
   const topicsCovered = [...progress.covered.keys()].sort();
 

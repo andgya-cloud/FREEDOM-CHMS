@@ -39,3 +39,4 @@ export { cleanupFind, cleanupCheck, cleanupDelete, cleanupRestore, cleanupBin, c
 export { welcomeCard } from './welcome.js';
 export { birthdayCards, birthdayTestCard } from './birthdays.js';
 export { familySignup, decideSignup } from './familySignup.js';
+export { classRegister } from './classRegister.js';
