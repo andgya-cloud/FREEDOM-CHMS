@@ -4,6 +4,7 @@ import { useOrg, type Organization } from '../../state/OrgContext';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
+import { aiMap } from '../../lib/aiWrite';
 import { downloadFile } from '../../lib/givingPdf';
 import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
@@ -230,6 +231,44 @@ function NeedsYouCard({ org, statements, learned, count, months }: { org: Organi
       if (others) toast.show(`Also sorted ${others} more line${others === 1 ? '' : 's'} like it.`);
     } catch (err) { toast.show(friendlyError(err)); }
   }
+  // The helper's guesses (key sid-n to category id); nothing is saved until someone taps to accept.
+  const [hints, setHints] = useState<Record<string, string>>({});
+  const [asking, setAsking] = useState(false);
+  async function askHelper() {
+    setAsking(true);
+    try {
+      const map = await aiMap(org.id, 'sort', waiting.map(({ l, n, sid }) => ({ k: `${sid}-${n}`, t: l.t, dir: l.i > 0 ? 'in' : 'out' })));
+      setHints(map);
+      const got = Object.keys(map).length;
+      toast.show(got ? `The helper suggested ${got} categor${got === 1 ? 'y' : 'ies'}. Check them, then accept.` : 'The helper was not sure about any of these.');
+    } catch (err) { toast.show(err instanceof Error ? err.message : 'The helper could not answer.'); }
+    finally { setAsking(false); }
+  }
+  async function acceptHints() {
+    setBusy(true);
+    try {
+      // All at once, one save per statement, and the app learns each choice for lines like it next time.
+      const nextLearned = { ...learned };
+      const writes: Promise<unknown>[] = [];
+      for (const st of statements) {
+        if (isLocked(months, st.from) || isLocked(months, st.to)) continue;
+        let changed = false;
+        const lines = st.lines.map((l, n) => {
+          const c = hints[`${st.id}-${n}`];
+          if (!c || l.s || isLocked(months, l.d)) return l;
+          changed = true;
+          const key = learnKey(l.t, l.i > 0 ? 'in' : 'out');
+          if (key.length > 4) nextLearned[key] = c;
+          return { ...l, c, s: true };
+        });
+        if (changed) writes.push(saveLines(org.id, st.id, lines));
+      }
+      writes.push(saveFinBook(org.id, 'learned', nextLearned));
+      await Promise.all(writes);
+      setHints({});
+      toast.show('The helper\'s choices are saved.');
+    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
+  }
   async function acceptAll() {
     setBusy(true);
     try {
@@ -250,9 +289,16 @@ function NeedsYouCard({ org, statements, learned, count, months }: { org: Organi
               <strong className={l.i ? 'fin-in' : 'fin-out'}>{l.i ? `+ ${money(org, l.i)}` : `- ${money(org, l.o)}`}</strong>
             </div>
             <CategorySelect line={l} onChange={(c) => void pick(sid, n, c)} />
+            {hints[`${sid}-${n}`] && hints[`${sid}-${n}`] !== l.c && (
+              <span className="small">Helper: <strong>{finLabel(hints[`${sid}-${n}`]!)}</strong> <button type="button" className="btn btn-quiet btn-small" onClick={() => void pick(sid, n, hints[`${sid}-${n}`]!)}>Use</button></span>
+            )}
           </li>
         ))}
       </ul>
+      <div className="chips">
+        <button type="button" className="btn btn-quiet" disabled={asking || busy || !waiting.length} onClick={() => void askHelper()}>{asking ? 'Asking…' : 'Ask the helper to sort these'}</button>
+        {Object.keys(hints).length > 0 && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void acceptHints()}>Accept the helper's {Object.keys(hints).length} choices</button>}
+      </div>
       <button type="button" className="btn align-start" disabled={busy} onClick={() => void acceptAll()}>{busy ? 'Saving…' : `The guesses are right: confirm all ${count}`}</button>
     </section>
   );

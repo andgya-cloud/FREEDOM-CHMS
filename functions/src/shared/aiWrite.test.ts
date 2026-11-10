@@ -21,3 +21,11 @@ describe('payer matching helpers', () => {
   it('rejects a person we did not offer', () => expect(parsePayer('{"personId":"zzz","confidence":99,"reason":"x"}', people).personId).toBeNull());
   it('survives rubbish', () => expect(parsePayer('sorry', people).personId).toBeNull());
 });
+
+import { parseMap } from './aiWrite.js';
+describe('parseMap', () => {
+  it('keeps only keys we sent and values that pass', () => {
+    expect(parseMap('Here: {"1":"rent","2":"made-up","9":"rent"}', ['1', '2'], (_k, v) => v === 'rent')).toEqual({ '1': 'rent' });
+  });
+  it('survives rubbish', () => expect(parseMap('no json', ['1'], () => true)).toEqual({}));
+});

@@ -80,6 +80,13 @@ export function saveExamRemark(orgId: string, cohort: string, exists: boolean, s
   return trackWrite(setDoc(ref, { orgId, cohort, remarks: { [scope]: { [studentId]: text } }, attendance: {}, ...createStamps() }));
 }
 
+/** Several remarks in one write, so they cannot overwrite each other (the helper's drafts, accepted together). */
+export function saveExamRemarks(orgId: string, cohort: string, exists: boolean, scope: string, remarks: Record<string, string>) {
+  const ref = doc(db, 'organizations', orgId, 'examMeta', metaId(cohort));
+  if (exists) return updateRecord(ref, Object.fromEntries(Object.entries(remarks).map(([id, t]) => [`remarks.${scope}.${id}`, t.slice(0, 300)])));
+  return trackWrite(setDoc(ref, { orgId, cohort, remarks: { [scope]: remarks }, attendance: {}, ...createStamps() }));
+}
+
 export function saveExamSettings(orgId: string, exists: boolean, settings: ExamSettings) {
   const ref = doc(db, 'organizations', orgId, 'examSettings', 'main');
   // Settings read from the database carry the document's id, which is not a field to write back.

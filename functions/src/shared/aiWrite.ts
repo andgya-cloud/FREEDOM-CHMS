@@ -8,7 +8,10 @@ export const AI_MONTHLY_CAP = 300;
 export const AI_DAILY_PER_USER = 30;
 export const AI_MAX_TOKENS = 500;
 
-export type AiKind = 'followup' | 'summary' | 'payer';
+export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks';
+
+/** Longer answers for the kinds that come back as a list. */
+export const maxTokensFor = (kind: AiKind) => (kind === 'sort' || kind === 'remarks' ? 2000 : AI_MAX_TOKENS);
 
 const RULES = [
   'You write for Freedom Church in Nairobi, Kenya. Write in plain, warm, simple English.',
@@ -17,6 +20,15 @@ const RULES = [
 ].join(' ');
 
 export function systemPrompt(kind: AiKind): string {
+  if (kind === 'notice') {
+    return `${RULES} You turn a church leader's short notes into one WhatsApp group notice for church members. Start with a short friendly line, give what, when and where exactly as given, and end with a warm invitation. Keep it under 90 words. Reply with the notice text only.`;
+  }
+  if (kind === 'sort') {
+    return `${RULES} You sort church bank statement lines into accounting categories. For each line you get a key, the description and whether money came in or went out, and the list of category ids allowed for that direction. Choose the most likely category id from the allowed list only. If you cannot tell, leave the line out. Reply with JSON only, an object of key to category id, for example {"3": "utilities"}.`;
+  }
+  if (kind === 'remarks') {
+    return `${RULES} You write short exam remarks for a vocational training college's result slips. For each student you get a key, their average, grade, attendance percentage and course marks (no names). Write one encouraging, honest remark of at most 15 words for each, naming a strength or what to work on. Do not mention the key or invent anything. Reply with JSON only, an object of key to remark, for example {"1": "Strong practical work; keep revising theory."}.`;
+  }
   if (kind === 'payer') {
     return `${RULES} You help a church treasurer work out who sent an M-Pesa payment. You get the name printed on the statement and a short list of church members (id and name). Names on M-Pesa are often shortened, reordered, misspelled or use a middle name. Pick a member only if the name clearly refers to the same person; if two members could fit, or none clearly does, pick none. Reply with JSON only: {"personId": "<id or null>", "confidence": <0-100>, "reason": "<one short sentence>"}`;
   }
@@ -71,4 +83,19 @@ export function parsePayer(raw: string, offered: readonly PersonName[]): PayerGu
     const confidence = Math.max(0, Math.min(100, Math.round(Number(j.confidence) || 0)));
     return { personId: id, confidence, reason: typeof j.reason === 'string' ? j.reason.slice(0, 200) : '' };
   } catch { return none; }
+}
+
+/** Reads a JSON object of key to text; only keys we sent are kept, and each value must pass `ok`. */
+export function parseMap(raw: string, keys: readonly string[], ok: (key: string, value: string) => boolean): Record<string, string> {
+  const m = /\{[\s\S]*\}/.exec(raw);
+  if (!m) return {};
+  try {
+    const j = JSON.parse(m[0]) as Record<string, unknown>;
+    const out: Record<string, string> = {};
+    for (const k of keys) {
+      const v = j[k];
+      if (typeof v === 'string' && v.trim() && ok(k, v.trim())) out[k] = v.trim();
+    }
+    return out;
+  } catch { return {}; }
 }

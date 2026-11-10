@@ -7,11 +7,12 @@ import { useAuth } from '../../state/AuthContext';
 import { useIsAndy } from '../../lib/andy';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
+import { aiMap } from '../../lib/aiWrite';
 import {
   useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, useDepartmentResults, type ExamSheetRow, type ExamTrainer,
 } from '../../state/useExams';
 import {
-  approveExamSheet, askExamChange, closedNow, confirmPassword, createExamSheet, deleteExamSheet, emailExamNotice, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamSettings, saveExamSheetDetails,
+  approveExamSheet, askExamChange, closedNow, confirmPassword, createExamSheet, deleteExamSheet, emailExamNotice, logExam, returnExamSheet, saveExamMark, saveExamRemark, saveExamRemarks, saveExamSettings, saveExamSheetDetails,
   saveExamCohort, saveExamCourseList, saveTypedResults, sendExamPapers, unlockExamPaper,
 } from '../../lib/examWrites';
 import { saveCourse, saveIntake } from '../../lib/schoolWrites';
@@ -783,6 +784,35 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
       void logExam(org.id, { action: 'remarks', cohort, sheetId: null, detail: `${report.rows.find((r) => r.studentId === studentId)?.name}: ${text || '(back to automatic)'}`, byName: a.myName });
     } catch (err) { toast.show(friendlyError(err)); }
   }
+  // The helper drafts remarks from the marks only (no names); a person accepts them before they reach the slips.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafting, setDrafting] = useState(false);
+  async function draftRemarks() {
+    const rows = report.rows.filter((r) => r.average != null && !r.remarksEdited);
+    if (!rows.length) { toast.show('Every student with marks already has a remark you wrote.'); return; }
+    setDrafting(true);
+    try {
+      const items = rows.map((r, i) => ({
+        k: String(i + 1),
+        line: `average ${r.average}, grade ${r.grade}, attendance ${r.attendance ?? 'unknown'}%, marks: ${report.units.map((u) => `${u.courseName} ${r.cells[u.sheetId]?.total ?? r.cells[u.sheetId]?.partial ?? '-'}`).join(', ')}`,
+      }));
+      const map = await aiMap(org.id, 'remarks', items);
+      setDrafts(Object.fromEntries(rows.map((r, i) => [r.studentId, map[String(i + 1)] ?? '']).filter(([, t]) => t)));
+      toast.show(Object.keys(map).length ? 'Drafts are under each remark. Check them, then accept.' : 'The helper could not draft remarks.');
+    } catch (err) { toast.show(err instanceof Error ? err.message : 'The helper could not answer.'); }
+    finally { setDrafting(false); }
+  }
+  function acceptDrafts() {
+    const n = Object.keys(drafts).length;
+    if (!n) return;
+    try {
+      saveExamRemarks(org.id, cohort, exists, scopeKey(courseId), drafts).catch((err) => toast.show(friendlyError(err)));
+      void logExam(org.id, { action: 'remarks', cohort, sheetId: null, detail: `Helper drafts accepted for ${n} students`, byName: a.myName });
+      setDrafts({});
+      toast.show(`${n} remarks saved. You can still change any of them.`);
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+
   async function slips(rows = report.rows) {
     setBusy(rows.length === 1 ? rows[0]!.studentId : 'all');
     try {
@@ -809,6 +839,8 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
         <span className="row-actions">
           <CsvButton name={`Results-${cohort}-${title}.csv`.replace(/[^A-Za-z0-9.-]+/g, '-')} csv={csv} />
           <button type="button" className="btn btn-quiet" onClick={() => window.print()}>Print</button>
+          {a.canManage && report.units.length > 0 && <button type="button" className="btn btn-quiet" disabled={drafting} onClick={() => void draftRemarks()}>{drafting ? 'Drafting…' : 'Draft remarks with the helper'}</button>}
+          {Object.keys(drafts).length > 0 && <button type="button" className="btn" onClick={acceptDrafts}>Accept {Object.keys(drafts).length} drafts</button>}
           <button type="button" className="btn btn-primary" disabled={!report.rows.length || !report.units.length || !!busy} onClick={() => void slips()}>{busy === 'all' ? 'Making slips…' : 'All result slips (PDF)'}</button>
         </span>
       </div>
@@ -862,7 +894,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
                   <td className="num">{r.total ?? '–'}</td>
                   <td className="num"><strong>{r.average ?? '–'}</strong></td>
                   <td>{r.grade}{r.provisional && r.grade && <div className="muted small">provisional</div>}</td>
-                  <td><input className="exam-remark" defaultValue={r.remarks} key={`${r.studentId}-${r.remarks}`} maxLength={300} aria-label={`Remarks for ${r.name}`} onBlur={(e) => remark(r.studentId, e.target.value === r.remarksAuto ? '' : e.target.value, r.remarksEdited ? r.remarks : '')} /></td>
+                  <td><input className="exam-remark" defaultValue={r.remarks} key={`${r.studentId}-${r.remarks}`} maxLength={300} aria-label={`Remarks for ${r.name}`} onBlur={(e) => remark(r.studentId, e.target.value === r.remarksAuto ? '' : e.target.value, r.remarksEdited ? r.remarks : '')} />{drafts[r.studentId] && <div className="small muted no-print">Helper: {drafts[r.studentId]}</div>}</td>
                   <td className={`num${notEligible(r.attendance, minAttendance) ? ' up-bad' : ''}`}>{r.attendance ?? '–'}{notEligible(r.attendance, minAttendance) && <div className="small">Not eligible</div>}</td>
                   <td className="no-print"><button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => void slips([r])}>{busy === r.studentId ? '…' : 'Slip'}</button></td>
                 </tr>
