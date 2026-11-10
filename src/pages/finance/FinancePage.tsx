@@ -5,6 +5,7 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { aiMap } from '../../lib/aiWrite';
+import { AI_MARK } from '../../components/Ai';
 import { downloadFile } from '../../lib/givingPdf';
 import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
@@ -290,14 +291,14 @@ function NeedsYouCard({ org, statements, learned, count, months }: { org: Organi
             </div>
             <CategorySelect line={l} onChange={(c) => void pick(sid, n, c)} />
             {hints[`${sid}-${n}`] && hints[`${sid}-${n}`] !== l.c && (
-              <span className="small">Helper: <strong>{finLabel(hints[`${sid}-${n}`]!)}</strong> <button type="button" className="btn btn-quiet btn-small" onClick={() => void pick(sid, n, hints[`${sid}-${n}`]!)}>Use</button></span>
+              <span className="small ai-hint">{AI_MARK} Helper: <strong>{finLabel(hints[`${sid}-${n}`]!)}</strong> <button type="button" className="btn btn-ai btn-small" onClick={() => void pick(sid, n, hints[`${sid}-${n}`]!)}>Use</button></span>
             )}
           </li>
         ))}
       </ul>
       <div className="chips">
-        <button type="button" className="btn btn-quiet" disabled={asking || busy || !waiting.length} onClick={() => void askHelper()}>{asking ? 'Asking…' : 'Ask the helper to sort these'}</button>
-        {Object.keys(hints).length > 0 && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void acceptHints()}>Accept the helper's {Object.keys(hints).length} choices</button>}
+        <button type="button" className="btn btn-ai" disabled={asking || busy || !waiting.length} onClick={() => void askHelper()}>{AI_MARK} {asking ? 'Asking…' : 'Ask the helper to sort these'}</button>
+        {Object.keys(hints).length > 0 && <button type="button" className="btn btn-ai-solid" disabled={busy} onClick={() => void acceptHints()}>{AI_MARK} Accept the helper's {Object.keys(hints).length} choices</button>}
       </div>
       <button type="button" className="btn align-start" disabled={busy} onClick={() => void acceptAll()}>{busy ? 'Saving…' : `The guesses are right: confirm all ${count}`}</button>
     </section>

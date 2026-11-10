@@ -11,6 +11,7 @@
  * - a giving part (finance reports): the giving summary, for the pastor's copy.
  */
 import type { jsPDF as JsPdf } from 'jspdf';
+import { aiPdfBlock } from './aiPdf.js';
 import {
   attendanceTrend,
   biggestChanges,
@@ -335,9 +336,8 @@ export function reportPdf(JsPDF: typeof JsPdf, r: ReportDoc, pastoral?: Pastoral
   y = 34;
 
   if (r.aiSummary) {
-    heading('This week in brief');
-    para(r.aiSummary);
-    para('Written by AI from the numbers in this report. Please check it.', 8, GREY);
+    need(30);
+    y = aiPdfBlock(pdf, y + 2, 'This week in brief', r.aiSummary);
   }
   heading('The biggest changes');
   if (r.changes.length === 0) para('No big changes this time.', 10, GREY);

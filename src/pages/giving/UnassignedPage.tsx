@@ -9,6 +9,7 @@ import { assignGift } from '../../lib/givingWrites';
 import { addPerson } from '../../lib/peopleWrites';
 import { friendlyError } from '../../lib/errors';
 import { aiWhoPaid } from '../../lib/aiWrite';
+import { AI_MARK, AiBox } from '../../components/Ai';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { OrgGate } from '../../components/OrgGate';
 import { PersonPicker } from '../../components/PersonPicker';
@@ -122,9 +123,9 @@ function QueuedPayment({ org, gift, funds }: { org: Organization; gift: Gift; fu
       )}
 
       {!giver.id && can('gifts.write') && statementName && (
-        <button type="button" className="btn btn-quiet align-start" disabled={asking} onClick={() => void askAi()}>{asking ? 'Looking…' : 'Ask the helper who this is'}</button>
+        <button type="button" className="btn btn-ai align-start" disabled={asking} onClick={() => void askAi()}>{AI_MARK} {asking ? 'Looking…' : 'Ask the helper who this is'}</button>
       )}
-      {aiNote && <p className="notice small" role="status">{aiNote}</p>}
+      {aiNote && <AiBox title="Helper's suggestion" note="A suggestion only. Nothing is saved until you tap Confirm."><p className="small" role="status">{aiNote}</p></AiBox>}
 
       <PersonPicker label="Who gave it" value={giver} onChange={setGiver} allowFreeText orgId={org.id} />
 

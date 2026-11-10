@@ -8,6 +8,7 @@ import { logMessage, markDone } from '../lib/followUpWrites';
 import { friendlyError } from '../lib/errors';
 import { useSavedMessage } from '../lib/useSavedMessage';
 import { aiWrite } from '../lib/aiWrite';
+import { AI_MARK } from './Ai';
 import {
   firstNameOf,
   recipientFor,
@@ -53,6 +54,7 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
   const [edited, setEdited] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
   const [writing, setWriting] = useState(false);
+  const [byAi, setByAi] = useState(false);
 
   const text = useMemo(() => {
     if (!template || !recipient.ok || !ready) return '';
@@ -73,6 +75,7 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
     try {
       // Only the first name and the words go out: no phone number, no notes about the person.
       setEdited(await aiWrite({ orgId: org.id, kind: 'followup', context: template?.name ?? 'a friendly follow-up', draft: message }));
+      setByAi(true);
     } catch (err) {
       toast.show(err instanceof Error ? err.message : 'The writing helper could not answer.');
     } finally {
@@ -132,19 +135,19 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
             {templates.length > 1 && (
               <label className="field">
                 <span>Message</span>
-                <select value={chosen} onChange={(e) => { setChosen(e.target.value); setEdited(null); }}>
+                <select value={chosen} onChange={(e) => { setChosen(e.target.value); setEdited(null); setByAi(false); }}>
                   {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </label>
             )}
-            <label className="field">
+            <label className={`field${byAi ? ' ai-field' : ''}`}>
               <span>{templates.length > 1 ? 'Words' : template?.name ?? 'Message'}</span>
               <textarea rows={6} value={ready ? message : 'Loading…'} disabled={!ready} onChange={(e) => setEdited(e.target.value)} />
-              <small className="hint">You can change the words here or in WhatsApp before you tap Send.</small>
+              {byAi ? <small className="ai-note">{AI_MARK} Written by AI. Please read it and change anything before you send.</small> : <small className="hint">You can change the words here or in WhatsApp before you tap Send.</small>}
             </label>
             {can('pastoral.read') && (
-              <button type="button" className="btn btn-quiet align-start" disabled={writing || !message.trim()} onClick={() => void writeForMe()}>
-                {writing ? 'Writing…' : 'Write it for me'}
+              <button type="button" className="btn btn-ai align-start" disabled={writing || !message.trim()} onClick={() => void writeForMe()}>
+                {AI_MARK} {writing ? 'Writing…' : byAi ? 'Write it again' : 'Write it for me'}
               </button>
             )}
             <div className="sheet-actions">

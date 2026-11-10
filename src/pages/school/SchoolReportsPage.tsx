@@ -7,6 +7,7 @@ import { useToast } from '../../state/ToastContext';
 import { useLiveQuery } from '../../lib/useQuery';
 import { friendlyError } from '../../lib/errors';
 import { aiWrite } from '../../lib/aiWrite';
+import { AI_MARK, AiBox } from '../../components/Ai';
 import { requestSchoolReport } from '../../lib/schoolWrites';
 import { schoolReportPdf } from '../../lib/schoolPdf';
 import { shareOrDownload } from '../../lib/givingPdf';
@@ -130,14 +131,12 @@ function ReportView({ org, report }: { org: Organization; report: SchoolReportDo
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
       {report.aiSummary && (
-        <div className="notice stack">
-          <strong>This week in brief</strong>
+        <AiBox title="This week in brief" note="Written by AI from the numbers in this report. Please check it.">
           <p>{report.aiSummary}</p>
-          <p className="small muted">Written by AI from the numbers in this report. Please check it.</p>
-        </div>
+        </AiBox>
       )}
-      {!report.aiSummary && <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>{summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}</button>}
-      {summary && <><p>{summary}</p><p className="small muted">Written by AI from the numbers below. Please check it before you share it.</p></>}
+      {!report.aiSummary && <button type="button" className="btn btn-ai align-start" disabled={summing} onClick={() => void summarise()}>{AI_MARK} {summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}</button>}
+      {summary && <AiBox title="Summary" note="Written by AI from the numbers in this report. Please check it before you share it."><p>{summary}</p></AiBox>}
       <table className="report-table"><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
       <h3>By department</h3>
       <table className="report-table">

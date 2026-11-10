@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useOrg } from '../state/OrgContext';
 import { useToast } from '../state/ToastContext';
 import { aiWrite } from '../lib/aiWrite';
+import { AI_MARK, AiBox } from '../components/Ai';
 
 /**
  * Write a WhatsApp notice (Andy, 2026-11-10): a leader types a few lines (what, when, where) and the helper writes
@@ -30,25 +31,24 @@ export function NoticePage() {
   return (
     <div className="page narrow">
       <p><Link to="/more">← More</Link></p>
-      <h1>Write a notice</h1>
+      <h1>{AI_MARK} Write a notice</h1>
       <p className="lead">Type a few lines: what, when and where. The helper writes the WhatsApp message; you check it before sending.</p>
       <label className="field">
         <span>Your notes</span>
         <textarea rows={4} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={'Youth night Friday 6pm, main hall\nBring a friend, snacks provided'} />
       </label>
-      <button type="button" className="btn btn-primary align-start" disabled={busy || notes.trim().length < 5} onClick={() => void write()}>{busy ? 'Writing…' : notice ? 'Write it again' : 'Write it for me'}</button>
+      <button type="button" className="btn btn-ai-solid align-start" disabled={busy || notes.trim().length < 5} onClick={() => void write()}>{AI_MARK} {busy ? 'Writing…' : notice ? 'Write it again' : 'Write it for me'}</button>
       {notice && (
-        <section className="card stack">
+        <AiBox title="The notice" note="Written by AI from your notes. Check the date, time and place before you send.">
           <label className="field">
-            <span>The notice (you can change it)</span>
+            <span>You can change it</span>
             <textarea rows={7} value={notice} onChange={(e) => setNotice(e.target.value)} />
           </label>
           <div className="chips">
             <button type="button" className="btn btn-primary" onClick={() => void copy()}>Copy</button>
             <a className="btn" href={`https://wa.me/?text=${encodeURIComponent(notice)}`} target="_blank" rel="noopener noreferrer">Open WhatsApp</a>
           </div>
-          <p className="small muted">Written by AI from your notes. Check the date, time and place before you send.</p>
-        </section>
+        </AiBox>
       )}
     </div>
   );

@@ -9,6 +9,7 @@ import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { formatMoney } from '../../../functions/src/shared/giving';
 import { dueText, reasonLabel, reportCsv, reportFileName, reportPdf, type GivingPart, type PastoralPart } from '../../../functions/src/shared/reports';
 import { aiWrite } from '../../lib/aiWrite';
+import { AI_MARK, AiBox } from '../../components/Ai';
 import { stampPoweredBy } from '../../../functions/src/shared/poweredBy';
 
 const day = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`;
@@ -120,19 +121,16 @@ export function ReportPage() {
       </div>
 
       {report.aiSummary && (
-        <div className="notice stack">
-          <strong>This week in brief</strong>
+        <AiBox title="This week in brief" note="Written by AI from the numbers in this report. Please check it.">
           <p>{report.aiSummary}</p>
-          <p className="small muted">Written by AI from the numbers in this report. Please check it.</p>
-        </div>
+        </AiBox>
       )}
       {can('pastoral.read') && !report.aiSummary && (
         <section className="card stack report-section">
-          <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>
-            {summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}
+          <button type="button" className="btn btn-ai align-start" disabled={summing} onClick={() => void summarise()}>
+            {AI_MARK} {summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}
           </button>
-          {summary && <p>{summary}</p>}
-          {summary && <p className="small muted">Written by AI from the numbers above. Please check it before you share it.</p>}
+          {summary && <AiBox title="Summary" note="Written by AI from the numbers in this report. Please check it before you share it."><p>{summary}</p></AiBox>}
         </section>
       )}
 

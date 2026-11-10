@@ -146,6 +146,9 @@ async function recipientsFor(orgId: string, settings: ReportSettings): Promise<R
   });
 }
 
+const AI_LABEL = '✦ This week in brief (written by AI from the numbers)';
+/** The helper's words in the email: light gold box, dark gold bar on the left, the sparkle (Andy, 2026-11-10, 5A). */
+const aiEmailBlock = (text: string) => `<div style="margin:0 0 12px;padding:10px 14px;background:#fbf6e6;border:1px solid #d8c58f;border-left:4px solid #8a6a12;border-radius:8px"><p style="margin:0 0 6px;color:#8a6a12;font-weight:bold">&#10022; This week in brief</p><p style="margin:0 0 6px">${escapeHtml(text)}</p><p style="margin:0;color:#8a6a12;font-size:12px">Written by AI from the numbers in this report. Please check it.</p></div>`;
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving: GivingPart | null, appUrl: string) {
@@ -157,7 +160,7 @@ export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving:
   const lines = [
     `${kind} report for ${r.orgName}: ${r.label}.`,
     '',
-    ...(r.aiSummary ? ['This week in brief (written by AI from the numbers):', r.aiSummary, ''] : []),
+    ...(r.aiSummary ? [`${AI_LABEL}:`, r.aiSummary, ''] : []),
     `Service attendance (weekly average): ${h.attendance ?? '–'}`,
     `First-time visitors: ${h.visitors}`,
     `Salvations: ${h.salvations}. Baptisms: ${h.baptisms}.`,
@@ -170,7 +173,7 @@ export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving:
   return {
     subject: `${kind} report: ${r.orgName}, ${r.label}`,
     text: [...lines, '', POWERED_BY].join('\n'),
-    html: lines.map((l) => (l ? `<p style="margin:0 0 6px">${escapeHtml(l)}</p>` : '<br>')).join('') + poweredByHtml(),
+    html: lines.filter((l) => !r.aiSummary || (l !== `${AI_LABEL}:` && l !== r.aiSummary)).map((l, i) => (l ? `<p style="margin:0 0 6px">${escapeHtml(l)}</p>` : '<br>') + (i === 1 && r.aiSummary ? aiEmailBlock(r.aiSummary) : '')).join('') + poweredByHtml(),
     attachments: [{ filename: reportFileName(r, 'pdf'), content, encoding: 'base64', contentType: 'application/pdf' }],
   };
 }

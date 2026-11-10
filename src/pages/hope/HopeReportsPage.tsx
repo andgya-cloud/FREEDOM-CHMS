@@ -1,4 +1,5 @@
 import { Help } from '../../components/Help';
+import { AiBox } from '../../components/Ai';
 import { canReadNotes } from '../../../functions/src/shared/hopeRecords';
 import { useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -117,11 +118,9 @@ function ReportView({ org, report }: { org: Organization; report: HopeReportDoc 
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
       {report.aiSummary && (
-        <div className="notice stack">
-          <strong>This week in brief</strong>
+        <AiBox title="This week in brief" note="Written by AI from the numbers in this report. Please check it.">
           <p>{report.aiSummary}</p>
-          <p className="small muted">Written by AI from the numbers in this report. Please check it.</p>
-        </div>
+        </AiBox>
       )}
       <table className="report-table"><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
       <h3>Photos</h3>

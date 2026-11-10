@@ -1,4 +1,5 @@
 import type { Organization } from '../state/OrgContext';
+import { aiPdfBlock } from '../../functions/src/shared/aiPdf';
 import { formatDateKey } from '../../functions/src/shared/datetime';
 import type { HopeReportDoc } from '../../functions/src/shared/hope';
 import { header, newPdf, GREY, INK } from './givingPdf';
@@ -27,15 +28,7 @@ export async function hopeReportPdf(org: Organization, r: HopeReportDoc, photos:
   if (r.audience === 'counts') note('Numbers only. No child is named in this report.');
   else note('For the pastor. Contains children\'s names: do not share.');
   y += 2;
-  if (r.aiSummary) {
-    section('This week in brief');
-    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(...INK);
-    const lines = pdf.splitTextToSize(r.aiSummary, w - 28) as string[];
-    pdf.text(lines, 14, y);
-    y += lines.length * 5;
-    pdf.setFontSize(8); pdf.setTextColor(...GREY); pdf.text('Written by AI from the numbers in this report. Please check it.', 14, y);
-    y += 8;
-  }
+  if (r.aiSummary) y = aiPdfBlock(pdf, y, 'This week in brief', r.aiSummary);
   section('The numbers');
   y = drawTable(pdf, y, [{ label: 'Measure', x: 14 }, { label: 'Value', x: w - 14, align: 'right' }], [
     ['Children registered', String(m.registered)], ['Children active', String(m.active)], ['Came in the last 8 weeks', String(m.attendingLast8Weeks)],

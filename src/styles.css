@@ -2778,3 +2778,18 @@ a.fin-chip:hover { background: #fdecea; }
 .class-online { width: 100%; max-width: 520px; display: grid; gap: 8px; justify-items: center; text-align: center; }
 .class-word-label { margin: 10px 0 0; font-weight: 600; }
 .class-word { font-size: clamp(2rem, 7vw, 3.4rem); font-weight: 800; letter-spacing: .08em; color: var(--green); margin: 0; }
+
+/* ---- AI assistance (Andy, 2026-11-10, 1A-6A): dark gold + the sparkle mark means "the helper wrote or suggested this" ---- */
+:root { --ai-gold: #8a6a12; --ai-gold-rgb: 138 106 18; --ai-tint: #fbf6e6; --ai-on: #ffffff; }
+:root[data-theme='dark'] { --ai-gold: #e3c15e; --ai-gold-rgb: 227 193 94; --ai-tint: #2a2208; --ai-on: #1a1404; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) { --ai-gold: #e3c15e; --ai-gold-rgb: 227 193 94; --ai-tint: #2a2208; --ai-on: #1a1404; } }
+.btn.btn-ai { background: transparent; border: 1.5px solid var(--ai-gold); color: var(--ai-gold); font-weight: 600; }
+.btn.btn-ai:hover:not(:disabled) { background: var(--ai-tint); }
+.btn.btn-ai-solid { background: var(--ai-gold); border: 1.5px solid var(--ai-gold); color: var(--ai-on); font-weight: 600; }
+.ai-box { background: var(--ai-tint); border: 1px solid rgb(var(--ai-gold-rgb) / 0.5); border-left: 4px solid var(--ai-gold); border-radius: var(--radius); padding: 12px 14px; display: flex; flex-direction: column; gap: 6px; color: var(--text); }
+.ai-box > p { margin: 0; }
+.ai-label { color: var(--ai-gold); font-weight: 700; }
+.ai-note { color: var(--ai-gold); font-size: 0.8rem; margin: 0; }
+.ai-hint { color: var(--ai-gold); }
+.ai-field textarea, textarea.ai-field { border-color: var(--ai-gold); background: var(--ai-tint); }
+@media print { .ai-box { border-left: 4px solid #8a6a12; background: none; } }

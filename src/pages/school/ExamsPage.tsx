@@ -8,6 +8,7 @@ import { useIsAndy } from '../../lib/andy';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import { aiMap } from '../../lib/aiWrite';
+import { AI_MARK } from '../../components/Ai';
 import {
   useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, useDepartmentResults, type ExamSheetRow, type ExamTrainer,
 } from '../../state/useExams';
@@ -839,8 +840,8 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
         <span className="row-actions">
           <CsvButton name={`Results-${cohort}-${title}.csv`.replace(/[^A-Za-z0-9.-]+/g, '-')} csv={csv} />
           <button type="button" className="btn btn-quiet" onClick={() => window.print()}>Print</button>
-          {a.canManage && report.units.length > 0 && <button type="button" className="btn btn-quiet" disabled={drafting} onClick={() => void draftRemarks()}>{drafting ? 'Drafting…' : 'Draft remarks with the helper'}</button>}
-          {Object.keys(drafts).length > 0 && <button type="button" className="btn" onClick={acceptDrafts}>Accept {Object.keys(drafts).length} drafts</button>}
+          {a.canManage && report.units.length > 0 && <button type="button" className="btn btn-ai" disabled={drafting} onClick={() => void draftRemarks()}>{AI_MARK} {drafting ? 'Drafting…' : 'Draft remarks with the helper'}</button>}
+          {Object.keys(drafts).length > 0 && <button type="button" className="btn btn-ai-solid" onClick={acceptDrafts}>{AI_MARK} Accept {Object.keys(drafts).length} drafts</button>}
           <button type="button" className="btn btn-primary" disabled={!report.rows.length || !report.units.length || !!busy} onClick={() => void slips()}>{busy === 'all' ? 'Making slips…' : 'All result slips (PDF)'}</button>
         </span>
       </div>
@@ -894,7 +895,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
                   <td className="num">{r.total ?? '–'}</td>
                   <td className="num"><strong>{r.average ?? '–'}</strong></td>
                   <td>{r.grade}{r.provisional && r.grade && <div className="muted small">provisional</div>}</td>
-                  <td><input className="exam-remark" defaultValue={r.remarks} key={`${r.studentId}-${r.remarks}`} maxLength={300} aria-label={`Remarks for ${r.name}`} onBlur={(e) => remark(r.studentId, e.target.value === r.remarksAuto ? '' : e.target.value, r.remarksEdited ? r.remarks : '')} />{drafts[r.studentId] && <div className="small muted no-print">Helper: {drafts[r.studentId]}</div>}</td>
+                  <td><input className="exam-remark" defaultValue={r.remarks} key={`${r.studentId}-${r.remarks}`} maxLength={300} aria-label={`Remarks for ${r.name}`} onBlur={(e) => remark(r.studentId, e.target.value === r.remarksAuto ? '' : e.target.value, r.remarksEdited ? r.remarks : '')} />{drafts[r.studentId] && <div className="small ai-hint no-print">{AI_MARK} {drafts[r.studentId]}</div>}</td>
                   <td className={`num${notEligible(r.attendance, minAttendance) ? ' up-bad' : ''}`}>{r.attendance ?? '–'}{notEligible(r.attendance, minAttendance) && <div className="small">Not eligible</div>}</td>
                   <td className="no-print"><button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => void slips([r])}>{busy === r.studentId ? '…' : 'Slip'}</button></td>
                 </tr>
