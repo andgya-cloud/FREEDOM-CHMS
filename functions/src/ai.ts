@@ -4,28 +4,39 @@ import { defineSecret } from 'firebase-functions/params';
 import { db, FieldValue, requireCaller } from './common.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
-import { AI_MAX_TOKENS, AI_MODEL, checkLimits, monthKey, systemPrompt, userPrompt, type AiKind } from './shared/aiWrite.js';
+import { AI_MAX_TOKENS, AI_MODEL, checkLimits, monthKey, parsePayer, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
 
 const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /**
- * { orgId, kind: 'followup' | 'summary', context, draft?, note? } → { text, left }
- * Leaders (pastoral access) only. The count is kept in aiUsage/ (server only): one document per church per month and
+ * { orgId, kind: 'followup' | 'summary' | 'payer', context, draft?, note? } → { text, guess?, usedThisMonth }
+ * Follow-ups and summaries: pastors, leaders and report viewers. Payer suggestions: people who record gifts; the AI only suggests, a person confirms. The count is kept in aiUsage/ (server only): one document per church per month and
  * one per person per day, both changed in the same transaction that checks the limit, so two taps cannot slip past it.
  */
 export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', timeoutSeconds: 60, maxInstances: 5 }, async (request) => {
   const d = (request.data ?? {}) as Record<string, unknown>;
   const orgId = text(d.orgId, 60);
-  const kind = d.kind === 'summary' ? 'summary' : d.kind === 'followup' ? 'followup' : null;
+  const kind = d.kind === 'summary' ? 'summary' : d.kind === 'followup' ? 'followup' : d.kind === 'payer' ? 'payer' : null;
   if (!orgId || !kind) throw new HttpsError('invalid-argument', 'Please check the request.');
-  const caller = await requireCaller(request, 'pastoral.read');
-  if (!canAccessOrg(caller.profile, orgId) || !can(caller.profile, 'pastoral.read')) {
-    throw new HttpsError('permission-denied', 'You do not have permission to do that.');
-  }
+  const caller = await requireCaller(request);
+  // Pastors and leaders; people who see a report or the money may use it on that page.
+  const allowed = kind === 'payer'
+    ? can(caller.profile, 'gifts.write')
+    : can(caller.profile, 'pastoral.read') || can(caller.profile, 'finance.reports') || can(caller.profile, 'settings.manage');
+  if (!canAccessOrg(caller.profile, orgId) || !allowed) throw new HttpsError('permission-denied', 'You do not have permission to do that.');
   const context = text(d.context, 6000);
   const draft = text(d.draft, 1500);
   const note = text(d.note, 300);
+  // Who sent this payment: only a shortlist of member NAMES goes out, never a phone number or an amount.
+  let offered: PersonName[] = [];
+  if (kind === 'payer') {
+    const name = text(d.context, 120);
+    if (!name) throw new HttpsError('invalid-argument', 'There is no name on this payment.');
+    const people = await db.collection(`organizations/${orgId}/people`).where('deletedAt', '==', null).select('fullName', 'status').get();
+    offered = shortlist(name, people.docs.filter((x) => x.get('status') !== 'child').map((x) => ({ id: x.id, fullName: String(x.get('fullName') ?? '') })));
+    if (offered.length === 0) return { text: '', guess: { personId: null, confidence: 0, reason: 'No member has a similar name.' }, usedThisMonth: null };
+  }
   if (kind === 'followup' && !draft) throw new HttpsError('invalid-argument', 'There is no message to improve yet.');
   if (kind === 'summary' && !context) throw new HttpsError('invalid-argument', 'There is nothing to summarise.');
 
@@ -52,10 +63,13 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
       model: AI_MODEL,
       max_tokens: AI_MAX_TOKENS,
       system: systemPrompt(kind as AiKind),
-      messages: [{ role: 'user', content: userPrompt(kind as AiKind, context, draft, note) }],
+      messages: [{ role: 'user', content: kind === 'payer'
+        ? `Statement name: "${text(d.context, 120)}"\nMembers:\n${offered.map((p) => `${p.id} | ${p.fullName}`).join('\n')}`
+        : userPrompt(kind as AiKind, context, draft, note) }],
     });
     const out = res.content.map((b) => (b.type === 'text' ? b.text : '')).join('').trim();
     if (!out) throw new Error('empty');
+    if (kind === 'payer') return { text: '', guess: parsePayer(out, offered), usedThisMonth: left };
     return { text: out, usedThisMonth: left };
   } catch (err) {
     await Promise.all([

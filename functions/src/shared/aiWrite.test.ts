@@ -11,3 +11,13 @@ describe('aiWrite limits', () => {
     expect(p).toContain('missed church'); expect(p).toContain('Hi Jo'); expect(p).toContain('she was sick');
   });
 });
+
+import { parsePayer, shortlist } from './aiWrite.js';
+describe('payer matching helpers', () => {
+  const people = [{ id: 'a', fullName: 'Mary Wanjiku Kamau' }, { id: 'b', fullName: 'John Otieno' }, { id: 'c', fullName: 'Wanjiru Mary' }];
+  it('shortlists by shared word starts', () => expect(shortlist('MARY WANJIKU', people).map((p) => p.id)).toEqual(['a', 'c']));
+  it('returns nothing for a number-only name', () => expect(shortlist('254712', people)).toEqual([]));
+  it('accepts an offered person', () => expect(parsePayer('{"personId":"a","confidence":90,"reason":"same"}', people).personId).toBe('a'));
+  it('rejects a person we did not offer', () => expect(parsePayer('{"personId":"zzz","confidence":99,"reason":"x"}', people).personId).toBeNull());
+  it('survives rubbish', () => expect(parsePayer('sorry', people).personId).toBeNull());
+});

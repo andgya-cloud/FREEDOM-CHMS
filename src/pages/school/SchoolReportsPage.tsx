@@ -6,6 +6,7 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { useLiveQuery } from '../../lib/useQuery';
 import { friendlyError } from '../../lib/errors';
+import { aiWrite } from '../../lib/aiWrite';
 import { requestSchoolReport } from '../../lib/schoolWrites';
 import { schoolReportPdf } from '../../lib/schoolPdf';
 import { shareOrDownload } from '../../lib/givingPdf';
@@ -92,7 +93,23 @@ function Reports({ org }: { org: Organization }) {
 function ReportView({ org, report }: { org: Organization; report: SchoolReportDoc & StoredSchoolReport }) {
   const toast = useToast();
   const [busy, setBusy] = useState(false);
+  const [summary, setSummary] = useState('');
+  const [summing, setSumming] = useState(false);
   const m = report.metrics;
+  async function summarise() {
+    // Numbers only: no student names, no fee amounts per person.
+    const context = [
+      `${org.name}, ${report.type} report: ${report.label}`,
+      `Enrolled ${m.enrolled}, withdrawn ${m.withdrawn}, retention ${pct(m.retentionRate)}, attendance rate ${pct(m.attendanceRate)}, students below the attendance threshold ${m.belowThreshold}, pass rate ${pct(m.passRate)}.`,
+      `Fees: billed ${money(org, m.billedCents)}, paid ${money(org, m.paidCents)}, arrears ${money(org, m.arrearsCents)}, collection rate ${pct(m.collectionRate)}. Students in arrears: ${report.arrears.length}.`,
+      `Graduation rate ${pct(m.graduationRate)}, graduates working at 6 months ${pct(m.employmentRate)}, graduate follow-ups due ${report.outcomesDue.length}.`,
+      `By department (students, trainers): ${m.byCourse.map((c) => `${c.name} ${c.enrolled}, ${c.trainers}`).join('; ')}.`,
+    ].join('\n');
+    setSumming(true);
+    try { setSummary(await aiWrite({ orgId: org.id, kind: 'summary', context })); }
+    catch (err) { toast.show(err instanceof Error ? err.message : 'The helper could not answer.'); }
+    finally { setSumming(false); }
+  }
   async function pdf() {
     setBusy(true);
     try {
@@ -112,6 +129,8 @@ function ReportView({ org, report }: { org: Organization; report: SchoolReportDo
   return (
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
+      <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>{summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}</button>
+      {summary && <><p>{summary}</p><p className="small muted">Written by AI from the numbers below. Please check it before you share it.</p></>}
       <table className="report-table"><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
       <h3>By department</h3>
       <table className="report-table">

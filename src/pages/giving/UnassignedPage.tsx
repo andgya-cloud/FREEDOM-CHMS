@@ -8,6 +8,7 @@ import { useFunds, useUnassignedGifts, type Fund, type Gift } from '../../state/
 import { assignGift } from '../../lib/givingWrites';
 import { addPerson } from '../../lib/peopleWrites';
 import { friendlyError } from '../../lib/errors';
+import { aiWhoPaid } from '../../lib/aiWrite';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { OrgGate } from '../../components/OrgGate';
 import { PersonPicker } from '../../components/PersonPicker';
@@ -50,8 +51,24 @@ function QueuedPayment({ org, gift, funds }: { org: Organization; gift: Gift; fu
     return { id: p?.id ?? null, name: p?.fullName ?? '' };
   });
   const [fundId, setFundId] = useState(gift.fundId ?? fundFromReference(gift.accountRef, funds)?.id ?? '');
+  const [asking, setAsking] = useState(false);
+  const [aiNote, setAiNote] = useState('');
   const statementName = titleCaseName(gift.giverName);
   const fullPhone = gift.phone && !gift.phone.includes('*') ? normalizePhone(gift.phone) : null;
+
+  async function askAi() {
+    setAsking(true);
+    try {
+      const g = await aiWhoPaid(org.id, statementName);
+      const p = g.personId ? byId(g.personId) : undefined;
+      if (p) { setGiver({ id: p.id, name: p.fullName }); setAiNote(`The helper thinks this is ${p.fullName} (${g.confidence}% sure): ${g.reason} Please check before you confirm.`); }
+      else setAiNote(g.reason || 'The helper found no clear match.');
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : 'The helper could not answer.');
+    } finally {
+      setAsking(false);
+    }
+  }
 
   function confirm(person: { id: string | null; name: string }) {
     if (!fundId || !person.name.trim()) return;
@@ -103,6 +120,11 @@ function QueuedPayment({ org, gift, funds }: { org: Organization; gift: Gift; fu
           </div>
         </div>
       )}
+
+      {!giver.id && can('gifts.write') && statementName && (
+        <button type="button" className="btn btn-quiet align-start" disabled={asking} onClick={() => void askAi()}>{asking ? 'Looking…' : 'Ask the helper who this is'}</button>
+      )}
+      {aiNote && <p className="notice small" role="status">{aiNote}</p>}
 
       <PersonPicker label="Who gave it" value={giver} onChange={setGiver} allowFreeText orgId={org.id} />
 
