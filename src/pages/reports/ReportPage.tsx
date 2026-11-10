@@ -8,6 +8,7 @@ import { Bars, Scorecard, TrendChart } from '../../components/Scorecard';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { formatMoney } from '../../../functions/src/shared/giving';
 import { dueText, reasonLabel, reportCsv, reportFileName, reportPdf, type GivingPart, type PastoralPart } from '../../../functions/src/shared/reports';
+import { aiWrite } from '../../lib/aiWrite';
 import { stampPoweredBy } from '../../../functions/src/shared/poweredBy';
 
 const day = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`;
@@ -25,6 +26,8 @@ export function ReportPage() {
   const pastoral = useReportPart<PastoralPart>(orgId, reportId, 'pastoral', can('pastoral.read'), version);
   const giving = useReportPart<GivingPart>(orgId, reportId, 'giving', can('finance.reports'), version);
   const [requestId, setRequestId] = useState<string | null>(null);
+  const [summary, setSummary] = useState('');
+  const [summing, setSumming] = useState(false);
   const req = useReportRequest(orgId, requestId);
   const org = organizations.find((o) => o.id === orgId);
 
@@ -72,6 +75,23 @@ export function ReportPage() {
     // A byte-order mark so Excel reads names with accents correctly.
     downloadFile(new File(['﻿', text], reportFileName(report!, 'csv'), { type: 'text/csv' }));
   }
+  async function summarise() {
+    // Numbers only, never names.
+    const r = report!;
+    const a = s.attendance;
+    const context = [
+      `${r.orgName}, ${r.type === 'weekly' ? 'weekly' : 'monthly'} report: ${r.label}`,
+      `Attendance: ${a.total} in total (adults ${a.adults}, teens ${a.teens}, children ${a.children}); weekly average ${a.weeklyAverage ?? 'n/a'}; regular attenders ${s.regularAttenders}; net growth ${s.netGrowth.net} (${s.netGrowth.gained} new, ${s.netGrowth.lost} dropped).`,
+      `First-time visitors: ${r.visitors.length}; came back within 4 weeks ${pct(s.returnRate.rate)}; contacted within 48 hours ${pct(s.followUpSpeed.rate)}.`,
+      `Salvations ${r.headlines.current.salvations}, baptisms ${r.headlines.current.baptisms}.`,
+      `People needing follow-up: ${r.followUpsDue.length}.`,
+      r.changes.length ? `Biggest changes: ${r.changes.join('; ')}` : '',
+    ].filter(Boolean).join('\n');
+    setSumming(true);
+    try { setSummary(await aiWrite({ orgId, kind: 'summary', context })); }
+    catch (err) { toast.show(err instanceof Error ? err.message : 'The writing helper could not answer.'); }
+    finally { setSumming(false); }
+  }
   function remake() {
     if (!user) return;
     setRequestId(requestReport(orgId, user.uid, report!.type, report!.from));
@@ -98,6 +118,16 @@ export function ReportPage() {
         <button type="button" className="btn" onClick={csv}>Excel (CSV)</button>
         <button type="button" className="btn btn-quiet" disabled={!!requestId} onClick={remake}>{requestId ? 'Remaking…' : 'Remake with the latest records'}</button>
       </div>
+
+      {can('pastoral.read') && (
+        <section className="card stack report-section">
+          <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>
+            {summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}
+          </button>
+          {summary && <p>{summary}</p>}
+          {summary && <p className="small muted">Written by AI from the numbers above. Please check it before you share it.</p>}
+        </section>
+      )}
 
       <Scorecard report={report} giving={giving} base={location.pathname} />
 

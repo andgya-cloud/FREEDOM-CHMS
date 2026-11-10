@@ -7,6 +7,7 @@ import type { Organization } from '../state/OrgContext';
 import { logMessage, markDone } from '../lib/followUpWrites';
 import { friendlyError } from '../lib/errors';
 import { useSavedMessage } from '../lib/useSavedMessage';
+import { aiWrite } from '../lib/aiWrite';
 import {
   firstNameOf,
   recipientFor,
@@ -51,6 +52,7 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
   const callPhone = person.status === 'child' ? guardian?.phone : person.phone;
   const [edited, setEdited] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+  const [writing, setWriting] = useState(false);
 
   const text = useMemo(() => {
     if (!template || !recipient.ok || !ready) return '';
@@ -64,6 +66,19 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
     });
   }, [template, recipient, person, org, profile, fields, ready]);
   const message = edited ?? text;
+
+  async function writeForMe() {
+    if (!message.trim() || writing) return;
+    setWriting(true);
+    try {
+      // Only the first name and the words go out: no phone number, no notes about the person.
+      setEdited(await aiWrite({ orgId: org.id, kind: 'followup', context: template?.name ?? 'a friendly follow-up', draft: message }));
+    } catch (err) {
+      toast.show(err instanceof Error ? err.message : 'The writing helper could not answer.');
+    } finally {
+      setWriting(false);
+    }
+  }
 
   function send() {
     if (!template || !recipient.ok) return;
@@ -127,6 +142,11 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
               <textarea rows={6} value={ready ? message : 'Loading…'} disabled={!ready} onChange={(e) => setEdited(e.target.value)} />
               <small className="hint">You can change the words here or in WhatsApp before you tap Send.</small>
             </label>
+            {can('pastoral.read') && (
+              <button type="button" className="btn btn-quiet align-start" disabled={writing || !message.trim()} onClick={() => void writeForMe()}>
+                {writing ? 'Writing…' : 'Write it for me'}
+              </button>
+            )}
             <div className="sheet-actions">
               <button type="button" className="btn btn-primary" disabled={!message.trim()} onClick={send}>Open WhatsApp</button>
               <button type="button" className="btn btn-quiet" onClick={onClose}>Cancel</button>
