@@ -196,6 +196,15 @@ export async function schoolReportPdf(org: Organization, r: SchoolReportDoc): Pr
     pdf.text(title, 14, y);
     y += 7;
   };
+  if (r.aiSummary) {
+    section('This week in brief');
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(10); pdf.setTextColor(...INK);
+    const lines = pdf.splitTextToSize(r.aiSummary, w - 28) as string[];
+    pdf.text(lines, 14, y);
+    y += lines.length * 5;
+    pdf.setFontSize(8); pdf.setTextColor(...GREY); pdf.text('Written by AI from the numbers in this report. Please check it.', 14, y);
+    y += 8;
+  }
   section('The numbers');
   y = drawTable(pdf, y, [{ label: 'Measure', x: 14 }, { label: 'Value', x: w - 14, align: 'right' }], [
     ['Students enrolled', String(m.enrolled)], ['Withdrawn', String(m.withdrawn)], ['Retention', pc(m.retentionRate)],

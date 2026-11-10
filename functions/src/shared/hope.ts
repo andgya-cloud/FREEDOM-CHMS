@@ -318,6 +318,8 @@ export interface HopeReportDoc {
   metrics: HopeMetrics;
   /** Weekly (pastor) report only. */
   followUps?: { code: string; name: string; programme: string; since: string }[];
+  /** The helper's Monday briefing (weekly reports), from counts only: never a child's name or code. */
+  aiSummary?: string | null;
 }
 
 /**

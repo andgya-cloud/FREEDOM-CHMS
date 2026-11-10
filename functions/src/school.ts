@@ -3,6 +3,8 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { FieldValue, type DocumentData } from 'firebase-admin/firestore';
 import { db } from './common.js';
+import { ANTHROPIC_API_KEY, weeklyBriefing } from './aiCore.js';
+import { numberFacts } from './shared/aiWrite.js';
 import { DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { periodFor, periodLabel, type ReportType } from './shared/metrics.js';
 import { reportsDue } from './shared/reports.js';
@@ -167,6 +169,10 @@ export async function generateSchoolReport(orgId: string, type: ReportType, from
   const period = periodFor(type, from);
   const { input, names } = await loadSchool(orgId);
   const doc: SchoolReportDoc = buildSchoolReport(input, names, type, period, periodLabel(type, period), today);
+  if (type === 'weekly') {
+    const facts = [`${org.name}, week ${doc.label}`, ...numberFacts(doc.metrics), `students below attendance threshold listed: ${doc.alerts.length}`, `students owing fees: ${doc.arrears.length}`, `graduate follow-ups due: ${doc.outcomesDue.length}`];
+    doc.aiSummary = await weeklyBriefing(orgId, today, facts);
+  }
   const id = `${type}_${period.from}`;
   await db.doc(`organizations/${orgId}/schoolReports/${id}`).set({
     ...doc, orgId, orgName: org.name, generatedAt: FieldValue.serverTimestamp(), generatedBy: by,
@@ -175,7 +181,7 @@ export async function generateSchoolReport(orgId: string, type: ReportType, from
 }
 
 export const onSchoolReportRequested = onDocumentCreated(
-  { document: 'organizations/{orgId}/schoolReportRequests/{requestId}', memory: '512MiB', timeoutSeconds: 300 },
+  { document: 'organizations/{orgId}/schoolReportRequests/{requestId}', memory: '512MiB', timeoutSeconds: 300, secrets: [ANTHROPIC_API_KEY] },
   async (event) => {
     const req = event.data?.data();
     if (!req || !event.data) return;
@@ -208,6 +214,6 @@ export async function runScheduledSchoolReports(now = new Date()): Promise<strin
 }
 
 export const scheduledSchoolReports = onSchedule(
-  { schedule: 'every day 07:00', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', memory: '1GiB', timeoutSeconds: 540 },
+  { schedule: 'every day 07:00', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', memory: '1GiB', timeoutSeconds: 540, secrets: [ANTHROPIC_API_KEY] },
   async () => { await runScheduledSchoolReports(); },
 );

@@ -29,3 +29,13 @@ describe('parseMap', () => {
   });
   it('survives rubbish', () => expect(parseMap('no json', ['1'], () => true)).toEqual({}));
 });
+
+import { numberFacts } from './aiWrite.js';
+describe('numberFacts', () => {
+  it('keeps numbers and named groups, skips people', () => {
+    const f = numberFacts({ enrolled: 10, rate: null, byCourse: [{ name: 'Tailoring', enrolled: 4 }], alerts: [{ studentId: 's1', name: 'Jane Doe', percent: 40 }], kids: [{ code: 'HC-1', name: 'Ann', n: 1 }] });
+    expect(f).toEqual(['enrolled: 10', 'byCourse Tailoring enrolled: 4']);
+    expect(f.join(' ')).not.toContain('Jane');
+    expect(f.join(' ')).not.toContain('Ann');
+  });
+});

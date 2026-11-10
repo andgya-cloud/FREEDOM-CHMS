@@ -116,6 +116,13 @@ function ReportView({ org, report }: { org: Organization; report: HopeReportDoc 
   return (
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
+      {report.aiSummary && (
+        <div className="notice stack">
+          <strong>This week in brief</strong>
+          <p>{report.aiSummary}</p>
+          <p className="small muted">Written by AI from the numbers in this report. Please check it.</p>
+        </div>
+      )}
       <table className="report-table"><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
       <h3>Photos</h3>
       {linked.length > 0 && (

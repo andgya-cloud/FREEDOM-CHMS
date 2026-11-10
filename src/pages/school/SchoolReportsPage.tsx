@@ -129,7 +129,14 @@ function ReportView({ org, report }: { org: Organization; report: SchoolReportDo
   return (
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
-      <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>{summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}</button>
+      {report.aiSummary && (
+        <div className="notice stack">
+          <strong>This week in brief</strong>
+          <p>{report.aiSummary}</p>
+          <p className="small muted">Written by AI from the numbers in this report. Please check it.</p>
+        </div>
+      )}
+      {!report.aiSummary && <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>{summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}</button>}
       {summary && <><p>{summary}</p><p className="small muted">Written by AI from the numbers below. Please check it before you share it.</p></>}
       <table className="report-table"><tbody>{rows.map(([k, v]) => <tr key={k}><td>{k}</td><td className="num">{v}</td></tr>)}</tbody></table>
       <h3>By department</h3>

@@ -8,7 +8,7 @@ export const AI_MONTHLY_CAP = 300;
 export const AI_DAILY_PER_USER = 30;
 export const AI_MAX_TOKENS = 500;
 
-export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks';
+export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks' | 'weekly';
 
 /** Longer answers for the kinds that come back as a list. */
 export const maxTokensFor = (kind: AiKind) => (kind === 'sort' || kind === 'remarks' ? 2000 : AI_MAX_TOKENS);
@@ -20,6 +20,9 @@ const RULES = [
 ].join(' ');
 
 export function systemPrompt(kind: AiKind): string {
+  if (kind === 'weekly') {
+    return `${RULES} You write the weekly briefing at the top of a report for the senior pastor. Use only the numbers given. Write two short parts in plain sentences, no headings or bullets: first 2 to 3 sentences on what went well and what dropped, then "This week:" followed by 2 or 3 practical things to do. Under 110 words. Reply with the briefing only.`;
+  }
   if (kind === 'notice') {
     return `${RULES} You turn a church leader's short notes into one WhatsApp group notice for church members. Start with a short friendly line, give what, when and where exactly as given, and end with a warm invitation. Keep it under 90 words. Reply with the notice text only.`;
   }
@@ -98,4 +101,26 @@ export function parseMap(raw: string, keys: readonly string[], ok: (key: string,
     }
     return out;
   } catch { return {}; }
+}
+
+/**
+ * The numbers of a report as "name: value" lines, for the weekly briefing. Only numbers (and the names of programmes
+ * or departments) go out: any list of people is skipped, so no student, member or child name ever leaves the app.
+ */
+export function numberFacts(value: unknown, prefix = '', out: string[] = []): string[] {
+  if (out.length > 120) return out;
+  if (typeof value === 'number' && Number.isFinite(value)) out.push(`${prefix}: ${value}`);
+  else if (Array.isArray(value)) {
+    value.slice(0, 20).forEach((v) => {
+      if (v && typeof v === 'object' && 'name' in v && !('studentId' in v) && !('personId' in v) && !('childId' in v) && !('code' in v)) {
+        numberFacts(v, `${prefix} ${String((v as { name: unknown }).name)}`, out);
+      }
+    });
+  } else if (value && typeof value === 'object') {
+    for (const [k, v] of Object.entries(value)) {
+      if (k === 'name') continue;
+      numberFacts(v, prefix ? `${prefix} ${k}` : k, out);
+    }
+  }
+  return out;
 }

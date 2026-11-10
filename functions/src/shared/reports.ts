@@ -66,6 +66,8 @@ export interface ReportDoc {
   funnel: FunnelStep[];
   trend: { week: string; total: number }[];
   followUpsDue: DueFollowUp[];
+  /** The helper's Monday briefing (weekly reports), from the numbers only; null when it could not be written. */
+  aiSummary?: string | null;
 }
 
 export interface PastoralPart {
@@ -332,6 +334,11 @@ export function reportPdf(JsPDF: typeof JsPdf, r: ReportDoc, pastoral?: Pastoral
   pdf.text(`${r.type === 'weekly' ? 'Weekly' : 'Monthly'} report: ${r.label}${giving ? ' (pastor\'s copy)' : ''}`, 14, 25);
   y = 34;
 
+  if (r.aiSummary) {
+    heading('This week in brief');
+    para(r.aiSummary);
+    para('Written by AI from the numbers in this report. Please check it.', 8, GREY);
+  }
   heading('The biggest changes');
   if (r.changes.length === 0) para('No big changes this time.', 10, GREY);
   r.changes.forEach((c) => para(`• ${c}`));

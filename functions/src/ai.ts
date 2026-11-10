@@ -1,13 +1,12 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
-import { defineSecret } from 'firebase-functions/params';
 import { db, FieldValue, requireCaller } from './common.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { categoriesFor } from './shared/finance.js';
 import { AI_MODEL, checkLimits, maxTokensFor, monthKey, parseMap, parsePayer, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
 
-const ANTHROPIC_API_KEY = defineSecret('ANTHROPIC_API_KEY');
+import { ANTHROPIC_API_KEY } from './aiCore.js';
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
 
 /**

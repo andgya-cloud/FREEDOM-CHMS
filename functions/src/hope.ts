@@ -3,6 +3,8 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { logger } from 'firebase-functions/v2';
 import { FieldValue, type DocumentData } from 'firebase-admin/firestore';
 import { db } from './common.js';
+import { ANTHROPIC_API_KEY, weeklyBriefing } from './aiCore.js';
+import { numberFacts } from './shared/aiWrite.js';
 import { DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { activitiesFor } from './shared/attendance.js';
 import { periodFor, periodLabel, type ReportType } from './shared/metrics.js';
@@ -166,6 +168,10 @@ export async function generateHopeReport(orgId: string, type: ReportType, from: 
     .map((t) => ({ childId: t.personId as string, programme: programmeOfTask(t.id, t.personId as string, data.programmes) ?? 'Programme', since: (t.absentSince as string) ?? '' }));
   const doc: HopeReportDoc = buildHopeReport(input, type, period, periodLabel(type, period), open, data.who);
   // Weekly reports are for the pastor, monthly ones are counts only: they are stored apart so the rules can tell them apart.
+  if (type === 'weekly') {
+    // Counts only (Andy 3A): the follow-up list with children's names and codes is never sent.
+    doc.aiSummary = await weeklyBriefing(orgId, today, [`${String(data.org.name ?? 'Hope Centre')}, week ${doc.label}`, ...numberFacts(doc.metrics), `children with open absence follow-ups: ${doc.followUps?.length ?? 0}`]);
+  }
   const id = `${type}_${period.from}`;
   await db.doc(`organizations/${orgId}/hopeReports/${id}`).set({
     ...doc, orgId, orgName: data.org.name, generatedAt: FieldValue.serverTimestamp(), generatedBy: by,
@@ -174,7 +180,7 @@ export async function generateHopeReport(orgId: string, type: ReportType, from: 
 }
 
 export const onHopeReportRequested = onDocumentCreated(
-  { document: 'organizations/{orgId}/hopeReportRequests/{requestId}', memory: '512MiB', timeoutSeconds: 300 },
+  { document: 'organizations/{orgId}/hopeReportRequests/{requestId}', memory: '512MiB', timeoutSeconds: 300, secrets: [ANTHROPIC_API_KEY] },
   async (event) => {
     const req = event.data?.data();
     if (!req || !event.data) return;
@@ -207,6 +213,6 @@ export async function runScheduledHopeReports(now = new Date()): Promise<string[
 }
 
 export const scheduledHopeReports = onSchedule(
-  { schedule: 'every day 07:15', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', memory: '1GiB', timeoutSeconds: 540 },
+  { schedule: 'every day 07:15', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', memory: '1GiB', timeoutSeconds: 540, secrets: [ANTHROPIC_API_KEY] },
   async () => { await runScheduledHopeReports(); },
 );

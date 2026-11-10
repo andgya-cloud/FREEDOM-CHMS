@@ -4,6 +4,8 @@ import { logger } from 'firebase-functions/v2';
 import { FieldValue, type DocumentData, type QuerySnapshot } from 'firebase-admin/firestore';
 import { jsPDF } from 'jspdf';
 import { db } from './common.js';
+import { ANTHROPIC_API_KEY, weeklyBriefing } from './aiCore.js';
+import { numberFacts } from './shared/aiWrite.js';
 import { DEFAULT_TIME_ZONE, zonedParts } from './shared/datetime.js';
 import {
   addDays,
@@ -107,6 +109,12 @@ export async function generateReport(
     monthlyBudgetCents: settings.budgets?.[orgId] ?? null,
   });
 
+  if (type === 'weekly') {
+    const r = parts.report;
+    const facts = [`${r.orgName}, week ${r.label}`, ...numberFacts({ headlines: r.headlines, scorecard: r.scorecard }), `first-time visitors: ${r.visitors.length}`, `people needing follow-up: ${r.followUpsDue.length}`, ...r.changes.map((c) => `change: ${c}`)];
+    parts.report.aiSummary = await weeklyBriefing(orgId, todayIn((org.get('timeZone') as string | undefined) ?? DEFAULT_TIME_ZONE, now), facts);
+  }
+
   const id = reportId(type, period.from);
   const ref = db.doc(`organizations/${orgId}/reports/${id}`);
   const stamp = { generatedAt: FieldValue.serverTimestamp(), generatedBy: opts.by ?? SYSTEM };
@@ -149,6 +157,7 @@ export function reportEmail(r: ReportDoc, pastoral: PastoralPart | null, giving:
   const lines = [
     `${kind} report for ${r.orgName}: ${r.label}.`,
     '',
+    ...(r.aiSummary ? ['This week in brief (written by AI from the numbers):', r.aiSummary, ''] : []),
     `Service attendance (weekly average): ${h.attendance ?? '–'}`,
     `First-time visitors: ${h.visitors}`,
     `Salvations: ${h.salvations}. Baptisms: ${h.baptisms}.`,
@@ -194,7 +203,7 @@ async function emailReport(orgId: string, parts: { report: ReportDoc; pastoral: 
  * marks the request done (or failed, with a reason).
  */
 export const onReportRequested = onDocumentCreated(
-  { document: 'organizations/{orgId}/reportRequests/{requestId}', memory: '1GiB', timeoutSeconds: 300 },
+  { document: 'organizations/{orgId}/reportRequests/{requestId}', memory: '1GiB', timeoutSeconds: 300, secrets: [ANTHROPIC_API_KEY] },
   async (event) => {
     const { orgId } = event.params;
     const req = event.data?.data();
@@ -238,6 +247,6 @@ export async function runScheduledReports(now = new Date()): Promise<string[]> {
 
 export const scheduledReports = onSchedule(
   // Cloud Scheduler isn't offered in africa-south1, so this job runs from Europe.
-  { schedule: 'every day 07:00', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', memory: '1GiB', timeoutSeconds: 540 },
+  { schedule: 'every day 07:00', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', memory: '1GiB', timeoutSeconds: 540, secrets: [ANTHROPIC_API_KEY] },
   async () => { await runScheduledReports(); },
 );

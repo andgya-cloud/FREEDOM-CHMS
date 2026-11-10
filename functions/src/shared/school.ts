@@ -387,6 +387,8 @@ export interface SchoolReportDoc {
   alerts: { studentId: string; name: string; course: string; percent: number; held: number }[];
   arrears: { studentId: string; name: string; course: string; balanceCents: number; overdue: boolean }[];
   outcomesDue: { studentId: string; name: string; months: number; due: string }[];
+  /** The helper's Monday briefing (weekly reports), from the numbers only. */
+  aiSummary?: string | null;
 }
 
 /**

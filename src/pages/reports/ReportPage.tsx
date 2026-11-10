@@ -119,7 +119,14 @@ export function ReportPage() {
         <button type="button" className="btn btn-quiet" disabled={!!requestId} onClick={remake}>{requestId ? 'Remaking…' : 'Remake with the latest records'}</button>
       </div>
 
-      {can('pastoral.read') && (
+      {report.aiSummary && (
+        <div className="notice stack">
+          <strong>This week in brief</strong>
+          <p>{report.aiSummary}</p>
+          <p className="small muted">Written by AI from the numbers in this report. Please check it.</p>
+        </div>
+      )}
+      {can('pastoral.read') && !report.aiSummary && (
         <section className="card stack report-section">
           <button type="button" className="btn btn-quiet align-start" disabled={summing} onClick={() => void summarise()}>
             {summing ? 'Writing…' : summary ? 'Write it again' : 'Write a summary for me'}
