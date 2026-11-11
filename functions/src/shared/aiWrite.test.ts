@@ -39,3 +39,16 @@ describe('numberFacts', () => {
     expect(f.join(' ')).not.toContain('Ann');
   });
 });
+
+import { parseFill } from './aiWrite.js';
+describe('parseFill', () => {
+  it('keeps our categories and sane numbers', () => {
+    const f = parseFill('{"category":"Transport","payee":"Total","items":[{"description":"Fuel","quantity":2,"unitPrice":1500},{"description":"","quantity":1,"unitPrice":5}]}', ['Transport', 'Other']);
+    expect(f).toEqual({ category: 'Transport', payee: 'Total', items: [{ description: 'Fuel', quantity: 2, unitPrice: 1500 }] });
+  });
+  it('drops a made-up category and bad numbers', () => {
+    const f = parseFill('{"category":"Snacks","items":[{"description":"Tea","quantity":-3,"unitPrice":"abc"}]}', ['Other']);
+    expect(f.category).toBe('');
+    expect(f.items[0]).toEqual({ description: 'Tea', quantity: 1, unitPrice: 0 });
+  });
+});

@@ -19,6 +19,10 @@ import { coupleNames, familyGroups, familyName, ordinal, yearsMarried } from '..
 import { useHouseholds } from '../state/useFamilies';
 import { familyWhatsApp } from '../components/FamilyCard';
 import { formatDateKey, localDateKey, zonedParts } from '../../functions/src/shared/datetime';
+import { aiMap } from '../lib/aiWrite';
+import { AI_MARK, AiTip } from '../components/Ai';
+import { WhatsAppSheet } from '../components/WhatsAppSheet';
+import { useToast } from '../state/ToastContext';
 
 const DAY = 86_400_000;
 const keyDaysAgo = (todayKey: string, n: number) => new Date(Date.parse(`${todayKey}T00:00:00Z`) - n * DAY).toISOString().slice(0, 10);
@@ -200,14 +204,35 @@ export function BirthdaysCard({ org }: { org: Organization }) {
 
 /** First-timers of the last 7 days, with Add visitor and the QR poster (Andy, 2026-11-01, 3A). */
 export function FirstTimersCard({ org }: { org: Organization }) {
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { people } = usePeople();
+  const toast = useToast();
+  // Visitor welcome drafts (Andy, 2026-11-11, idea 5): one personal draft each, sent one tap at a time.
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafting, setDrafting] = useState(false);
+  const [open, setOpen] = useState<Person | null>(null);
   if (!can('people.read') && !can('people.write')) return null;
+  const helper = can('pastoral.read') || can('followups.manage') || can('settings.manage');
   const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
   const from = keyDaysAgo(today, 7);
   const found = people
     .filter((p) => p.orgId === org.id && !p.deletedAt && p.firstVisitDate && p.firstVisitDate >= from)
     .sort((a, b) => (b.firstVisitDate ?? '').localeCompare(a.firstVisitDate ?? '') || a.fullName.localeCompare(b.fullName));
+  async function draftWelcomes() {
+    setDrafting(true);
+    try {
+      const rows = found.map((p, i) => ({
+        k: String(i + 1),
+        // First name and the visitor card only: no surname, phone or notes.
+        line: [`first name ${p.firstName || p.fullName.split(' ')[0]}`, `came ${formatDateKey(p.firstVisitDate!)}`, p.howHeard ? `heard about us: ${p.howHeard}` : '', p.invitedBy ? `invited by ${String(p.invitedBy).split(' ')[0]}` : ''].filter(Boolean).join(', '),
+      }));
+      const sender = `${(profile?.displayName ?? '').split(' ')[0]}, ${org.name}${org.serviceTimes?.[0] ? `; Sunday service ${org.serviceTimes[0]}` : ''}`;
+      const map = await aiMap(org.id, 'welcome', rows, sender);
+      setDrafts(Object.fromEntries(found.map((p, i) => [p.id, map[String(i + 1)] ?? '']).filter(([, t]) => t)));
+      if (!Object.keys(map).length) toast.show('The helper could not draft these. Please try again.');
+    } catch (err) { toast.show(err instanceof Error ? err.message : 'The helper could not answer.'); }
+    finally { setDrafting(false); }
+  }
   return (
     <section className="card first-timers-card" aria-label="First-timers">
       <div className="card-head">
@@ -219,10 +244,18 @@ export function FirstTimersCard({ org }: { org: Organization }) {
           {found.map((p) => (
             <li key={p.id}>
               <Link to={`/people/${p.orgId}/${p.id}`}><b>{p.fullName}</b> <span className="muted small">{formatDateKey(p.firstVisitDate!)}</span></Link>
+              {drafts[p.id] && <button type="button" className="btn btn-ai btn-small" onClick={() => setOpen(p)}>{AI_MARK} Send welcome</button>}
             </li>
           ))}
         </ul>
       )}
+      {helper && found.length > 0 && (
+        <>
+          <AiTip id="welcome">tap <b>Draft welcome messages</b> and the helper writes a personal welcome for each first-timer. You send them one tap at a time.</AiTip>
+          <button type="button" className="btn btn-ai align-start" disabled={drafting} onClick={() => void draftWelcomes()}>{AI_MARK} {drafting ? 'Drafting…' : Object.keys(drafts).length ? 'Draft them again' : `Draft welcome messages (${found.length})`}</button>
+        </>
+      )}
+      {open && <WhatsAppSheet org={org} person={open} templateId="visitor_welcome" initialText={drafts[open.id]} onSent={() => setDrafts((d) => { const n = { ...d }; delete n[open.id]; return n; })} onClose={() => setOpen(null)} />}
       {can('people.write') && <p className="muted small">Visitors can fill in their own card: <Link to="/visitors/qr">QR poster for the door</Link>.</p>}
     </section>
   );

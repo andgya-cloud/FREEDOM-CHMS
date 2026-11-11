@@ -4,7 +4,8 @@ import { db, FieldValue, requireCaller } from './common.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { categoriesFor } from './shared/finance.js';
-import { AI_MODEL, AI_MONTHLY_CAP, checkLimits, maxTokensFor, monthKey, parseMap, parsePayer, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
+import { pettyCashCategoriesFor } from './shared/pettyCash.js';
+import { AI_MODEL, AI_MONTHLY_CAP, checkLimits, maxTokensFor, monthKey, parseFill, parseMap, parsePayer, numberFacts, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
 
 import { ANTHROPIC_API_KEY } from './aiCore.js';
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -28,7 +29,7 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
     const m = await db.doc(`aiUsage/${org0}_${month}`).get();
     return { used: Math.max(0, Number(m.get('count') ?? 0)), cap: AI_MONTHLY_CAP, month };
   }
-  const KINDS: AiKind[] = ['followup', 'summary', 'payer', 'notice', 'sort', 'remarks'];
+  const KINDS: AiKind[] = ['followup', 'summary', 'payer', 'notice', 'sort', 'remarks', 'welcome', 'ask', 'fill'];
   const kind = KINDS.find((k) => k === d.kind) ?? null;
   if (!orgId || !kind) throw new HttpsError('invalid-argument', 'Please check the request.');
   const caller = await requireCaller(request);
@@ -37,7 +38,9 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
   const allowed = kind === 'payer' ? any('gifts.write')
     : kind === 'sort' ? any('finance.reports', 'pettycash.approve', 'pettycash.authorize', 'users.manage')
       : kind === 'remarks' ? any('exams.manage', 'users.manage')
-        : kind === 'notice' ? any('pastoral.read', 'followups.manage', 'settings.manage')
+        : kind === 'notice' || kind === 'welcome' ? any('pastoral.read', 'followups.manage', 'settings.manage')
+        : kind === 'fill' ? any('pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage')
+        : kind === 'ask' ? any('pastoral.read', 'finance.reports', 'settings.manage', 'users.manage')
           : any('pastoral.read', 'finance.reports', 'settings.manage');
   if (!canAccessOrg(caller.profile, orgId) || !allowed) throw new HttpsError('permission-denied', 'You do not have permission to do that.');
   const context = text(d.context, 6000);
@@ -71,6 +74,29 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
     keys = rows.map((r) => r.k);
     listPrompt = `Students:\n${rows.map((r) => `${r.k} | ${r.line}`).join('\n')}`;
   }
+  if (kind === 'welcome') {
+    // First names and what the visitor card says only: no surname, phone or notes.
+    const rows = items.map((x) => x as Record<string, unknown>).map((x) => ({ k: text(x.k, 20), line: text(x.line, 300) })).filter((x) => x.k && x.line);
+    if (!rows.length) throw new HttpsError('invalid-argument', 'There are no visitors to welcome.');
+    keys = rows.map((r) => r.k);
+    listPrompt = `Sender and church: ${text(d.context, 200)}\nVisitors:\n${rows.map((r) => `${r.k} | ${r.line}`).join('\n')}`;
+  }
+  let orgType = '';
+  if (kind === 'ask' || kind === 'fill') orgType = String((await db.doc(`organizations/${orgId}`).get()).get('type') ?? '');
+  if (kind === 'ask') {
+    if (!context) throw new HttpsError('invalid-argument', 'Please type your question.');
+    // The numbers of the latest reports only (Andy 4A): never names, never private notes.
+    const coll = orgType === 'college' ? 'schoolReports' : orgType === 'ministry' ? 'hopeReports' : 'reports';
+    const snap = await db.collection(`organizations/${orgId}/${coll}`).orderBy('from', 'desc').limit(30).get();
+    const docs = snap.docs.filter((x) => x.get('type') === 'weekly').slice(0, 8).concat(snap.docs.filter((x) => x.get('type') === 'monthly').slice(0, 6));
+    if (!docs.length) return { text: 'There are no reports yet to answer from. Make a weekly or monthly report first.', usedThisMonth: null };
+    listPrompt = docs.map((x) => {
+      const r = x.data();
+      const nums = numberFacts(coll === 'reports' ? { headlines: r.headlines?.current, scorecard: r.scorecard } : r.metrics).slice(0, 70);
+      return `[${r.type} report ${r.label} (${r.from} to ${r.to})]\n${nums.join('\n')}`;
+    }).join('\n\n') + `\n\nQuestion: ${context.slice(0, 500)}`;
+  }
+  if (kind === 'fill' && !context) throw new HttpsError('invalid-argument', 'Please say or type what you need.');
   if (kind === 'notice' && !context) throw new HttpsError('invalid-argument', 'Please type what the notice is about.');
   if (kind === 'followup' && !draft) throw new HttpsError('invalid-argument', 'There is no message to improve yet.');
   if (kind === 'summary' && !context) throw new HttpsError('invalid-argument', 'There is nothing to summarise.');
@@ -100,7 +126,8 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
       system: systemPrompt(kind),
       messages: [{ role: 'user', content: kind === 'payer'
         ? `Statement name: "${text(d.context, 120)}"\nMembers:\n${offered.map((p) => `${p.id} | ${p.fullName}`).join('\n')}`
-        : kind === 'sort' || kind === 'remarks' ? listPrompt
+        : kind === 'sort' || kind === 'remarks' || kind === 'welcome' || kind === 'ask' ? listPrompt
+          : kind === 'fill' ? `Allowed categories: ${pettyCashCategoriesFor(orgType).join(', ')}\nWhat they said:\n${context.slice(0, 1500)}`
           : kind === 'notice' ? `Leader's notes:\n${context}`
             : userPrompt(kind, context, draft, note) }],
     });
@@ -112,6 +139,8 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
       return { text: '', map: parseMap(out, keys, (k, v) => allowedIds[dirOf[k] ?? 'out'].has(v)), usedThisMonth: left };
     }
     if (kind === 'remarks') return { text: '', map: parseMap(out, keys, (_k, v) => v.length <= 200), usedThisMonth: left };
+    if (kind === 'welcome') return { text: '', map: parseMap(out, keys, (_k, v) => v.length <= 600), usedThisMonth: left };
+    if (kind === 'fill') return { text: '', fill: parseFill(out, pettyCashCategoriesFor(orgType)), usedThisMonth: left };
     return { text: out, usedThisMonth: left };
   } catch (err) {
     await Promise.all([

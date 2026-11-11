@@ -29,6 +29,8 @@ interface Props {
   giftId?: string | null;
   /** Limit the choice of templates (for a receipt, only the receipt template). */
   templateIds?: string[];
+  /** Words drafted elsewhere (the helper's welcome), shown in gold and still editable. */
+  initialText?: string;
   onSent?: () => void;
   onClose: () => void;
 }
@@ -38,7 +40,7 @@ interface Props {
  * with it ready, and records that it was sent. A child's message goes to
  * their parent or guardian; nobody who said no or asked us to stop is messaged.
  */
-export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, giftId, templateIds, onSent, onClose }: Props) {
+export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, giftId, templateIds, initialText, onSent, onClose }: Props) {
   const { profile, can } = useAuth();
   const { byId } = usePeople();
   const toast = useToast();
@@ -51,10 +53,10 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
   const guardian = person.guardianId ? byId(person.guardianId) ?? null : null;
   const recipient = recipientFor(person, guardian);
   const callPhone = person.status === 'child' ? guardian?.phone : person.phone;
-  const [edited, setEdited] = useState<string | null>(null);
+  const [edited, setEdited] = useState<string | null>(initialText ?? null);
   const [sent, setSent] = useState(false);
   const [writing, setWriting] = useState(false);
-  const [byAi, setByAi] = useState(false);
+  const [byAi, setByAi] = useState(!!initialText);
 
   const text = useMemo(() => {
     if (!template || !recipient.ok || !ready) return '';

@@ -62,6 +62,7 @@ const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => (
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
 const AiHelperPage = lazy(() => import('./pages/AiHelperPage').then((m) => ({ default: m.AiHelperPage })));
+const AskPage = lazy(() => import('./pages/AskPage').then((m) => ({ default: m.AskPage })));
 const NoticePage = lazy(() => import('./pages/NoticePage').then((m) => ({ default: m.NoticePage })));
 const MorePage = lazy(() => import('./pages/MorePage').then((m) => ({ default: m.MorePage })));
 const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
@@ -333,6 +334,7 @@ function AppRoutes() {
         <Route path="/help" element={<HelpPage />} />
         <Route path="/notice" element={<NoticePage />} />
         <Route path="/ai" element={<AiHelperPage />} />
+        <Route path="/ask" element={<AskPage />} />
         <Route path="/more" element={<MorePage />} />
         <Route path="/settings/audit" element={<RequirePermission permission="audit.read"><AuditLogPage /></RequirePermission>} />
         <Route path="/sign-in" element={<Navigate to="/" replace />} />

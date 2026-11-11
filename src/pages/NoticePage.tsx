@@ -4,6 +4,7 @@ import { useOrg } from '../state/OrgContext';
 import { useToast } from '../state/ToastContext';
 import { aiWrite } from '../lib/aiWrite';
 import { AI_MARK, AiBox } from '../components/Ai';
+import { VoiceButton } from '../components/VoiceButton';
 
 /**
  * Write a WhatsApp notice (Andy, 2026-11-10): a leader types a few lines (what, when, where) and the helper writes
@@ -34,7 +35,7 @@ export function NoticePage() {
       <h1>{AI_MARK} Write a notice</h1>
       <p className="lead">Type a few lines: what, when and where. The helper writes the WhatsApp message; you check it before sending.</p>
       <label className="field">
-        <span>Your notes</span>
+        <span className="label-row">Your notes <VoiceButton value={notes} onChange={setNotes} /></span>
         <textarea rows={4} maxLength={1000} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={'Youth night Friday 6pm, main hall\nBring a friend, snacks provided'} />
       </label>
       <button type="button" className="btn btn-ai-solid align-start" disabled={busy || notes.trim().length < 5} onClick={() => void write()}>{AI_MARK} {busy ? 'Writing…' : notice ? 'Write it again' : 'Write it for me'}</button>

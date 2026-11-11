@@ -2805,3 +2805,6 @@ a.fin-chip:hover { background: #fdecea; }
 .ai-list b { color: var(--ai-gold); }
 .ai-meter { height: 10px; border-radius: 999px; background: rgb(var(--ai-gold-rgb) / 0.15); overflow: hidden; }
 .ai-meter > span { display: block; height: 100%; background: var(--ai-gold); }
+
+.voice { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

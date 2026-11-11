@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState, type ChangeEvent, type ReactNode } from 'react';
+import { aiFill } from '../../lib/aiWrite';
+import { AI_MARK, AiTip } from '../../components/Ai';
+import { VoiceButton } from '../../components/VoiceButton';
 import { Greeting } from '../../components/Greeting';
 import { SIGNATORY_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { createPortal } from 'react-dom';
@@ -228,6 +231,10 @@ function NewRequisition({ org }: { org: Organization }) {
   const [payee, setPayee] = useState(prefill?.payee ?? '');
   const [payCode, setPayCode] = useState('');
   const paid = splitPaymentCode(payCode);
+  // Say or type what you need; the helper fills the form for you to check (Andy, 2026-11-11, idea 8).
+  const [words, setWords] = useState('');
+  const [filling, setFilling] = useState(false);
+  const [filled, setFilled] = useState(false);
   const parsed = lines.map((l) => {
     const quantity = parseQuantity(l.quantity);
     const unitPriceCents = parseAmountCents(l.unitPrice);
@@ -358,6 +365,26 @@ function NewRequisition({ org }: { org: Organization }) {
           <label className="field"><span>What is "Other" for?</span><input value={note} maxLength={120} onChange={(e) => setNote(e.target.value)} placeholder="For example: generator fuel" /></label>
         )}
         {p.seesAll && category && <BudgetWarning org={org} category={category} addingCents={total} />}
+        <div className="ai-box no-print">
+          <AiTip id="fill">say or type what you need, for example "fuel for the generator, 10 litres at 180 shillings, from Total". The helper fills the form; you check it.</AiTip>
+          <label className="field">
+            <span className="label-row"><span className="ai-label">{AI_MARK} Say or type what you need</span><VoiceButton value={words} onChange={setWords} /></span>
+            <textarea rows={2} maxLength={1500} value={words} onChange={(e) => setWords(e.target.value)} placeholder="For example: 2 printer cartridges at 3,500 each from Text Book Centre" />
+          </label>
+          <button type="button" className="btn btn-ai align-start" disabled={filling || words.trim().length < 4} onClick={() => void (async () => {
+            setFilling(true);
+            try {
+              const f = await aiFill(org.id, words);
+              if (!f.items.length) { toast.show('The helper could not find any items in that. Please add a little more detail.'); return; }
+              if (f.category) setCategory(f.category as PettyCashCategory);
+              if (f.payee) setPayee(f.payee);
+              setLines(f.items.map((it, i) => ({ key: i + 1, description: it.description, quantity: String(it.quantity), unitPrice: it.unitPrice ? String(it.unitPrice) : '' })));
+              setFilled(true);
+            } catch (err) { toast.show(err instanceof Error ? err.message : 'The helper could not answer.'); }
+            finally { setFilling(false); }
+          })()}>{AI_MARK} {filling ? 'Filling…' : 'Fill the form for me'}</button>
+          {filled && <p className="ai-note">{AI_MARK} Filled by AI from your words. Check every item and price before you save.</p>}
+        </div>
         <h3>Expense items</h3>
         <div className="petty-lines">
           {lines.map((l, n) => (

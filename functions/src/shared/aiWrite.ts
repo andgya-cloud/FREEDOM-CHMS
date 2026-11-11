@@ -8,10 +8,10 @@ export const AI_MONTHLY_CAP = 300;
 export const AI_DAILY_PER_USER = 30;
 export const AI_MAX_TOKENS = 500;
 
-export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks' | 'weekly';
+export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks' | 'weekly' | 'welcome' | 'ask' | 'fill';
 
 /** Longer answers for the kinds that come back as a list. */
-export const maxTokensFor = (kind: AiKind) => (kind === 'sort' || kind === 'remarks' ? 2000 : AI_MAX_TOKENS);
+export const maxTokensFor = (kind: AiKind) => (kind === 'sort' || kind === 'remarks' || kind === 'welcome' ? 2000 : AI_MAX_TOKENS);
 
 const RULES = [
   'You write for Freedom Church in Nairobi, Kenya. Write in plain, warm, simple English.',
@@ -20,6 +20,15 @@ const RULES = [
 ].join(' ');
 
 export function systemPrompt(kind: AiKind): string {
+  if (kind === 'welcome') {
+    return `${RULES} You write personal WhatsApp welcome messages to first-time visitors of a church, one per person. For each you get a key, their first name and what we know (the day they came, how they heard, who invited them). Greet them by first name, thank them warmly for coming, use one detail if given, invite them back, and end with the sender's name and church given. At most 55 words each. Reply with JSON only, an object of key to message, for example {"1": "Hi Mary, ..."}.`;
+  }
+  if (kind === 'ask') {
+    return `${RULES} You answer a church leader's question using ONLY the report figures given (weekly and monthly reports, newest first). Answer in 1 to 4 plain sentences with the numbers and the report period they come from. If the figures do not answer the question, say so plainly and suggest which report or page to look at. Never guess.`;
+  }
+  if (kind === 'fill') {
+    return `${RULES} You turn what a staff member said or typed into a petty cash request. Reply with JSON only: {"category": "<one of the allowed categories or empty>", "payee": "<who is paid, or empty>", "items": [{"description": "<short>", "quantity": <number>, "unitPrice": <number in shillings>}]}. Use only amounts that were said. If no price was said for an item, use 0. At most 10 items.`;
+  }
   if (kind === 'weekly') {
     return `${RULES} You write the weekly briefing at the top of a report for the senior pastor. Use only the numbers given. Write two short parts in plain sentences, no headings or bullets: first 2 to 3 sentences on what went well and what dropped, then "This week:" followed by 2 or 3 practical things to do. Under 110 words. Reply with the briefing only.`;
   }
@@ -123,4 +132,24 @@ export function numberFacts(value: unknown, prefix = '', out: string[] = []): st
     }
   }
   return out;
+}
+
+export type FilledRequest = { category: string; payee: string; items: { description: string; quantity: number; unitPrice: number }[] };
+
+/** Reads the helper's petty cash request; the category must be one of ours, numbers must be sensible. */
+export function parseFill(raw: string, categories: readonly string[]): FilledRequest {
+  const empty: FilledRequest = { category: '', payee: '', items: [] };
+  const m = /\{[\s\S]*\}/.exec(raw);
+  if (!m) return empty;
+  try {
+    const j = JSON.parse(m[0]) as { category?: unknown; payee?: unknown; items?: unknown };
+    const category = typeof j.category === 'string' && categories.includes(j.category) ? j.category : '';
+    const payee = typeof j.payee === 'string' ? j.payee.trim().slice(0, 120) : '';
+    const items = (Array.isArray(j.items) ? j.items : []).slice(0, 10).map((x) => x as Record<string, unknown>).map((x) => ({
+      description: typeof x.description === 'string' ? x.description.trim().slice(0, 200) : '',
+      quantity: Number.isFinite(Number(x.quantity)) && Number(x.quantity) > 0 ? Math.min(10000, Number(x.quantity)) : 1,
+      unitPrice: Number.isFinite(Number(x.unitPrice)) && Number(x.unitPrice) >= 0 ? Math.min(10_000_000, Number(x.unitPrice)) : 0,
+    })).filter((x) => x.description);
+    return { category, payee, items };
+  } catch { return empty; }
 }

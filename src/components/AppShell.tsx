@@ -91,7 +91,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {!finance && (can('attendance.write') || can('people.read')) && (
         <NavLink to="/attendance" className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
-          Service
+          Service{dot('sunday')}
         </NavLink>
       )}
       {!usher && givingAllowed && (
