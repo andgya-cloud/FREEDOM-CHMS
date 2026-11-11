@@ -2808,3 +2808,26 @@ a.fin-chip:hover { background: #fdecea; }
 
 .voice { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .label-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* Just ask Andy (Andy, 2026-11-11): the gold guide button on every page, above the phone menu. */
+.jaa-fab { position: fixed; right: 16px; bottom: calc(92px + env(safe-area-inset-bottom)); z-index: 60; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--ai-gold); background: var(--ai-gold); color: var(--ai-on); font: inherit; font-weight: 700; font-size: 0.92rem; cursor: pointer; box-shadow: 0 8px 22px -8px rgb(var(--ai-gold-rgb) / 0.75); }
+.jaa-fab:hover { filter: brightness(1.08); }
+.jaa-fab:focus-visible { outline: 3px solid rgb(var(--ai-gold-rgb) / 0.45); outline-offset: 2px; }
+.jaa-fab-short { display: none; }
+@media (max-width: 899px) { .jaa-fab-long { display: none; } .jaa-fab-short { display: inline; } }
+@media (min-width: 900px) { .jaa-fab { bottom: 24px; right: 24px; } }
+.jaa-sheet { max-width: 560px; overflow: hidden; }
+.jaa-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.jaa-head h2 { margin: 0; }
+.jaa-here { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; border: 1px dashed rgb(var(--ai-gold-rgb) / 0.6); background: var(--ai-tint); }
+.jaa-thread { display: flex; flex-direction: column; gap: 12px; flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.jaa-turn { display: flex; flex-direction: column; gap: 6px; }
+.jaa-q { align-self: flex-end; max-width: 85%; margin: 0; padding: 8px 12px; border-radius: 14px 14px 4px 14px; background: rgb(var(--ai-gold-rgb) / 0.14); font-weight: 600; }
+.jaa-a { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border-radius: 14px 14px 14px 4px; border: 1px solid rgb(var(--ai-gold-rgb) / 0.35); }
+.jaa-a p { margin: 0; }
+.jaa-a.jaa-locked { border-style: dashed; }
+.jaa-steps { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+.jaa-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.jaa-ask { display: flex; flex-direction: column; gap: 8px; flex: none; }
+.jaa-ask .field { margin: 0; }
+.jaa-ask .row-actions { justify-content: flex-end; }

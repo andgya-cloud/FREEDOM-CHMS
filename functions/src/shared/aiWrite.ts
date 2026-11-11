@@ -8,10 +8,17 @@ export const AI_MONTHLY_CAP = 300;
 export const AI_DAILY_PER_USER = 30;
 export const AI_MAX_TOKENS = 500;
 
-export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks' | 'weekly' | 'welcome' | 'ask' | 'fill';
+export type AiKind = 'followup' | 'summary' | 'payer' | 'notice' | 'sort' | 'remarks' | 'weekly' | 'welcome' | 'ask' | 'fill' | 'guide';
+
+/**
+ * "Just ask Andy" (Andy, 2026-11-11, 2A): most questions are answered on the phone from the app's own map at no cost.
+ * Only the ones it cannot place come here, with an allowance of their own so the guide never uses up the drafts.
+ */
+export const GUIDE_MONTHLY_CAP = 600;
+export const GUIDE_DAILY_PER_USER = 20;
 
 /** Longer answers for the kinds that come back as a list. */
-export const maxTokensFor = (kind: AiKind) => (kind === 'sort' || kind === 'remarks' || kind === 'welcome' ? 2000 : AI_MAX_TOKENS);
+export const maxTokensFor = (kind: AiKind) => (kind === 'sort' || kind === 'remarks' || kind === 'welcome' ? 2000 : kind === 'guide' ? 300 : AI_MAX_TOKENS);
 
 const RULES = [
   'You write for Freedom Church in Nairobi, Kenya. Write in plain, warm, simple English.',
@@ -20,6 +27,9 @@ const RULES = [
 ].join(' ');
 
 export function systemPrompt(kind: AiKind): string {
+  if (kind === 'guide') {
+    return `${RULES} You are "Just ask Andy", the friendly guide inside the Freedom ChMS app, which Andy made. You help a staff member find their way in the app. You get the organisation, the page they are on, and the app's topics as lines of key | title | where to find it | steps | open or no access. Answer in 1 to 3 short, kind sentences using ONLY those topics: say where to go and what to press. If the best topic says no access, say gently that their account does not include that area and that Mr Andrew can give them access. If no topic answers the question, say you are not sure and suggest they ask Mr Andrew. Never invent pages, buttons or numbers. Reply with JSON only: {"answer": "<your answer>", "topic": "<the key you used, or empty>"}.`;
+  }
   if (kind === 'welcome') {
     return `${RULES} You write personal WhatsApp welcome messages to first-time visitors of a church, one per person. For each you get a key, their first name and what we know (the day they came, how they heard, who invited them). Greet them by first name, thank them warmly for coming, use one detail if given, invite them back, and end with the sender's name and church given. At most 55 words each. Reply with JSON only, an object of key to message, for example {"1": "Hi Mary, ..."}.`;
   }
@@ -65,6 +75,28 @@ export function checkLimits(monthCount: number, userDayCount: number): LimitChec
   if (monthCount >= AI_MONTHLY_CAP) return { ok: false, why: `The church has used all ${AI_MONTHLY_CAP} drafts for this month. It starts again next month.` };
   if (userDayCount >= AI_DAILY_PER_USER) return { ok: false, why: `You have used ${AI_DAILY_PER_USER} drafts today. Please try again tomorrow.` };
   return { ok: true };
+}
+
+export function checkGuideLimits(monthCount: number, userDayCount: number): LimitCheck {
+  if (monthCount >= GUIDE_MONTHLY_CAP) return { ok: false, why: 'The guide has answered all its questions for this month. The ready answers still work.' };
+  if (userDayCount >= GUIDE_DAILY_PER_USER) return { ok: false, why: `You have asked ${GUIDE_DAILY_PER_USER} questions today. The ready answers still work; please try again tomorrow.` };
+  return { ok: true };
+}
+
+export type GuideAnswer = { answer: string; topic: string };
+
+/** Reads the guide's JSON; the topic must be one we sent. Plain text is kept as the answer. */
+export function parseGuide(raw: string, keys: readonly string[]): GuideAnswer {
+  const m = /\{[\s\S]*\}/.exec(raw);
+  if (m) {
+    try {
+      const j = JSON.parse(m[0]) as { answer?: unknown; topic?: unknown };
+      const answer = typeof j.answer === 'string' ? j.answer.trim().slice(0, 600) : '';
+      const topic = typeof j.topic === 'string' && keys.includes(j.topic) ? j.topic : '';
+      if (answer) return { answer, topic };
+    } catch { /* fall through to plain text */ }
+  }
+  return { answer: raw.replace(/[{}"]/g, '').trim().slice(0, 600), topic: '' };
 }
 
 export type PersonName = { id: string; fullName: string };

@@ -5,7 +5,7 @@ import { can, canAccessOrg } from './shared/permissions.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { categoriesFor } from './shared/finance.js';
 import { pettyCashCategoriesFor } from './shared/pettyCash.js';
-import { AI_MODEL, AI_MONTHLY_CAP, checkLimits, maxTokensFor, monthKey, parseFill, parseMap, parsePayer, numberFacts, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
+import { AI_MODEL, AI_MONTHLY_CAP, GUIDE_MONTHLY_CAP, checkGuideLimits, parseGuide, checkLimits, maxTokensFor, monthKey, parseFill, parseMap, parsePayer, numberFacts, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
 
 import { ANTHROPIC_API_KEY } from './aiCore.js';
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -26,16 +26,18 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
     if (!org0 || !canAccessOrg(who.profile, org0) || !(can(who.profile, 'settings.manage') || can(who.profile, 'users.manage'))) throw new HttpsError('permission-denied', 'You do not have permission to see this.');
     const o = await db.doc(`organizations/${org0}`).get();
     const month = monthKey(localDateKey(new Date(), String(o.get('timeZone') ?? DEFAULT_TIME_ZONE)));
-    const m = await db.doc(`aiUsage/${org0}_${month}`).get();
-    return { used: Math.max(0, Number(m.get('count') ?? 0)), cap: AI_MONTHLY_CAP, month };
+    const [m, g] = await Promise.all([db.doc(`aiUsage/${org0}_${month}`).get(), db.doc(`aiUsage/${org0}_guide_${month}`).get()]);
+    return { used: Math.max(0, Number(m.get('count') ?? 0)), cap: AI_MONTHLY_CAP, month, guideUsed: Math.max(0, Number(g.get('count') ?? 0)), guideCap: GUIDE_MONTHLY_CAP };
   }
-  const KINDS: AiKind[] = ['followup', 'summary', 'payer', 'notice', 'sort', 'remarks', 'welcome', 'ask', 'fill'];
+  const KINDS: AiKind[] = ['followup', 'summary', 'payer', 'notice', 'sort', 'remarks', 'welcome', 'ask', 'fill', 'guide'];
   const kind = KINDS.find((k) => k === d.kind) ?? null;
   if (!orgId || !kind) throw new HttpsError('invalid-argument', 'Please check the request.');
   const caller = await requireCaller(request);
   // Pastors and leaders; people who see a report or the money may use it on that page.
   const any = (...ps: Parameters<typeof can>[1][]) => ps.some((x) => can(caller.profile, x));
-  const allowed = kind === 'payer' ? any('gifts.write')
+  // The guide is for everyone who signs in (Andy, 1A): it only reads the app's own map, never any records.
+  const allowed = kind === 'guide' ? true
+    : kind === 'payer' ? any('gifts.write')
     : kind === 'sort' ? any('finance.reports', 'pettycash.approve', 'pettycash.authorize', 'users.manage')
       : kind === 'remarks' ? any('exams.manage', 'users.manage')
         : kind === 'notice' || kind === 'welcome' ? any('pastoral.read', 'followups.manage', 'settings.manage')
@@ -56,7 +58,7 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
     if (offered.length === 0) return { text: '', guess: { personId: null, confidence: 0, reason: 'No member has a similar name.' }, usedThisMonth: null };
   }
   // Lists (bank lines, exam rows) come as short items with a key; only those keys can come back.
-  const items = Array.isArray(d.items) ? (d.items as unknown[]).slice(0, kind === 'remarks' ? 80 : 40) : [];
+  const items = Array.isArray(d.items) ? (d.items as unknown[]).slice(0, kind === 'remarks' || kind === 'guide' ? 90 : 40) : [];
   let listPrompt = '';
   let keys: string[] = [];
   const dirOf: Record<string, 'in' | 'out'> = {};
@@ -81,6 +83,13 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
     keys = rows.map((r) => r.k);
     listPrompt = `Sender and church: ${text(d.context, 200)}\nVisitors:\n${rows.map((r) => `${r.k} | ${r.line}`).join('\n')}`;
   }
+  if (kind === 'guide') {
+    const rows = items.map((x) => x as Record<string, unknown>).map((x) => ({ k: text(x.k, 30), line: text(x.line, 500) })).filter((x) => x.k && x.line).slice(0, 90);
+    if (!context) throw new HttpsError('invalid-argument', 'Please type or say your question.');
+    if (!rows.length) throw new HttpsError('invalid-argument', 'The guide has nothing to answer from.');
+    keys = rows.map((r) => r.k);
+    listPrompt = `Organisation: ${text(d.note, 80)}\nPage they are on: ${text(d.draft, 120)}\nTopics:\n${rows.map((r) => `${r.k} | ${r.line}`).join('\n')}\n\nQuestion: ${context.slice(0, 400)}`;
+  }
   let orgType = '';
   if (kind === 'ask' || kind === 'fill') orgType = String((await db.doc(`organizations/${orgId}`).get()).get('type') ?? '');
   if (kind === 'ask') {
@@ -104,14 +113,15 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
   const org = await db.doc(`organizations/${orgId}`).get();
   const tz = String(org.get('timeZone') ?? DEFAULT_TIME_ZONE);
   const today = localDateKey(new Date(), tz);
-  const monthRef = db.doc(`aiUsage/${orgId}_${monthKey(today)}`);
-  const dayRef = db.doc(`aiUsage/${orgId}_${caller.uid}_${today}`);
+  const guide = kind === 'guide';
+  const monthRef = db.doc(guide ? `aiUsage/${orgId}_guide_${monthKey(today)}` : `aiUsage/${orgId}_${monthKey(today)}`);
+  const dayRef = db.doc(guide ? `aiUsage/${orgId}_${caller.uid}_guide_${today}` : `aiUsage/${orgId}_${caller.uid}_${today}`);
 
   // Take the count first; give it back if the AI could not answer, so a failed try costs nothing.
   const left = await db.runTransaction(async (tx) => {
     const [m, u] = await Promise.all([tx.get(monthRef), tx.get(dayRef)]);
     const monthCount = Number(m.get('count') ?? 0);
-    const verdict = checkLimits(monthCount, Number(u.get('count') ?? 0));
+    const verdict = (guide ? checkGuideLimits : checkLimits)(monthCount, Number(u.get('count') ?? 0));
     if (!verdict.ok) throw new HttpsError('resource-exhausted', verdict.why);
     tx.set(monthRef, { orgId, month: monthKey(today), count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
     tx.set(dayRef, { orgId, uid: caller.uid, day: today, count: FieldValue.increment(1), updatedAt: FieldValue.serverTimestamp() }, { merge: true });
@@ -126,7 +136,7 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
       system: systemPrompt(kind),
       messages: [{ role: 'user', content: kind === 'payer'
         ? `Statement name: "${text(d.context, 120)}"\nMembers:\n${offered.map((p) => `${p.id} | ${p.fullName}`).join('\n')}`
-        : kind === 'sort' || kind === 'remarks' || kind === 'welcome' || kind === 'ask' ? listPrompt
+        : kind === 'sort' || kind === 'remarks' || kind === 'welcome' || kind === 'ask' || kind === 'guide' ? listPrompt
           : kind === 'fill' ? `Allowed categories: ${pettyCashCategoriesFor(orgType).join(', ')}\nWhat they said:\n${context.slice(0, 1500)}`
           : kind === 'notice' ? `Leader's notes:\n${context}`
             : userPrompt(kind, context, draft, note) }],
@@ -140,6 +150,7 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
     }
     if (kind === 'remarks') return { text: '', map: parseMap(out, keys, (_k, v) => v.length <= 200), usedThisMonth: left };
     if (kind === 'welcome') return { text: '', map: parseMap(out, keys, (_k, v) => v.length <= 600), usedThisMonth: left };
+    if (kind === 'guide') return { text: '', guide: parseGuide(out, keys), usedThisMonth: left };
     if (kind === 'fill') return { text: '', fill: parseFill(out, pettyCashCategoriesFor(orgType)), usedThisMonth: left };
     return { text: out, usedThisMonth: left };
   } catch (err) {

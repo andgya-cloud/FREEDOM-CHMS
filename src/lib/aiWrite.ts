@@ -40,8 +40,8 @@ export async function aiMap(orgId: string, kind: 'sort' | 'remarks' | 'welcome',
 }
 
 /** This month's use of the helper for an organisation (Andy and Settings managers only). */
-export async function aiUsage(orgId: string): Promise<{ used: number; cap: number; month: string }> {
-  const r = await httpsCallable<Record<string, unknown>, { used: number; cap: number; month: string }>(functions, 'aiWrite')({ action: 'usage', orgId });
+export async function aiUsage(orgId: string): Promise<{ used: number; cap: number; month: string; guideUsed?: number; guideCap?: number }> {
+  const r = await httpsCallable<Record<string, unknown>, { used: number; cap: number; month: string; guideUsed?: number; guideCap?: number }>(functions, 'aiWrite')({ action: 'usage', orgId });
   return r.data;
 }
 
@@ -54,5 +54,17 @@ export async function aiFill(orgId: string, words: string): Promise<FilledReques
   } catch (err) {
     const e = err as { code?: string; message?: string };
     throw new Error(e?.code && e.code !== 'functions/internal' && e.message ? e.message.replace(/\s*\[\d+\]$/, '') : 'The helper could not answer. Please check your internet and try again.');
+  }
+}
+
+export type GuideAnswer = { answer: string; topic: string };
+/** "Just ask Andy" for a question the built-in map could not place: only the question, the page name and the map go out. */
+export async function aiGuide(orgId: string, question: string, orgName: string, pageTitle: string, topics: { k: string; line: string }[]): Promise<GuideAnswer> {
+  try {
+    const r = await httpsCallable<Record<string, unknown>, { guide: GuideAnswer }>(functions, 'aiWrite')({ orgId, kind: 'guide', context: question, note: orgName, draft: pageTitle, items: topics });
+    return r.data.guide;
+  } catch (err) {
+    const e = err as { code?: string; message?: string };
+    throw new Error(e?.code && e.code !== 'functions/internal' && e.message ? e.message.replace(/\s*\[\d+\]$/, '') : 'I could not reach the internet just now. The ready answers below still work.');
   }
 }

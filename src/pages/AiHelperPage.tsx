@@ -15,7 +15,7 @@ export function AiHelperPage() {
   const { current } = useOrg();
   const features = aiFeaturesFor(current?.type, can);
   const manager = can('settings.manage') || can('users.manage');
-  const [use, setUse] = useState<{ used: number; cap: number } | null>(null);
+  const [use, setUse] = useState<{ used: number; cap: number; guideUsed?: number; guideCap?: number } | null>(null);
   useEffect(() => {
     if (!current || !manager) return;
     let stop = false;
@@ -41,6 +41,7 @@ export function AiHelperPage() {
             <>
               <div className="ai-meter" role="meter" aria-valuemin={0} aria-valuemax={use.cap} aria-valuenow={use.used} aria-label="AI use this month"><span style={{ width: `${Math.min(100, Math.round((use.used / use.cap) * 100))}%` }} /></div>
               <p className="small"><strong>{use.used} of {use.cap}</strong> used this month for {current?.name}. It starts again on the 1st. Each person can use up to 30 a day.</p>
+              {use.guideCap != null && <p className="small"><strong>Just ask Andy:</strong> {use.guideUsed ?? 0} of {use.guideCap} AI answers this month (20 a day for each person). Its ready answers are free and are not counted.</p>}
             </>
           ) : <p className="small muted">Loading…</p>}
           <p className="small muted">The spending limit you set in the Claude Console is the final safety net.</p>

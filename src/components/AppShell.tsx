@@ -18,6 +18,8 @@ import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/
 import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 import { AI_MARK, AiDot } from './Ai';
+import { roleRedirect } from '../lib/roleAccess';
+import { JustAskAndy } from './JustAskAndy';
 import { aiFeaturesFor, aiSectionsFor, type AiSection } from '../lib/aiFeatures';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
@@ -64,11 +66,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A trainer's only pages are their marks sheets and their own settings.
   // A trainer with register classes also marks those classes' registers (Andy, 2026-10-26).
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
-  if (trainer && !new RegExp(`^/(school/exams|settings|tutor-files${trainerRegister ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`).test(location.pathname)) return <Navigate to="/school/exams" replace />;
-  if (labtech && !/^\/(inventory|settings)(\/|$)/.test(location.pathname)) return <Navigate to="/inventory" replace />;
   // A Hope helper sees only Today (their "I'm here" button), the registers and the clubs (Andy, 2026-11-04, 2A).
   const helper = profile?.roleId === HELPER_ROLE_ID;
-  if (helper && !/^\/($|hope\/register|hope\/gate|hope\/clubs|hope\/photos|hope\/more|settings|help)/.test(location.pathname)) return <Navigate to="/" replace />;
+  const sendTo = roleRedirect(profile, location.pathname);
+  if (sendTo) return <Navigate to={sendTo} replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
   // Each person sees only their own work (Andy, 2026-11-01, 8A): an usher Sunday and People, finance Giving and Petty Cash.
@@ -295,6 +296,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           </header>
           {notices}
           <main className="main">{children}</main>
+          <JustAskAndy />
         </div>
       </div>
     );
@@ -312,6 +314,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
       {notices}
       <main className="main">{children}</main>
+      <JustAskAndy />
       {tabs}
     </div>
   );
