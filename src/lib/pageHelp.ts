@@ -8,6 +8,11 @@ export interface PageHelp { title: string; steps: [string, string, string] }
 const PETTY = '^/(school/|hope/)?petty-cash';
 
 const HELP: [RegExp, PageHelp][] = [
+  [/^\/manual(\/|$)/, { title: 'User manual', steps: [
+    'Type a word in the search box, or open the part for your place.',
+    'Press a job to see its steps and a picture of the screen.',
+    'The red numbers in the picture match the steps. Press the arrows at the bottom for the next job.',
+  ] }],
   [/^\/$/, { title: 'Today', steps: [
     'Press the big button for the job you want to do.',
     'Do the job on the page that opens, then press Save.',

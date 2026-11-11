@@ -3,6 +3,7 @@ import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useOrg } from '../state/OrgContext';
 import { useAuth } from '../state/AuthContext';
 import { canKeepAccounts } from '../../functions/src/shared/permissions';
+import { manualTopicForPath } from '../lib/manual';
 import { helpFor } from '../lib/pageHelp';
 import { roleRedirect } from '../lib/roleAccess';
 import { canOpen, confident, findTopics, GUIDE, isWhereAmI, NO_ACCESS, orgKind, topicPath, topicSteps, type Access, type GuideTopic, type OrgKind } from '../lib/guide';
@@ -64,6 +65,8 @@ export function JustAskAndy() {
     can, keeper: canKeepAccounts(profile), roleBlocks: (p: string) => roleRedirect(profile, p) != null,
   }), [can, profile]);
   const first = (profile?.displayName ?? '').split(' ')[0] ?? '';
+  // The manual's page about this screen, with its picture (v256).
+  const manualHere = pathname.startsWith('/manual') ? null : manualTopicForPath(pathname, current?.type, canKeepAccounts(profile));
 
   useEffect(() => { end.current?.scrollIntoView({ block: 'end', behavior: 'smooth' }); }, [answers, busy]);
   useEffect(() => {
@@ -177,6 +180,7 @@ export function JustAskAndy() {
               <b>{org.name} › {here.title}</b>
               <button type="button" className="jaa-toggle small" aria-expanded={stepsOpen} onClick={() => setStepsOpen((o) => !o)}>{stepsOpen ? 'Hide how to use this page' : 'How to use this page'}</button>
               {stepsOpen && <ol className="jaa-steps small">{here.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
+              <Link to={manualHere ? `/manual/${manualHere.id}` : '/manual'} className="small" onClick={() => setOpen(false)}>📖 {manualHere ? 'Read this page in the manual, with a picture' : 'Open the user manual'}</Link>
             </div>
 
             <div className="jaa-thread" aria-live="polite">

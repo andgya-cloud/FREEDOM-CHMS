@@ -15,6 +15,7 @@ function More(_: { org: Organization }) {
   const tiles: [string, string, string, string, boolean][] = [
     ['/hope/messages', '💬', 'WhatsApp parents', 'One message to many parents, from the Hope phone', can('people.write')],
     ['/hope/bin', '🗑', 'Bin', 'What was removed, to put back', canKeepAccounts(profile)],
+    ['/manual', '📖', 'User manual', 'How to do each job, step by step, with pictures', true],
     ['/settings', '⚙️', 'Settings', 'Your account, password and the Hope Centre settings', true],
   ];
   return (

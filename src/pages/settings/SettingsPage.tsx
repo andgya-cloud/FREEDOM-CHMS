@@ -18,6 +18,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   // ADIA keeps these three on the list; elsewhere they sit inside This device (Andy, 2026-10-31, 6A was for Freedom Church).
   { collegeOnly: true, to: '/settings/signing-pin', label: 'Signing PIN', detail: 'Set or change the PIN used to sign petty cash', petty: true },
   { collegeOnly: true, to: '/settings/my-password', label: 'My password', detail: 'Change your own password; it also signs you in on its own', keepersOnly: true },
+  { collegeOnly: true, to: '/manual', label: 'User manual', detail: 'How to do each job, step by step, with pictures of the screen' },
   { to: '/settings/device', label: 'This device', detail: 'Install, sync, theme, your signing PIN and password, help' },
   // Follow-ups now live on Today, so the programme reminders sit here (Andy, 2026-11-01, 2A).
   { churchOnly: true, advanced: true, to: '/follow-ups/reminders', label: 'Programme reminders', detail: 'Reminders for people in a class or programme', permission: 'followups.manage' },

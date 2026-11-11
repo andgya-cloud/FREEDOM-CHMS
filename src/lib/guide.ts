@@ -54,6 +54,8 @@ export const GUIDE: GuideTopic[] = [
     steps: ['Open Settings and press Reviews.', 'Read each review. Tap the page name to see the page it is about.', 'Press Answer and write back; the reviewer sees it in My reviews.'] },
   { id: 'signout', title: 'Sign out', orgs: ALL, path: '/settings', words: 'sign out log out logout leave exit', where: 'Settings (on Church, under More).',
     steps: ['Open Settings. On Freedom Church, press More first.', 'Scroll to the bottom of the page.', 'Press Sign out.'] },
+  { id: 'manual', title: 'The user manual, with pictures', orgs: ALL, path: '/manual', words: 'manual book guide handbook instructions training learn pictures steps how', where: 'More, then User manual (at ADIA: Settings, then User manual).',
+    steps: ['Open More and press User manual. At ADIA, open Settings first.', 'Search for a job, or open the part for your place.', 'Each page has numbered steps and a picture of the screen.'] },
   { id: 'device', title: 'Install the app, offline use and dark screen', orgs: ALL, path: '/settings/device', words: 'install phone home screen offline internet network sync theme dark light update', where: 'Settings, then This device.',
     steps: ['The app works without internet. What you save is sent when the signal returns.', 'To install it, open Settings, then This device, and press Install.', 'The small badge at the top shows changes still waiting to send.'] },
   { id: 'switch-org', title: 'Move between Church, ADIA and Hope', orgs: ALL, path: '/', words: 'switch change organisation organization adia hope church campus other', where: 'The name at the top of the menu.',
