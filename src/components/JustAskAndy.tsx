@@ -241,6 +241,7 @@ export function JustAskAndy() {
                   </form>
                 )}
                 {noteState === 'sent' && <p className="small">✅ Thank you! Mr Andrew will read it.</p>}
+                <Link to="/reviews" className="small" onClick={() => setOpen(false)}>✍️ All my reviews and Mr Andrew's answers</Link>
               </div>
             )}
 

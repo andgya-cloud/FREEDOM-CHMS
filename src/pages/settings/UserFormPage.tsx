@@ -47,7 +47,7 @@ const ROLE_HINTS: Record<string, string> = {
   principal: ': ADIA students, attendance, Exam Records and graduation, with each student\'s fee balance; nothing else',
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
   labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
-  reviewer: ': an outsider who reviews the app. Sees every area of the places you tick (also tick Practice Church so they can try things), changes nothing real, and sends ideas from Just ask Andy. Never sees pastoral notes, safeguarding or staff accounts',
+  reviewer: ': an outsider who reviews the app. Sees every area of the places you tick, changes nothing, and writes reviews in My reviews for you to answer. Never sees pastoral notes, private conversations, staff accounts or the full download',
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 

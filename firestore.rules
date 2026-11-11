@@ -33,7 +33,6 @@ service cloud.firestore {
     // and leave a suggestion in reviewerNotes.
     function reviewerBlocked() {
       return request.method != 'get' && request.method != 'list'
-        && !(request.path[3] == 'organizations' && request.path[4] == 'training')
         && request.path[3] != 'reviewerNotes';
     }
     function has(permission) {
@@ -2225,10 +2224,15 @@ service cloud.firestore {
         && request.resource.data.orgId is string && request.resource.data.orgId.size() <= 60
         && request.resource.data.path is string && request.resource.data.path.size() <= 200
         && request.resource.data.page is string && request.resource.data.page.size() <= 120;
-      allow read: if has('users.manage');
-      allow update: if has('users.manage')
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
-        && request.resource.data.status in ['new', 'done'];
+      // Andy reads and answers every review; a reviewer reads their own and marks the answer seen.
+      allow read: if has('users.manage') || (isActive() && resource.data.uid == request.auth.uid);
+      allow update: if (has('users.manage')
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'reply', 'replyBy', 'replyAt', 'replySeen'])
+          && request.resource.data.status in ['new', 'done']
+          && (!('reply' in request.resource.data) || (request.resource.data.reply is string && request.resource.data.reply.size() <= 2000)))
+        || (isActive() && resource.data.uid == request.auth.uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['replySeen'])
+          && request.resource.data.replySeen == true);
     }
   }
 }

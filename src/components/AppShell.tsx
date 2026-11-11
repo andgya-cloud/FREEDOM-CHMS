@@ -1,6 +1,6 @@
 import { useCloseLeftOpen } from '../lib/pastOpen';
 import { useEffect, useState, type ReactNode } from 'react';
-import { Navigate, NavLink, useLocation } from 'react-router-dom';
+import { Link, Navigate, NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
 import { InstallBanner } from './InstallBanner';
@@ -19,6 +19,7 @@ import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 import { AiDot } from './Ai';
 import { roleRedirect } from '../lib/roleAccess';
 import { setReviewing } from '../lib/errors';
+import { ReviewerReminder } from './ReviewerReminder';
 import { JustAskAndy } from './JustAskAndy';
 import { aiFeaturesFor, aiSectionsFor, type AiSection } from '../lib/aiFeatures';
 
@@ -260,14 +261,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   );
-  // A Reviewer on a real organisation (Andy, 2026-11-11, 1B 2A): look-only, said once at the top.
-  const reviewing = isReviewer(profile) && !!current && !current.training;
+  // A Reviewer (Andy, 2026-11-11): looks at everything, changes nothing, writes reviews in My reviews.
+  const reviewing = isReviewer(profile) && !!current;
   setReviewing(reviewing);
   const notices = (
     <>
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}
       {current?.training && <div className="dev-ribbon" role="status">Practice mode. Everything here is made up and is never mixed with real records.</div>}
-      {reviewing && <div className="dev-ribbon reviewer-ribbon" role="status">Reviewer: look around freely. Real records can't be changed here; try things in the Practice Church. Share ideas in ✦ Just ask Andy.</div>}
+      {reviewing && <div className="dev-ribbon reviewer-ribbon" role="status">Reviewer: look around everything; nothing can be changed. <Link to={`/reviews?from=${encodeURIComponent(location.pathname)}`}>✍️ Write a review</Link></div>}
+      {reviewing && <ReviewerReminder />}
       {showInstall && <InstallBanner />}
       {current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile))) && <InventoryDueBanner />}
     </>

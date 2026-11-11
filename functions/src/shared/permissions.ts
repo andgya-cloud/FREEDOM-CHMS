@@ -132,8 +132,8 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
 
 /**
  * A Reviewer (Andy, 2026-11-11, 1B 2A 3B 5B 6B): an outsider who looks around the real system to suggest
- * improvements. They see every area of the organisations ticked on their account, change nothing there (the
- * Firestore rules and the server refuse it), may try things in the Practice Church, and never see pastoral notes,
+ * improvements. They see every area of the organisations ticked on their account, change nothing anywhere (the
+ * Firestore rules and the server refuse it; Andy, 2026-11-11), write their reviews in My reviews, and never see pastoral notes,
  * safeguarding, staff accounts, the audit log or the full data download. Only Andy creates them.
  */
 export const REVIEWER_ROLE_ID = 'reviewer';

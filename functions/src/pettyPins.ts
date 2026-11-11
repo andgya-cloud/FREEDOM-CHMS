@@ -52,8 +52,7 @@ export function requireMember(profile: UserProfile, orgId: string) {
 
 /** Sets or changes the caller's own signing PIN. */
 export const setPettyPin = onCall(CALLABLE, async (request) => {
-  // Their own PIN only, so a reviewer can practise signing in the Practice Church.
-  const caller = await requireCaller(request, undefined, { reviewerOk: true });
+  const caller = await requireCaller(request);
   const pin = checkPin((request.data as Record<string, unknown> | null)?.pin);
   if (!pin) throw new HttpsError('invalid-argument', 'A PIN is 4 to 6 digits, and not all the same digit.');
   const salt = randomBytes(16);

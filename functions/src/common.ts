@@ -4,7 +4,6 @@ import { getAuth } from 'firebase-admin/auth';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import type { AccessProfile, Permission } from './shared/permissions.js';
 import { can, REVIEWER_ROLE_ID } from './shared/permissions.js';
-import { TRAINING_ORG_ID } from './shared/organizations.js';
 
 if (getApps().length === 0) initializeApp();
 
@@ -39,10 +38,9 @@ export async function requireCaller(request: CallableRequest, permission?: Permi
   const snap = await db.doc(`users/${request.auth.uid}`).get();
   const profile = snap.data() as UserProfile | undefined;
   if (!profile || !profile.active) throw new HttpsError('permission-denied', 'This account is not active.');
-  // A Reviewer changes nothing in the real system (Andy, 2026-11-11, 1B 2A): only reading actions, and the Practice Church.
-  const practice = (request.data as { orgId?: unknown } | null)?.orgId === TRAINING_ORG_ID;
-  if (profile.roleId === REVIEWER_ROLE_ID && !opts.reviewerOk && !practice) {
-    throw new HttpsError('permission-denied', 'Reviewers can look at everything but not change real records. Try it in the Practice Church.');
+  // A Reviewer changes nothing anywhere (Andy, 2026-11-11): only reading actions. Their thoughts go in My reviews.
+  if (profile.roleId === REVIEWER_ROLE_ID && !opts.reviewerOk) {
+    throw new HttpsError('permission-denied', 'Reviewers look at everything but change nothing. Please write what you noticed in ✍️ My reviews.');
   }
   if (permission && !can(profile, permission)) {
     throw new HttpsError('permission-denied', 'You do not have permission to do that.');

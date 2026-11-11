@@ -11,7 +11,7 @@ const ITEMS: { to: string; label: string; detail: string; permission?: Permissio
   { churchOnly: true, to: '/settings/birthday-card', label: 'Birthday card', detail: 'The card sent on birthdays, and where the name goes', permission: 'settings.manage' },
   { churchOnly: true, to: '/settings/group/whatsapp', label: 'WhatsApp', detail: 'The words of each message, and which ones send themselves', permission: 'settings.manage' },
   { to: '/settings/users', label: 'Staff accounts', detail: 'Add staff, reset passwords, set access', keepersOnly: true },
-  { to: '/settings/reviewer-notes', label: 'Reviewer notes', detail: 'Ideas sent by the people reviewing the app', permission: 'users.manage' },
+  { to: '/reviews', label: 'Reviews', detail: 'Read and answer what the reviewers noticed', permission: 'users.manage' },
   { advanced: true, to: '/settings/cleanup', label: 'Clean-up', detail: 'Remove test data and clutter; Recycle Bin and Dormant', keepersOnly: true },
   { advanced: true, to: '/settings/data', label: 'Data and backups', detail: 'Weekly backup, download everything, one person’s data, practice mode', permission: 'data.export' },
   { advanced: true, to: '/settings/audit', label: 'Audit log', detail: 'Who changed what, and when', permission: 'audit.read' },

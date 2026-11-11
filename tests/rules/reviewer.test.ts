@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest';
 import { assertFails, assertSucceeds, type RulesTestEnvironment } from '@firebase/rules-unit-testing';
-import { addDoc, collection, doc, getDoc, getDocs, serverTimestamp, setDoc, Timestamp, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, Timestamp, updateDoc, where } from 'firebase/firestore';
 import { created, makeEnv, person, seed } from './helpers';
 
 let env: RulesTestEnvironment;
@@ -31,17 +31,23 @@ describe('Reviewer (Andy, 2026-11-11)', () => {
     await assertFails(setDoc(doc(as('rev'), 'organizations/fcn/people/p9'), { ...person('fcn'), ...created('rev') }));
     await assertFails(updateDoc(doc(as('rev'), 'organizations/fcn/people/p1'), { fullName: 'Changed', updatedAt: serverTimestamp(), updatedBy: 'rev' }));
   });
-  it('can try things in the Practice Church', async () => {
-    await assertSucceeds(setDoc(doc(as('rev'), 'organizations/training/people/p9'), { ...person('training'), ...created('rev') }));
+  it('cannot change the Practice Church either (Andy, 2026-11-11)', async () => {
+    await assertFails(setDoc(doc(as('rev'), 'organizations/training/people/p9'), { ...person('training'), ...created('rev') }));
   });
   it('never sees pastoral notes', async () => {
     await assertFails(getDoc(doc(as('rev'), 'organizations/fcn/pastoralNotes/n1')));
   });
-  it('leaves a note that only Andy reads', async () => {
+  it('writes a review that Andy reads and answers, and reads only their own', async () => {
     const ref = await assertSucceeds(addDoc(collection(as('rev'), 'reviewerNotes'), note('rev')));
-    await assertFails(getDoc(doc(as('rev'), `reviewerNotes/${ref.id}`)));
+    await assertSucceeds(getDoc(doc(as('rev'), `reviewerNotes/${ref.id}`)));
+    await assertSucceeds(getDocs(query(collection(as('rev'), 'reviewerNotes'), where('uid', '==', 'rev'))));
+    await assertFails(getDocs(collection(as('rev'), 'reviewerNotes')));
+    await assertFails(getDoc(doc(as('admin'), `reviewerNotes/${ref.id}`)));
     await assertSucceeds(getDoc(doc(as('pastor'), `reviewerNotes/${ref.id}`)));
-    await assertSucceeds(updateDoc(doc(as('pastor'), `reviewerNotes/${ref.id}`), { status: 'done' }));
+    await assertFails(updateDoc(doc(as('rev'), `reviewerNotes/${ref.id}`), { reply: 'I answer myself' }));
+    await assertSucceeds(updateDoc(doc(as('pastor'), `reviewerNotes/${ref.id}`), { reply: 'Thank you, fixed.', replyBy: 'Andrew Guya', replyAt: serverTimestamp(), replySeen: false, status: 'done' }));
+    await assertSucceeds(updateDoc(doc(as('rev'), `reviewerNotes/${ref.id}`), { replySeen: true }));
+    await assertFails(updateDoc(doc(as('rev'), `reviewerNotes/${ref.id}`), { text: 'Changed' }));
     await assertFails(addDoc(collection(as('rev'), 'reviewerNotes'), note('pastor')));
   });
   it('leaves other staff unchanged', async () => {

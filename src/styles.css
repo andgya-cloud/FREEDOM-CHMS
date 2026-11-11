@@ -2863,4 +2863,9 @@ a.fin-chip:hover { background: #fdecea; }
 /* Room at the foot of every page so the Just ask Andy button never hides the last line. */
 .main::after { content: ''; display: block; height: 56px; }
 .reviewer-ribbon { background: #1f3a5c; color: #fff; }
+.reviewer-ribbon a { color: #ffd77a; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+.review-nudge { position: fixed; left: 16px; right: 16px; bottom: calc(150px + env(safe-area-inset-bottom)); z-index: 61; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; max-width: 520px; margin: 0 auto; padding: 12px 14px; border-radius: 14px; border: 1.5px solid var(--ai-gold); background: var(--surface, #fff); color: inherit; box-shadow: 0 12px 30px -12px rgba(0,0,0,.35); }
+@media (min-width: 900px) { .review-nudge { bottom: 84px; left: auto; right: 24px; } }
+.review-text { margin: 0; white-space: pre-wrap; }
+.review-reply { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; border-left: 4px solid var(--ai-gold); background: var(--ai-tint); }
 .jaa-note { flex: none; padding-top: 6px; border-top: 1px dashed var(--border, rgba(0,0,0,.12)); }

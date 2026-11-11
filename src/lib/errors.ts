@@ -1,7 +1,7 @@
 /** Set while a Reviewer looks at a real organisation (Andy, 2026-11-11), so a refused change explains itself. */
 let reviewing = false;
 export const setReviewing = (on: boolean) => { reviewing = on; };
-export const REVIEWER_NOTE = 'Reviewers can look at everything but not change real records. Try it in the Practice Church.';
+export const REVIEWER_NOTE = 'Reviewers look at everything but change nothing. Please write what you noticed in ✍️ My reviews.';
 
 /** Turns Firebase errors into plain English for staff. */
 export function friendlyError(err: unknown): string {
