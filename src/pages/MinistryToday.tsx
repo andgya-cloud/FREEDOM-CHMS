@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom';
+import { AiTodayCard } from '../components/AiTodayCard';
 import { useAuth } from '../state/AuthContext';
 import { useFollowUpCounts } from '../state/useFollowUps';
 import { useLatestReport } from '../state/useReports';
@@ -57,6 +58,7 @@ export function MinistryToday({ org, hope, figures }: { org: Organization; hope:
         </section>
         <FirstRunChecklist />
         <CircleNeedsYou org={org} offerSend />
+        <AiTodayCard org={org} />
         <SundayCard org={org} />
         <SignupsCard org={org} />
         <ReachCard org={org} />

@@ -9,7 +9,7 @@ import { assignGift } from '../../lib/givingWrites';
 import { addPerson } from '../../lib/peopleWrites';
 import { friendlyError } from '../../lib/errors';
 import { aiWhoPaid } from '../../lib/aiWrite';
-import { AI_MARK, AiBox } from '../../components/Ai';
+import { AI_MARK, AiBox, AiTip } from '../../components/Ai';
 import { useSavedMessage } from '../../lib/useSavedMessage';
 import { OrgGate } from '../../components/OrgGate';
 import { PersonPicker } from '../../components/PersonPicker';
@@ -33,6 +33,7 @@ function Unassigned({ org }: { org: Organization }) {
       <h1>Unassigned</h1>
       <p className="lead">{gifts.length ? `${gifts.length} ${gifts.length === 1 ? 'payment' : 'payments'} · ${formatMoney(total)}` : loading ? 'Loading…' : 'Nothing waiting. Every payment has a person and fund.'}</p>
       {gifts.length > 0 && <p className="muted small">Suggestions come from the phone number and name on the statement. Check each one before confirming; a receipt is made as soon as a payment has a person and fund.</p>}
+      {gifts.length > 0 && <AiTip id="payer">for a payment with no member, tap <b>Ask the helper who this is</b>. It suggests a name; you confirm.</AiTip>}
       {gifts.map((g) => <QueuedPayment key={g.id} org={org} gift={g} funds={funds} />)}
     </div>
   );

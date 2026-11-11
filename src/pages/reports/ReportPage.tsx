@@ -9,7 +9,7 @@ import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { formatMoney } from '../../../functions/src/shared/giving';
 import { dueText, reasonLabel, reportCsv, reportFileName, reportPdf, type GivingPart, type PastoralPart } from '../../../functions/src/shared/reports';
 import { aiWrite } from '../../lib/aiWrite';
-import { AI_MARK, AiBox } from '../../components/Ai';
+import { AI_MARK, AiBox, AiTip } from '../../components/Ai';
 import { stampPoweredBy } from '../../../functions/src/shared/poweredBy';
 
 const day = (k: string) => `${k.slice(8, 10)}/${k.slice(5, 7)}/${k.slice(0, 4)}`;
@@ -120,6 +120,7 @@ export function ReportPage() {
         <button type="button" className="btn btn-quiet" disabled={!!requestId} onClick={remake}>{requestId ? 'Remaking…' : 'Remake with the latest records'}</button>
       </div>
 
+      {(can('pastoral.read') || report.aiSummary) && <AiTip id="report-brief">weekly reports now start with a short briefing from the helper, written from the numbers only.</AiTip>}
       {report.aiSummary && (
         <AiBox title="This week in brief" note="Written by AI from the numbers in this report. Please check it.">
           <p>{report.aiSummary}</p>

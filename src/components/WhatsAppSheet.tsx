@@ -8,7 +8,7 @@ import { logMessage, markDone } from '../lib/followUpWrites';
 import { friendlyError } from '../lib/errors';
 import { useSavedMessage } from '../lib/useSavedMessage';
 import { aiWrite } from '../lib/aiWrite';
-import { AI_MARK } from './Ai';
+import { AI_MARK, AiTip } from './Ai';
 import {
   firstNameOf,
   recipientFor,
@@ -145,6 +145,7 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
               <textarea rows={6} value={ready ? message : 'Loading…'} disabled={!ready} onChange={(e) => setEdited(e.target.value)} />
               {byAi ? <small className="ai-note">{AI_MARK} Written by AI. Please read it and change anything before you send.</small> : <small className="hint">You can change the words here or in WhatsApp before you tap Send.</small>}
             </label>
+            {can('pastoral.read') && <AiTip id="followup">tap <b>Write it for me</b> and the helper makes this message warmer and more personal. You still read it before sending.</AiTip>}
             {can('pastoral.read') && (
               <button type="button" className="btn btn-ai align-start" disabled={writing || !message.trim()} onClick={() => void writeForMe()}>
                 {AI_MARK} {writing ? 'Writing…' : byAi ? 'Write it again' : 'Write it for me'}

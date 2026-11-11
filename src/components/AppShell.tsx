@@ -17,6 +17,8 @@ import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
+import { AI_MARK, AiDot } from './Ai';
+import { aiFeaturesFor, aiSectionsFor, type AiSection } from '../lib/aiFeatures';
 
 /** ADIA's phone dock has eight items, so long names give way to a short one on small screens. */
 function TabLabel({ full, short }: { full: string; short: string }) {
@@ -38,6 +40,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   useTemplates();
   useCloseLeftOpen(location.pathname, profile?.displayName ?? '');
   const look = lookFor(current);
+  // AI help, signposted (Andy, 2026-11-11, 1A 2A 6A): only what this person's role allows.
+  const aiFeatures = aiFeaturesFor(current?.type, can);
+  const aiAt = aiSectionsFor(aiFeatures);
+  const dot = (section: AiSection) => (aiAt.has(section) ? <AiDot /> : null);
+  const aiButton = aiFeatures.length > 0 && full ? <NavLink to="/ai" className="btn btn-ai ai-top" aria-label="AI Helper">{AI_MARK} AI Helper</NavLink> : null;
   const adia = look === 'glass';
   // The look changes the colours of every page, so it is set on the page root.
   useEffect(() => {
@@ -90,19 +97,19 @@ export function AppShell({ children }: { children: ReactNode }) {
       {!usher && givingAllowed && (
         <NavLink to="/giving" className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v4H3zM5 13v8h14v-8M12 9v12M12 9c-1.5-3-6-3.5-6-1s4 1 6 1Zm0 0c1.5-3 6-3.5 6-1s-4 1-6 1Z" /></svg>
-          Giving
+          Giving{dot('giving')}
         </NavLink>
       )}
       {/* Petty Cash is pinned on the menu for everyone who works with it, not in More (Andy, 2026-11-08). */}
       {pettyAllowed && (
         <NavLink to={pettyCashBase('church_campus')} className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
-          Petty Cash
+          Petty Cash{dot('petty')}
         </NavLink>
       )}
       <NavLink to="/more" className={({ isActive }) => `tab tab-dots${isActive || /^\/(reports|settings|help|follow-ups|dashboard)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
-        More
+        More{dot('more')}
       </NavLink>
     </nav>
   ) : null;
@@ -130,19 +137,19 @@ export function AppShell({ children }: { children: ReactNode }) {
  {can('people.read') && !helper && (
         <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos|chats|attendance|records|meals)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
-          Reports
+          Reports{dot('reports')}
         </NavLink>
       )}
       {/* Petty Cash is pinned on the menu, not in More (Andy, 2026-11-08). */}
       {pettyAllowed && !helper && (
         <NavLink to={pettyCashBase('ministry')} className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
-          <TabLabel full="Petty Cash" short="Petty" />
+          <TabLabel full="Petty Cash" short="Petty" />{dot('petty')}
         </NavLink>
       )}
       <NavLink to="/hope/more" className={({ isActive }) => `tab${isActive || /^\/(settings|help|hope\/bin)/.test(location.pathname) ? ' active' : ''}`}>
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.8" /><circle cx="12" cy="12" r="1.8" /><circle cx="19" cy="12" r="1.8" /></svg>
-        More
+        More{dot('more')}
       </NavLink>
     </nav>
   ) : null;
@@ -164,7 +171,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {church && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && (
         <NavLink to="/giving" className="tab">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9h18v4H3zM5 13v8h14v-8M12 9v12M12 9c-1.5-3-6-3.5-6-1s4 1 6 1Zm0 0c1.5-3 6-3.5 6-1s-4 1-6 1Z" /></svg>
-          Giving
+          Giving{dot('giving')}
         </NavLink>
       )}
       </>)}
@@ -179,7 +186,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         // "School" opens the school pages; Students, Programmes, Fees and the rest are in its Go to dropdown (Andy, 2026-10-26, 4A and 5A).
         <NavLink to="/school/students" className={() => `tab${/^\/school(\/|$)/.test(location.pathname) && !/^\/school\/(petty-cash|payroll|exams)/.test(location.pathname) ? ' active' : ''}`}>
           {adia ? <AdiaIcon name="programmes" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2 9l10-5 10 5-10 5zM6 11.5V16c0 1.5 2.7 3 6 3s6-1.5 6-3v-4.5M22 9v6" /></svg>}
-          School
+          School{dot('school')}
         </NavLink>
       ) : current?.type === 'ministry' ? (
         <NavLink to="/hope" className={({ isActive }) => `tab${isActive && !location.pathname.startsWith('/hope/petty-cash') ? ' active' : ''}`}>
@@ -196,7 +203,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {!church && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type) && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
         <NavLink to={pettyCashBase(current.type)} className="tab">
           {adia ? <AdiaIcon name="pettyCash" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>}
-          Petty Cash
+          Petty Cash{dot('petty')}
         </NavLink>
       )}
       {phoneMore && (
@@ -208,7 +215,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {church && can('followups.manage') && (
         <NavLink to="/follow-ups" className={`tab${extra}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20.5l1.4-5A8 8 0 1 1 21 12Z" /></svg>
-          Follow-ups
+          Follow-ups{dot('followups')}
         </NavLink>
       )}
       {church && full && (
@@ -220,7 +227,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {church && (can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage')) && (
         <NavLink to={pettyCashBase('church_campus')} className={`tab${extra}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7h18v12H3zM3 7l2-3h14l2 3M12 10v6M9.5 11.5c0-.8 1.1-1.5 2.5-1.5s2.5.7 2.5 1.5-1.1 1.2-2.5 1.5-2.5.7-2.5 1.5 1.1 1.5 2.5 1.5 2.5-.7 2.5-1.5" /></svg>
-          Petty Cash
+          Petty Cash{dot('petty')}
         </NavLink>
       )}
       {full && current?.type === 'college' && (can('payroll.manage') || can('payroll.approve') || can('users.manage')) && (
@@ -232,7 +239,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       {(full || trainer) && current?.type === 'college' && (can('exams.mark') || can('exams.manage') || can('users.manage')) && (
         <NavLink to="/school/exams" className={`tab${extra}`}>
           {adia ? <AdiaIcon name="exams" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h14v17H5zM9 4V2.5h6V4M8.5 10l1.5 1.5 3-3M8.5 16l1.5 1.5 3-3M15 10.5h1.5M15 16.5h1.5" /></svg>}
-          {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}
+          {adia ? <TabLabel full="Exam Records" short="Exams" /> : 'Exam Records'}{dot('exams')}
         </NavLink>
       )}
       {current?.type === 'college' && (trainer || (full && ((!!profile && isInventoryManager(profile)) || can('exams.manage')))) && (
@@ -279,6 +286,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="adia-head">
             {can('people.read') && !trainer && <QuickSearch className="adia-search" />}
             {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
+            {aiButton}
             <PageHelp college={adia} />
             <SyncBadge />
             {look === 'glass' ? <img className="org-mark" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
@@ -299,6 +307,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="brand-name">Insight-IQ</span>
         </NavLink>
         <OrgSwitcher />
+        {aiButton}
         <SyncBadge />
       </header>
       {notices}

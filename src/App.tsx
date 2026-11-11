@@ -61,6 +61,7 @@ const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((m) =>
 const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => ({ default: m.ReportPage })));
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
 const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
+const AiHelperPage = lazy(() => import('./pages/AiHelperPage').then((m) => ({ default: m.AiHelperPage })));
 const NoticePage = lazy(() => import('./pages/NoticePage').then((m) => ({ default: m.NoticePage })));
 const MorePage = lazy(() => import('./pages/MorePage').then((m) => ({ default: m.MorePage })));
 const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
@@ -331,6 +332,7 @@ function AppRoutes() {
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<HelpPage />} />
         <Route path="/notice" element={<NoticePage />} />
+        <Route path="/ai" element={<AiHelperPage />} />
         <Route path="/more" element={<MorePage />} />
         <Route path="/settings/audit" element={<RequirePermission permission="audit.read"><AuditLogPage /></RequirePermission>} />
         <Route path="/sign-in" element={<Navigate to="/" replace />} />

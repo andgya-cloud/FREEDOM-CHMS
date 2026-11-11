@@ -2793,3 +2793,15 @@ a.fin-chip:hover { background: #fdecea; }
 .ai-hint { color: var(--ai-gold); }
 .ai-field textarea, textarea.ai-field { border-color: var(--ai-gold); background: var(--ai-tint); }
 @media print { .ai-box { border-left: 4px solid #8a6a12; background: none; } }
+
+.ai-tip { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 8px 12px; border: 1px dashed var(--ai-gold); border-radius: var(--radius); background: var(--ai-tint); font-size: 0.9rem; }
+.ai-dot { color: var(--ai-gold); font-size: 0.75em; margin-left: 3px; vertical-align: super; line-height: 0; }
+.tab .ai-dot { position: absolute; top: 6px; right: 10px; margin: 0; vertical-align: baseline; font-size: 0.8rem; line-height: 1; }
+.tab { position: relative; }
+.btn.ai-top { min-height: 36px; padding: 0 12px; white-space: nowrap; }
+.ai-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.ai-list a { display: flex; flex-direction: column; gap: 2px; padding: 12px 14px; border: 1px solid rgb(var(--ai-gold-rgb) / 0.45); border-left: 4px solid var(--ai-gold); border-radius: var(--radius); background: var(--surface); color: var(--text); text-decoration: none; }
+.ai-list a:hover { background: var(--ai-tint); }
+.ai-list b { color: var(--ai-gold); }
+.ai-meter { height: 10px; border-radius: 999px; background: rgb(var(--ai-gold-rgb) / 0.15); overflow: hidden; }
+.ai-meter > span { display: block; height: 100%; background: var(--ai-gold); }

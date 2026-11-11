@@ -8,7 +8,7 @@ import { useIsAndy } from '../../lib/andy';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import { aiMap } from '../../lib/aiWrite';
-import { AI_MARK } from '../../components/Ai';
+import { AI_MARK, AiTip } from '../../components/Ai';
 import {
   useAllExamSheets, useExamAccess, useExamCohorts, useExamLog, useExamMeta, useExamPrincipals, useExamSettings, useExamSheet, useExamSheets, useExamTrainers, useMyExamSheets, useDepartmentResults, type ExamSheetRow, type ExamTrainer,
 } from '../../state/useExams';
@@ -845,6 +845,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
           <button type="button" className="btn btn-primary" disabled={!report.rows.length || !report.units.length || !!busy} onClick={() => void slips()}>{busy === 'all' ? 'Making slips…' : 'All result slips (PDF)'}</button>
         </span>
       </div>
+      {a.canManage && report.units.length > 0 && <AiTip id="remarks">tap <b>Draft remarks with the helper</b> for a draft remark per student, from the marks only. Accept them to put them on the slips.</AiTip>}
       <div className="print-only exam-print-head"><strong>{title}</strong></div>
       {pending > 0 && <p className="notice small no-print">{pending} of {report.units.length} {report.units.length === 1 ? 'course is' : 'courses are'} not approved yet, so these results are provisional. Slips print with "Provisional" until every course is approved.</p>}
 

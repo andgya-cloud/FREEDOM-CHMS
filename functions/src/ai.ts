@@ -4,7 +4,7 @@ import { db, FieldValue, requireCaller } from './common.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { categoriesFor } from './shared/finance.js';
-import { AI_MODEL, checkLimits, maxTokensFor, monthKey, parseMap, parsePayer, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
+import { AI_MODEL, AI_MONTHLY_CAP, checkLimits, maxTokensFor, monthKey, parseMap, parsePayer, shortlist, systemPrompt, userPrompt, type AiKind, type PersonName } from './shared/aiWrite.js';
 
 import { ANTHROPIC_API_KEY } from './aiCore.js';
 const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
@@ -18,6 +18,16 @@ const text = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slic
 export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', timeoutSeconds: 60, maxInstances: 5 }, async (request) => {
   const d = (request.data ?? {}) as Record<string, unknown>;
   const orgId = text(d.orgId, 60);
+  // The usage meter (Andy, 2026-11-11, 4A): how many this month, for Andy and Settings managers. No AI call.
+  if (d.action === 'usage') {
+    const org0 = text(d.orgId, 60);
+    const who = await requireCaller(request);
+    if (!org0 || !canAccessOrg(who.profile, org0) || !(can(who.profile, 'settings.manage') || can(who.profile, 'users.manage'))) throw new HttpsError('permission-denied', 'You do not have permission to see this.');
+    const o = await db.doc(`organizations/${org0}`).get();
+    const month = monthKey(localDateKey(new Date(), String(o.get('timeZone') ?? DEFAULT_TIME_ZONE)));
+    const m = await db.doc(`aiUsage/${org0}_${month}`).get();
+    return { used: Math.max(0, Number(m.get('count') ?? 0)), cap: AI_MONTHLY_CAP, month };
+  }
   const KINDS: AiKind[] = ['followup', 'summary', 'payer', 'notice', 'sort', 'remarks'];
   const kind = KINDS.find((k) => k === d.kind) ?? null;
   if (!orgId || !kind) throw new HttpsError('invalid-argument', 'Please check the request.');

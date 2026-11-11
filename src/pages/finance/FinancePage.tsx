@@ -5,7 +5,7 @@ import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { aiMap } from '../../lib/aiWrite';
-import { AI_MARK } from '../../components/Ai';
+import { AI_MARK, AiTip } from '../../components/Ai';
 import { downloadFile } from '../../lib/givingPdf';
 import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
@@ -280,6 +280,7 @@ function NeedsYouCard({ org, statements, learned, count, months }: { org: Organi
   return (
     <section className="card stack no-print">
       <div className="card-head"><h2>Needs you ({count})</h2></div>
+      <AiTip id="sort">tap <b>Ask the helper to sort these</b> for a suggested category on each line. Nothing is saved until you accept.</AiTip>
       <p className="small muted">The app was not sure about these lines. Choose the right category; it remembers your choice for lines like it in future.</p>
       <ul className="plain">
         {waiting.map(({ l, n, sid, account }) => (

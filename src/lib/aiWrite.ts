@@ -38,3 +38,9 @@ export async function aiMap(orgId: string, kind: 'sort' | 'remarks', items: Reco
     throw new Error(known && e.message ? e.message.replace(/\s*\[\d+\]$/, '') : 'The helper could not answer. Please check your internet and try again.');
   }
 }
+
+/** This month's use of the helper for an organisation (Andy and Settings managers only). */
+export async function aiUsage(orgId: string): Promise<{ used: number; cap: number; month: string }> {
+  const r = await httpsCallable<Record<string, unknown>, { used: number; cap: number; month: string }>(functions, 'aiWrite')({ action: 'usage', orgId });
+  return r.data;
+}

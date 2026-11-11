@@ -7,7 +7,7 @@ import { useToast } from '../../state/ToastContext';
 import { useLiveQuery } from '../../lib/useQuery';
 import { friendlyError } from '../../lib/errors';
 import { aiWrite } from '../../lib/aiWrite';
-import { AI_MARK, AiBox } from '../../components/Ai';
+import { AI_MARK, AiBox, AiTip } from '../../components/Ai';
 import { requestSchoolReport } from '../../lib/schoolWrites';
 import { schoolReportPdf } from '../../lib/schoolPdf';
 import { shareOrDownload } from '../../lib/givingPdf';
@@ -130,6 +130,7 @@ function ReportView({ org, report }: { org: Organization; report: SchoolReportDo
   return (
     <section className="card stack">
       <div className="card-head"><h2>{report.label}</h2><button type="button" className="btn" disabled={busy} onClick={() => void pdf()}>{busy ? 'Making…' : 'PDF'}</button></div>
+      <AiTip id="school-brief">weekly school reports now start with a short briefing from the helper, from the numbers only.</AiTip>
       {report.aiSummary && (
         <AiBox title="This week in brief" note="Written by AI from the numbers in this report. Please check it.">
           <p>{report.aiSummary}</p>
