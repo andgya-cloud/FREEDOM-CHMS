@@ -7,13 +7,18 @@ const { PDFDocument } = require('pdf-lib');
 
 const ROOT = '/home/user/manual';
 const APP = '/home/user/freedom-chms/public';
-const OUT = process.argv[2] || `${ROOT}/out/Freedom-ChMS-User-Manual.pdf`;
-const VERSION = '1.0 (sample: front pages and Part 1)';
+const MODE = process.argv[2] || 'manual'; // manual | admin | cards
+const OUT = `${ROOT}/out/${{ manual: 'Freedom-ChMS-User-Manual', admin: 'Freedom-ChMS-Administrator-Guide', cards: 'Freedom-ChMS-Quick-Cards' }[MODE]}.pdf`;
+const VERSION = '1.0';
 const DATE = 'November 2026';
 const APPV = 'v255';
 
-const topics = [...require('./spec-church.cjs')];
+const ALL = [...require('./spec-church.cjs'), ...require('./spec-adia.cjs'), ...require('./spec-hope.cjs'), ...require('./spec-shared.cjs')];
+const ADMIN = require('./spec-admin.cjs');
+const topics = MODE === 'admin' ? ADMIN : ALL;
 const front = require('./front.cjs');
+const back = require('./back.cjs');
+const BOOK = { manual: 'Freedom ChMS User Manual', admin: 'Freedom ChMS Administrator Guide', cards: 'Freedom ChMS Quick Cards' }[MODE];
 
 const img = (p) => `data:image/${p.endsWith('.jpg') ? 'jpeg' : 'png'};base64,${fs.readFileSync(p).toString('base64')}`;
 const LOGO = img(`${APP}/logo-mark.png`);
@@ -28,6 +33,14 @@ const PARTS = {
     intro: 'Everything you need on your first day: signing in, finding your way around the screen, putting the app on your phone and getting help.' },
   church: { n: 'Part 1', title: 'Freedom Church Nairobi', logo: CHURCH, color: '#2f6b47',
     intro: 'People, Sunday services, first-timers and follow-ups, giving and reports for Freedom Church Nairobi.' },
+  adia: { n: 'Part 2', title: 'ADIA Training Centre', logo: ADIA, color: '#1f2a5c',
+    intro: 'Students, the class register, fees, exams, graduation, payroll, Tutor Files and inventory at ADIA Training Centre.' },
+  hope: { n: 'Part 3', title: 'Freedom Hope Center', logo: HOPE, color: '#038241',
+    intro: 'Children, Saturday registers and gate sign-in, clubs, parents, sponsors and reports at Freedom Hope Center.' },
+  shared: { n: 'Part 4', title: 'Shared by all three', logo: LOGO, color: '#7a5a12',
+    intro: 'Petty cash, signing, bank and financial statements, and the AI helps. These pages work the same at the Church, ADIA and Hope.' },
+  admin: { n: 'Administrator guide', title: 'Accounts and settings', logo: LOGO, color: '#14213d',
+    intro: 'For Mr Andrew and Doreen: staff accounts, passwords, reviewers and the settings that change how the app works for everyone.' },
 };
 
 const CSS = `
@@ -91,6 +104,10 @@ table.t tr:nth-child(even) td { background: #f7f8fa; }
 .dot { display: inline-block; width: 6mm; height: 6mm; border-radius: 50%; background: #e4572e; color: #fff; font-weight: 700; font-size: 9pt; line-height: 6mm; text-align: center; }
 .sig { margin-top: 10mm; }
 .sig .name { font-family: 'Great Vibes', cursive; font-size: 26pt; color: #14213d; }
+.card .cardhead { background: var(--c); color: #fff; border-radius: 4mm; padding: 9mm 10mm; margin-bottom: 8mm; }
+.card .cardhead h1 { color: #fff; font-size: 28pt; } .card .cardhead .k { letter-spacing: .16em; text-transform: uppercase; font-size: 9pt; opacity: .85; }
+.card .cardbody { padding: 0 4mm; font-size: 12pt; } .card h3 { font-size: 13pt; margin: 6mm 0 2.5mm; color: var(--c); } .card .pg { color: #6b7480; font-weight: 400; }
+.card ul { padding-left: 5mm; } .card ul li { margin-bottom: 2mm; }
 .roles td:first-child { font-weight: 650; width: 42mm; }
 `;
 
@@ -131,25 +148,40 @@ function divider(key, list) {
 function bodyHtml(pages) {
   const toc = [];
   const sections = [];
-  for (const f of front.pages({ md, esc, LOGO, CHURCH, ADIA, HOPE, VERSION, DATE, APPV })) {
-    sections.push(f.html); if (f.toc) toc.push({ id: f.id, title: f.title, cls: 'part' });
+  const add = (html, id, title, cls) => { sections.push(html); if (title) toc.push({ id, title, cls }); };
+  if (MODE === 'cards') {
+    add(back.cards(ALL, {}, LOGO), 'cards');
+  } else {
+    if (MODE === 'manual') {
+      for (const f of front.pages({ md, esc, LOGO, CHURCH, ADIA, HOPE, VERSION, DATE, APPV })) add(f.html, f.id, f.toc ? f.title : null, 'part');
+    } else {
+      add(front.adminIntro({ DATE, APPV }), 'aintro', 'About this guide', 'part');
+    }
+    for (const key of Object.keys(PARTS)) {
+      const list = topics.filter((t) => t.part === key);
+      if (!list.length) continue;
+      add(divider(key, list), `part-${key}`, `${PARTS[key].n === PARTS[key].title ? '' : PARTS[key].n + ': '}${PARTS[key].title}`, 'part');
+      for (const t of list) add(topicPage(t), t.id, t.title, 'sub');
+    }
+    if (MODE === 'manual') {
+      add(back.privacy(), 'privacy', 'Privacy and care', 'part');
+      add(back.problems(), 'problems', 'Common problems and fixes', 'part');
+      add(back.words(), 'words', 'Word list', 'part');
+      add(back.contacts(), 'contacts', 'Who to contact', 'part');
+      add(back.index(topics, pages), 'index', 'Index', 'part');
+      add(back.cards(topics, pages, LOGO), 'cards', 'Quick cards for each role', 'part');
+    }
   }
-  for (const key of Object.keys(PARTS)) {
-    const list = topics.filter((t) => t.part === key);
-    if (!list.length) continue;
-    sections.push(divider(key, list));
-    toc.push({ id: `part-${key}`, title: `${PARTS[key].n === PARTS[key].title ? '' : PARTS[key].n + ': '}${PARTS[key].title}`, cls: 'part' });
-    for (const t of list) { sections.push(topicPage(t)); toc.push({ id: t.id, title: t.title, cls: 'sub' }); }
+  if (MODE !== 'cards') {
+    const tocHtml = `<section class="page front" id="contents"><h1>Contents</h1><ul class="toc">${toc.map((e) =>
+      `<li class="${e.cls}"><span>${esc(e.title)}</span><span class="dots"></span><span>${pages[e.id] ?? ''}</span></li>`).join('')}</ul></section>`;
+    sections.splice(MODE === 'manual' ? front.tocAfter : 0, 0, tocHtml);
   }
-  const tocHtml = `<section class="page front" id="contents"><h1>Contents</h1><ul class="toc">${toc.map((e) =>
-    `<li class="${e.cls}"><span>${esc(e.title)}</span><span class="dots"></span><span>${pages[e.id] ?? ''}</span></li>`).join('')}</ul></section>`;
-  // Contents goes after the document control page and the welcome.
-  sections.splice(front.tocAfter, 0, tocHtml);
   return { html: `<!doctype html><html><head><meta charset="utf-8"><style>@font-face{font-family:'Great Vibes';src:url(${'data:font/ttf;base64,' + fs.readFileSync(APP + '/fonts/GreatVibes-Regular.ttf').toString('base64')})}${CSS}</style></head><body>${sections.join('\n')}</body></html>`, ids: toc.map((e) => e.id) };
 }
 
 const footer = `<div style="width:100%;font-family:Inter,sans-serif;font-size:7.5pt;color:#7a838e;padding:0 16mm;display:flex;align-items:center;justify-content:space-between;">
-  <span style="width:60mm">Freedom ChMS User Manual · Version 1.0</span>
+  <span style="width:60mm">${BOOK} · Version 1.0</span>
   <span style="display:flex;align-items:center;gap:1.5mm;"><img src="${LOGO}" style="height:5mm;width:5mm"> Powered by <b style="color:#14213d;margin-left:.8mm">Insight-IQ</b></span>
   <span style="width:60mm;text-align:right">Page <span class="pageNumber"></span></span></div>`;
 
@@ -195,11 +227,11 @@ function coverHtml() {
   .pb { position: absolute; right: 22mm; bottom: 11mm; display: flex; align-items: center; gap: 2mm; color: #6b7480; font-size: 9pt; }
   .pb img { height: 7mm; }
   </style></head><body><div class="c"><div class="gold"></div><div class="band"></div>
-  <div class="in"><div class="k">User Manual</div><h1>Freedom ChMS</h1>
+  <div class="in"><div class="k">${{ manual: 'User Manual', admin: 'Administrator Guide', cards: 'Quick Cards' }[MODE]}</div><h1>Freedom ChMS</h1>
   <p>The church management system for Freedom Church Nairobi, ADIA Training Centre and Freedom Hope Center.</p>
   <p style="margin-top:8mm;font-size:11pt;color:#b8c1d1">Version ${VERSION} · ${DATE} · Matches the app at ${APPV}</p></div>
   <div class="logos"><div><img src="${CHURCH}">Freedom Church Nairobi</div><div><img src="${ADIA}">ADIA Training Centre</div><div><img src="${HOPE}">Freedom Hope Center</div></div>
-  <div class="meta">For staff and leaders · Internal use only</div>
+  <div class="meta">${MODE === 'admin' ? 'For Mr Andrew and Doreen only · Confidential' : 'For staff and leaders · Internal use only'}</div>
   <div class="pb"><img src="${LOGO}"> Powered by <b style="color:#14213d">Insight-IQ</b></div>
   </div></body></html>`;
 }
@@ -210,16 +242,16 @@ function coverHtml() {
   let { html, ids } = bodyHtml({});
   const pages = await pageMap(browser, html, ids);
   ({ html } = bodyHtml(pages));
-  fs.writeFileSync(`${ROOT}/out/manual.html`, html);
-  await render(browser, coverHtml(), `${ROOT}/out/cover.pdf`, false);
-  await render(browser, html, `${ROOT}/out/body.pdf`, true);
+  fs.writeFileSync(`${ROOT}/out/${MODE}.html`, html);
+  await render(browser, coverHtml(), `${ROOT}/out/cover-${MODE}.pdf`, false);
+  await render(browser, html, `${ROOT}/out/body-${MODE}.pdf`, true);
   await browser.close();
   const outDoc = await PDFDocument.create();
-  for (const f of ['cover.pdf', 'body.pdf']) {
+  for (const f of [`cover-${MODE}.pdf`, `body-${MODE}.pdf`]) {
     const src = await PDFDocument.load(fs.readFileSync(`${ROOT}/out/${f}`));
     for (const p of await outDoc.copyPages(src, src.getPageIndices())) outDoc.addPage(p);
   }
-  outDoc.setTitle('Freedom ChMS User Manual'); outDoc.setAuthor('Freedom Church Nairobi'); outDoc.setCreator('Insight-IQ');
+  outDoc.setTitle(BOOK); outDoc.setAuthor('Freedom Church Nairobi'); outDoc.setCreator('Insight-IQ');
   fs.writeFileSync(OUT, await outDoc.save());
   console.log('pages', outDoc.getPageCount(), OUT);
 })();

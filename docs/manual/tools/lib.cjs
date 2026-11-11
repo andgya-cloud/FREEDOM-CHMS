@@ -1,7 +1,7 @@
 const { chromium } = require('playwright');
 const BASE = 'http://127.0.0.1:5173';
 async function open({ mobile = false, email = 'pastor@example.org', password = 'DemoPass2026', dark = false } = {}) {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] });
   const ctx = await browser.newContext(mobile
     ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: dark ? 'dark' : 'light' }
     : { viewport: { width: 1366, height: 860 }, deviceScaleFactor: 2, colorScheme: dark ? 'dark' : 'light' });

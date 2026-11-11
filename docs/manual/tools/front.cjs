@@ -81,9 +81,18 @@ exports.pages = ({ md, esc, VERSION, DATE, APPV }) => [
       <tr><td>Trainer</td><td>Enters exam marks and uses Tutor Files at ADIA</td><td>Getting started; Part 2: Exam marks, Tutor Files</td></tr>
       <tr><td>Lab technician</td><td>Counts inventory at ADIA</td><td>Getting started; Part 2: Inventory</td></tr>
       <tr><td>Hope helper</td><td>Takes the children’s register at Hope Center</td><td>Getting started; Part 3: the register and gate sign-in</td></tr>
-      <tr><td>Reviewer</td><td>Looks at the app and writes suggestions. Cannot change anything</td><td>Getting started; Writing a review</td></tr>
+      <tr><td>Reviewer</td><td>Looks at the app and writes suggestions. Cannot change anything</td><td>Getting started (Find your way around, Just ask Andy)</td></tr>
     </table>
     <div class="box tip"><span class="h">Tip</span>Each role also has a one-page quick card at the back of the manual. Print it or keep it on your phone.</div>
     </section>`,
   },
 ];
+
+exports.adminIntro = ({ DATE, APPV }) => `<section class="page front" id="aintro">
+  <h1>About this guide</h1>
+  <p>This guide is for the people who manage Freedom ChMS for everyone else: Mr Andrew Guya and Doreen Mayaka. It covers staff accounts, passwords, reviewers and the settings that change how the app works for every user.</p>
+  <p>It goes with the <b>Freedom ChMS User Manual</b>, which explains the everyday jobs. Version 1.0, ${DATE}, matches the app at ${APPV}.</p>
+  <div class="box warn"><span class="h">Warning</span>Keep this guide private. Changes made from these pages affect every user, and some cannot be undone.</div>
+  <h2>Golden rules</h2>
+  <ul><li>One person, one account. Never share an account or a password.</li><li>Give the smallest role that lets a person do their job.</li><li>Switch off accounts the same day someone leaves.</li><li>Give passwords in person or by phone, never in a group chat.</li></ul>
+</section>`;
