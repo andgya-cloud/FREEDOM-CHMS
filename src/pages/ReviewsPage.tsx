@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { httpsCallable } from 'firebase/functions';
+import { db, functions } from '../firebase';
+import { generateTemporaryPassword } from '../lib/generatePassword';
 import { useAuth } from '../state/AuthContext';
 import { useOrg } from '../state/OrgContext';
 import { useToast } from '../state/ToastContext';
 import { friendlyError } from '../lib/errors';
 import { helpFor } from '../lib/pageHelp';
-import { isReviewer } from '../../functions/src/shared/permissions';
+import { isDirectorProfile, isReviewer, REVIEWER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { markNote, markReplySeen, replyToNote, sendReviewerNote, sortNewest, useMyReviews, useReviewerNotes, type ReviewerNote } from '../lib/reviewerNotes';
 import { VoiceButton } from '../components/VoiceButton';
 
@@ -119,6 +123,7 @@ function AllReviews() {
       <p><Link to="/settings">← Settings</Link></p>
       <h1>✍️ Reviews</h1>
       <p className="muted small">What the reviewers noticed, newest first. Tap the page name to see it. Your answer shows in their review window.</p>
+      {isDirectorProfile(profile) && <Reviewers />}
       <label className="field">
         <span className="visually-hidden">Show</span>
         <select className="filter-select" value={show} onChange={(e) => setShow(e.target.value as 'new' | 'done')}>
@@ -157,5 +162,91 @@ function AllReviews() {
         </ul>
       )}
     </div>
+  );
+}
+
+interface ReviewerRow { uid: string; displayName: string; email: string; active: boolean; orgIds?: string[]; allOrgs?: boolean }
+
+/** Mr Andrew adds as many reviewers as he likes, and switches each off or on (Andy, 2026-11-11). */
+function Reviewers() {
+  const { organizations } = useOrg();
+  const toast = useToast();
+  const [people, setPeople] = useState<ReviewerRow[]>([]);
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const real = organizations.filter((o) => !o.training);
+  const [places, setPlaces] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const [made, setMade] = useState<{ name: string; email: string; password: string } | null>(null);
+
+  useEffect(() => onSnapshot(query(collection(db, 'users'), where('roleId', '==', REVIEWER_ROLE_ID)), (snap) => {
+    setPeople(snap.docs.map((d) => ({ uid: d.id, ...(d.data() as Omit<ReviewerRow, 'uid'>) })).sort((a, b) => a.displayName.localeCompare(b.displayName)));
+  }, () => setPeople([])), []);
+
+  const open = () => { setAdding(true); setError(''); setMade(null); setName(''); setEmail(''); setPlaces(real.map((o) => o.id)); };
+  const add = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (name.trim().length < 2) return setError('Type their name.');
+    if (!/^\S+@\S+\.\S+$/.test(email.trim())) return setError('Type a real email address.');
+    if (!places.length) return setError('Tick at least one place they review.');
+    const password = generateTemporaryPassword();
+    setBusy(true);
+    try {
+      await httpsCallable(functions, 'createUser')({ displayName: name.trim(), email: email.trim(), password, roleId: REVIEWER_ROLE_ID, allOrgs: false, orgIds: places, extraPermissions: [], pettyTitle: '', phone: '', departments: [], inventoryDepartments: [], hopeClasses: [] });
+      setMade({ name: name.trim(), email: email.trim().toLowerCase(), password });
+      setAdding(false);
+    } catch (err) {
+      setError(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  };
+  const switchTo = (u: ReviewerRow, active: boolean) =>
+    httpsCallable(functions, 'updateUser')({ uid: u.uid, active })
+      .then(() => toast.show(active ? `${u.displayName} can review again.` : `${u.displayName} is switched off.`))
+      .catch((err) => toast.show(friendlyError(err)));
+
+  return (
+    <details className="card stack">
+      <summary><b>👥 Reviewers ({people.filter((p) => p.active).length} on)</b></summary>
+      {people.length === 0 ? <p className="muted small">No reviewers yet.</p> : (
+        <ul className="plain stack">
+          {people.map((u) => (
+            <li key={u.uid} className="row-actions">
+              <span>{u.displayName} <span className="small muted">· {u.email}{!u.active && ' · Off'}</span></span>
+              <button type="button" className="btn btn-quiet btn-small" onClick={() => switchTo(u, !u.active)}>{u.active ? 'Switch off' : 'Switch on'}</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {made && (
+        <p className="notice small">✅ {made.name} is a reviewer. Send them: sign in at freedom-chms.web.app with <b>{made.email}</b> and the temporary password <b>{made.password}</b>. They choose their own password on the first sign-in.</p>
+      )}
+      {!adding ? (
+        <button type="button" className="btn btn-primary btn-small align-start" onClick={open}>➕ Add a reviewer</button>
+      ) : (
+        <form className="stack" onSubmit={add}>
+          <label className="field"><span>Name</span><input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></label>
+          <label className="field"><span>Email</span><input type="email" value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+          <fieldset className="field">
+            <legend>Places they review</legend>
+            {real.map((o) => (
+              <label key={o.id} className="check">
+                <input type="checkbox" checked={places.includes(o.id)} onChange={() => setPlaces((p) => (p.includes(o.id) ? p.filter((x) => x !== o.id) : [...p, o.id]))} />
+                <span>{o.name}</span>
+              </label>
+            ))}
+          </fieldset>
+          {error && <p className="error small">{error}</p>}
+          <div className="row-actions">
+            <button type="submit" className="btn btn-primary btn-small" disabled={busy}>{busy ? 'Adding…' : 'Add reviewer'}</button>
+            <button type="button" className="btn btn-quiet btn-small" onClick={() => setAdding(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+    </details>
   );
 }

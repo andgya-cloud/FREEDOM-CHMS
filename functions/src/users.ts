@@ -167,10 +167,13 @@ export const createUser = onCall(CALLABLE, async (request) => {
   try {
     uid = (await auth.createUser({ email, password, displayName })).uid;
   } catch (err) {
-    if ((err as { code?: string }).code === 'auth/email-already-exists') {
-      throw new HttpsError('already-exists', 'An account with that email already exists.');
-    }
-    throw err;
+    if ((err as { code?: string }).code !== 'auth/email-already-exists') throw err;
+    // A sign-in left behind by an earlier try that stopped half way (no staff account to go with it) is reused,
+    // so that person can still be added (Andy, 2026-11-11).
+    const left = await auth.getUserByEmail(email);
+    if ((await db.doc(`users/${left.uid}`).get()).exists) throw new HttpsError('already-exists', 'An account with that email already exists. Find it in Staff accounts and change it there.');
+    await auth.updateUser(left.uid, { password, displayName, disabled: false });
+    uid = left.uid;
   }
   const profile: UserProfile & Record<string, unknown> = {
     email,
