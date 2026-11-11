@@ -18,6 +18,7 @@ import {
   type FollowUpOutcome,
 } from '../../functions/src/shared/followups';
 import { formatPhone } from '../../functions/src/shared/phone';
+import { isReviewer } from '../../functions/src/shared/permissions';
 
 interface Props {
   org: Organization;
@@ -85,8 +86,11 @@ export function WhatsAppSheet({ org, person, templateId, fields = {}, followUp, 
     }
   }
 
+  // A Reviewer never messages real members (Andy, 2026-11-11): they see the sheet, but WhatsApp does not open.
+  const lookOnly = isReviewer(profile) && !org.training;
   function send() {
     if (!template || !recipient.ok) return;
+    if (lookOnly) { toast.show('Reviewers can see this message but not send it to a real member.'); return; }
     logMessage({
       orgId: org.id, about: person, to: recipient.to as Person, viaGuardian: recipient.viaGuardian, template,
       senderName: profile?.displayName ?? '', followUp, giftId,

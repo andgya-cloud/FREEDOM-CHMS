@@ -22,7 +22,7 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
   // The usage meter (Andy, 2026-11-11, 4A): how many this month, for Andy and Settings managers. No AI call.
   if (d.action === 'usage') {
     const org0 = text(d.orgId, 60);
-    const who = await requireCaller(request);
+    const who = await requireCaller(request, undefined, { reviewerOk: true });
     if (!org0 || !canAccessOrg(who.profile, org0) || !(can(who.profile, 'settings.manage') || can(who.profile, 'users.manage'))) throw new HttpsError('permission-denied', 'You do not have permission to see this.');
     const o = await db.doc(`organizations/${org0}`).get();
     const month = monthKey(localDateKey(new Date(), String(o.get('timeZone') ?? DEFAULT_TIME_ZONE)));
@@ -32,7 +32,8 @@ export const aiWrite = onCall({ secrets: [ANTHROPIC_API_KEY], memory: '256MiB', 
   const KINDS: AiKind[] = ['followup', 'summary', 'payer', 'notice', 'sort', 'remarks', 'welcome', 'ask', 'fill', 'guide'];
   const kind = KINDS.find((k) => k === d.kind) ?? null;
   if (!orgId || !kind) throw new HttpsError('invalid-argument', 'Please check the request.');
-  const caller = await requireCaller(request);
+  // A Reviewer may use the guide, not the drafting helps (they would spend the church's allowance).
+  const caller = await requireCaller(request, undefined, { reviewerOk: kind === 'guide' });
   // Pastors and leaders; people who see a report or the money may use it on that page.
   const any = (...ps: Parameters<typeof can>[1][]) => ps.some((x) => can(caller.profile, x));
   // The guide is for everyone who signs in (Andy, 1A): it only reads the app's own map, never any records.

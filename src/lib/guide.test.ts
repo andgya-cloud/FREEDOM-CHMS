@@ -77,3 +77,14 @@ describe('guide answers from the AI', () => {
     expect(checkGuideLimits(10, 3).ok).toBe(true);
   });
 });
+
+describe('Reviewer role (Andy, 2026-11-11)', () => {
+  it('never carries pastoral notes, accounts, audit or the full download', async () => {
+    const { DEFAULT_ROLES, isReviewer } = await import('../../functions/src/shared/permissions');
+    const p = DEFAULT_ROLES.reviewer.permissions;
+    for (const no of ['pastoral.read', 'users.manage', 'team.manage', 'audit.read', 'data.export']) expect(p).not.toContain(no);
+    expect(p).toContain('people.read');
+    expect(isReviewer({ roleId: 'reviewer' })).toBe(true);
+    expect(isReviewer({ roleId: 'staff' })).toBe(false);
+  });
+});

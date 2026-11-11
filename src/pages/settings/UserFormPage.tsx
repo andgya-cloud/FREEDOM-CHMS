@@ -15,7 +15,7 @@ import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
-import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -47,6 +47,7 @@ const ROLE_HINTS: Record<string, string> = {
   principal: ': ADIA students, attendance, Exam Records and graduation, with each student\'s fee balance; nothing else',
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
   labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
+  reviewer: ': an outsider who reviews the app. Sees every area of the places you tick (also tick Practice Church so they can try things), changes nothing real, and sends ideas from Just ask Andy. Never sees pastoral notes, safeguarding or staff accounts',
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 
@@ -211,7 +212,7 @@ export function UserFormPage() {
         ) : (
           <fieldset className="field">
             <legend>Role</legend>
-            {roles.map((r) => (
+            {roles.filter((r) => r.id !== REVIEWER_ROLE_ID || isDirectorProfile(me) || form.roleId === REVIEWER_ROLE_ID).map((r) => (
               <label key={r.id} className="check">
                 <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID || r.id === TRAINER_ROLE_ID || r.id === LABTECH_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
                 <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ROLE_HINTS[r.id] ?? ''}</span>

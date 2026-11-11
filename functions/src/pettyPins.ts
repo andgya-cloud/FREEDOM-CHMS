@@ -66,7 +66,7 @@ export const setPettyPin = onCall(CALLABLE, async (request) => {
 
 /** The people who can sign in this organization, for the name list on the signing box. */
 export const listPettySigners = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request);
+  const caller = await requireCaller(request, undefined, { reviewerOk: true });
   const orgId = requireString((request.data as Record<string, unknown> | null)?.orgId, 'the organization', { max: 80 });
   requireMember(caller.profile, orgId);
   const [users, org] = await Promise.all([db.collection('users').where('active', '==', true).get(), db.doc(`organizations/${orgId}`).get()]);

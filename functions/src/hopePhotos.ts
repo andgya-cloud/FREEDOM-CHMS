@@ -58,7 +58,8 @@ async function nextRef(orgId: string, type: CircleType): Promise<string> {
  * and their files are reached only here, so who may see what is checked on every call.
  */
 export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', timeoutSeconds: 120, secrets: CIRCLE_SECRETS }, async (request) => {
-  const caller = await requireCaller(request);
+  // A Reviewer may only read here (Andy, 2026-11-11).
+  const caller = await requireCaller(request, undefined, { reviewerOk: (['list', 'board', 'people', 'faces', 'children', 'file', 'messages'] as unknown[]).includes((request.data as { action?: unknown } | null)?.action) });
   const me = caller.profile as UserProfile;
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });

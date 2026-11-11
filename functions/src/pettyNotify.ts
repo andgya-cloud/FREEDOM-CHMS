@@ -309,7 +309,7 @@ export const sendPettyEmail = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_
 
 /** Names and WhatsApp numbers of this organization's stakeholders, for "Send WhatsApp" (Andy, 2026-10-24). */
 export const listPettyContacts = onCall({ invoker: 'public' }, async (request) => {
-  const caller = await requireCaller(request);
+  const caller = await requireCaller(request, undefined, { reviewerOk: true });
   const orgId = requireString((request.data as Record<string, unknown> | null)?.orgId, 'the organization', { max: 80 });
   requireMember(caller.profile, orgId);
   const people = await stakeholders(await orgInfo(orgId));

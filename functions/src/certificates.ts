@@ -22,7 +22,8 @@ const PETTY_EMAIL_APP_PASSWORD = defineSecret('PETTY_EMAIL_APP_PASSWORD');
  * directly, so every read and write is checked here.
  */
 export const certificateFile = onCall({ invoker: 'public', secrets: [PETTY_EMAIL_APP_PASSWORD], memory: '512MiB' }, async (request) => {
-  const caller = await requireCaller(request);
+  // A Reviewer may only read here (Andy, 2026-11-11).
+  const caller = await requireCaller(request, undefined, { reviewerOk: (['download', undefined] as unknown[]).includes((request.data as { action?: unknown } | null)?.action) });
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   const studentId = requireString(data.studentId, 'the student', { max: 80 });

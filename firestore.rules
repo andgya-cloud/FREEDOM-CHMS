@@ -25,7 +25,16 @@ service cloud.firestore {
       return get(profilePath()).data;
     }
     function isActive() {
-      return signedIn() && exists(profilePath()) && me().active == true;
+      return signedIn() && exists(profilePath()) && me().active == true && !('rv' in request.auth.token && reviewerBlocked());
+    }
+    // A Reviewer (Andy, 2026-11-11, 1B 2A) looks at the real system but changes nothing in it. Their sign-in carries
+    // the mark "rv" (set by the server on Reviewer accounts), and every check above goes through isActive(), so this
+    // one line stops all their writes, cheaply for everyone else. They may still try things in the Practice Church,
+    // and leave a suggestion in reviewerNotes.
+    function reviewerBlocked() {
+      return request.method != 'get' && request.method != 'list'
+        && !(request.path[3] == 'organizations' && request.path[4] == 'training')
+        && request.path[3] != 'reviewerNotes';
     }
     function has(permission) {
       return isActive() && permission in me().permissions;
@@ -1598,7 +1607,8 @@ service cloud.firestore {
       // The pastor (users.manage) holds every petty cash role, as accounts made before petty cash existed
       // do not carry the new permissions. The number (ADIA-00015) is written by a Cloud Function.
       function pc(permission) {
-        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+        // canAccessOrg() already checks the account is active, so one look at the permissions is enough (cheaper).
+        return canAccessOrg(orgId) && me().permissions.hasAny([permission, 'users.manage']);
       }
       function pcAny() {
         return pc('pettycash.request') || pc('pettycash.check') || pc('pettycash.approve');
@@ -1989,7 +1999,8 @@ service cloud.firestore {
       // may change marks on a locked sheet, unlocks it, and keeps the remarks, attendance and grading. Every change
       // the principal makes is written to the exam log by the app.
       function ex(permission) {
-        return canAccessOrg(orgId) && (has(permission) || has('users.manage'));
+        // canAccessOrg() already checks the account is active, so one look at the permissions is enough (cheaper).
+        return canAccessOrg(orgId) && me().permissions.hasAny([permission, 'users.manage']);
       }
       function examWeights(w) {
         return w is map && w.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final']) && w.keys().hasAll(['cat1', 'cat2', 'cat3', 'final']);
@@ -2199,6 +2210,25 @@ service cloud.firestore {
     match /auditLog/{entryId} {
       allow read: if has('audit.read');
       allow write: if false; // written only by Cloud Functions
+    }
+  
+    // ---- Reviewer notes (Andy, 2026-11-11, 4A) ------------------------------
+    // Anyone signed in may leave a suggestion about a page; only Andy (users.manage) reads them and marks them done.
+    match /reviewerNotes/{noteId} {
+      allow create: if isActive()
+        && request.resource.data.keys().hasOnly(['uid', 'name', 'orgId', 'path', 'page', 'text', 'status', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.status == 'new'
+        && request.resource.data.text is string && request.resource.data.text.size() >= 3 && request.resource.data.text.size() <= 2000
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80
+        && request.resource.data.orgId is string && request.resource.data.orgId.size() <= 60
+        && request.resource.data.path is string && request.resource.data.path.size() <= 200
+        && request.resource.data.page is string && request.resource.data.page.size() <= 120;
+      allow read: if has('users.manage');
+      allow update: if has('users.manage')
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status in ['new', 'done'];
     }
   }
 }

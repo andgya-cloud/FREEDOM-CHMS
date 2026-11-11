@@ -22,7 +22,7 @@ const perms = (u: UserProfile | undefined) => u?.permissions ?? [];
  * organization that may key in marks. Only the principal (or the pastor) can ask.
  */
 export const listExamTrainers = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request);
+  const caller = await requireCaller(request, undefined, { reviewerOk: true });
   const orgId = requireString((request.data as Record<string, unknown> | null)?.orgId, 'the organization', { max: 80 });
   const mine = perms(caller.profile);
   if (!canAccessOrg(caller.profile, orgId) || !(mine.includes('exams.manage') || mine.includes('users.manage'))) {

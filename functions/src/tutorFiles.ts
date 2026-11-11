@@ -43,7 +43,8 @@ async function tutorsOf(orgId: string) {
  * - "roster": the principal's list of tutors.
  */
 export const tutorFiles = onCall({ invoker: 'public', memory: '512MiB', timeoutSeconds: 120 }, async (request) => {
-  const caller = await requireCaller(request);
+  // A Reviewer may only read here (Andy, 2026-11-11).
+  const caller = await requireCaller(request, undefined, { reviewerOk: (['roster', 'download'] as unknown[]).includes((request.data as { action?: unknown } | null)?.action) });
   const me = caller.profile as Profile;
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });

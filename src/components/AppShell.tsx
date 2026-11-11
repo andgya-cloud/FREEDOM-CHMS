@@ -14,10 +14,11 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isReviewer, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 import { AiDot } from './Ai';
 import { roleRedirect } from '../lib/roleAccess';
+import { setReviewing } from '../lib/errors';
 import { JustAskAndy } from './JustAskAndy';
 import { aiFeaturesFor, aiSectionsFor, type AiSection } from '../lib/aiFeatures';
 
@@ -259,10 +260,14 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   );
+  // A Reviewer on a real organisation (Andy, 2026-11-11, 1B 2A): look-only, said once at the top.
+  const reviewing = isReviewer(profile) && !!current && !current.training;
+  setReviewing(reviewing);
   const notices = (
     <>
       {usingEmulators && <div className="dev-ribbon">Local test server. Nothing here is live data.</div>}
       {current?.training && <div className="dev-ribbon" role="status">Practice mode. Everything here is made up and is never mixed with real records.</div>}
+      {reviewing && <div className="dev-ribbon reviewer-ribbon" role="status">Reviewer: look around freely. Real records can't be changed here; try things in the Practice Church. Share ideas in ✦ Just ask Andy.</div>}
       {showInstall && <InstallBanner />}
       {current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile))) && <InventoryDueBanner />}
     </>

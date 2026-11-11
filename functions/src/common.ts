@@ -3,7 +3,8 @@ import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
 import { HttpsError, type CallableRequest } from 'firebase-functions/v2/https';
 import type { AccessProfile, Permission } from './shared/permissions.js';
-import { can } from './shared/permissions.js';
+import { can, REVIEWER_ROLE_ID } from './shared/permissions.js';
+import { TRAINING_ORG_ID } from './shared/organizations.js';
 
 if (getApps().length === 0) initializeApp();
 
@@ -33,11 +34,16 @@ export interface Caller {
 }
 
 /** Loads the signed-in caller and checks they are active (and hold `permission`, if given). */
-export async function requireCaller(request: CallableRequest, permission?: Permission): Promise<Caller> {
+export async function requireCaller(request: CallableRequest, permission?: Permission, opts: { reviewerOk?: boolean } = {}): Promise<Caller> {
   if (!request.auth) throw new HttpsError('unauthenticated', 'Please sign in.');
   const snap = await db.doc(`users/${request.auth.uid}`).get();
   const profile = snap.data() as UserProfile | undefined;
   if (!profile || !profile.active) throw new HttpsError('permission-denied', 'This account is not active.');
+  // A Reviewer changes nothing in the real system (Andy, 2026-11-11, 1B 2A): only reading actions, and the Practice Church.
+  const practice = (request.data as { orgId?: unknown } | null)?.orgId === TRAINING_ORG_ID;
+  if (profile.roleId === REVIEWER_ROLE_ID && !opts.reviewerOk && !practice) {
+    throw new HttpsError('permission-denied', 'Reviewers can look at everything but not change real records. Try it in the Practice Church.');
+  }
   if (permission && !can(profile, permission)) {
     throw new HttpsError('permission-denied', 'You do not have permission to do that.');
   }

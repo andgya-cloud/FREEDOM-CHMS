@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, HELPER_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, HELPER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -21,6 +21,20 @@ function hopeClassesFrom(roleId: string, value: unknown): string[] {
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
 // them closed and every call fails.
 const CALLABLE = { invoker: 'public' } as const;
+
+/**
+ * The "rv" mark on a Reviewer's sign-in: the Firestore rules read it to refuse every change outside the Practice
+ * Church (Andy, 2026-11-11). Set before the account can sign in; taken off when the role changes.
+ */
+async function reviewerMark(uid: string, roleId: string) {
+  const claims = { ...((await auth.getUser(uid)).customClaims ?? {}) };
+  if (roleId === REVIEWER_ROLE_ID) claims.rv = true;
+  else delete claims.rv;
+  await auth.setCustomUserClaims(uid, claims);
+}
+
+/** Reviewer accounts are Andy's alone (Andy, 2026-11-11, 6B). */
+const ONLY_ANDY_REVIEWERS = 'Only Mr Andrew can add or change Reviewer accounts.';
 
 async function loadRole(roleId: string, byUid?: string): Promise<RoleDefinition> {
   const ref = db.doc(`roles/${roleId}`);
@@ -140,6 +154,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
   const pettyTitle = teamOnly ? '' : pettyTitleFrom(data.pettyTitle);
   const phone = phoneFrom(data.phone);
   const dept = roleId === TRAINER_ROLE_ID ? await trainerDepartments(data.departments, orgIds) : { trainerCourseIds: [], registerClasses: [] };
+  if (roleId === REVIEWER_ROLE_ID && !isDirectorProfile(caller.profile)) throw new HttpsError('permission-denied', ONLY_ANDY_REVIEWERS);
   const role = await loadRole(roleId, caller.uid);
   const allOrgs = role.isOwner ? true : !teamOnly && data.allOrgs === true;
   if (teamOnly && !canManageTeamAccount(caller.profile, { roleId, allOrgs, orgIds })) {
@@ -177,6 +192,7 @@ export const createUser = onCall(CALLABLE, async (request) => {
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,
   };
+  await reviewerMark(uid, roleId);
   await db.doc(`users/${uid}`).set(profile);
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'create', path: `users/${uid}`,
@@ -214,6 +230,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
 
   const merged = { ...current, ...next };
   if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  if ((merged.roleId === REVIEWER_ROLE_ID || current.roleId === REVIEWER_ROLE_ID) && !isDirectorProfile(caller.profile)) throw new HttpsError('permission-denied', ONLY_ANDY_REVIEWERS);
   const role = await loadRole(merged.roleId, caller.uid);
   const currentRole = await loadRole(current.roleId);
   if (role.isOwner) merged.allOrgs = true;
@@ -235,6 +252,11 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     ? await inventoryDepartments(data.inventoryDepartments, merged.orgIds, merged.allOrgs)
     : (current as { inventoryCourseIds?: string[] }).inventoryCourseIds ?? [];
 
+  if (merged.roleId !== current.roleId) {
+    await reviewerMark(uid, merged.roleId);
+    // A new sign-in picks up the change straight away.
+    await auth.revokeRefreshTokens(uid);
+  }
   await ref.update({
     displayName: merged.displayName,
     roleId: merged.roleId,
@@ -351,7 +373,7 @@ export const changeMyPassword = onCall(CALLABLE, async (request) => {
 
 /** Records a sign-in in the audit log. Called by the app right after a successful sign-in. */
 export const recordSignIn = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request);
+  const caller = await requireCaller(request, undefined, { reviewerOk: true });
   await db.doc(`users/${caller.uid}`).update({ lastSignInAt: FieldValue.serverTimestamp() });
   await writeAudit({
     actorUid: caller.uid, actorEmail: caller.email, action: 'sign_in', path: `users/${caller.uid}`,

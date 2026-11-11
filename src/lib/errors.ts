@@ -1,3 +1,8 @@
+/** Set while a Reviewer looks at a real organisation (Andy, 2026-11-11), so a refused change explains itself. */
+let reviewing = false;
+export const setReviewing = (on: boolean) => { reviewing = on; };
+export const REVIEWER_NOTE = 'Reviewers can look at everything but not change real records. Try it in the Practice Church.';
+
 /** Turns Firebase errors into plain English for staff. */
 export function friendlyError(err: unknown): string {
   const code = (err as { code?: string })?.code ?? '';
@@ -16,7 +21,8 @@ export function friendlyError(err: unknown): string {
       return 'No internet connection. The first sign-in on a device needs internet.';
     case 'permission-denied':
     case 'functions/permission-denied':
-      return 'You do not have permission to do that.';
+      if (reviewing) return REVIEWER_NOTE;
+      return code === 'functions/permission-denied' && message ? message.replace(/\s*\[\d+\]$/, '') : 'You do not have permission to do that.';
     case 'unavailable':
     case 'functions/unavailable':
     case 'functions/internal':

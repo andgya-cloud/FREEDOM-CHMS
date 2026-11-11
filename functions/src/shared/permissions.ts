@@ -130,7 +130,19 @@ export function isPettyTitle(value: unknown): value is PettyTitle {
   return typeof value === 'string' && (PETTY_TITLES as readonly string[]).includes(value);
 }
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'usher' | 'finance' | 'helper', RoleDefinition> = {
+/**
+ * A Reviewer (Andy, 2026-11-11, 1B 2A 3B 5B 6B): an outsider who looks around the real system to suggest
+ * improvements. They see every area of the organisations ticked on their account, change nothing there (the
+ * Firestore rules and the server refuse it), may try things in the Practice Church, and never see pastoral notes,
+ * safeguarding, staff accounts, the audit log or the full data download. Only Andy creates them.
+ */
+export const REVIEWER_ROLE_ID = 'reviewer';
+const REVIEWER_SEES: Permission[] = ['people.read', 'people.write', 'attendance.write', 'programs.write', 'gifts.write', 'receipts.issue',
+  'followups.manage', 'giving.person.read', 'finance.reports', 'settings.manage', 'pettycash.request', 'pettycash.approve', 'pettycash.authorize',
+  'payroll.manage', 'payroll.approve', 'exams.mark', 'exams.manage', 'school.manage', 'fees.balances'];
+export const isReviewer = (profile: { roleId?: string } | null | undefined) => profile?.roleId === REVIEWER_ROLE_ID;
+
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'usher' | 'finance' | 'helper' | 'reviewer', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -160,6 +172,7 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   // Freedom Hope Centre (Andy, 2026-11-04, 2A): a helper sees only the registers and clubs, with big buttons, and
   // records the time they arrive.
   helper: { name: 'Hope helper', permissions: ['people.read', 'attendance.write'] },
+  reviewer: { name: 'Reviewer', permissions: REVIEWER_SEES },
 };
 
 export const USHER_ROLE_ID = 'usher';

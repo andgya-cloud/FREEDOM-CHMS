@@ -2862,3 +2862,5 @@ a.fin-chip:hover { background: #fdecea; }
 .jaa-welcome { background: var(--ai-tint); }
 /* Room at the foot of every page so the Just ask Andy button never hides the last line. */
 .main::after { content: ''; display: block; height: 56px; }
+.reviewer-ribbon { background: #1f3a5c; color: #fff; }
+.jaa-note { flex: none; padding-top: 6px; border-top: 1px dashed var(--border, rgba(0,0,0,.12)); }

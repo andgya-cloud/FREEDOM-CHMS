@@ -20,7 +20,8 @@ const RECEIPT_MAX = 450_000;
  * Removing a note or payment goes through Clean-up, to the Bin.
  */
 export const hopeRecords = onCall({ invoker: 'public', memory: '512MiB', timeoutSeconds: 120 }, async (request) => {
-  const caller = await requireCaller(request);
+  // A Reviewer may only read here (Andy, 2026-11-11).
+  const caller = await requireCaller(request, undefined, { reviewerOk: (['owing', 'fees'] as unknown[]).includes((request.data as { action?: unknown } | null)?.action) });
   const me = caller.profile as UserProfile;
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });

@@ -10,6 +10,8 @@ import { aiGuide } from '../lib/aiWrite';
 import { AI_MARK } from './Ai';
 import { VoiceButton } from './VoiceButton';
 import { aiFeaturesFor } from '../lib/aiFeatures';
+import { isReviewer } from '../../functions/src/shared/permissions';
+import { sendReviewerNote } from '../lib/reviewerNotes';
 
 /** Other pages open the guide with this event (the old Help link now does). */
 const OPEN_EVENT = 'just-ask-andy';
@@ -97,6 +99,11 @@ export function JustAskAndy() {
     return () => clearInterval(timer);
   }, [uid, current]);
   const [welcome, setWelcome] = useState(false);
+  // Reviewers suggest improvements from here (Andy, 2026-11-11, 4A); the note keeps the page it is about.
+  const reviewer = isReviewer(profile);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [noteState, setNoteState] = useState<'' | 'sending' | 'sent' | 'error'>('');
 
   if (!current || !profile) return null;
   const org = current;
@@ -206,6 +213,34 @@ export function JustAskAndy() {
             {answers.length === 0 && (
               <div className="jaa-chips">
                 {popular.map((t) => <button key={t.id} type="button" className="btn btn-ai btn-small" onClick={() => add(fromTopic(t.title, t), false)}>{t.title}</button>)}
+              </div>
+            )}
+
+            {reviewer && (
+              <div className="jaa-note">
+                {!noteOpen ? (
+                  <button type="button" className="btn btn-small" onClick={() => { setNoteOpen(true); setNoteState(''); }}>💡 Suggest an improvement to this page</button>
+                ) : (
+                  <form className="stack" onSubmit={(e) => {
+                    e.preventDefault();
+                    if (noteText.trim().length < 3 || noteState === 'sending') return;
+                    setNoteState('sending');
+                    sendReviewerNote({ uid: profile.uid, name: profile.displayName ?? '', orgId: org.id, path: pathname, page: `${org.name} › ${here.title}`, text: noteText })
+                      .then(() => { setNoteText(''); setNoteState('sent'); setNoteOpen(false); })
+                      .catch(() => setNoteState('error'));
+                  }}>
+                    <label className="field"><span>Your idea for {here.title}</span>
+                      <textarea rows={3} value={noteText} maxLength={2000} onChange={(e) => setNoteText(e.target.value)} placeholder="What was hard, unclear or could be better here?" />
+                    </label>
+                    <div className="row-actions">
+                      <VoiceButton value={noteText} onChange={setNoteText} label="Speak" />
+                      <button type="submit" className="btn btn-primary btn-small" disabled={noteText.trim().length < 3 || noteState === 'sending'}>{noteState === 'sending' ? 'Sending…' : 'Send to Mr Andrew'}</button>
+                      <button type="button" className="btn btn-quiet btn-small" onClick={() => setNoteOpen(false)}>Cancel</button>
+                    </div>
+                    {noteState === 'error' && <p className="error small">It could not be sent. Please try again.</p>}
+                  </form>
+                )}
+                {noteState === 'sent' && <p className="small">✅ Thank you! Mr Andrew will read it.</p>}
               </div>
             )}
 
