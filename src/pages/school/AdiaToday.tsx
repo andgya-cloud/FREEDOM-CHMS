@@ -12,9 +12,8 @@ import { attendanceAlerts, arrearsList, capacityOf, collectionRate, schoolMetric
 import { ADIA_PROGRAMMES } from '../../../functions/src/shared/schoolSetup';
 import { LineChart } from '../../components/charts';
 import { DeptBars, Kpi, Ring, StatusDonut } from '../../components/LavFigures';
-import { SceneVideo } from '../../components/SceneVideo';
+import { AdiaWelcome } from '../../components/AdiaWelcome';
 import { PoweredBy } from '../../components/PoweredBy';
-import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { FirstRunChecklist } from '../../components/FirstRunChecklist';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
 import { usePettyCashAccess } from '../../state/usePettyCash';
@@ -103,9 +102,6 @@ export function AdiaToday({ org }: { org: Organization }) {
   const placeCell = (cohort: string, courseId: string) => intakes.filter(({ i }) => i.name === cohort && i.courseId === courseId);
   const placesIn = (list: typeof intakes) => list.reduce((n, { c }) => n + c.taken, 0);
 
-  // "Good evening, Andrew", with the school's name under it (Andy, 2026-10-30).
-  const first = firstNameOf(profile?.displayName);
-  const greet = `${timeGreeting(org.timeZone || 'Africa/Nairobi')}${first ? `, ${first}` : ''}`;
   const summary = `${metrics.enrolled} ${metrics.enrolled === 1 ? 'student is' : 'students are'} enrolled across ${depts.length} ${depts.length === 1 ? 'department' : 'departments'}.`
     + (thisWeek == null ? ' Mark today’s register to start tracking the weekly attendance trend.' : ` Attendance this week is ${thisWeek}%.`);
   const canRegister = can('attendance.write') || can('people.read');
@@ -136,19 +132,10 @@ export function AdiaToday({ org }: { org: Organization }) {
         </section>
       )}
 
-      <section className="card lav-hero">
-        <div className="lav-hero-text">
-          <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: org.timeZone || 'Africa/Nairobi' }).format(new Date())}</span>
-          <h1 className="lav-greet">{greet}</h1>
-          <p className="lav-org"><em>{org.name}</em></p>
-          <p>{summary}</p>
-        </div>
-        <div className="lav-scene">
-          <SceneVideo />
-          {/* "Getting started" shows to the Director only (Andy 9A, 2026-10-30). */}
-          {isDirectorProfile(profile) && <FirstRunChecklist variant="scene" />}
-        </div>
-      </section>
+      <AdiaWelcome org={org} summary={summary}>
+        {/* "Getting started" shows to the Director only (Andy 9A, 2026-10-30). */}
+        {isDirectorProfile(profile) && <FirstRunChecklist variant="scene" />}
+      </AdiaWelcome>
 
       <CircleNeedsYou org={org} />
 

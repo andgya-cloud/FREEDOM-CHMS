@@ -1,3 +1,4 @@
+import { AdiaWelcome } from '../../components/AdiaWelcome';
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { Greeting } from '../../components/Greeting';
 import { CleanupButton } from '../../components/CleanupDialog';
@@ -39,7 +40,7 @@ export function InventoryPage() {
     const mine = [...counts].sort((x, y) => Number(x.status !== 'open') - Number(y.status !== 'open') || y.deadline.localeCompare(x.deadline));
     return (
       <div className="page narrow">
-        <Greeting />
+        {current ? <AdiaWelcome org={current} summary="Your department's inventory counts are below. Count each item and send the count before its deadline." /> : <Greeting />}
         <h1>Inventory</h1>
         {loading && !mine.length ? <p className="muted">Loading…</p> : !mine.length ? (
           <p className="muted">No inventory form yet. Admin opens one at the start and at the end of each cohort, with its deadline.</p>
