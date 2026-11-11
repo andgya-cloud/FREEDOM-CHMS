@@ -29,6 +29,14 @@ describe('Hope photo reports access (Andy, 2026-11-04)', () => {
     expect(canSeePhotoReport(helper, 'u-helper', r)).toBe(true);
     expect(canSeePhotoReport(staff, 'u-staff', r)).toBe(false);
   });
+  it('lets a Reviewer read every report and win but not write, delete or see deleted ones (2026-11-11)', () => {
+    const reviewer = user({ roleId: 'reviewer', displayName: 'Rita Reviewer', permissions: ['people.read', 'attendance.write'] });
+    const r = { orgId: HOPE, senderUid: 'u-helper', deleted: false };
+    expect(canSeePhotoReport(reviewer, 'u-rev', r)).toBe(true);
+    expect(canWriteInStory(reviewer, 'u-rev', r)).toBe(false);
+    expect(canSeePhotoReport(reviewer, 'u-rev', { ...r, deleted: true })).toBe(false);
+    expect(canSeePhotoReport({ ...reviewer, orgIds: ['adia'] }, 'u-rev', r)).toBe(false);
+  });
   it('lets only the Director, Andy and Doreen delete, and see deleted ones (8A)', () => {
     for (const p of [director, andy, doreen]) expect(canDeletePhotoReport(p, HOPE)).toBe(true);
     for (const p of [board, helper, staff]) expect(canDeletePhotoReport(p, HOPE)).toBe(false);

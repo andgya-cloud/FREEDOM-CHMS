@@ -11,7 +11,7 @@ type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'b
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: Action }) =>
   httpsCallable<typeof data, R>(functions, 'hopePhotoReports', { timeout: 120_000 })(data).then((r) => r.data);
 
-export interface PhotoList { reports: StoredPhotoReport[]; deleted: StoredPhotoReport[]; seesAll: boolean; deletes: boolean; sends: boolean }
+export interface PhotoList { reports: StoredPhotoReport[]; deleted: StoredPhotoReport[]; seesAll: boolean; reviews?: boolean; deletes: boolean; sends: boolean }
 export const listPhotoReports = (orgId: string, reportId?: string) => call<PhotoList>({ orgId, action: 'list', ...(reportId ? { reportId } : {}) });
 
 function toBase64(blob: Blob): Promise<string> {

@@ -14,7 +14,7 @@ import { sendChatReminders } from './hopeChats.js';
 import { plainName } from './pettyContacts.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
 import {
-  canDeletePhotoReport, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, isPhotoReportKind, MAX_PHOTO_FILES,
+  canDeletePhotoReport, canReviewPhotoReports, canSeeAllPhotoReports, canSeePhotoReport, canSendPhotoReport, isPhotoReportKind, MAX_PHOTO_FILES,
   PHOTO_FILE_MAX_BYTES, PHOTO_TEXT_MAX, PHOTO_TITLE_MAX, photoFileName, photoFilePath, photoFileTypeOf,
   canEditMessage, canPackageStory, canUnsay, canWriteInStory, cleanIncident, OPENING_ID, STORY_DOC_MAX_BYTES, STORY_FILES_MAX, STORY_PART_BYTES,
   STORY_TEXT_MAX, STORY_VIDEO_MAX_BYTES, storyStartEmail, type PhotoFile, type PhotoReport, type StoryMessage,
@@ -76,12 +76,13 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   const myName = me.displayName || me.email;
   const all = canSeeAllPhotoReports(me, orgId, type);
   const deleter = canDeletePhotoReport(me, orgId, type);
+  const reviewer = canReviewPhotoReports(me, orgId);
 
   if (action === 'list') {
     const reportId = typeof data.reportId === 'string' && data.reportId ? data.reportId.slice(0, 120) : null;
     let q: FirebaseFirestore.Query = col;
     if (reportId) q = q.where('reportId', '==', reportId);
-    else if (!all) q = q.where('senderUid', '==', caller.uid);
+    else if (!all && !reviewer) q = q.where('senderUid', '==', caller.uid);
     const snap = await q.get();
     const rows: Stored[] = snap.docs.map((d) => ({ id: d.id, ...(d.data() as PhotoReport) }))
       .filter((r) => canSeePhotoReport(me, caller.uid, r, type) || (r.deleted && deleter))
@@ -89,7 +90,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     return {
       reports: rows.filter((r) => !r.deleted).slice(0, 300).map((r) => shown(r.id, r)),
       deleted: deleter && !reportId ? rows.filter((r) => r.deleted).slice(0, 300).map((r) => shown(r.id, r)) : [],
-      seesAll: all, deletes: deleter, sends: canSendPhotoReport(me, orgId, type),
+      seesAll: all, reviews: reviewer, deletes: deleter, sends: canSendPhotoReport(me, orgId, type),
     };
   }
 
@@ -175,7 +176,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
 
   if (action === 'children') {
     // The children to name in a message (2A): name, HC code and class only.
-    if (!canSendPhotoReport(me, orgId, type) && !all) throw new HttpsError('permission-denied', 'You cannot write here.');
+    if (!canSendPhotoReport(me, orgId, type) && !all && !reviewer) throw new HttpsError('permission-denied', 'You cannot write here.');
     return { children: await circleEveryone(orgId, type) };
   }
 
@@ -244,7 +245,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     const messages = snap.docs.map((d) => shownMessage(d.id, d.data() as StoryMessage));
     const last = r.lastAt ?? r.startedAt ?? '';
     const change: Record<string, unknown> = {};
-    if (last && r.seen?.[caller.uid] !== last) { change[`seen.${caller.uid}`] = last; change[`seenNames.${caller.uid}`] = myName; }
+    if (last && !reviewer && r.seen?.[caller.uid] !== last) { change[`seen.${caller.uid}`] = last; change[`seenNames.${caller.uid}`] = myName; }
     if (!r.ref && !r.deleted) { r.ref = await nextRef(orgId, type); change.ref = r.ref; }
     if (Object.keys(change).length) await ref.update(change);
     if (last) { r.seen = { ...r.seen, [caller.uid]: last }; r.seenNames = { ...r.seenNames, [caller.uid]: myName }; }

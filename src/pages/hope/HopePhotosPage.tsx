@@ -106,7 +106,7 @@ function Photos({ org }: { org: Organization }) {
         </div>
       </div>
       <p className="small muted">
-        {list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
+        {list?.reviews ? 'As a reviewer you can read every report and win here. Look only: replies and changes stay with the team.' : list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
       </p>
       {error && <p className="notice notice-warn small">{error}</p>}
 

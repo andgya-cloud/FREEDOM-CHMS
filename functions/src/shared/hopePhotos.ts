@@ -6,7 +6,7 @@
  * WhatsApp is a button, never automatic (7A). Only the Director, Andy and Doreen delete, and a deleted list keeps who
  * deleted what (8A). Files sit in Storage, reached only through the hopePhotoReports Cloud Function.
  */
-import { can, canAccessOrg, canKeepAccounts, type AccessProfile } from './permissions.js';
+import { can, canAccessOrg, canKeepAccounts, isReviewer, type AccessProfile } from './permissions.js';
 import {
   circleApprover, circleKeeper, circleOf, circleReader, circleRef, circleSender, HOPE_BOARD_NAMES, isKindOf, KIND_EMOJI, kindLabel,
   type CircleKind, type CircleType,
@@ -307,6 +307,9 @@ export function canSeeAllPhotoReports(p: Profile, orgId: string, type: CircleTyp
   return can(p, 'users.manage') || isHopeDirector(p, orgId) || isHopeBoardName(p?.displayName);
 }
 
+/** A Reviewer reads every report and win, look-only (Andy, 2026-11-11); never the private conversations. */
+export const canReviewPhotoReports = (p: Profile, orgId: string) => isReviewer(p) && canAccessOrg(p, orgId);
+
 /** Only the Director, Andy and Doreen delete (8A). */
 export function canDeletePhotoReport(p: Profile, orgId: string, type: CircleType = 'ministry'): boolean {
   if (type !== 'ministry') return circleKeeper(p, orgId, type);
@@ -315,7 +318,7 @@ export function canDeletePhotoReport(p: Profile, orgId: string, type: CircleType
 
 export function canSeePhotoReport(p: Profile, uid: string, r: Pick<PhotoReport, 'orgId' | 'senderUid' | 'deleted'>, type: CircleType = 'ministry'): boolean {
   if (r.deleted) return canDeletePhotoReport(p, r.orgId, type);
-  return canSeeAllPhotoReports(p, r.orgId, type) || (r.senderUid === uid && canAccessOrg(p, r.orgId));
+  return canSeeAllPhotoReports(p, r.orgId, type) || canReviewPhotoReports(p, r.orgId) || (r.senderUid === uid && canAccessOrg(p, r.orgId));
 }
 
 /**
