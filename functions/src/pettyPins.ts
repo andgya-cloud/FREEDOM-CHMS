@@ -18,6 +18,7 @@ import { bankMoney, type BankStatement } from './shared/finance.js';
  * five wrong tries lock that person's PIN for 15 minutes.
  */
 const CALLABLE = { invoker: 'public' } as const;
+const PASSWORDS = { invoker: 'public', memory: '1GiB', timeoutSeconds: 120 } as const;
 const scrypt = promisify(scryptCb) as (pin: string, salt: Buffer, keylen: number) => Promise<Buffer>;
 
 async function hashPin(pin: string, salt: Buffer) {
@@ -158,7 +159,7 @@ export async function passwordInUse(password: string, exceptUid: string) {
  * passwords are counted per network address and locked out for 15 minutes after ten.
  */
 const SIGNIN_MAX_FAILS = 10;
-export const findPasswordAccount = onCall(CALLABLE, async (request) => {
+export const findPasswordAccount = onCall(PASSWORDS, async (request) => {
   const password = typeof (request.data as Record<string, unknown> | null)?.password === 'string' ? String((request.data as Record<string, unknown>).password) : '';
   if (password.length < 4 || password.length > 200) throw new HttpsError('invalid-argument', 'Type your password.');
   const ip = String(request.rawRequest?.ip ?? 'unknown');
@@ -219,7 +220,7 @@ export async function verifyPin(uid: string, pin: string) {
 }
 
 /** Signs a waiting request, top-up or reset as the chosen stakeholder, after checking their PIN. */
-export const signWithPin = onCall(CALLABLE, async (request) => {
+export const signWithPin = onCall(PASSWORDS, async (request) => {
   const caller = await requireCaller(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });

@@ -21,6 +21,8 @@ function hopeClassesFrom(roleId: string, value: unknown): string[] {
 // the caller's sign-in and permissions itself. Without this, a deploy can leave
 // them closed and every call fails.
 const CALLABLE = { invoker: 'public' } as const;
+// Checking a new password against everyone else's hashes needs more than the default 256 MiB (Andy, 2026-11-11).
+const PASSWORDS = { invoker: 'public', memory: '1GiB', timeoutSeconds: 120 } as const;
 
 /**
  * The "rv" mark on a Reviewer's sign-in: the Firestore rules read it to refuse every change outside the Practice
@@ -142,7 +144,7 @@ async function refreshRosters(orgIds: string[], courseIds: string[]) {
 }
 
 /** Pastor (or an organization head, for their own Staff) creates an account with a temporary password. */
-export const createUser = onCall(CALLABLE, async (request) => {
+export const createUser = onCall(PASSWORDS, async (request) => {
   const { caller, teamOnly } = await requireAccountManager(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const email = requireString(data.email, 'the email', { min: 3 }).toLowerCase();
@@ -296,7 +298,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
 });
 
 /** Pastor (or a head, for their own Staff) sets a new temporary password; the user must change it at next sign-in. */
-export const resetUserPassword = onCall(CALLABLE, async (request) => {
+export const resetUserPassword = onCall(PASSWORDS, async (request) => {
   const { caller, teamOnly } = await requireAccountManager(request);
   const data = (request.data ?? {}) as Record<string, unknown>;
   const uid = requireString(data.uid, 'the user');
@@ -351,7 +353,7 @@ export const deleteUser = onCall(CALLABLE, async (request) => {
 });
 
 /** A user replaces their temporary password. Requires a sign-in within the last 10 minutes. */
-export const changeMyPassword = onCall(CALLABLE, async (request) => {
+export const changeMyPassword = onCall(PASSWORDS, async (request) => {
   // A reviewer must still be able to choose their own password at first sign-in.
   const caller = await requireCaller(request, undefined, { reviewerOk: true });
   const authTime = Number(request.auth?.token.auth_time ?? 0);
