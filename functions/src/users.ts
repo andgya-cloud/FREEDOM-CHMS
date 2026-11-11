@@ -349,7 +349,8 @@ export const deleteUser = onCall(CALLABLE, async (request) => {
 
 /** A user replaces their temporary password. Requires a sign-in within the last 10 minutes. */
 export const changeMyPassword = onCall(CALLABLE, async (request) => {
-  const caller = await requireCaller(request);
+  // A reviewer must still be able to choose their own password at first sign-in.
+  const caller = await requireCaller(request, undefined, { reviewerOk: true });
   const authTime = Number(request.auth?.token.auth_time ?? 0);
   if (Date.now() / 1000 - authTime > 600) {
     throw new HttpsError('failed-precondition', 'Please sign in again, then change your password.');
