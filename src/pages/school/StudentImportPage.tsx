@@ -173,7 +173,7 @@ function StudentImport({ org }: { org: Organization }) {
           {plan.newCourses.length > 0 && <p className="notice small">These departments will be added: {plan.newCourses.join(', ')}. Check the spelling first; a department spelt differently from one you already have will be added as a new one.</p>}
           {plan.newIntakes.length > 0 && <p className="notice small">These cohorts will be added: {plan.newIntakes.map((i) => `${i.courseName} ${i.name}`).join(', ')}.</p>}
           {!can('settings.manage') && !can('school.manage') && plan.ready.some((r) => r.admissionNo) && <p className="notice small">Only staff with the Settings permission can keep the file's admission numbers, so these students will get new numbers.</p>}
-          {needsSettings && <p className="error" role="alert">Adding departments or cohorts needs the Settings permission. Ask the Director to add them, or to do the import.</p>}
+          {needsSettings && <p className="error" role="alert">Adding departments or cohorts needs the Settings permission. Ask Mr Andrew to add them, or to do the import.</p>}
 
           <div className="card exam-table-wrap">
             <table className="table">

@@ -3,7 +3,6 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { Navigate, NavLink, useLocation } from 'react-router-dom';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SyncBadge } from './SyncBadge';
-import { PageHelp } from './PageHelp';
 import { InstallBanner } from './InstallBanner';
 import { AdiaIntro } from './AdiaIntro';
 import { usingEmulators } from '../firebase';
@@ -17,7 +16,7 @@ import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
 import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
-import { AI_MARK, AiDot } from './Ai';
+import { AiDot } from './Ai';
 import { roleRedirect } from '../lib/roleAccess';
 import { JustAskAndy } from './JustAskAndy';
 import { aiFeaturesFor, aiSectionsFor, type AiSection } from '../lib/aiFeatures';
@@ -46,7 +45,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const aiFeatures = aiFeaturesFor(current?.type, can);
   const aiAt = aiSectionsFor(aiFeatures);
   const dot = (section: AiSection) => (aiAt.has(section) ? <AiDot /> : null);
-  const aiButton = aiFeatures.length > 0 && full ? <NavLink to="/ai" className="btn btn-ai ai-top" aria-label="AI Helper">{AI_MARK} AI Helper</NavLink> : null;
   const adia = look === 'glass';
   // The look changes the colours of every page, so it is set on the page root.
   useEffect(() => {
@@ -287,8 +285,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <header className="adia-head">
             {can('people.read') && !trainer && <QuickSearch className="adia-search" />}
             {look === 'cockpit' && current && <LiveClock timeZone={current.timeZone} />}
-            {aiButton}
-            <PageHelp college={adia} />
             <SyncBadge />
             {look === 'glass' ? <img className="org-mark" src="/org/adia-crest.png" alt="ADIA Training Centre crest" width={96} height={96} />
               : look === 'cockpit' ? <img className="org-mark org-mark-church" src="/org/freedom-church-logo.png" alt="Freedom Church" width={64} height={90} />
@@ -309,7 +305,6 @@ export function AppShell({ children }: { children: ReactNode }) {
           <span className="brand-name">Insight-IQ</span>
         </NavLink>
         <OrgSwitcher />
-        {aiButton}
         <SyncBadge />
       </header>
       {notices}

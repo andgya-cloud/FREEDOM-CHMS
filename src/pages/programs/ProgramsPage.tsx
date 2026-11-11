@@ -89,7 +89,7 @@ function Programs({ org }: { org: Organization }) {
                 <button type="button" className="btn btn-primary" onClick={setUp}>Add Growth Track, Freedom 252 and Communication Master Class</button>
                 <p className="hint">You can rename topics and add more programmes afterwards. <Link to={`/programs/${org.id}/new`}>Or start a different programme.</Link></p>
               </>
-            ) : <p className="muted">Ask the pastor to set up the programmes.</p>}
+            ) : <p className="muted">Ask Mr Andrew to set up the programmes.</p>}
           </div>
         ) : (
           <ul className="link-list">

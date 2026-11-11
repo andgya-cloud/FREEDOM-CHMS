@@ -83,7 +83,7 @@ function Receipts({ org }: { org: Organization }) {
         <button type="button" className={show === 'missing' ? 'on' : ''} onClick={() => setShow('missing')}>Receipt needed ({missing.length})</button>
         <button type="button" className={show === 'all' ? 'on' : ''} onClick={() => setShow('all')}>All requisitions</button>
       </div>
-      {list.length === 0 ? <p className="muted small">{show === 'missing' ? 'Every approved requisition here has a receipt.' : 'No requisitions here.'}</p> : (
+      {list.length === 0 ? <p className="muted small">{show === 'missing' ? 'Every approved requisition here has a receipt.' : '🌱 Nothing here yet.'}</p> : (
         <ul className="petty-folders">
           {list.map((r) => {
             const mine = receiptsOf(r.id);

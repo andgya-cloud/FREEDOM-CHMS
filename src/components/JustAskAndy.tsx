@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useOrg } from '../state/OrgContext';
 import { useAuth } from '../state/AuthContext';
 import { canKeepAccounts } from '../../functions/src/shared/permissions';
@@ -9,6 +9,17 @@ import { canOpen, confident, findTopics, GUIDE, isWhereAmI, NO_ACCESS, orgKind, 
 import { aiGuide } from '../lib/aiWrite';
 import { AI_MARK } from './Ai';
 import { VoiceButton } from './VoiceButton';
+import { aiFeaturesFor } from '../lib/aiFeatures';
+
+/** Other pages open the guide with this event (the old Help link now does). */
+const OPEN_EVENT = 'just-ask-andy';
+export const openGuide = () => window.dispatchEvent(new Event(OPEN_EVENT));
+
+/** The old /help address: goes to Today and opens the guide, so saved links still work (Andy, 2026-11-11, 1A). */
+export function OpenGuide() {
+  useEffect(() => { const t = setTimeout(openGuide, 50); return () => clearTimeout(t); }, []);
+  return <Navigate to="/" replace />;
+}
 
 interface Answer { id: number; q: string; text: string; topic?: GuideTopic; open?: boolean; steps?: string[]; byAi?: boolean; others?: GuideTopic[] }
 
@@ -46,7 +57,7 @@ export function JustAskAndy() {
   const [answers, setAnswers] = useState<Answer[]>([]);
   const end = useRef<HTMLDivElement>(null);
   const kind = orgKind(current?.type);
-  const here = helpFor(pathname, kind === 'college');
+  const here = helpFor(pathname, kind === 'college', kind === 'church_campus');
   const access: Access = useMemo(() => ({
     can, keeper: canKeepAccounts(profile), roleBlocks: (p: string) => roleRedirect(profile, p) != null,
   }), [can, profile]);
@@ -60,6 +71,32 @@ export function JustAskAndy() {
     return () => document.removeEventListener('keydown', esc);
   }, [open]);
   useEffect(() => () => { if (canSpeak) window.speechSynthesis.cancel(); }, []);
+  useEffect(() => {
+    const show = () => setOpen(true);
+    window.addEventListener(OPEN_EVENT, show);
+    return () => window.removeEventListener(OPEN_EVENT, show);
+  }, []);
+  // The "?" help is folded in here (1A): opening on a new page shows that page's steps again.
+  const [stepsOpen, setStepsOpen] = useState(true);
+  useEffect(() => { setStepsOpen(true); }, [pathname]);
+  const aiCount = aiFeaturesFor(current?.type, can).length;
+  // A first-day welcome (Andy, 2026-11-11, 5A): the guide opens by itself once on each device, after the opening video.
+  const uid = profile?.uid ?? '';
+  useEffect(() => {
+    if (!uid || !current) return;
+    const key = `jaaWelcomed_${uid}`;
+    try { if (localStorage.getItem(key)) return; } catch { return; }
+    let tries = 0;
+    const timer = setInterval(() => {
+      if (document.querySelector('.adia-intro') && tries++ < 30) return;
+      clearInterval(timer);
+      try { localStorage.setItem(key, '1'); } catch { /* private window */ }
+      setWelcome(true);
+      setOpen(true);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [uid, current]);
+  const [welcome, setWelcome] = useState(false);
 
   if (!current || !profile) return null;
   const org = current;
@@ -126,14 +163,22 @@ export function JustAskAndy() {
               <h2 id="jaa-h"><span className="ai-label">{AI_MARK}</span> Just ask Andy</h2>
               <button type="button" className="btn btn-quiet btn-small" onClick={() => setOpen(false)} aria-label="Close">✕</button>
             </div>
-            <p className="small muted">Hi{first ? ` ${first}` : ''}, I’m the guide Andy built into this app. Ask me how to do anything, or where something is.</p>
+            <p className="small muted">Hi{first ? ` ${first}` : ''}, I’m the guide Andy built into this app. Ask me how to do anything, or where something is.{aiCount > 0 && <> <Link to="/ai" className="ai-link" onClick={() => setOpen(false)}>{AI_MARK} See the {aiCount} things the AI helper can do for you</Link></>}</p>
 
             <div className="jaa-here" aria-label="Where you are">
               <span className="small muted">You are here</span>
               <b>{org.name} › {here.title}</b>
+              <button type="button" className="jaa-toggle small" aria-expanded={stepsOpen} onClick={() => setStepsOpen((o) => !o)}>{stepsOpen ? 'Hide how to use this page' : 'How to use this page'}</button>
+              {stepsOpen && <ol className="jaa-steps small">{here.steps.map((x) => <li key={x}>{x}</li>)}</ol>}
             </div>
 
             <div className="jaa-thread" aria-live="polite">
+              {welcome && answers.length === 0 && (
+                <div className="jaa-a jaa-welcome">
+                  <p><b>🎉 Welcome{first ? `, ${first}` : ''}!</b> This is your first time here on this phone. I’m always at the bottom right of every page. Tap me and ask anything, by typing or by pressing Speak.</p>
+                  <p className="small">Here are a few jobs you can do. Tap one to see how.</p>
+                </div>
+              )}
               {answers.map((a) => (
                 <div key={a.id} className="jaa-turn">
                   <p className="jaa-q">{a.q}</p>
@@ -160,7 +205,6 @@ export function JustAskAndy() {
 
             {answers.length === 0 && (
               <div className="jaa-chips">
-                <button type="button" className="btn btn-ai btn-small" onClick={() => void ask('Where am I?', false)}>Where am I?</button>
                 {popular.map((t) => <button key={t.id} type="button" className="btn btn-ai btn-small" onClick={() => add(fromTopic(t.title, t), false)}>{t.title}</button>)}
               </div>
             )}

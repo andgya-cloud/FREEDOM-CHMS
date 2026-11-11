@@ -2831,3 +2831,34 @@ a.fin-chip:hover { background: #fdecea; }
 .jaa-ask { display: flex; flex-direction: column; gap: 8px; flex: none; }
 .jaa-ask .field { margin: 0; }
 .jaa-ask .row-actions { justify-content: flex-end; }
+
+/* Needs you today and Celebrations on Freedom Church's Today (Andy, 2026-11-11, 3A). */
+.needs-today .card-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.needs-today .card-head h2 { margin: 0; }
+.nt-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.nt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.nt-row { width: 100%; display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 8px 12px; border-radius: 12px; border: 1px solid var(--border, rgba(0, 0, 0, 0.08)); border-left-width: 4px; background: transparent; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; }
+.nt-row:hover { background: rgba(0, 0, 0, 0.03); }
+.nt-red { border-left-color: #c0392b; }
+.nt-blue { border-left-color: #2f6fb3; }
+.nt-violet { border-left-color: #6b4fbb; }
+.nt-gold { border-left-color: #c99a3c; }
+.nt-ai { border-left-color: var(--ai-gold); color: var(--ai-gold); background: var(--ai-tint); }
+.nt-icon { width: 22px; text-align: center; flex: none; }
+.nt-count { font-size: 1.25rem; min-width: 1.6em; flex: none; }
+.nt-label { flex: 1; min-width: 0; }
+.nt-go { color: var(--muted, #777); flex: none; }
+.nt-done { margin: 0; }
+.nt-reach { margin-top: 8px; }
+.nt-reach .reach-card { box-shadow: none; border: 0; padding: 0; margin: 0; background: transparent; }
+.celebrate-card:not(:has(.celebrate-part)) { display: none; }
+.celebrate-part { display: flex; flex-direction: column; gap: 6px; }
+.celebrate-part + .celebrate-part { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border, rgba(0, 0, 0, 0.08)); }
+.celebrate-part h3 { margin: 0; font-size: 1rem; }
+.needs-today .nu-pill { text-decoration: none; }
+.jaa-toggle { align-self: flex-start; background: none; border: 0; padding: 2px 0; color: var(--ai-gold); font: inherit; font-weight: 600; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.ai-link { color: var(--ai-gold); font-weight: 600; }
+.giving-one { display: inline-block; margin: -4px 0 16px; font-weight: 600; }
+.jaa-welcome { background: var(--ai-tint); }
+/* Room at the foot of every page so the Just ask Andy button never hides the last line. */
+.main::after { content: ''; display: block; height: 56px; }

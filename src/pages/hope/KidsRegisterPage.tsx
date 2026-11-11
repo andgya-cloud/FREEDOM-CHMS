@@ -178,7 +178,7 @@ function KidsRegister({ org, ptabs }: { org: Organization; ptabs: ReactNode }) {
   function bulkAbsent() {
     const ids = inGroup.filter(({ c }) => !shown(marks[c.id]?.s)).map(({ c }) => c.id);
     markMany(org.id, 'hopeDays', date, Object.fromEntries(ids.map((id) => [id, { s: 'absent', t: null, r: null }]))).catch(fail);
-    toast.show(`${ids.length} marked absent.`);
+    toast.show(`✅ Register finished. Well done! ${ids.length} marked absent.`);
   }
 
   const menu: MenuItem[] = [];

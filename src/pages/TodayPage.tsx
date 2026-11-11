@@ -86,16 +86,7 @@ export function TodayPage() {
   if (glass && current?.type === 'college' && can('people.read')) return <AdiaToday org={current} />;
 
   // Freedom Church's and Hope's Today, laid out like ADIA's (Andy, 2026-10-31).
-  const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
-  if ((cockpit || aurora) && current && !isCombined) {
-    const figures = can('people.read') || givingAllowed ? (
-      <>
-        {can('people.read') && <HomeScorecard org={current} />}
-        {givingAllowed && <GivingLink />}
-      </>
-    ) : null;
-    return <MinistryToday org={current} hope={aurora} figures={figures} />;
-  }
+  if ((cockpit || aurora) && current && !isCombined) return <MinistryToday org={current} hope={aurora} />;
 
   return (
     <div className={`page${sided ? ' glass-today' : ''}`}>
@@ -161,14 +152,14 @@ export function TodayPage() {
       {current?.type === 'college' && can('people.read') ? <AdiaToday org={current} />
         : current && can('people.read') && <HomeScorecard org={current} />}
 
-      {current?.type !== 'college' && organizations.length > 0 && givingAllowed && <GivingLink />}
+      {current?.type !== 'college' && organizations.length > 0 && (can('gifts.write') || can('finance.reports') || can('giving.person.read')) && <GivingLink />}
 
       {!loading && organizations.length === 0 && (
         <div className="notice">
           <p>No organizations are set up for your account yet.</p>
           {profile?.permissions.includes('settings.manage') && profile.allOrgs
             ? <Link className="btn btn-primary" to="/settings/organizations/new">Add an organization</Link>
-            : <p className="muted">Ask the pastor to give you access.</p>}
+            : <p className="muted">Ask Mr Andrew to give you access.</p>}
         </div>
       )}
     </div>

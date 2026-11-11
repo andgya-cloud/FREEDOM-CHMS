@@ -1,3 +1,4 @@
+import { OpenGuide } from './components/JustAskAndy';
 import { Suspense, lazy, useCallback } from 'react';
 import { InstallPage } from './pages/InstallPage';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -60,7 +61,6 @@ const RemindersPage = lazy(() => import('./pages/followups/RemindersPage').then(
 const ReportsPage = lazy(() => import('./pages/reports/ReportsPage').then((m) => ({ default: m.ReportsPage })));
 const ReportPage = lazy(() => import('./pages/reports/ReportPage').then((m) => ({ default: m.ReportPage })));
 const DataPage = lazy(() => import('./pages/settings/DataPage').then((m) => ({ default: m.DataPage })));
-const HelpPage = lazy(() => import('./pages/HelpPage').then((m) => ({ default: m.HelpPage })));
 const AiHelperPage = lazy(() => import('./pages/AiHelperPage').then((m) => ({ default: m.AiHelperPage })));
 const AskPage = lazy(() => import('./pages/AskPage').then((m) => ({ default: m.AskPage })));
 const NoticePage = lazy(() => import('./pages/NoticePage').then((m) => ({ default: m.NoticePage })));
@@ -160,7 +160,7 @@ export function App() {
     return (
       <div className="center-card">
         <h1>Account not set up</h1>
-        <p>This sign-in has no active staff account. Ask the pastor to add or switch on your account.</p>
+        <p>This sign-in has no active staff account. Ask Mr Andrew to add or switch on your account.</p>
         <button type="button" className="btn btn-primary" onClick={() => void signOut()}>Sign out</button>
       </div>
     );
@@ -331,7 +331,7 @@ function AppRoutes() {
         <Route path="/settings/users/new" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
         <Route path="/settings/users/:uid" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
-        <Route path="/help" element={<HelpPage />} />
+        <Route path="/help" element={<OpenGuide />} />
         <Route path="/notice" element={<NoticePage />} />
         <Route path="/ai" element={<AiHelperPage />} />
         <Route path="/ask" element={<AskPage />} />

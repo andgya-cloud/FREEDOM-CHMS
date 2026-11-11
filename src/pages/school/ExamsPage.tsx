@@ -130,7 +130,7 @@ function Exams({ org }: { org: Organization }) {
   const label = choice?.graduationDate ? `${cohort} · ${classOf(choice.graduationDate)}` : cohort;
   const canStart = can('settings.manage') || can('school.manage');
 
-  if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask the Director to tick it for your account.</p></div>;
+  if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask Mr Andrew to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} allStudents={allStudents} courseName={s.courseName} />;
   const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'student' ? 'Student' : '';
 
@@ -357,7 +357,7 @@ function MyClasses({ org, studentsOf, allStudents, courseName }: { org: Organiza
       {departments && <Greeting />}
       <div className="page-head"><h1>My classes</h1></div>
       <MyCommonCourses orgId={org.id} />
-      {departments && departments.length === 0 && <div className="notice">Your department hasn't been set yet. Ask the office to set it on your account; your students and classes then show here.</div>}
+      {departments && departments.length === 0 && <div className="notice">Your department hasn't been set yet. Ask Mr Andrew to set it on your account; your students and classes then show here.</div>}
       <p className="muted">Tap a class to key in marks or upload them from Excel. When a CAT's marks are in, send it to the principal; it locks.</p>
       {sheets.length === 0 ? <p className="muted">{loading ? 'Loading…' : 'No classes yet. The principal sets up the courses and gives each one to its trainer; yours will show here.'}</p> : cohorts.map((c) => {
         const students = studentsOf(c);

@@ -56,9 +56,8 @@ export const GUIDE: GuideTopic[] = [
     steps: ['The app works without internet. What you save is sent when the signal returns.', 'To install it, open Settings, then This device, and press Install.', 'The small badge at the top shows changes still waiting to send.'] },
   { id: 'switch-org', title: 'Move between Church, ADIA and Hope', orgs: ALL, path: '/', words: 'switch change organisation organization adia hope church campus other', where: 'The name at the top of the menu.',
     steps: ['Press the organisation name at the top of the side menu.', 'Choose the one you want.', 'You only see the ones your account belongs to.'] },
-  { id: 'ai-helper', title: 'All the AI helps', orgs: ALL, path: '/ai', words: 'ai helper artificial intelligence write draft gold sparkle', where: 'The gold AI Helper button at the top.' },
+  { id: 'ai-helper', title: 'All the AI helps', orgs: ALL, path: '/ai', words: 'ai helper artificial intelligence write draft gold sparkle', where: 'Open Just ask Andy and tap the gold AI helper link.' },
   { id: 'ask', title: 'Ask a question about the numbers', orgs: ALL, path: '/ask', need: ['pastoral.read', 'finance.reports', 'settings.manage', 'users.manage'], words: 'how many numbers figures attendance last week total question statistics', where: 'AI Helper, then Ask the app.' },
-  { id: 'help', title: 'Help for everyday jobs', orgs: ALL, path: '/help', words: 'help guide manual how', where: 'Settings or More, then Help.' },
   { id: 'finance', title: 'Bank statements and financial statements', orgs: ALL, path: '/finance', need: ['finance.reports', 'pettycash.approve', 'pettycash.check', 'pettycash.authorize', 'users.manage'], words: 'bank statement financial statements income expenditure family bank balance sort lines accounts close month', where: 'Petty Cash, then Financial statements.',
     steps: ['Open Financial statements.', 'Upload the bank statement PDF and check the lines. Ask the helper to sort lines with no category.', 'Read the income and expenditure, and close the month when it is right.'] },
 
@@ -76,13 +75,13 @@ export const GUIDE: GuideTopic[] = [
     steps: ['Open Service and choose today’s service.', 'Type Adults, Teens, Children (or Whole church), First-time and Salvations.', 'Press Save. The weekly report uses these numbers.'] },
   { id: 'welcome', title: 'Welcome this week’s first-timers', orgs: C, path: '/attendance', need: ['pastoral.read', 'followups.manage', 'settings.manage'], words: 'welcome first-timers visitors message thank whatsapp new people', where: 'Service in the menu, First-timers this week.',
     steps: ['Open Service and scroll to First-timers this week.', 'Press Draft welcome messages.', 'Press Send welcome on each one. WhatsApp opens; read it and send.'] },
-  { id: 'reach', title: 'People to reach today (follow-ups)', orgs: C, path: '/', need: ['followups.manage'], words: 'follow up followup reach call message whatsapp today care visit absent missing', where: 'Today, People to reach today.',
-    steps: ['On Today, look at People to reach today.', 'Press a name and choose WhatsApp or Call.', 'When done, mark it Done: message sent or Done: we spoke.'] },
+  { id: 'reach', title: 'People to reach today (follow-ups)', orgs: C, path: '/', need: ['followups.manage'], words: 'follow up followup reach call message whatsapp today care visit absent missing', where: 'Today, Needs you today, then People to reach.',
+    steps: ['On Today, tap People to reach in Needs you today.', 'Press a name and choose WhatsApp or Call.', 'When done, mark it Done: message sent or Done: we spoke.'] },
   { id: 'whatsapp', title: 'Send someone a WhatsApp message', orgs: C, path: '/people', need: ['people.read'], words: 'whatsapp message text send sms write', where: 'People, open the person, then WhatsApp.',
     steps: ['Open the person’s page and press WhatsApp.', 'Choose the message. Press Write it for me to make it warmer.', 'Press Open WhatsApp and send it there.'] },
-  { id: 'birthdays', title: 'Birthdays and wedding anniversaries', orgs: C, path: '/', need: ['people.read'], words: 'birthday birthdays anniversary card greeting celebrate', where: 'Today, Birthdays.',
-    steps: ['On Today, look at Birthdays this week.', 'Press Send card to share the birthday card.', 'Anniversaries show on Today too, with a greeting button.'] },
-  { id: 'giving-record', title: 'Record a gift and send a receipt', orgs: C, path: '/giving/new', need: ['gifts.write'], words: 'gift tithe offering record give giving money mpesa cash receipt donation', where: 'Giving in the menu, then Record a gift.' },
+  { id: 'birthdays', title: 'Birthdays and wedding anniversaries', orgs: C, path: '/', need: ['people.read'], words: 'birthday birthdays anniversary card greeting celebrate', where: 'Today, Celebrations this week.',
+    steps: ['On Today, look at Celebrations this week.', 'Press Send card to share the birthday card.', 'Anniversaries show on Today too, with a greeting button.'] },
+  { id: 'giving-record', title: 'Record a gift and send a receipt', orgs: C, path: '/giving/new', need: ['gifts.write'], words: 'gift tithe offering record give giving money mpesa cash receipt donation', where: 'Giving in the menu, then Record one gift.' },
   { id: 'giving-import', title: 'Upload the Paybill statement', orgs: C, path: '/giving/import', need: ['gifts.write'], words: 'import upload paybill statement mpesa excel csv 222118', where: 'Giving, then More giving, then Import.' },
   { id: 'unassigned', title: 'Payments with no name', orgs: C, path: '/giving/unassigned', need: ['gifts.write'], words: 'unassigned who sent unknown match payment no name', where: 'Giving, then Unassigned.' },
   { id: 'statements', title: 'Giving statements for members', orgs: C, path: '/giving/statements', need: ['giving.person.read'], words: 'giving statement member tax year annual', where: 'Giving, then More giving, then Statements.' },
@@ -139,7 +138,7 @@ export function topicPath(t: GuideTopic, kind: OrgKind): string {
 }
 
 export function topicSteps(t: GuideTopic, kind: OrgKind): string[] {
-  return t.steps ?? [...helpFor(topicPath(t, kind).split('?')[0]!, kind === 'college').steps];
+  return t.steps ?? [...helpFor(topicPath(t, kind).split('?')[0]!, kind === 'college', kind === 'church_campus').steps];
 }
 
 export interface Access { can: (p: Permission) => boolean; keeper: boolean; roleBlocks: (path: string) => boolean }

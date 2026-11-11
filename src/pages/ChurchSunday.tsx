@@ -7,8 +7,6 @@ import { usePeople, type Person } from '../state/PeopleContext';
 import { useDayAttendance, useEvents } from '../state/useAttendance';
 import { useGiftsBetween } from '../state/useGiving';
 import { useLiveQuery } from '../lib/useQuery';
-import { useWaitingSignups } from './people/SignupsPage';
-import { canKeepAccounts } from '../../functions/src/shared/permissions';
 import { markCardSent, useCardDesign, useCardFiles, useCardsSent } from '../lib/birthdayCard';
 import { cardGreeting, cardId } from '../../functions/src/shared/birthdayCard';
 import type { Organization } from '../state/OrgContext';
@@ -130,6 +128,20 @@ export function SundayCard({ org, onSundayPage = false, pick }: { org: Organizat
  * with "Dear Mary," on it: "Send card" shares it to WhatsApp from the user's own phone (a child's goes to the parent),
  * the 7 a.m. job emails it, and "Card sent ✓" shows who sent it so nobody sends it twice.
  */
+/**
+ * Birthdays and wedding anniversaries in one card on Today (Andy, 2026-11-11, 3A). It hides itself when neither has
+ * anyone this week.
+ */
+export function CelebrationsCard({ org }: { org: Organization }) {
+  return (
+    <section className="card birthdays-card celebrate-card" aria-label="Celebrations this week">
+      <h2>Celebrations this week</h2>
+      <BirthdaysCard org={org} />
+      <AnniversariesCard org={org} />
+    </section>
+  );
+}
+
 export function BirthdaysCard({ org }: { org: Organization }) {
   const { can, profile } = useAuth();
   const { people, byId } = usePeople();
@@ -176,8 +188,8 @@ export function BirthdaysCard({ org }: { org: Organization }) {
   };
 
   return (
-    <section className="card birthdays-card" aria-label="Birthdays this week">
-      <h2>Birthdays this week</h2>
+    <div className="celebrate-part" aria-label="Birthdays this week">
+      <h3>🎂 Birthdays</h3>
       <ul className="row-list">
         {found.map(({ person: p, daysAway }) => {
           const year = yearOf(daysAway);
@@ -198,7 +210,7 @@ export function BirthdaysCard({ org }: { org: Organization }) {
       </ul>
       {problem && <p className="error small">{problem}</p>}
       <p className="muted small">Cards also go by email at 7am on the day to anyone with an email address.</p>
-    </section>
+    </div>
   );
 }
 
@@ -273,8 +285,8 @@ export function AnniversariesCard({ org }: { org: Organization }) {
   const found = upcomingBirthdays(rows, today);
   if (!found.length) return null;
   return (
-    <section className="card birthdays-card" aria-label="Wedding anniversaries this week">
-      <h2>Anniversaries this week</h2>
+    <div className="celebrate-part" aria-label="Wedding anniversaries this week">
+      <h3>💍 Wedding anniversaries</h3>
       <ul className="row-list">
         {found.map(({ person: r, daysAway }) => {
           const members = families.get(r.hid)!;
@@ -291,32 +303,7 @@ export function AnniversariesCard({ org }: { org: Organization }) {
           );
         })}
       </ul>
-    </section>
+    </div>
   );
 }
 
-/** "3 new sign-ups to check" from the family sign-up form (Andy, 2026-11-02, 4A). */
-export function SignupsCard({ org }: { org: Organization }) {
-  const { profile } = useAuth();
-  const { people } = usePeople();
-  const keeper = canKeepAccounts(profile);
-  const { rows } = useWaitingSignups(org.id, keeper);
-  if (!keeper) return null;
-  // Forms waiting for approval (Andy, 2026-11-02, 3A), plus anyone still flagged by the earlier form.
-  const older = people.filter((p) => p.orgId === org.id && p.signup && !p.deletedAt).length;
-  // Red while anything waits, black when nothing does (Andy, 2026-11-02).
-  if (rows.length || !older) {
-    return (
-      <Link className={`card signups-card${rows.length ? ' signups-waiting' : ''}`} to="/people/signups">
-        <b>{rows.length ? `${rows.length} family sign-up${rows.length === 1 ? '' : 's'} to approve` : 'No family sign-ups to approve'}</b>
-        <span className="muted small">{rows.length ? 'Nothing reaches People until you or Doreen approve it.' : 'New forms from the family sign-up QR code show here.'}</span>
-      </Link>
-    );
-  }
-  return (
-    <Link className="card signups-card" to="/people?status=signup">
-      <b>{older} new sign-up{older === 1 ? '' : 's'} to check</b>
-      <span className="muted small">Confirm each person&apos;s status on the People page.</span>
-    </Link>
-  );
-}

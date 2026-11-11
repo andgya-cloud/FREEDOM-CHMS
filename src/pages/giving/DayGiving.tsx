@@ -76,7 +76,7 @@ export function DayGiving({ org, funds }: { org: Organization; funds: Fund[] }) 
         }, profile?.displayName ?? '', newFund);
         synced.catch((err) => toast.show(friendlyError(err)));
       }
-      toast.show(`Saved ${formatMoney(total)} for ${new Date(`${date}T12:00:00`).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}`);
+      toast.show(`✅ Well done! Saved ${formatMoney(total)} for ${new Date(`${date}T12:00:00`).toLocaleDateString('en-KE', { weekday: 'short', day: 'numeric', month: 'short' })}`);
       setOfferings(''); setTithes(''); setOthers([{ name: '', amount: '' }]);
     } catch (err) {
       setError(friendlyError(err));

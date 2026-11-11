@@ -71,7 +71,7 @@ export const examNotify = onCall({ ...CALLABLE, secrets: [PETTY_EMAIL_APP_PASSWO
     throw new HttpsError('permission-denied', 'Only the trainer of this class can send this.');
   }
   const principals = await principalsOf(orgId);
-  if (!principals.length) throw new HttpsError('failed-precondition', 'There is no principal account yet. Ask the pastor to create one.');
+  if (!principals.length) throw new HttpsError('failed-precondition', 'There is no principal account yet. Ask Mr Andrew to create one.');
   const base: ExamNotice = {
     kind: kind as ExamNoticeKind, component, courseName: String(sheet.courseName ?? ''), cohort: String(sheet.cohort ?? ''),
     teacherName: String(sheet.teacherName || caller.profile.displayName || ''), reason: String(sheet.changeRequest?.reason ?? ''),

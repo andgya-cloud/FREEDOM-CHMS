@@ -178,7 +178,7 @@ export const findPasswordAccount = onCall(CALLABLE, async (request) => {
     const fails = (limit?.fails ?? 0) + 1;
     const lock = fails >= SIGNIN_MAX_FAILS;
     await limitRef.set({ fails: lock ? 0 : fails, lockedUntil: lock ? new Date(Date.now() + PIN_LOCK_MINUTES * 60_000) : null, at: FieldValue.serverTimestamp() });
-    if (users.length > 1) throw new HttpsError('failed-precondition', 'More than one person has this password. Sign in with your email instead, and ask the pastor to give you a new password.');
+    if (users.length > 1) throw new HttpsError('failed-precondition', 'More than one person has this password. Sign in with your email instead, and ask Mr Andrew to give you a new password.');
     throw new HttpsError('not-found', 'That password is not recognised. Check it, or sign in with your email.');
   }
   if (limit?.fails) await limitRef.set({ fails: 0, lockedUntil: null, at: FieldValue.serverTimestamp() });

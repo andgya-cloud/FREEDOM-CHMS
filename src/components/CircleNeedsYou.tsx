@@ -15,7 +15,8 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
  * the urgent conversations about a student or member (one line each, with the latest words), the conversations with
  * new messages, and the reports with new messages. Readers only; everyone else gets the "Send a report" button.
  */
-export function CircleNeedsYou({ org, offerSend = false }: { org: Organization; offerSend?: boolean }) {
+/** The counts behind "Needs you", shared with the church's "Needs you today" list. Null until loaded. */
+export function useCircleNeeds(org: Organization) {
   const me = useAuth().profile?.uid ?? '';
   const circle = circleOf(org.type);
   const chats = useChats(org.id).list;
@@ -34,11 +35,17 @@ export function CircleNeedsYou({ org, offerSend = false }: { org: Organization; 
     const incidents = live.filter((r) => r.kind === 'incident' && r.status !== 'resolved').length;
     return { urgent, unread, fresh, incidents };
   }, [chats, reports, me]);
-
   if (!chats || !reports) return null;
-  if (!reports.seesAll && !chats.reader) {
+  return { circle, urgent, unread, fresh, incidents, reader: reports.seesAll || chats.reader, sends: reports.sends };
+}
+
+export function CircleNeedsYou({ org, offerSend = false }: { org: Organization; offerSend?: boolean }) {
+  const needs = useCircleNeeds(org);
+  if (!needs) return null;
+  const { circle, urgent, unread, fresh, incidents } = needs;
+  if (!needs.reader) {
     // Staff send a report from here (the church's Today has no job buttons).
-    return offerSend && reports.sends ? (
+    return offerSend && needs.sends ? (
       <section className="card circle-send"><Link to={`${circle.photosPath}?new=1`} className="btn">📷 Send a report or good news</Link></section>
     ) : null;
   }

@@ -37,7 +37,6 @@ export function DevicePage() {
         {canKeepAccounts(profile) && (
           <li><Link to="/settings/my-password"><span className="link-title">My password</span><span className="link-detail">Change your own password; it also signs you in on its own</span></Link></li>
         )}
-        <li><Link to="/help"><span className="link-title">Help</span><span className="link-detail">How to do the everyday jobs</span></Link></li>
       </ul>
 
       <section className="card">

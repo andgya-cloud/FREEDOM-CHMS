@@ -65,7 +65,7 @@ export function SignInPage() {
           {withEmail ? 'Sign in with your password only' : 'Sign in with email and password instead'}
         </button>
       </form>
-      <p className="muted small">Forgot your password? Ask the pastor to reset it.</p>
+      <p className="muted small">Forgot your password? Ask Mr Andrew to reset it.</p>
     </div>
   );
 }

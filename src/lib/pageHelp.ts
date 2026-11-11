@@ -96,7 +96,7 @@ const HELP: [RegExp, PageHelp][] = [
   [/^\/school\/settings/, { title: 'School settings', steps: [
     'Change only what you need.',
     'Press Save at the bottom of each box.',
-    'Ask the Director if you are not sure.',
+    'Ask Mr Andrew if you are not sure.',
   ] }],
   [/^\/inventory\/[^/]+/, { title: 'Inventory form', steps: [
     'Count each item and type the number.',
@@ -181,6 +181,35 @@ const HELP: [RegExp, PageHelp][] = [
 ];
 
 /** Freedom Church and Freedom Hope Center pages that differ from ADIA's; the rest (petty cash, settings) are shared. */
+/** Freedom Church's own pages as they are now (Andy, 2026-11-11): Today's three cards, the Service page, Giving. */
+const CHURCH: [RegExp, PageHelp][] = [
+  [/^\/$/, { title: 'Today', steps: [
+    'Start with Needs you today. Tap a line to open it.',
+    'The Sunday card shows this week’s service. On Sunday, press Check in.',
+    'Celebrations shows birthdays and anniversaries, with a card or greeting to send.',
+  ] }],
+  [/^\/attendance$/, { title: 'Service', steps: [
+    'Pick the date, and the time if you like.',
+    'Press Check in for the service, then tap each person who came.',
+    'Fill in the headcount, then welcome the first-timers further down.',
+  ] }],
+  [/^\/giving$/, { title: 'Giving', steps: [
+    'Type the day’s giving in Record a day’s giving and press Save.',
+    'For one named giver with a receipt, press Record one gift instead.',
+    'More giving has the M-Pesa import, payments with no name and statements.',
+  ] }],
+  [/^\/programs|^\/groups|^\/teams/, { title: 'Classes and programmes', steps: [
+    'Press a class, for example Freedom 252.',
+    'Press Register to mark who came.',
+    'Add people to the class from its page.',
+  ] }],
+  [/^\/more/, { title: 'More', steps: [
+    'Reports has the weekly and monthly figures.',
+    'Photos and wins and Private conversations are for news and worries.',
+    'Settings has staff accounts, messages and this device.',
+  ] }],
+];
+
 const CHURCH_HOPE: [RegExp, PageHelp][] = [
   [/^\/$/, { title: 'Today', steps: [
     'Press the big button for the job you want to do.',
@@ -270,7 +299,7 @@ const FALLBACK: PageHelp = { title: 'This page', steps: [
   'Press Today in the menu to go back to the start.',
 ] };
 
-export function helpFor(path: string, college = true): PageHelp {
-  const own = college ? undefined : CHURCH_HOPE.find(([re]) => re.test(path))?.[1];
+export function helpFor(path: string, college = true, church = false): PageHelp {
+  const own = college ? undefined : (church ? CHURCH.find(([re]) => re.test(path))?.[1] : undefined) ?? CHURCH_HOPE.find(([re]) => re.test(path))?.[1];
   return own ?? HELP.find(([re]) => re.test(path))?.[1] ?? FALLBACK;
 }

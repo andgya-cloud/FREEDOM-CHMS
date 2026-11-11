@@ -132,7 +132,7 @@ export function AdiaToday({ org }: { org: Organization }) {
           <h2>Set up the school</h2>
           <p className="small">This adds the four departments ({ADIA_PROGRAMMES.join(', ')}), the grading settings and a School fees fund. Levels, units, trainers and timetables are for the school to enter. Nothing else is filled in for you.</p>
           {can('settings.manage') ? <button type="button" className="btn btn-primary align-start" disabled={busy} onClick={() => void setup()}>{busy ? 'Setting up…' : 'Set up now'}</button>
-            : <p className="muted small">Ask the Director to set this up.</p>}
+            : <p className="muted small">Ask Mr Andrew to set this up.</p>}
         </section>
       )}
 

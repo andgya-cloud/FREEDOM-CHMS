@@ -12,7 +12,7 @@ export function RequirePermission({ permission, anyOf, children }: Props) {
     return (
       <div className="page">
         <h1>Not available</h1>
-        <p>Your account does not have access to this page. Ask the pastor if you need it.</p>
+        <p>This page is not part of your account, so you can’t open it. If you need it for your work, please ask Mr Andrew and he can give you access.</p>
       </div>
     );
   }
@@ -26,7 +26,7 @@ export function RequireAccountKeeper({ children }: { children: ReactNode }) {
     return (
       <div className="page">
         <h1>Not available</h1>
-        <p>Only Andrew Guya and Doreen can manage staff accounts and passwords.</p>
+        <p>Only Mr Andrew and Doreen manage staff accounts and passwords. If you need a change, please ask Mr Andrew.</p>
       </div>
     );
   }

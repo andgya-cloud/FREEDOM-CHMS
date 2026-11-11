@@ -9,7 +9,7 @@ export function friendlyError(err: unknown): string {
     case 'auth/invalid-email':
       return 'That email and password do not match. Check them and try again.';
     case 'auth/user-disabled':
-      return 'This account has been switched off. Ask the pastor.';
+      return 'This account has been switched off. Ask Mr Andrew.';
     case 'auth/too-many-requests':
       return 'Too many attempts. Wait a few minutes and try again.';
     case 'auth/network-request-failed':

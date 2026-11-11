@@ -324,7 +324,7 @@ function SundayPage({ org, date, setDate, today, todays, events, loading, canRec
       <FirstTimersCard org={org} />
       <details className="card fold">
         <summary>Past services</summary>
-        {loading && events.length === 0 ? <p className="muted">Loading…</p> : events.length === 0 ? <p className="muted">Nothing recorded yet.</p> : (
+        {loading && events.length === 0 ? <p className="muted">Loading…</p> : events.length === 0 ? <p className="muted">🌱 No services yet. Your first check-in will show here.</p> : (
           <ul className="link-list">
             {events.map((e) => {
               const counted = headcountTotal(e.headcounts, e.type);

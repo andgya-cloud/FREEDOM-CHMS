@@ -16,7 +16,6 @@ function More(_: { org: Organization }) {
     ['/hope/messages', '💬', 'WhatsApp parents', 'One message to many parents, from the Hope phone', can('people.write')],
     ['/hope/bin', '🗑', 'Bin', 'What was removed, to put back', canKeepAccounts(profile)],
     ['/settings', '⚙️', 'Settings', 'Your account, password and the Hope Centre settings', true],
-    ['/help', '❓', 'Help', 'How each page works', true],
   ];
   return (
     <div className="page narrow">

@@ -75,13 +75,15 @@ export function ClassRegister({ org, event, byPerson, canRecord, roster: spec, r
 
   function mark(p: Person, status: AttendanceStatus) {
     markAttendance(org.id, event, p.id, status, 'register', byPerson.get(p.id)).catch((err) => toast.show(friendlyError(err)));
+    // The last name on the register (Andy, 2026-11-11, 5A): a small well done.
+    if (unmarked.length === 1 && unmarked[0]!.id === p.id) toast.show('✅ Register complete. Well done!');
   }
 
   function markRest(status: AttendanceStatus) {
     if (!unmarked.length) return;
     markMany(org.id, event, unmarked.map((p) => ({ personId: p.id, existing: byPerson.get(p.id) })), status)
       .catch((err) => toast.show(friendlyError(err)));
-    toast.show(saved(`${unmarked.length} marked ${ATTENDANCE_STATUS_LABELS[status].toLowerCase()}`));
+    toast.show(`✅ ${saved(`${unmarked.length} marked ${ATTENDANCE_STATUS_LABELS[status].toLowerCase()}`)} Register complete. Well done!`);
   }
 
   return (

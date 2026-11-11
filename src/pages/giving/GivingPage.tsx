@@ -42,9 +42,7 @@ function Giving({ org }: { org: Organization }) {
     { show: canRecord, to: '/giving/unassigned', label: `Unassigned payments${queue.length ? ` (${queue.length})` : ''}` },
     { show: can('giving.person.read'), to: '/giving/pledges', label: 'Pledges' },
     { show: can('giving.person.read'), to: '/giving/statements', label: `Giving statements${january ? ' (year-end)' : ''}` },
-    { show: can('finance.reports'), to: '/reports?tab=giving', label: 'Giving figures and reports' },
     { show: can('finance.reports'), to: '/giving/summary', label: 'Monthly summary' },
-    { show: can('finance.reports'), to: '/finance', label: 'Financial statements from the bank' },
     { show: can('settings.manage'), to: '/settings/funds', label: 'Funds' },
   ].filter((m) => m.show);
 
@@ -68,16 +66,16 @@ function Giving({ org }: { org: Organization }) {
       {canRecord && !church && !fundsLoading && funds.length === 0 && (
         <div className="notice">
           <p>Set up the funds first (Tithes, Offerings and any others) so gifts can be recorded against them.</p>
-          {can('settings.manage') ? <Link className="btn btn-primary" to="/settings/funds">Set up funds</Link> : <p className="muted">Ask the pastor to set up the funds.</p>}
+          {can('settings.manage') ? <Link className="btn btn-primary" to="/settings/funds">Set up funds</Link> : <p className="muted">Ask Mr Andrew to set up the funds.</p>}
         </div>
       )}
 
       {/* A day's giving on any day, in one go (Andy, 2026-11-09). */}
       {canRecord && church && !fundsLoading && <DayGiving org={org} funds={funds} />}
 
-      {canRecord && (church || funds.length > 0) && (
-        <Link to="/giving/new" className={`btn ${church ? '' : 'btn-primary '}btn-block giving-record`}>Record a gift</Link>
-      )}
+      {/* One big way in (Andy, 2026-11-11, 4A): a day's giving; one named gift with a receipt is the small link under it. */}
+      {canRecord && church && !fundsLoading && <Link to="/giving/new" className="giving-one">Record one gift instead (a named giver, with a receipt) ›</Link>}
+      {canRecord && !church && funds.length > 0 && <Link to="/giving/new" className="btn btn-primary btn-block giving-record">Record a gift</Link>}
 
       {(can('giving.person.read') || canRecord) && (
         <section className="card giving-month">
@@ -108,7 +106,7 @@ function Giving({ org }: { org: Organization }) {
       <section className="stack">
         <h2>Last {RECENT_DAYS} days</h2>
         {!can('giving.person.read') && <p className="muted small">You see the gifts you recorded. The pastor sees everyone's.</p>}
-        {loading && recent.length === 0 ? <p className="muted">Loading…</p> : recent.length === 0 ? <p className="muted">No gifts recorded yet.</p> : (
+        {loading && recent.length === 0 ? <p className="muted">Loading…</p> : recent.length === 0 ? <p className="muted">🌱 No gifts in these days yet. Each one you record shows here.</p> : (
           <ul className="row-list">{recent.slice(0, 50).map((g) => <GiftRow key={g.id} org={org} gift={g} fundName={fundName(g.fundId)} />)}</ul>
         )}
       </section>
