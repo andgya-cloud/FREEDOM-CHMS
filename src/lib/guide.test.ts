@@ -50,7 +50,9 @@ describe('Just ask Andy guide', () => {
     expect(canOpen(staff, 'church_campus', everyone)).toBe(true);
   });
   it('follows the menu rules for trainers and helpers', () => {
-    expect(roleRedirect({ roleId: 'trainer' }, '/school/students')).toBe('/school/exams');
+    expect(roleRedirect({ roleId: 'trainer' }, '/school/students')).toBe('/');
+    expect(roleRedirect({ roleId: 'trainer' }, '/')).toBeNull();
+    expect(roleRedirect({ roleId: 'labtech' }, '/')).toBeNull();
     expect(roleRedirect({ roleId: 'trainer' }, '/school/exams')).toBeNull();
     expect(roleRedirect({ roleId: 'helper' }, '/hope/children')).toBe('/');
     expect(roleRedirect({ roleId: 'pastor' }, '/giving')).toBeNull();

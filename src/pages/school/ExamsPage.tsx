@@ -5,7 +5,6 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
 import { useIsAndy } from '../../lib/andy';
-import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import { aiMap } from '../../lib/aiWrite';
 import { AI_MARK, AiTip } from '../../components/Ai';
@@ -39,7 +38,6 @@ import { MyCommonCourses } from '../attendance/CommonCourses';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { SchoolGate, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
-import { AdiaWelcome } from '../../components/AdiaWelcome';
 import type { CourseRow as Programme } from '../../state/useSchool';
 
 /**
@@ -106,7 +104,7 @@ const semesterText = (n: number | null | undefined) => (n ? `Semester ${n}` : 'N
  */
 function Exams({ org }: { org: Organization }) {
   const a = useExamAccess();
-  const { can, profile } = useAuth();
+  const { can } = useAuth();
   const { s, cohorts, order, info, studentsOf, allStudents, attendance } = useCohorts(org);
   const { settings } = useExamSettings(org.id);
   const [params, setParams] = useSearchParams();
@@ -137,8 +135,6 @@ function Exams({ org }: { org: Organization }) {
 
   return (
     <div className="page narrow exams">
-      {/* A trainer's first page is this one, so the ADIA welcome shows here too (Andy, 2026-11-11). */}
-      {profile?.roleId === TRAINER_ROLE_ID && <AdiaWelcome org={org} summary="Your marks sheets are below. Key in the marks for your classes, then send each sheet on when it is complete." />}
       <div className="page-head">
         <h1>Exam Records{sub && <span className="muted"> · {sub}</span>}</h1>
         {cohorts.length > 0 && (

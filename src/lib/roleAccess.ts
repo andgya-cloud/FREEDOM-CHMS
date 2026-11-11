@@ -12,10 +12,11 @@ export function roleRedirect(profile: RoleProfile | null | undefined, path: stri
   const counter = (profile.inventoryCourseIds?.length ?? 0) > 0;
   if (profile.roleId === TRAINER_ROLE_ID) {
     const register = (profile.registerClasses?.length ?? 0) > 0;
-    const ok = new RegExp(`^/(school/exams|settings|tutor-files${register ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`);
-    return ok.test(path) ? null : '/school/exams';
+    // Their own Today, with the ADIA welcome card, is theirs too (Andy, 2026-11-11).
+    const ok = new RegExp(`^/(school/exams|settings|tutor-files|reviews${register ? '|attendance' : ''}${counter ? '|inventory' : ''})(/|$)`);
+    return path === '/' || ok.test(path) ? null : '/';
   }
-  if (profile.roleId === LABTECH_ROLE_ID) return /^\/(inventory|settings)(\/|$)/.test(path) ? null : '/inventory';
+  if (profile.roleId === LABTECH_ROLE_ID) return path === '/' || /^\/(inventory|settings)(\/|$)/.test(path) ? null : '/';
   if (profile.roleId === HELPER_ROLE_ID) return /^\/($|hope\/register|hope\/gate|hope\/clubs|hope\/photos|hope\/more|settings|help)/.test(path) ? null : '/';
   return null;
 }

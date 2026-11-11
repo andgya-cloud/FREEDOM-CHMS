@@ -156,6 +156,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   ) : null;
   const tabs = churchTabs ?? hopeTabs ?? (
     <nav className={`tabbar${phoneMore ? ' has-more' : ''}${moreOpen ? ' more-open' : ''}`} aria-label="Main">
+      {!full && current?.type === 'college' && (
+        <NavLink to="/" end className="tab"><AdiaIcon name="today" />Today</NavLink>
+      )}
       {full && (<>
       <NavLink to="/" end className="tab">
         {adia ? <AdiaIcon name="today" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /></svg>}

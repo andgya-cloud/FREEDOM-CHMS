@@ -17,6 +17,7 @@ import type { Organization } from '../state/OrgContext';
 import { lookFor } from '../lib/look';
 import { AdiaIcon } from '../components/icons';
 import { AdiaToday } from './school/AdiaToday';
+import { AdiaStaffToday } from './school/AdiaStaffToday';
 import { MinistryToday } from './MinistryToday';
 import { FINANCE_ROLE_ID, SIGNATORY_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
@@ -72,6 +73,9 @@ export function TodayPage() {
     : true);
   // The principal has no fees access, so ADIA's fees tile is left out rather than greyed.
   const tiles = (tileActions as readonly (typeof tileActions)[number][]).filter((a) => a.to !== '/school/fees' || allowedTo(a.to));
+
+  // ADIA staff who don't read student records (trainers, lab technicians, signatories) get the welcome card and their jobs (Andy, 2026-11-11).
+  if (current?.type === 'college' && !can('people.read')) return <AdiaStaffToday org={current} />;
 
   // The petty cash signatories work in Petty Cash only, so it is their first page.
   if (profile?.roleId === SIGNATORY_ROLE_ID && current && (PETTY_CASH_ORG_TYPES as readonly string[]).includes(current.type)) {
