@@ -5,6 +5,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useToast } from '../../state/ToastContext';
 import { useAuth } from '../../state/AuthContext';
 import { useIsAndy } from '../../lib/andy';
+import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { friendlyError } from '../../lib/errors';
 import { aiMap } from '../../lib/aiWrite';
 import { AI_MARK, AiTip } from '../../components/Ai';
