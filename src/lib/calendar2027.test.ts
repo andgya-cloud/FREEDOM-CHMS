@@ -8,7 +8,7 @@ describe('Freedom Church 2027 calendar', () => {
   it('is well formed, all in 2027, with no id twice', () => {
     const ids = new Set(CALENDAR_2027.map((r) => r.id));
     expect(ids.size).toBe(CALENDAR_2027.length);
-    expect(CALENDAR_2027.length).toBeLessThan(450);
+    expect(CALENDAR_2027.length).toBe(81);
     for (const r of CALENDAR_2027) {
       expect(r.date.startsWith('2027-')).toBe(true);
       expect((r.endDate ?? r.date) >= r.date).toBe(true);
