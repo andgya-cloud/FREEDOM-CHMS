@@ -37,6 +37,8 @@ describe('calendar', () => {
   it('lets only calendar.manage add events, well formed, at their own place', async () => {
     await assertSucceeds(setDoc(doc(as('leader'), 'organizations/fcn/calendar/e2'), event('leader')));
     await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/adia/calendar/e8'), event('pastor', { orgId: 'adia' })));
+    // The shape the 2027 church calendar import writes: no reminders, nobody invited.
+    await assertSucceeds(setDoc(doc(as('pastor'), 'organizations/fcn/calendar/fc2027-communion'), event('pastor', { type: 'service', allDay: true, start: null, end: null, date: '2027-01-03', endDate: '2027-01-03', repeat: 'monthlyWeekday', repeatUntil: '2027-12-05', endsOn: '2027-12-05', reminders: [], invited: [], invitedNames: {}, skipDates: ['2027-02-07'] })));
     await assertFails(setDoc(doc(as('admin'), 'organizations/fcn/calendar/e3'), event('admin')));
     await assertFails(setDoc(doc(as('adiaLeader'), 'organizations/fcn/calendar/e4'), event('adiaLeader')));
     await assertFails(setDoc(doc(as('leader'), 'organizations/fcn/calendar/e5'), event('leader', { endDate: '2026-11-19' })));

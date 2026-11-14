@@ -9,6 +9,7 @@ import { addDays, dayLabel, daysInMonth, EVENT_TYPE_INFO, minutesOf, weekdayOf }
 import { readPref, writePref } from '../../lib/storage';
 import { refreshPush } from '../../lib/push';
 import { setCalendarName } from '../../lib/calendarWrites';
+import { addCalendar2027, CALENDAR_2027, CALENDAR_2027_PREFIX } from '../../lib/calendar2027';
 import { EventSheet } from './EventSheet';
 import { EventForm } from './EventForm';
 import { RemindersSheet } from './RemindersSheet';
@@ -124,6 +125,21 @@ export function CalendarBoard({ embedded = false }: { embedded?: boolean }) {
     setEditing({ orgId: preferred.id, day, start });
   }
 
+  // Freedom Church's 2027 calendar, added in one tap by Andy (2026-11-14). Hidden once it is in.
+  const church = shown.find((o) => o.type === 'church_campus' && !o.training && managed.some((m) => m.id === o.id));
+  const [adding2027, setAdding2027] = useState<'' | 'busy' | 'done' | 'failed'>('');
+  const offer2027 = can('users.manage') && !!church && !loading && !error && adding2027 !== 'done'
+    && !events.some((e) => e.orgId === church.id && e.id.startsWith(CALENDAR_2027_PREFIX));
+  async function add2027() {
+    if (!church) return;
+    setAdding2027('busy');
+    try {
+      await addCalendar2027(church.id, profile?.displayName ?? '');
+      setAdding2027('done');
+      setCursor('2027-01-01');
+    } catch { setAdding2027('failed'); }
+  }
+
   const invites = events.filter((e) => profile && e.invited?.includes(profile.uid) && !e.responses?.[profile.uid] && e.endsOn >= today).length;
 
   return (
@@ -146,6 +162,13 @@ export function CalendarBoard({ embedded = false }: { embedded?: boolean }) {
         </div>
       </div>
 
+      {offer2027 && (
+        <div className="notice cal-invites">
+          <p>📅 Freedom Church's 2027 calendar is ready to add: {CALENDAR_2027.length} entries, from New Year's Day to Boxing Day, with Bible study, Communion, prayer and fasting, special Sundays and public holidays.</p>
+          <button type="button" className="btn btn-primary" disabled={adding2027 === 'busy'} onClick={add2027}>{adding2027 === 'busy' ? 'Adding…' : 'Add the 2027 calendar'}</button>
+          {adding2027 === 'failed' && <p className="small">That did not go through. Check the internet and try again.</p>}
+        </div>
+      )}
       {invites > 0 && <p className="notice cal-invites">✉️ You have {invites === 1 ? 'an invitation' : `${invites} invitations`} to answer. Open the event{invites === 1 ? '' : 's'} marked “Answer” and tap Yes or No.</p>}
 
       <div className="cal-filters">
