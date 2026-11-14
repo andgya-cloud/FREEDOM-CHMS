@@ -41,3 +41,4 @@ export { birthdayCards, birthdayTestCard } from './birthdays.js';
 export { familySignup, decideSignup } from './familySignup.js';
 export { classRegister } from './classRegister.js';
 export { aiWrite } from './ai.js';
+export { calendarReminders, calendarTest } from './calendar.js';

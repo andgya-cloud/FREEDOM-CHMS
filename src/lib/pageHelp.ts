@@ -8,6 +8,11 @@ export interface PageHelp { title: string; steps: [string, string, string] }
 const PETTY = '^/(school/|hope/)?petty-cash';
 
 const HELP: [RegExp, PageHelp][] = [
+  [/^\/calendar/, { title: 'Calendar', steps: [
+    'Choose Month, Week, Day or Coming up. The arrows move back and forward; Today comes back to today.',
+    'Tap a day or New event to add one. Pick its kind, time, place, whether it repeats, and when to remind.',
+    'Press Reminders and turn pop-ups on, once on each phone and computer. Tap an event to see it, answer Yes or No, change or delete it.',
+  ] }],
   [/^\/manual(\/|$)/, { title: 'User manual', steps: [
     'Type a word in the search box, or open the part for your place.',
     'Press a job to see its steps and a picture of the screen.',

@@ -1,3 +1,4 @@
+import { ComingUpCard } from '../../components/ComingUpCard';
 import { useMemo, useState, type ReactNode } from 'react';
 import { MyCommonCourses } from '../attendance/CommonCourses';
 import { Link } from 'react-router-dom';
@@ -138,6 +139,7 @@ export function AdiaToday({ org }: { org: Organization }) {
       </AdiaWelcome>
 
       <CircleNeedsYou org={org} />
+      <ComingUpCard org={org} />
 
       <section className="lav-jobs" aria-label="What do you want to do?">
         <h2>What do you want to do?</h2>

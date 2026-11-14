@@ -350,6 +350,54 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ---- Events calendar (Andy, 2026-11-14) -------------------------------------
+      // Everyone at the place sees its calendar (2A); Andy and the leaders he ticks ("calendar.manage") add and
+      // change events (3A). Someone invited may only answer Yes or No for themselves. Reminders are sent by the
+      // server (calendarReminders), which records each one in calendarSent so it never goes twice.
+      function validCalendarEvent() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['orgId', 'title', 'type', 'allDay', 'date', 'endDate', 'start', 'end', 'place', 'inCharge', 'notes',
+                 'repeat', 'repeatUntil', 'skipDates', 'seriesId', 'seriesDate', 'reminders', 'remindAll', 'invited', 'invitedNames',
+                 'responses', 'endsOn', 'createdByName', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && d.title is string && d.title.size() >= 1 && d.title.size() <= 120
+          && d.type in ['service', 'meeting', 'outreach', 'training', 'exam', 'deadline', 'celebration', 'other']
+          && d.allDay is bool
+          && d.date is string && d.date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && d.endDate is string && d.endDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$') && d.endDate >= d.date
+          && (d.start == null || (d.start is string && d.start.matches('^[0-2][0-9]:[0-5][0-9]$')))
+          && (d.end == null || (d.end is string && d.end.matches('^[0-2][0-9]:[0-5][0-9]$')))
+          && d.place is string && d.place.size() <= 160
+          && d.inCharge is string && d.inCharge.size() <= 120
+          && d.notes is string && d.notes.size() <= 3000
+          && d.repeat in ['none', 'daily', 'weekly', 'fortnightly', 'monthly', 'monthlyWeekday', 'yearly']
+          && (d.repeatUntil == null || (d.repeatUntil is string && d.repeatUntil.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && d.skipDates is list && d.skipDates.size() <= 400
+          && (d.seriesId == null || (d.seriesId is string && d.seriesId.size() <= 60))
+          && (d.seriesDate == null || (d.seriesDate is string && d.seriesDate.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && d.reminders is list && d.reminders.size() <= 5
+          && d.remindAll is bool
+          && d.invited is list && d.invited.size() <= 150
+          && d.invitedNames is map && d.responses is map
+          && d.endsOn is string && d.endsOn.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && d.createdByName is string && d.createdByName.size() <= 120;
+      }
+      function calendarAnswer(orgId) {
+        let d = request.resource.data;
+        let before = resource.data.get('responses', {});
+        return canAccessOrg(orgId) && request.auth.uid in resource.data.invited
+          && d.diff(resource.data).affectedKeys().hasOnly(['responses', 'updatedAt', 'updatedBy'])
+          && d.responses.diff(before).affectedKeys().hasOnly([request.auth.uid])
+          && d.responses[request.auth.uid] in ['yes', 'no']
+          && d.updatedBy == request.auth.uid && d.updatedAt == request.time;
+      }
+      match /calendar/{eventId} {
+        allow read: if canAccessOrg(orgId);
+        // users.manage (Andy and Doreen) always may, so it works before their accounts are next saved.
+        allow create: if (orgWrite(orgId, 'calendar.manage') || orgWrite(orgId, 'users.manage')) && validCalendarEvent();
+        allow update: if ((orgWrite(orgId, 'calendar.manage') || orgWrite(orgId, 'users.manage')) && validCalendarEvent()) || calendarAnswer(orgId);
+        allow delete: if false;
+      }
+
       // One record per person per gathering. It must point at a real gathering
       // and a real person in this organization, on the gathering's date.
       // A check-in carries its gathering's date, programme and group, so a
@@ -2211,6 +2259,28 @@ service cloud.firestore {
       allow write: if false; // written only by Cloud Functions
     }
   
+    // ---- Calendar reminders on phones and computers (Andy, 2026-11-14, 4A) ----
+    // Each device that turned reminders on keeps its push address here, under the person signed in on it. The doc
+    // id is a fingerprint of the address, so the same device signing in as someone else takes the entry over.
+    match /pushTokens/{tokenId} {
+      allow read: if signedIn() && resource.data.uid == request.auth.uid;
+      allow create, update: if isActive()
+        && request.resource.data.keys().hasOnly(['uid', 'token', 'device', 'updatedAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.token is string && request.resource.data.token.size() >= 20 && request.resource.data.token.size() <= 4096
+        && request.resource.data.device is string && request.resource.data.device.size() <= 120
+        && request.resource.data.updatedAt == request.time
+        && (resource == null || resource.data.token == request.resource.data.token);
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
+    }
+    // Each person's own reminder choice: email on or off.
+    match /calendarPrefs/{uid} {
+      allow read: if signedIn() && request.auth.uid == uid;
+      allow write: if isActive() && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'updatedAt'])
+        && request.resource.data.email is bool && request.resource.data.updatedAt == request.time;
+    }
+
     // ---- Reviewer notes (Andy, 2026-11-11, 4A) ------------------------------
     // Anyone signed in may leave a suggestion about a page; only Andy (users.manage) reads them and marks them done.
     match /reviewerNotes/{noteId} {

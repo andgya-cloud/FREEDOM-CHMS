@@ -8,6 +8,7 @@ import { HopeToday } from './hope/HopeToday';
 import { PoweredBy } from '../components/PoweredBy';
 import { CelebrationsCard, SundayCard } from './ChurchSunday';
 import { NeedsTodayCard } from '../components/NeedsToday';
+import { ComingUpCard } from '../components/ComingUpCard';
 import type { Organization } from '../state/OrgContext';
 
 /**
@@ -35,6 +36,7 @@ export function MinistryToday({ org, hope }: { org: Organization; hope: boolean 
       </section>
       <FirstRunChecklist />
       <NeedsTodayCard org={org} />
+      <ComingUpCard org={org} />
       <SundayCard org={org} />
       <CelebrationsCard org={org} />
       <PoweredBy />

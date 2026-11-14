@@ -33,6 +33,8 @@ export const PERMISSIONS = [
   // ADIA principal (Andy, 2026-10-25): keep admission numbers and issue certificates; see each student's fee balance only
   'school.manage',
   'fees.balances',
+  // The events calendar (Andy, 2026-11-14, 3A): Andy, plus the leaders he ticks, add and change events
+  'calendar.manage',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -57,6 +59,7 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'payroll.approve',
   'exams.mark',
   'exams.manage',
+  'calendar.manage',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -81,6 +84,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'exams.manage': 'Exam records: compile reports, edit and unlock sheets (principal)',
   'school.manage': 'Students: admission numbers, graduation and certificates',
   'fees.balances': "Each student's fee balance (no payments)",
+  'calendar.manage': 'Calendar: add and change events',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',

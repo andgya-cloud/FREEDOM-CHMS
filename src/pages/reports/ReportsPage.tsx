@@ -2,6 +2,7 @@ import { NewMembersCard } from '../../components/NewMembersCard';
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { WeeklyDashboard } from './DashboardPage';
+import { CalendarBoard } from '../calendar/CalendarBoard';
 import { GivingFigures } from '../giving/GivingDashboardPage';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
@@ -14,6 +15,7 @@ import { localDateKey } from '../../../functions/src/shared/datetime';
 import { lastCompletePeriod, periodFor, periodLabel, type ReportType } from '../../../functions/src/shared/metrics';
 
 /**
+ * Reports, one page with tabs. Calendar added 2026-11-14 (Andy: "Under reports, a calendar like Google Calendar").
  * Reports, one page with three tabs (Andy, 2026-10-31, 4A): Weekly (the week-by-week dashboard, making a report,
  * the weekly archive), Monthly (the monthly reports) and Giving (the giving dashboard and the monthly summary).
  */
@@ -21,7 +23,7 @@ export function ReportsPage() {
   return <OrgGate title="Reports">{(org) => <Archive org={org} />}</OrgGate>;
 }
 
-type Tab = 'weekly' | 'monthly' | 'giving';
+type Tab = 'weekly' | 'monthly' | 'giving' | 'calendar';
 
 function Archive({ org }: { org: Organization }) {
   const { can } = useAuth();
@@ -29,10 +31,10 @@ function Archive({ org }: { org: Organization }) {
   const [params, setParams] = useSearchParams();
   const givingTab = can('finance.reports');
   const asked = params.get('tab');
-  const tab: Tab = asked === 'monthly' || (asked === 'giving' && givingTab) ? asked : 'weekly';
+  const tab: Tab = asked === 'monthly' || asked === 'calendar' || (asked === 'giving' && givingTab) ? asked : 'weekly';
   const pick = (t: Tab) => setParams(t === 'weekly' ? {} : { tab: t }, { replace: true });
   const shown = tab === 'giving' ? [] : reports.filter((r) => r.type === tab);
-  const tabs: { id: Tab; label: string }[] = [{ id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, ...(givingTab ? [{ id: 'giving' as const, label: 'Giving' }] : [])];
+  const tabs: { id: Tab; label: string }[] = [{ id: 'weekly', label: 'Weekly' }, { id: 'monthly', label: 'Monthly' }, ...(givingTab ? [{ id: 'giving' as const, label: 'Giving' }] : []), { id: 'calendar', label: '📅 Calendar' }];
 
   return (
     <div className="page">
@@ -50,7 +52,7 @@ function Archive({ org }: { org: Organization }) {
         ))}
       </div>
 
-      {tab === 'giving' ? (
+      {tab === 'calendar' ? <CalendarBoard embedded /> : tab === 'giving' ? (
         <>
           <GivingFigures org={org} />
           <ul className="link-list narrow-block">

@@ -65,6 +65,7 @@ const AiHelperPage = lazy(() => import('./pages/AiHelperPage').then((m) => ({ de
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage').then((m) => ({ default: m.ReviewsPage })));
 const AskPage = lazy(() => import('./pages/AskPage').then((m) => ({ default: m.AskPage })));
 const NoticePage = lazy(() => import('./pages/NoticePage').then((m) => ({ default: m.NoticePage })));
+const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const ManualPage = lazy(() => import('./pages/ManualPage').then((m) => ({ default: m.ManualPage })));
 const MorePage = lazy(() => import('./pages/MorePage').then((m) => ({ default: m.MorePage })));
 const ReportSettingsPage = lazy(() => import('./pages/settings/ReportSettingsPage').then((m) => ({ default: m.ReportSettingsPage })));
@@ -334,6 +335,7 @@ function AppRoutes() {
         <Route path="/settings/users/:uid" element={<RequireAccountKeeper><UserFormPage /></RequireAccountKeeper>} />
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<OpenGuide />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/manual" element={<ManualPage />} />
         <Route path="/manual/:id" element={<ManualPage />} />
         <Route path="/settings/reviewer-notes" element={<ReviewsPage />} />

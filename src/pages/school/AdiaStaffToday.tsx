@@ -1,3 +1,4 @@
+import { ComingUpCard } from '../../components/ComingUpCard';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import type { Organization } from '../../state/OrgContext';
@@ -33,6 +34,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
   return (
     <div className="page lav-today">
       <AdiaWelcome org={org} summary={mine.length ? 'Welcome! Your work is below. Tap what you came to do.' : 'Welcome! Ask Mr Andrew if you need anything here.'} />
+      <ComingUpCard org={org} />
       {mine.length > 0 && (
         <section className="lav-jobs" aria-label="What do you want to do?">
           <h2>What do you want to do?</h2>

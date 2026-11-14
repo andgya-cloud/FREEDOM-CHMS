@@ -20,6 +20,7 @@ import { rateFrom, saturdayOnOrBefore } from '../../../functions/src/shared/hope
 import { useHopePage } from './common';
 import { isChampionManager } from '../../../functions/src/shared/hopeChampionPay';
 import type { Organization } from '../../state/OrgContext';
+import { ComingUpCard } from '../../components/ComingUpCard';
 
 
 /**
@@ -116,6 +117,7 @@ function LeaderToday({ org }: { org: Organization }) {
       {openDay && <LiveBoard org={org} h={h} days={days} helpers={helpers} meals={meals} clubsToday={clubsToday} clubDays={clubs.days} marker={marker} />}
 
       {(can('people.read') || isChampionManager(profile, org.id)) && <NeedsUs org={org} h={h} days={days} unread={chats?.unread} />}
+      <ComingUpCard org={org} />
 
       <PoweredBy />
     </div>
