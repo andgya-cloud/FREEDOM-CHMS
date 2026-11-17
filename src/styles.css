@@ -2941,3 +2941,5 @@ a.fin-chip:hover { background: #fdecea; }
 .lp-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; align-items: end; }
 .lp-add .button-row { grid-column: 1 / -1; }
 .lp-file-ctl select { max-width: 200px; }
+.lp-cell { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
+.lp-miss { font-size: 0.74rem; color: #b91c1c; font-weight: 700; }

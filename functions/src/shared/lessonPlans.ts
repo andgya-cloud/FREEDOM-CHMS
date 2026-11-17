@@ -33,10 +33,13 @@ export const isDocType = (v: unknown): v is DocType => typeof v === 'string' && 
 /** Files one upload holds: a lesson plan, or all of a course's files of one kind. */
 export const maxFilesFor = (t: DocType) => (t === 'lesson' ? LESSON_MAX_FILES : 30);
 /** How far back and forward a lesson date may be picked. */
-export const DAYS_BACK = 90;
-export const DAYS_AHEAD = 30;
+// Round 3 (Andy, 2026-11-17 12:29, 5): past plans as far back as they want, and the next two weeks ahead.
+export const FIRST_DAY = '2020-01-01';
+export const DAYS_AHEAD = 14;
+/** How far back red days (registers without a plan) are looked for. */
+export const DAYS_BACK = 120;
 export const isAllowedDay = (day: string, today: string) =>
-  /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`)) && day >= addDays(today, -DAYS_BACK) && day <= addDays(today, DAYS_AHEAD);
+  /^\d{4}-\d{2}-\d{2}$/.test(day) && !Number.isNaN(Date.parse(`${day}T12:00:00Z`)) && day >= FIRST_DAY && day <= addDays(today, DAYS_AHEAD);
 
 /** Lesson plan for a date: lp_{course}_{day}_{uid}. Other kinds: one per course and kind, cf_{course}_{kind}_{uid}. */
 export const uploadFileId = (courseKey: string, type: DocType, day: string, uid: string) =>
@@ -93,13 +96,20 @@ export function teachingCourses(
 /** A class held: a register marked on a date (3A). */
 export interface LessonDay { date: string; registerName: string }
 
-/** The lessons a teacher held: their courses' class registers, one per register and date, newest first. */
-export function lessonDaysOf(courses: readonly TeachingCourse[], events: readonly { name?: string; date?: string; type?: string; deletedAt?: unknown }[], today: string): LessonDay[] {
+type EventLike = { name?: string; date?: string; type?: string; deletedAt?: unknown; createdBy?: string; updatedBy?: string };
+
+/**
+ * The days a teacher reported for teaching (Andy, 2026-11-17 12:29, 1A): registers of their courses that THEY
+ * marked. A register marked by someone else never counts, and no day is assumed. Sending a plan is the other way a
+ * day counts, and that day is green anyway.
+ */
+export function lessonDaysOf(uid: string, courses: readonly TeachingCourse[], events: readonly EventLike[], today: string): LessonDay[] {
   const names = new Set(courses.map((c) => c.registerName).filter(Boolean) as string[]);
   const seen = new Set<string>();
   const out: LessonDay[] = [];
   for (const e of events) {
     if (e.deletedAt || e.type !== 'class' || !e.name || !e.date || e.date > today || !names.has(e.name)) continue;
+    if (e.createdBy !== uid && e.updatedBy !== uid) continue;
     const k = `${e.date}|${e.name}`;
     if (seen.has(k)) continue;
     seen.add(k); out.push({ date: e.date, registerName: e.name });
@@ -129,14 +139,12 @@ export function dayColours(course: TeachingCourse, courses: readonly TeachingCou
   return out;
 }
 
-/** One box of the principal's table (9A): lessons with plans of lessons held that week, e.g. "3 of 4". */
-export function weekBox(monday: string, lessons: readonly LessonDay[], courses: readonly TeachingCourse[], plans: readonly PlanLike[]): { done: number; of: number; extra: number } {
+/** One box of the principal's table (6A): plans sent that week, and the teacher's own registers with no plan. */
+export function weekBox(monday: string, lessons: readonly LessonDay[], courses: readonly TeachingCourse[], plans: readonly PlanLike[]): { sent: number; missing: number } {
   const sunday = addDays(monday, 6);
-  const inWeek = lessons.filter((l) => l.date >= monday && l.date <= sunday);
-  const done = inWeek.filter((l) => lessonCovered(l, courses, plans)).length;
-  // Plans for dates with no register yet (a lesson still to come).
-  const extra = new Set(plans.filter((p) => p.docType === 'lesson' && hasPlan(p) && p.day >= monday && p.day <= sunday && !inWeek.some((l) => l.date === p.day)).map((p) => p.day)).size;
-  return { done, of: inWeek.length, extra };
+  const sent = plans.filter((p) => p.docType === 'lesson' && hasPlan(p) && p.day >= monday && p.day <= sunday).length;
+  const missing = lessons.filter((l) => l.date >= monday && l.date <= sunday && !lessonCovered(l, courses, plans)).length;
+  return { sent, missing };
 }
 
 const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];

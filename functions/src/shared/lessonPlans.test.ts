@@ -33,11 +33,13 @@ describe('teachingCourses', () => {
 describe('lesson days', () => {
   const courses = [{ key: 'w', label: 'Wiring', registerName: 'Electrical' }, { key: 's', label: 'Safety', registerName: 'Electrical' }, { key: 'l', label: 'Leadership', registerName: 'Leadership · Cohort 4' }];
   const events = [
-    { name: 'Electrical', date: '2026-11-16', type: 'class' }, { name: 'Electrical', date: '2026-11-16', type: 'class' },
-    { name: 'Electrical', date: '2026-11-17', type: 'class' }, { name: 'Leadership · Cohort 4', date: '2026-11-17', type: 'class' },
-    { name: 'Plumbing', date: '2026-11-17', type: 'class' }, { name: 'Electrical', date: '2026-11-20', type: 'class' },
+    { name: 'Electrical', date: '2026-11-16', type: 'class', createdBy: 'jane' }, { name: 'Electrical', date: '2026-11-16', type: 'class', createdBy: 'jane' },
+    { name: 'Electrical', date: '2026-11-17', type: 'class', createdBy: 'jane' }, { name: 'Leadership · Cohort 4', date: '2026-11-17', type: 'class', updatedBy: 'jane' },
+    { name: 'Plumbing', date: '2026-11-17', type: 'class', createdBy: 'jane' }, { name: 'Electrical', date: '2026-11-20', type: 'class', createdBy: 'jane' },
+    // Marked by someone else: never a day for Jane (Andy, round 3).
+    { name: 'Electrical', date: '2026-11-12', type: 'class', createdBy: 'flavier' },
   ];
-  const lessons = lessonDaysOf(courses, events, '2026-11-17');
+  const lessons = lessonDaysOf('jane', courses, events, '2026-11-17');
   const plans = [{ status: 'sent' as const, docType: 'lesson', courseKey: 's', day: '2026-11-16', files: [1] }, { status: 'sent' as const, docType: 'lesson', courseKey: 'w', day: '2026-11-19', files: [1] }];
   it('finds the registers marked, once each, not in the future', () => expect(lessons).toHaveLength(3));
   it('counts a plan for any course taught in that register', () => {
@@ -46,7 +48,7 @@ describe('lesson days', () => {
   it('colours the calendar', () => {
     expect(dayColours(courses[0]!, courses, lessons, plans)).toEqual({ '2026-11-16': 'done', '2026-11-17': 'missing', '2026-11-19': 'done' });
   });
-  it('fills the principal\'s box', () => expect(weekBox('2026-11-16', lessons, courses, plans)).toEqual({ done: 1, of: 3, extra: 1 }));
+  it('fills the principal\'s box', () => expect(weekBox('2026-11-16', lessons, courses, plans)).toEqual({ sent: 2, missing: 2 }));
   it('names days and weeks', () => {
     expect(dayLabel('2026-11-17')).toBe('Tue 17 Nov');
     expect(weekRange('2026-11-16')).toBe('16 to 22 Nov');
@@ -54,7 +56,8 @@ describe('lesson days', () => {
   });
   it('checks dates and ids', () => {
     expect(isAllowedDay('2026-11-10', '2026-11-17')).toBe(true);
-    expect(isAllowedDay('2026-01-01', '2026-11-17')).toBe(false);
+    expect(isAllowedDay('2024-01-01', '2026-11-17')).toBe(true);
+    expect(isAllowedDay('2026-12-02', '2026-11-17')).toBe(false);
     expect(uploadFileId('w', 'lesson', '2026-11-17', 'u')).toBe('lp_w_2026-11-17_u');
     expect(uploadFileId('w', 'scheme', '', 'u')).toBe('cf_w_scheme_u');
   });

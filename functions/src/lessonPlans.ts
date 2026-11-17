@@ -50,8 +50,8 @@ const coursesFor = (uid: string, p: Profile, c: Ctx) =>
 
 /** Class registers marked from a date to today (3A). */
 async function classEventsSince(orgId: string, from: string) {
-  const snap = await db.collection(`organizations/${orgId}/events`).where('date', '>=', from).select('name', 'date', 'type', 'deletedAt').get();
-  return snap.docs.map((d) => d.data() as { name?: string; date?: string; type?: string; deletedAt?: unknown });
+  const snap = await db.collection(`organizations/${orgId}/events`).where('date', '>=', from).select('name', 'date', 'type', 'deletedAt', 'createdBy', 'updatedBy').get();
+  return snap.docs.map((d) => d.data() as { name?: string; date?: string; type?: string; deletedAt?: unknown; createdBy?: string; updatedBy?: string });
 }
 
 /** Every teacher at the college: Trainer accounts and anyone who has a course (a common course, say). */
@@ -99,7 +99,7 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
 
   if (action === 'courses') {
     const courses = coursesFor(caller.uid, me, await contextOf(orgId));
-    const lessons = lessonDaysOf(courses, await classEventsSince(orgId, addDays(today, -DAYS_BACK)), today);
+    const lessons = lessonDaysOf(caller.uid, courses, await classEventsSince(orgId, addDays(today, -DAYS_BACK)), today);
     return { courses, lessons };
   }
   if (action === 'roster') {
@@ -108,7 +108,7 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
     const ctx = await contextOf(orgId);
     const [teachers, events] = await Promise.all([teachersOf(orgId, ctx), classEventsSince(orgId, from)]);
     return {
-      teachers: teachers.map(({ email: _e, ...t }) => ({ ...t, lessons: lessonDaysOf(t.courses, events, today) })),
+      teachers: teachers.map(({ email: _e, ...t }) => ({ ...t, lessons: lessonDaysOf(t.uid, t.courses, events, today) })),
       manual: ctx.manual, programmes: Object.entries(ctx.programmes).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
     };
   }
@@ -159,7 +159,7 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
     const parts = Number(data.parts);
     const name = cleanFileName(requireString(data.name, 'the file name', { max: 200 }));
     if (!UPLOAD_ID.test(uploadId) || !Number.isInteger(parts) || parts < 1 || parts > LESSON_MAX_PARTS) throw new HttpsError('invalid-argument', 'This upload is not valid.');
-    if (docType === 'lesson' && !isAllowedDay(day, today)) throw new HttpsError('invalid-argument', 'Pick a lesson date in the last three months or the next month.');
+    if (docType === 'lesson' && !isAllowedDay(day, today)) throw new HttpsError('invalid-argument', 'Pick a lesson date from the past or the next two weeks.');
     const course = coursesFor(caller.uid, me, await contextOf(orgId)).find((c) => c.key === courseKey);
     if (!course) throw new HttpsError('permission-denied', 'This is not one of your courses.');
     const fileId = uploadFileId(courseKey, docType, day, caller.uid);
@@ -268,7 +268,7 @@ export async function remindLessonPlans(kind: 'evening' | 'friday', now = new Da
     ]);
     for (const t of teachers) {
       if (!EMAIL.test(t.email)) continue;
-      const missing = missingLessons(lessonDaysOf(t.courses, events, today), t.courses, plans.filter((p) => p.tutorUid === t.uid));
+      const missing = missingLessons(lessonDaysOf(t.uid, t.courses, events, today), t.courses, plans.filter((p) => p.tutorUid === t.uid));
       if (!missing.length) continue;
       if (send === undefined) send = await mailer();
       if (!send) return sent;

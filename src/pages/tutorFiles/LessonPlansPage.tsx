@@ -16,7 +16,7 @@ import { isInventoryManager, TRAINER_ROLE_ID } from '../../../functions/src/shar
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
 import { addDays, mondayOf } from '../../../functions/src/shared/metrics';
 import {
-  canChange, dayColours, dayLabel, DAYS_AHEAD, DAYS_BACK, DOC_TYPE_LABELS, DOC_TYPES, hasPlan, LESSON_ACCEPT, LESSON_TYPES_TEXT, lessonCovered,
+  canChange, dayColours, dayLabel, DAYS_AHEAD, DOC_TYPE_LABELS, FIRST_DAY, DOC_TYPES, hasPlan, LESSON_ACCEPT, LESSON_TYPES_TEXT, lessonCovered,
   maxFilesFor, missingLessons, uploadFileId, weekBox, weekRange, type DocType, type LessonDay, type TeachingCourse,
 } from '../../../functions/src/shared/lessonPlans';
 import type { TutorFile } from '../../../functions/src/shared/tutorFiles';
@@ -148,7 +148,7 @@ function UploadCard({ orgId, courses, lessons }: { orgId: string; courses: Teach
         {missingHere.length > 0
           ? <p className="lp-missing">{missingHere.length === 1 ? '1 lesson has' : `${missingHere.length} lessons have`} no plan yet. Tap a red day.</p>
           : <p className="tf-status tf-done small">Every lesson you marked for this course has a plan. Well done!</p>}
-        <MonthCalendar selected={day} onPick={setDay} colours={colours} min={addDays(now, -DAYS_BACK)} max={addDays(now, DAYS_AHEAD)} />
+        <MonthCalendar selected={day} onPick={setDay} colours={colours} min={FIRST_DAY} max={addDays(now, DAYS_AHEAD)} />
         <h3 className="lp-day">Lesson plan for {dayLabel(day)}{day === now ? ' (today)' : ''}</h3>
       </>)}
 
@@ -306,12 +306,12 @@ function PrincipalView({ orgId, onCoursesChanged }: { orgId: string; onCoursesCh
                     {weeks.map((w) => {
                       const b = weekBox(w, t.lessons, t.courses, theirs);
                       const picked = cell?.uid === t.uid && cell.week === w;
-                      const state = b.of ? (b.done === b.of ? 'all' : b.done ? 'some' : 'none') : b.extra ? 'all' : 'empty';
+                      const state = b.missing ? (b.sent ? 'some' : 'none') : b.sent ? 'all' : 'empty';
                       return (
                         <td key={w}>
                           <button type="button" className={`lp-cell lp-${state}${picked ? ' lp-picked' : ''}`} onClick={() => setCell(picked ? null : { uid: t.uid, week: w })}
-                            aria-label={`${t.name}, ${weekRange(w)}: ${b.done} of ${b.of} lessons with plans`}>
-                            {b.of ? `${b.done} of ${b.of}` : b.extra ? `✓ ${b.extra}` : '–'}
+                            aria-label={`${t.name}, ${weekRange(w)}: ${b.sent} plans sent, ${b.missing} missing`}>
+                            {b.sent || b.missing ? <>{b.sent ? <span>✓ {b.sent}</span> : null}{b.missing ? <span className="lp-miss">{b.missing} missing</span> : null}</> : '–'}
                           </button>
                         </td>
                       );
@@ -323,7 +323,7 @@ function PrincipalView({ orgId, onCoursesChanged }: { orgId: string; onCoursesCh
           </table>
         </div>
       )}
-      <p className="muted small">Each box: lessons with a plan, of the lessons whose register was marked that week. Green = all, amber = some, red = none. Tap a box to open, approve or send back.</p>
+      <p className="muted small">Each box: ✓ lesson plans sent that week. "Missing" counts only days the teacher marked a register themselves and sent no plan. Tap a box to open, approve or send back.</p>
       {cell && selTeacher && <CellDetail orgId={orgId} teacher={selTeacher} week={cell.week} plans={plans.filter((p) => p.tutorUid === cell.uid)} files={courseFiles.filter((p) => p.tutorUid === cell.uid)} />}
     </section>
     {roster && <CoursesAndTutors orgId={orgId} roster={roster} onChanged={() => { load(); onCoursesChanged(); }} />}
