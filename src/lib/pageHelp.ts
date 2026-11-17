@@ -13,6 +13,11 @@ const HELP: [RegExp, PageHelp][] = [
     'Tap a day or New event to add one. Pick its kind, time, place, whether it repeats, and when to remind.',
     'Press Reminders and turn pop-ups on, once on each phone and computer. Tap an event to see it, answer Yes or No, change or delete it.',
   ] }],
+  [/^\/tutor-files\/lesson-plans/, { title: 'Lesson plans', steps: [
+    'Teachers: pick your course and the week, then press Choose files or Take a photo. You can add several files.',
+    'You can remove or add files until the principal approves. Then it locks; press Ask to change if you need to.',
+    'Principal: tap a box to open a teacher\'s plans, then Approve or Send back. ⬇ All downloads the whole week.',
+  ] }],
   [/^\/manual(\/|$)/, { title: 'User manual', steps: [
     'Type a word in the search box, or open the part for your place.',
     'Press a job to see its steps and a picture of the screen.',

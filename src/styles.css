@@ -2869,3 +2869,50 @@ a.fin-chip:hover { background: #fdecea; }
 .review-text { margin: 0; white-space: pre-wrap; }
 .review-reply { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border-radius: 12px; border-left: 4px solid var(--ai-gold); background: var(--ai-tint); }
 .jaa-note { flex: none; padding-top: 6px; border-top: 1px dashed var(--border, rgba(0,0,0,.12)); }
+
+/* ---- ADIA weekly lesson plans (Andy, 2026-11-17, 1A-9A) ---- */
+.lp-hero { display: flex; align-items: center; gap: 16px; padding: 18px 20px; border-radius: 18px; text-decoration: none; color: #1a1300;
+  background: linear-gradient(135deg, #f3d27a, #d4a017 60%, #b8860b); box-shadow: 0 10px 28px rgb(184 134 11 / 0.28); transition: transform 0.2s, box-shadow 0.2s; }
+.lp-hero:hover, .lp-hero:focus-visible { transform: translateY(-2px); box-shadow: 0 14px 32px rgb(184 134 11 / 0.36); }
+.lp-hero-ico { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 14px; background: rgb(255 255 255 / 0.35); flex: none; }
+.lp-hero-ico svg { width: 26px; height: 26px; }
+.lp-hero-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.lp-hero-text b { font-size: 1.15rem; }
+.lp-hero-text span { font-size: 0.86rem; opacity: 0.85; }
+.lp-hero-go { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2.4; flex: none; }
+.btn.lp-gold { background: #d4a017; border-color: #b8860b; color: #1a1300; font-weight: 700; }
+.btn.lp-gold:hover { background: #e2b23a; }
+.lp-page { display: flex; flex-direction: column; gap: 16px; }
+.lp-upload { display: flex; flex-direction: column; gap: 12px; }
+.lp-pickers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.lp-pickers select { font-size: 1rem; padding: 12px; }
+.lp-drop { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; padding: 26px 16px; border: 2px dashed #d4a017;
+  border-radius: 16px; background: rgb(212 160 23 / 0.06); text-align: center; }
+.lp-drop p { flex-basis: 100%; margin: 0; }
+.lp-drop.lp-over { background: rgb(212 160 23 / 0.18); }
+.lp-drop .btn { min-height: 48px; padding-inline: 22px; font-size: 1rem; }
+.lp-progress { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.lp-progress > div { display: flex; flex-direction: column; gap: 4px; text-align: left; }
+.lp-progress progress { width: 100%; height: 10px; accent-color: #d4a017; }
+.lp-files, .lp-recent { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.lp-files li, .lp-recent li { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 10px; border-radius: 10px; background: var(--surface-2, #f4f5f9); }
+.lp-file-name { overflow-wrap: anywhere; }
+.lp-file-ctl { display: flex; gap: 4px; }
+.lp-recent { margin-top: 10px; }
+.lp-grid-card { display: flex; flex-direction: column; gap: 12px; }
+.lp-grid { border-collapse: collapse; width: 100%; }
+.lp-grid th, .lp-grid td { padding: 6px; text-align: center; border-bottom: 1px solid var(--line, #e5e7eb); }
+.lp-grid th[scope='row'] { text-align: left; white-space: nowrap; }
+.lp-grid thead th { font-size: 0.8rem; vertical-align: bottom; }
+.lp-grid thead th > span { display: block; white-space: nowrap; }
+.lp-grid thead th.lp-now > span { color: var(--gold-ink); }
+.lp-ncourses { display: block; font-weight: 400; }
+.lp-zip { margin-top: 4px; font: inherit; font-size: 0.74rem; padding: 2px 8px; border-radius: 999px; border: 1px solid var(--line, #d1d5db); background: transparent; color: inherit; cursor: pointer; white-space: nowrap; }
+.lp-zip:disabled { opacity: 0.45; cursor: default; }
+.lp-cell { min-width: 44px; min-height: 36px; border-radius: 10px; border: 1px solid transparent; background: transparent; font: inherit; font-weight: 700; cursor: pointer; color: inherit; }
+.lp-cell.lp-all { background: #dcfce7; color: #15803d; }
+.lp-cell.lp-all.lp-approved { background: #15803d; color: #fff; }
+.lp-cell.lp-some { background: #fef3c7; color: #a16207; }
+.lp-cell.lp-picked { border-color: #d4a017; box-shadow: 0 0 0 2px rgb(212 160 23 / 0.35); }
+.lp-detail { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid #d4a017; }
+.lp-detail h3 { margin: 0; }

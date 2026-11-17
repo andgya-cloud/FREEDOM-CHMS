@@ -1,5 +1,6 @@
 import { ComingUpCard } from '../../components/ComingUpCard';
 import { Link } from 'react-router-dom';
+import { LessonPlanButton } from '../../components/LessonPlanButton';
 import { useAuth } from '../../state/AuthContext';
 import type { Organization } from '../../state/OrgContext';
 import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
@@ -24,7 +25,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
     { to: '/attendance', icon: 'register', label: 'Mark register', sub: 'Who came to class today', show: register },
     { to: '/school/exams', icon: 'exams', label: 'Enter marks', sub: 'CATs, finals and results', show: can('exams.mark') || can('exams.manage') },
-    { to: '/tutor-files', icon: 'files', label: 'Tutor Files', sub: 'Schemes, lesson plans and records', show: trainer },
+    { to: '/tutor-files', icon: 'files', label: 'Tutor Files', sub: 'Course outlines and reports', show: trainer },
     { to: '/inventory', icon: 'inventory', label: 'Inventory', sub: 'Count your department’s items', show: inventory.counts },
     { to: '/school/petty-cash/new', icon: 'pettyCash', label: 'New requisition', sub: 'Ask for petty cash', show: petty.canRequest },
     { to: '/school/petty-cash', icon: 'pettyCash', label: 'Sign requisitions', sub: 'Approve what is waiting', show: petty.canSign },
@@ -34,6 +35,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
   return (
     <div className="page lav-today">
       <AdiaWelcome org={org} summary={mine.length ? 'Welcome! Your work is below. Tap what you came to do.' : 'Welcome! Ask Mr Andrew if you need anything here.'} />
+      <LessonPlanButton />
       <ComingUpCard org={org} />
       {mine.length > 0 && (
         <section className="lav-jobs" aria-label="What do you want to do?">

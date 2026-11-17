@@ -108,7 +108,7 @@ export function EventPage() {
         ? <ClassRegister org={org} event={event} byPerson={byPerson} canRecord={canRecord} roster={linked.roster} rosterOnly={trainer} names={trainer ? linked.names : undefined} />
         : <CheckInPanel org={org} event={event} byPerson={byPerson} canRecord={canRecord} />}
 
-      {trainer && mine && <LessonPlanCard orgId={orgId} eventId={eventId} />}
+      {trainer && mine && <LessonPlanCard />}
 
       <section className="card">
         <label className="field">

@@ -2,6 +2,7 @@ import { ComingUpCard } from '../../components/ComingUpCard';
 import { useMemo, useState, type ReactNode } from 'react';
 import { MyCommonCourses } from '../attendance/CommonCourses';
 import { Link } from 'react-router-dom';
+import { LessonPlanButton } from '../../components/LessonPlanButton';
 import { useAuth } from '../../state/AuthContext';
 import { isDirectorProfile } from '../../../functions/src/shared/permissions';
 import { useToast } from '../../state/ToastContext';
@@ -138,6 +139,7 @@ export function AdiaToday({ org }: { org: Organization }) {
         {isDirectorProfile(profile) && <FirstRunChecklist variant="scene" />}
       </AdiaWelcome>
 
+      <LessonPlanButton />
       <CircleNeedsYou org={org} />
       <ComingUpCard org={org} />
 

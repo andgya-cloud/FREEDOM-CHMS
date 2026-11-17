@@ -28,6 +28,7 @@ export { onChildCreated, dailyChildAbsences, onAbsenceCheckRequested, onHopeRepo
 export { whatsappQueue, onWhatsappOutboxWritten, whatsappWebhook } from './whatsapp.js';
 export { inventoryEmail, inventoryReminders } from './inventory.js';
 export { tutorFiles, tutorFileReminders } from './tutorFiles.js';
+export { lessonPlans, lessonPlanReminders } from './lessonPlans.js';
 export { hopePhotoReports, hopeIncidentReminders } from './hopePhotos.js';
 export { hopeChats } from './hopeChats.js';
 export { hopeRecords } from './hopeRecords.js';

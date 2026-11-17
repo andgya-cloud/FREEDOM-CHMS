@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Link } from 'react-router-dom';
+import { weekRange } from '../../../functions/src/shared/lessonPlans';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg } from '../../state/OrgContext';
 import { useToast } from '../../state/ToastContext';
-import { useLiveDoc, useLiveQuery } from '../../lib/useQuery';
-import { useClassEvents } from '../../state/useAttendance';
+import { useLiveQuery } from '../../lib/useQuery';
 import { friendlyError } from '../../lib/errors';
 import { softDelete } from '../../lib/records';
 import {
@@ -13,15 +14,14 @@ import {
 } from '../../lib/tutorFiles';
 import { isInventoryManager, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
-import { addDays, mondayOf } from '../../../functions/src/shared/metrics';
+import { addDays } from '../../../functions/src/shared/metrics';
 import {
-  canSend, dueText, FILE_KIND_LABELS, FILE_KINDS, kindLabel, isForTutor, lessonFileId, requestFileId, urgency,
+  canSend, dueText, FILE_KIND_LABELS, FILE_KINDS, kindLabel, isForTutor, requestFileId, urgency,
   type FileKind, type FileRequest, type TutorFile,
 } from '../../../functions/src/shared/tutorFiles';
 
 type RequestRow = FileRequest & { id: string; deletedAt?: unknown };
 type FileRow = TutorFile & { id: string };
-type ClassEventRow = { id: string; name: string; date: string; type: string; deletedAt?: unknown };
 
 const today = () => localDateKey(new Date());
 const byDeadline = (a: RequestRow, b: RequestRow) => a.deadline.localeCompare(b.deadline) || a.title.localeCompare(b.title);
@@ -62,9 +62,6 @@ function TutorView({ orgId }: { orgId: string }) {
   const open = requests.filter((r) => { const f = fileFor(requestFileId(r.id, uid)); return !f || f.status === 'returned'; });
   // The page turns redder as the nearest deadline closes in (Andy, 2026-11-04).
   const heat = open.reduce((m, r) => Math.max(m, urgency(r.deadline, now)), 0);
-  const { events: classEvents } = useClassEvents(orgId, profile?.registerClasses ?? []);
-  const since = addDays(now, -13);
-  const lessons = classEvents.filter((e) => !e.deletedAt && e.date >= since && e.date <= now).sort((a, b) => b.date.localeCompare(a.date) || a.name.localeCompare(b.name));
 
   return (
     <div className="page narrow tf-page" style={{ '--heat': heat } as CSSProperties}>
@@ -74,18 +71,9 @@ function TutorView({ orgId }: { orgId: string }) {
       {requests.map((r) => <TutorRequestCard key={r.id} orgId={orgId} request={r} file={fileFor(requestFileId(r.id, uid))} />)}
 
       <h2>Lesson plans</h2>
-      <p className="muted small">Add the plan for each lesson after you mark its register.</p>
-      <section className="card tf-lessons">
-        {lessons.length === 0 && <p className="muted">No class registers in the last two weeks.</p>}
-        {lessons.map((e) => {
-          const f = fileFor(lessonFileId(e.id, uid));
-          return (
-            <div key={e.id} className="tf-lesson">
-              <div><strong>{e.name}</strong><span className="muted small"> · {formatDateKey(e.date)}</span></div>
-              <LessonPlanControls orgId={orgId} eventId={e.id} file={f} compact />
-            </div>
-          );
-        })}
+      <section className="card">
+        <p className="small">Upload each week's lesson plan for your courses.</p>
+        <Link to="/tutor-files/lesson-plans" className="btn lp-gold align-start">Upload lesson plan</Link>
       </section>
     </div>
   );
@@ -178,29 +166,15 @@ function FileActions({ orgId, target, file: f, late, compact }: { orgId: string;
   );
 }
 
-function LessonPlanControls({ orgId, eventId, file, compact }: { orgId: string; eventId: string; file?: FileRow; compact?: boolean }) {
-  const now = today();
-  const s = file ? statusLine(file, now) : null;
-  return (
-    <div className="tf-lesson-ctl">
-      {s && <span className={`tf-status tf-${s.tone} small`}>{s.text}</span>}
-      <FileActions orgId={orgId} target={{ eventId }} file={file} compact={compact} />
-    </div>
-  );
-}
-
-/** "Add lesson plan" on a class register, for the tutor whose class it is (7A). */
-export function LessonPlanCard({ orgId, eventId }: { orgId: string; eventId: string }) {
+/** On a class register, a short way to the weekly lesson plans (Andy, 2026-11-17: one place to upload). */
+export function LessonPlanCard() {
   const { profile } = useAuth();
-  const uid = profile?.uid ?? '';
-  const id = lessonFileId(eventId, uid);
-  const { data } = useLiveDoc<TutorFile>(() => (uid ? doc(db, 'organizations', orgId, 'tutorFiles', id) : null), [orgId, id, uid]);
   if (profile?.roleId !== TRAINER_ROLE_ID) return null;
   return (
     <section className="card tf-plan-card">
       <h3>Lesson plan</h3>
-      <p className="muted small">After the lesson, add its plan as a PDF or Word file, or take photos of the pages.</p>
-      <LessonPlanControls orgId={orgId} eventId={eventId} file={data ? { ...data, id } : undefined} compact />
+      <p className="muted small">Lesson plans now go in one place, a plan for each course and week.</p>
+      <Link to="/tutor-files/lesson-plans" className="btn lp-gold align-start">Upload lesson plan</Link>
     </section>
   );
 }
@@ -240,7 +214,11 @@ function PrincipalView({ orgId }: { orgId: string }) {
         </details>
       )}
 
-      <LessonPlanGrid orgId={orgId} files={files} tutors={tutors} />
+      <section className="card">
+        <h2>Lesson plans</h2>
+        <p className="small">Every teacher's weekly lesson plans, with Approve and Download all.</p>
+        <Link to="/tutor-files/lesson-plans" className="btn lp-gold align-start">Open lesson plans</Link>
+      </section>
     </div>
   );
 }
@@ -319,7 +297,7 @@ function AskForFileForm({ orgId, onDone }: { orgId: string; onDone: () => void }
   );
 }
 
-function ReopenAsk({ orgId, file: f }: { orgId: string; file: FileRow }) {
+export function ReopenAsk({ orgId, file: f }: { orgId: string; file: FileRow }) {
   const toast = useToast();
   const [days, setDays] = useState(2);
   const [busy, setBusy] = useState(false);
@@ -330,7 +308,7 @@ function ReopenAsk({ orgId, file: f }: { orgId: string; file: FileRow }) {
   }
   return (
     <div className="inv-banner inv-banner-late tf-askbar" role="status">
-      <span><strong>{f.reopenRequest!.byName}</strong> asks to change <strong>{f.kind === 'lesson' ? `the lesson plan for ${f.title}` : f.title}</strong>: “{f.reopenRequest!.reason}”</span>
+      <span><strong>{f.reopenRequest!.byName}</strong> asks to change <strong>{f.kind === 'lesson' ? `the lesson plan for ${f.title}` : f.kind === 'week' ? `the lesson plan for ${f.title}, ${weekRange(f.day)}` : f.title}</strong>: “{f.reopenRequest!.reason}”</span>
       <span className="tf-askbar-ctl">
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Open for">
           {[1, 2, 3, 5, 7].map((d) => <option key={d} value={d}>{d === 1 ? 'Today only' : `${d} days`}</option>)}
@@ -410,61 +388,5 @@ function TutorRow({ orgId, request: r, tutor: t, file: f }: { orgId: string; req
         </div>
       )}
     </div>
-  );
-}
-
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-/** A simple week: ✓ where a lesson has its plan, a red dot where a register was marked but no plan came (7A). */
-function LessonPlanGrid({ orgId, files, tutors }: { orgId: string; files: FileRow[]; tutors: Tutor[] | null }) {
-  const toast = useToast();
-  const [monday, setMonday] = useState(mondayOf(today()));
-  const sunday = addDays(monday, 6);
-  const { rows } = useLiveQuery<ClassEventRow>(
-    () => query(collection(db, 'organizations', orgId, 'events'), where('date', '>=', monday), where('date', '<=', sunday)),
-    [orgId, monday],
-  );
-  const classes = rows.filter((e) => e.type === 'class' && !e.deletedAt);
-  const days = WEEKDAYS.map((label, i) => ({ label, key: addDays(monday, i) }));
-  const teaching = (tutors ?? []).filter((t) => t.registerClasses.length);
-  return (
-    <section className="card tf-grid-card">
-      <div className="tf-head">
-        <h2>Lesson plans</h2>
-        <div className="button-row">
-          <button type="button" className="btn btn-small btn-quiet" onClick={() => setMonday(addDays(monday, -7))} aria-label="Previous week">‹</button>
-          <span className="small">{formatDateKey(monday)} to {formatDateKey(sunday)}</span>
-          <button type="button" className="btn btn-small btn-quiet" disabled={monday >= mondayOf(today())} onClick={() => setMonday(addDays(monday, 7))} aria-label="Next week">›</button>
-        </div>
-      </div>
-      {teaching.length === 0 ? <p className="muted small">{tutors ? 'No tutor has class registers yet.' : 'Loading…'}</p> : (
-        <div className="table-wrap">
-          <table className="tf-grid">
-            <thead><tr><th>Tutor</th>{days.map((d) => <th key={d.key}>{d.label}</th>)}</tr></thead>
-            <tbody>
-              {teaching.map((t) => (
-                <tr key={t.uid}>
-                  <th scope="row">{t.name}</th>
-                  {days.map((d) => {
-                    const lessons = classes.filter((e) => e.date === d.key && t.registerClasses.includes(e.name));
-                    if (!lessons.length) return <td key={d.key} />;
-                    const plans = lessons.map((e) => files.find((f) => f.id === lessonFileId(e.id, t.uid))).filter(Boolean) as FileRow[];
-                    const done = plans.length === lessons.length;
-                    return (
-                      <td key={d.key}>
-                        {done
-                          ? <button type="button" className="tf-tick" title={`Download ${lessons.map((e) => e.name).join(', ')}`} onClick={() => plans.forEach((p) => downloadTutorFile(orgId, p.id).catch((err) => toast.show(friendlyError(err))))}>✓</button>
-                          : <span className="tf-dot" title={`${lessons.length - plans.length} lesson plan missing`} aria-label="Lesson plan missing" />}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      <p className="muted small">✓ = plan added (tap to download) · red dot = register marked, plan missing.</p>
-    </section>
   );
 }

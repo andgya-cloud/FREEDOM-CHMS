@@ -37,7 +37,8 @@ export type TutorFileStatus = 'sent' | 'approved' | 'returned';
 /** A tutor's file (a requested file or a lesson plan). Written only by Cloud Functions. */
 export interface TutorFile {
   orgId: string;
-  kind: 'request' | 'lesson';
+  /** 'week' is a weekly lesson plan (shared/lessonPlans.ts, 2026-11-17), with its files in `files`. */
+  kind: 'request' | 'lesson' | 'week';
   requestId: string | null;
   eventId: string | null;
   /** The request's title, or the class name for a lesson plan. */
@@ -59,6 +60,8 @@ export interface TutorFile {
   reopenUntil: string | null;
   returnNote: string;
   approvedByName: string;
+  courseKey?: string;
+  files?: { id: string; name: string; contentType: string; size: number; uploadedOn: string }[];
 }
 
 /** The largest file accepted: it has to fit in one upload (about 10 MB once encoded) and in an email. */
