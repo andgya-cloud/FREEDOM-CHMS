@@ -1,44 +1,68 @@
 import { describe, expect, it } from 'vitest';
 import {
-  canChangeWeek, cellState, cleanFileName, isAllowedWeek, lessonFileType, missingCourses, reminderEmail, teachingCourses, weekChoices, weekFileId, weekRange, zipPath,
+  canChange, cleanFileName, dayColours, dayLabel, fridayEmail, isAllowedDay, lessonDaysOf, lessonFileType, missingLessons, teachingCourses, uploadFileId, weekBox, weekRange, zipPath,
 } from './lessonPlans.js';
 
 const bytes = (...v: (number | string)[]) => new Uint8Array(v.flatMap((x) => (typeof x === 'string' ? [...x].map((c) => c.charCodeAt(0)) : [x])));
 
 describe('teachingCourses', () => {
   const sheets = [
-    { id: 'a', courseName: 'Leadership', cohort: 'Cohort 4', ownerUid: 'andy' },
-    { id: 'b', courseName: 'Leadership', cohort: 'Cohort 4', ownerUid: 'andy' }, // Semester 2 sheet
-    { id: 'c', courseName: 'Leadership', cohort: 'Cohort 3', ownerUid: 'andy' },
-    { id: 'd', courseName: 'Wiring', cohort: 'Cohort 4', ownerUid: 'jane' },
+    { id: 'a', courseName: 'Leadership', cohort: 'Cohort 4', ownerUid: 'andy', courseId: null },
+    { id: 'b', courseName: 'Leadership', cohort: 'Cohort 4', ownerUid: 'andy', courseId: null }, // Semester 2 sheet
+    { id: 'c', courseName: 'Leadership', cohort: 'Cohort 3', ownerUid: 'andy', courseId: null },
+    { id: 'd', courseName: 'Wiring', cohort: 'Cohort 4', ownerUid: 'jane', courseId: 'elec' },
     { id: 'e', courseName: 'Old', cohort: 'Cohort 1', ownerUid: 'andy' },
     { id: 'f', courseName: 'Gone', cohort: 'Cohort 4', ownerUid: 'andy', deletedAt: 1 },
   ];
-  it('lists one entry per course and cohort, skipping closed cohorts and other teachers', () => {
+  it('lists one entry per course and cohort with its register, skipping closed cohorts and other teachers', () => {
     expect(teachingCourses('andy', sheets, new Set(['Cohort-1']))).toEqual([
-      { key: 'c-leadership-cohort-3', label: 'Leadership · Cohort 3' },
-      { key: 'c-leadership-cohort-4', label: 'Leadership · Cohort 4' },
+      { key: 'c-leadership-cohort-3', label: 'Leadership · Cohort 3', registerName: 'Leadership · Cohort 3' },
+      { key: 'c-leadership-cohort-4', label: 'Leadership · Cohort 4', registerName: 'Leadership · Cohort 4' },
     ]);
+    expect(teachingCourses('jane', sheets, new Set(), [], { elec: 'Electrical' })[0]!.registerName).toBe('Electrical');
   });
-  it('falls back to class registers when the teacher has no sheets', () => {
-    expect(teachingCourses('sam', sheets, new Set(), ['Electrical', 'Electrical'])).toEqual([{ key: 'r-electrical', label: 'Electrical' }]);
+  it('adds the principal\'s own courses', () => {
+    const manual = [{ id: 'm1', name: 'Entrepreneurship', department: 'common', cohort: 'Cohort 4', tutorUid: 'sam', tutorName: 'Sam' }];
+    expect(teachingCourses('sam', sheets, new Set(), ['Plumbing'], {}, manual)).toEqual([{ key: 'm-m1', label: 'Entrepreneurship · Cohort 4', registerName: 'Entrepreneurship · Cohort 4' }]);
+  });
+  it('falls back to class registers when the teacher has no courses', () => {
+    expect(teachingCourses('sam', sheets, new Set(), ['Electrical', 'Electrical'])).toEqual([{ key: 'r-electrical', label: 'Electrical', registerName: 'Electrical' }]);
   });
 });
 
-describe('weeks', () => {
-  it('offers next week, this week and earlier, only Mondays', () => {
-    const w = weekChoices('2026-11-17');
-    expect(w.find((x) => x.label.startsWith('Next week'))?.monday).toBe('2026-11-23');
-    expect(w.find((x) => x.label.startsWith('This week'))?.monday).toBe('2026-11-16');
-    expect(isAllowedWeek('2026-11-23', '2026-11-17')).toBe(true);
-    expect(isAllowedWeek('2026-11-24', '2026-11-17')).toBe(false);
-    expect(isAllowedWeek('2027-06-07', '2026-11-17')).toBe(false);
+describe('lesson days', () => {
+  const courses = [{ key: 'w', label: 'Wiring', registerName: 'Electrical' }, { key: 's', label: 'Safety', registerName: 'Electrical' }, { key: 'l', label: 'Leadership', registerName: 'Leadership · Cohort 4' }];
+  const events = [
+    { name: 'Electrical', date: '2026-11-16', type: 'class' }, { name: 'Electrical', date: '2026-11-16', type: 'class' },
+    { name: 'Electrical', date: '2026-11-17', type: 'class' }, { name: 'Leadership · Cohort 4', date: '2026-11-17', type: 'class' },
+    { name: 'Plumbing', date: '2026-11-17', type: 'class' }, { name: 'Electrical', date: '2026-11-20', type: 'class' },
+  ];
+  const lessons = lessonDaysOf(courses, events, '2026-11-17');
+  const plans = [{ status: 'sent' as const, docType: 'lesson', courseKey: 's', day: '2026-11-16', files: [1] }, { status: 'sent' as const, docType: 'lesson', courseKey: 'w', day: '2026-11-19', files: [1] }];
+  it('finds the registers marked, once each, not in the future', () => expect(lessons).toHaveLength(3));
+  it('counts a plan for any course taught in that register', () => {
+    expect(missingLessons(lessons, courses, plans).map((l) => `${l.date} ${l.registerName}`)).toEqual(['2026-11-17 Electrical', '2026-11-17 Leadership · Cohort 4']);
   });
-  it('names a week plainly', () => {
+  it('colours the calendar', () => {
+    expect(dayColours(courses[0]!, courses, lessons, plans)).toEqual({ '2026-11-16': 'done', '2026-11-17': 'missing', '2026-11-19': 'done' });
+  });
+  it('fills the principal\'s box', () => expect(weekBox('2026-11-16', lessons, courses, plans)).toEqual({ done: 1, of: 3, extra: 1 }));
+  it('names days and weeks', () => {
+    expect(dayLabel('2026-11-17')).toBe('Tue 17 Nov');
     expect(weekRange('2026-11-16')).toBe('16 to 22 Nov');
     expect(weekRange('2026-12-28')).toBe('28 Dec to 3 Jan');
   });
-  it('builds ids', () => expect(weekFileId('c-x', '2026-11-16', 'u1')).toBe('week_c-x_2026-11-16_u1'));
+  it('checks dates and ids', () => {
+    expect(isAllowedDay('2026-11-10', '2026-11-17')).toBe(true);
+    expect(isAllowedDay('2026-01-01', '2026-11-17')).toBe(false);
+    expect(uploadFileId('w', 'lesson', '2026-11-17', 'u')).toBe('lp_w_2026-11-17_u');
+    expect(uploadFileId('w', 'scheme', '', 'u')).toBe('cf_w_scheme_u');
+  });
+  it('writes the Friday email', () => {
+    const e = fridayEmail('Jane', missingLessons(lessons, courses, plans), 'https://x');
+    expect(e.subject).toBe('Lesson plans missing for 2 lessons');
+    expect(e.text).toContain('• Tue 17 Nov: Electrical');
+  });
 });
 
 describe('lessonFileType', () => {
@@ -58,25 +82,15 @@ describe('lessonFileType', () => {
   it('cleans names', () => expect(cleanFileName('Week 3: plan/final.docx')).toBe('Week 3- plan-final.docx'));
 });
 
-describe('locking and the grid', () => {
+describe('locking and zip', () => {
   it('locks only once approved, unless reopened', () => {
-    expect(canChangeWeek(null, '2026-11-17')).toBe(true);
-    expect(canChangeWeek({ status: 'sent' }, '2026-11-17')).toBe(true);
-    expect(canChangeWeek({ status: 'returned' }, '2026-11-17')).toBe(true);
-    expect(canChangeWeek({ status: 'approved' }, '2026-11-17')).toBe(false);
-    expect(canChangeWeek({ status: 'approved', reopenUntil: '2026-11-18' }, '2026-11-17')).toBe(true);
+    expect(canChange(null, '2026-11-17')).toBe(true);
+    expect(canChange({ status: 'sent' }, '2026-11-17')).toBe(true);
+    expect(canChange({ status: 'returned' }, '2026-11-17')).toBe(true);
+    expect(canChange({ status: 'approved' }, '2026-11-17')).toBe(false);
+    expect(canChange({ status: 'approved', reopenUntil: '2026-11-18' }, '2026-11-17')).toBe(true);
   });
-  it('counts courses with a plan', () => {
-    const plans = [{ courseKey: 'a', status: 'sent' as const, files: [1] }, { courseKey: 'b', status: 'sent' as const, files: [] }];
-    expect(cellState(['a', 'b'], plans)).toEqual({ done: 1, of: 2, state: 'some' });
-    expect(cellState(['a'], plans).state).toBe('all');
-    expect(cellState(['b'], plans).state).toBe('none');
-    expect(missingCourses([{ key: 'a', label: 'A' }, { key: 'b', label: 'B' }], plans)).toEqual([{ key: 'b', label: 'B' }]);
-  });
-  it('writes the Friday email and zip paths', () => {
-    const e = reminderEmail('Jane', '2026-11-23', [{ key: 'a', label: 'Wiring · Cohort 4' }], 'https://x/lp');
-    expect(e.subject).toContain('23 to 29 Nov');
-    expect(e.text).toContain('• Wiring · Cohort 4');
+  it('names zip entries', () => {
     const taken = new Set<string>();
     expect(zipPath('Jane', 'Wiring · Cohort 4', 'a.pdf', taken)).toBe('Jane/Wiring · Cohort 4/a.pdf');
     expect(zipPath('Jane', 'Wiring · Cohort 4', 'a.pdf', taken)).toBe('Jane/Wiring · Cohort 4/a (2).pdf');

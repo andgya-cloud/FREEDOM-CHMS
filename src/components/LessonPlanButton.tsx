@@ -18,7 +18,7 @@ export function LessonPlanButton() {
       <span className="lp-hero-ico"><AdiaIcon name="files" /></span>
       <span className="lp-hero-text">
         <b>{teaches ? 'Upload lesson plan' : 'Lesson plans'}</b>
-        <span>{teaches ? 'Pick your course and week, then choose your file' : 'See, approve and download every teacher’s plans'}</span>
+        <span>{teaches ? 'Pick your course and the date, then choose your file' : 'See, approve and download every teacher’s plans'}</span>
       </span>
       <svg className="lp-hero-go" viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>
     </Link>

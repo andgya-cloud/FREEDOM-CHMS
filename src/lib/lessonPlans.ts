@@ -2,16 +2,19 @@ import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
 import { downloadFile } from './givingPdf';
 import {
-  extOf, LESSON_CHUNK_BYTES, LESSON_MAX_BYTES, LESSON_TYPES, LESSON_TYPES_TEXT, zipPath, type LessonItem, type TeachingCourse,
+  extOf, LESSON_CHUNK_BYTES, LESSON_MAX_BYTES, LESSON_TYPES, LESSON_TYPES_TEXT, zipPath, type DocType, type LessonDay, type LessonItem, type ManualCourse, type TeachingCourse,
 } from '../../functions/src/shared/lessonPlans';
 
-export interface LessonTeacher { uid: string; name: string; phone: string; courses: TeachingCourse[] }
+export interface LessonTeacher { uid: string; name: string; phone: string; courses: TeachingCourse[]; lessons: LessonDay[] }
+export interface LessonRoster { teachers: LessonTeacher[]; manual: ManualCourse[]; programmes: { id: string; name: string }[] }
 
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: string }) =>
   httpsCallable<typeof data, R>(functions, 'lessonPlans', { timeout: 180_000 })(data).then((r) => r.data);
 
-export const myCourses = (orgId: string) => call<{ courses: TeachingCourse[] }>({ orgId, action: 'courses' }).then((r) => r.courses);
-export const lessonRoster = (orgId: string) => call<{ teachers: LessonTeacher[] }>({ orgId, action: 'roster' }).then((r) => r.teachers);
+export const myCourses = (orgId: string) => call<{ courses: TeachingCourse[]; lessons: LessonDay[] }>({ orgId, action: 'courses' });
+export const lessonRoster = (orgId: string, from: string) => call<LessonRoster>({ orgId, action: 'roster', from });
+export const saveCourse = (orgId: string, c: { id?: string; name: string; cohort: string; department: string; tutorUid: string }) => call<{ id: string }>({ orgId, action: 'saveCourse', ...c });
+export const removeCourse = (orgId: string, id: string) => call({ orgId, action: 'removeCourse', id });
 export const removeLessonFile = (orgId: string, fileId: string, itemId: string) => call({ orgId, action: 'remove', fileId, itemId });
 
 function toBase64(blob: Blob): Promise<string> {
@@ -38,8 +41,8 @@ export function checkFile(file: File): string | null {
   return null;
 }
 
-/** Uploads one file into a week's plan, in 4 MB pieces. onProgress gets 0 to 1. */
-export async function uploadLessonFile(orgId: string, courseKey: string, week: string, file: File, onProgress?: (p: number) => void): Promise<void> {
+/** Uploads one file (a lesson plan for a date, or a course file), in 4 MB pieces. onProgress gets 0 to 1. */
+export async function uploadLessonFile(orgId: string, courseKey: string, docType: DocType, day: string, file: File, onProgress?: (p: number) => void): Promise<void> {
   const problem = checkFile(file);
   if (problem) throw new Error(problem);
   const uploadId = Array.from(crypto.getRandomValues(new Uint8Array(10)), (b) => (b % 36).toString(36)).join('');
@@ -49,7 +52,7 @@ export async function uploadLessonFile(orgId: string, courseKey: string, week: s
     await call({ orgId, action: 'part', uploadId, n, data: await toBase64(piece) });
     onProgress?.((n + 1) / (parts + 1));
   }
-  await call({ orgId, action: 'add', courseKey, week, uploadId, parts, name: nameFor(file) });
+  await call({ orgId, action: 'add', courseKey, docType, day, uploadId, parts, name: nameFor(file) });
   onProgress?.(1);
 }
 

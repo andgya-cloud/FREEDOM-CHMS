@@ -2916,3 +2916,28 @@ a.fin-chip:hover { background: #fdecea; }
 .lp-cell.lp-picked { border-color: #d4a017; box-shadow: 0 0 0 2px rgb(212 160 23 / 0.35); }
 .lp-detail { display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 14px; border: 1px solid #d4a017; }
 .lp-detail h3 { margin: 0; }
+.lp-missing { margin: 0; padding: 10px 14px; border-radius: 12px; background: #fee2e2; color: #991b1b; font-weight: 600; }
+.lp-day { margin: 4px 0 0; }
+.lp-cal { display: flex; flex-direction: column; gap: 8px; max-width: 420px; }
+.lp-cal-head { display: flex; justify-content: space-between; align-items: center; }
+.lp-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.lp-cal-wd { text-align: center; font-size: 0.74rem; color: var(--muted); font-weight: 600; }
+.lp-cal-day { aspect-ratio: 1; min-height: 38px; border-radius: 10px; border: 1px solid var(--line, #e5e7eb); background: var(--surface, #fff); font: inherit; font-weight: 600; cursor: pointer; color: inherit; }
+.lp-cal-day.lp-out { opacity: 0.45; }
+.lp-cal-day:disabled { opacity: 0.25; cursor: default; }
+.lp-cal-day.lp-done { background: #dcfce7; border-color: #86efac; color: #15803d; }
+.lp-cal-day.lp-missing { background: #fee2e2; border-color: #fca5a5; color: #b91c1c; }
+.lp-cal-day.lp-today { box-shadow: inset 0 0 0 2px var(--gold-ink); }
+.lp-cal-day.lp-sel { background: #d4a017; border-color: #b8860b; color: #1a1300; }
+.lp-cal-key { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin: 0; }
+.lp-key { display: inline-block; width: 12px; height: 12px; border-radius: 4px; }
+.lp-key.lp-done { background: #86efac; }
+.lp-key.lp-missing { background: #fca5a5; }
+.lp-cell { white-space: nowrap; padding: 4px 8px; }
+.lp-cell.lp-none { background: #fee2e2; color: #b91c1c; }
+.lp-cell.lp-empty { color: var(--muted); font-weight: 400; }
+.lp-courses { display: flex; flex-direction: column; gap: 10px; }
+.lp-courses > ul, .lp-courses > p, .lp-courses > .btn, .lp-add { margin-top: 10px; }
+.lp-add { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; align-items: end; }
+.lp-add .button-row { grid-column: 1 / -1; }
+.lp-file-ctl select { max-width: 200px; }

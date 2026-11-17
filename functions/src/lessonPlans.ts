@@ -11,10 +11,11 @@ import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProf
 import { can, canAccessOrg, isInventoryManager, TRAINER_ROLE_ID } from './shared/permissions.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { localDateKey } from './shared/datetime.js';
-import { addDays, mondayOf } from './shared/metrics.js';
+import { addDays } from './shared/metrics.js';
 import {
-  canChangeWeek, cleanFileName, isAllowedWeek, LESSON_CHUNK_BYTES, LESSON_MAX_BYTES, LESSON_MAX_FILES, LESSON_MAX_PARTS, lessonFileType, lessonItemPath,
-  lessonPartPath, missingCourses, reminderEmail, teachingCourses, weekFileId, weekRange, type LessonItem, type TeachingCourse,
+  canChange, cleanFileName, DAYS_BACK, fridayEmail, isAllowedDay, isDocType, LESSON_CHUNK_BYTES, LESSON_MAX_BYTES, LESSON_MAX_PARTS, lessonDaysOf,
+  lessonFileType, lessonItemPath, lessonPartPath, maxFilesFor, missingLessons, sixPmEmail, teachingCourses, uploadFileId,
+  type LessonItem, type ManualCourse, type TeachingCourse,
 } from './shared/lessonPlans.js';
 import type { TutorFile } from './shared/tutorFiles.js';
 
@@ -26,28 +27,39 @@ const UPLOAD_ID = /^[a-z0-9]{8,32}$/;
 type Profile = UserProfile & { registerClasses?: string[] };
 export interface Teacher { uid: string; name: string; email: string; phone: string; courses: TeachingCourse[] }
 
-async function closedCohorts(orgId: string): Promise<Set<string>> {
-  const snap = await db.collection(`organizations/${orgId}/examCohorts`).where('closed', '==', true).get();
-  return new Set(snap.docs.map((d) => d.id));
+/** What every course list needs from Exam Records, the departments and the principal's own list. */
+interface Ctx { sheets: Awaited<ReturnType<typeof sheetsOf>>; closed: Set<string>; programmes: Record<string, string>; manual: ManualCourse[] }
+
+async function sheetsOf(orgId: string) {
+  const snap = await db.collection(`organizations/${orgId}/examSheets`).select('courseName', 'cohort', 'ownerUid', 'courseId', 'deletedAt').get();
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as { courseName?: string; cohort?: string; ownerUid?: string; courseId?: string | null; deletedAt?: unknown }) }));
 }
 
-async function sheetsOf(orgId: string, uid?: string) {
-  const col = db.collection(`organizations/${orgId}/examSheets`);
-  const snap = await (uid ? col.where('ownerUid', '==', uid) : col).select('courseName', 'cohort', 'ownerUid', 'deletedAt').get();
-  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as { courseName?: string; cohort?: string; ownerUid?: string; deletedAt?: unknown }) }));
+async function contextOf(orgId: string): Promise<Ctx> {
+  const [sheets, closed, programmes, manual] = await Promise.all([
+    sheetsOf(orgId),
+    db.collection(`organizations/${orgId}/examCohorts`).where('closed', '==', true).get().then((q) => new Set(q.docs.map((d) => d.id))),
+    db.collection(`organizations/${orgId}/courses`).get().then((q) => Object.fromEntries(q.docs.filter((d) => !d.data().deletedAt).map((d) => [d.id, String(d.data().name ?? '')]))),
+    db.collection(`organizations/${orgId}/teachingCourses`).get().then((q) => q.docs.map((d) => ({ id: d.id, ...d.data() }) as ManualCourse).filter((m) => !m.deletedAt)),
+  ]);
+  return { sheets, closed, programmes, manual };
 }
 
-/** A person's own courses (2A): their marks sheets in open cohorts; a trainer with none gets their class registers. */
-async function coursesOf(orgId: string, uid: string, profile: Profile): Promise<TeachingCourse[]> {
-  const [sheets, closed] = await Promise.all([sheetsOf(orgId, uid), closedCohorts(orgId)]);
-  return teachingCourses(uid, sheets, closed, profile.roleId === TRAINER_ROLE_ID ? profile.registerClasses ?? [] : []);
+const coursesFor = (uid: string, p: Profile, c: Ctx) =>
+  teachingCourses(uid, c.sheets, c.closed, p.roleId === TRAINER_ROLE_ID ? p.registerClasses ?? [] : [], c.programmes, c.manual);
+
+/** Class registers marked from a date to today (3A). */
+async function classEventsSince(orgId: string, from: string) {
+  const snap = await db.collection(`organizations/${orgId}/events`).where('date', '>=', from).select('name', 'date', 'type', 'deletedAt').get();
+  return snap.docs.map((d) => d.data() as { name?: string; date?: string; type?: string; deletedAt?: unknown });
 }
 
-/** Every teacher at the college: Trainer accounts and anyone who teaches a course (a common course, say). */
-export async function teachersOf(orgId: string): Promise<Teacher[]> {
-  const [sheets, closed, trainers] = await Promise.all([sheetsOf(orgId), closedCohorts(orgId), db.collection('users').where('roleId', '==', TRAINER_ROLE_ID).get()]);
+/** Every teacher at the college: Trainer accounts and anyone who has a course (a common course, say). */
+export async function teachersOf(orgId: string, ctx?: Ctx): Promise<Teacher[]> {
+  const c = ctx ?? await contextOf(orgId);
+  const trainers = await db.collection('users').where('roleId', '==', TRAINER_ROLE_ID).get();
   const profiles = new Map<string, Profile>(trainers.docs.map((d) => [d.id, d.data() as Profile]));
-  const owners = [...new Set(sheets.filter((s) => !s.deletedAt && s.ownerUid && !profiles.has(s.ownerUid)).map((s) => s.ownerUid!))];
+  const owners = [...new Set([...c.sheets.filter((s) => !s.deletedAt).map((s) => s.ownerUid), ...c.manual.map((m) => m.tutorUid)].filter((u): u is string => !!u && !profiles.has(u)))];
   if (owners.length) {
     const snaps = await db.getAll(...owners.map((uid) => db.doc(`users/${uid}`)));
     for (const s of snaps) if (s.exists) profiles.set(s.id, s.data() as Profile);
@@ -55,7 +67,7 @@ export async function teachersOf(orgId: string): Promise<Teacher[]> {
   const out: Teacher[] = [];
   for (const [uid, u] of profiles) {
     if (!u.active || !canAccessOrg(u, orgId)) continue;
-    const courses = teachingCourses(uid, sheets, closed, u.roleId === TRAINER_ROLE_ID ? u.registerClasses ?? [] : []);
+    const courses = coursesFor(uid, u, c);
     if (!courses.length && u.roleId !== TRAINER_ROLE_ID) continue;
     out.push({ uid, name: u.displayName || u.email, email: u.email ?? '', phone: u.phone ?? '', courses });
   }
@@ -85,10 +97,47 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
   const manager = isInventoryManager(me) || can(me, 'exams.manage');
   const today = localDateKey();
 
-  if (action === 'courses') return { courses: await coursesOf(orgId, caller.uid, me) };
+  if (action === 'courses') {
+    const courses = coursesFor(caller.uid, me, await contextOf(orgId));
+    const lessons = lessonDaysOf(courses, await classEventsSince(orgId, addDays(today, -DAYS_BACK)), today);
+    return { courses, lessons };
+  }
   if (action === 'roster') {
     if (!manager) throw new HttpsError('permission-denied', 'Only the principal sees every teacher.');
-    return { teachers: (await teachersOf(orgId)).map(({ email: _e, ...t }) => t) };
+    const from = typeof data.from === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(data.from) && data.from >= addDays(today, -DAYS_BACK) ? data.from : addDays(today, -35);
+    const ctx = await contextOf(orgId);
+    const [teachers, events] = await Promise.all([teachersOf(orgId, ctx), classEventsSince(orgId, from)]);
+    return {
+      teachers: teachers.map(({ email: _e, ...t }) => ({ ...t, lessons: lessonDaysOf(t.courses, events, today) })),
+      manual: ctx.manual, programmes: Object.entries(ctx.programmes).map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name)),
+    };
+  }
+  // The principal's own list of courses (6A), one tutor each (7B).
+  if (action === 'saveCourse') {
+    if (!manager) throw new HttpsError('permission-denied', 'Only the principal adds courses.');
+    const name = requireString(data.name, 'the course name', { max: 80 }).trim();
+    const cohort = typeof data.cohort === 'string' ? data.cohort.trim().slice(0, 40) : '';
+    const department = typeof data.department === 'string' && data.department ? data.department.slice(0, 80) : 'common';
+    const tutorUid = requireString(data.tutorUid, 'the tutor', { max: 128 });
+    const tutor = (await db.doc(`users/${tutorUid}`).get()).data() as Profile | undefined;
+    if (!name || !tutor || !tutor.active || !canAccessOrg(tutor, orgId)) throw new HttpsError('invalid-argument', 'Pick a course name and a tutor at ADIA.');
+    const ctx = await contextOf(orgId);
+    if (department !== 'common' && !ctx.programmes[department]) throw new HttpsError('invalid-argument', 'Pick a department from the list.');
+    const id = typeof data.id === 'string' && /^[A-Za-z0-9]{6,40}$/.test(data.id) ? data.id : null;
+    const clash = ctx.manual.find((m) => m.id !== id && m.name.toLowerCase() === name.toLowerCase() && (m.cohort ?? '').toLowerCase() === cohort.toLowerCase());
+    if (clash) throw new HttpsError('already-exists', `${name} already has a tutor: ${clash.tutorName}. Change that one instead.`);
+    const ref = id ? db.doc(`organizations/${orgId}/teachingCourses/${id}`) : db.collection(`organizations/${orgId}/teachingCourses`).doc();
+    await ref.set({ name, cohort, department, tutorUid, tutorName: tutor.displayName || tutor.email, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid, ...(id ? {} : { createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid }) }, { merge: true });
+    await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: 'teaching_course_save', path: ref.path, collection: 'teachingCourses', docId: ref.id, orgId });
+    return { id: ref.id };
+  }
+  if (action === 'removeCourse') {
+    if (!manager) throw new HttpsError('permission-denied', 'Only the principal removes courses.');
+    const id = requireString(data.id, 'the course', { max: 40 });
+    const ref = db.doc(`organizations/${orgId}/teachingCourses/${id}`);
+    await ref.update({ deletedAt: FieldValue.serverTimestamp(), deletedBy: caller.uid });
+    await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: 'teaching_course_remove', path: ref.path, collection: 'teachingCourses', docId: id, orgId });
+    return { ok: true };
   }
 
   if (action === 'part') {
@@ -104,19 +153,20 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
 
   if (action === 'add') {
     const courseKey = requireString(data.courseKey, 'the course', { max: 140 });
-    const monday = requireString(data.week, 'the week', { max: 10 });
+    const docType = isDocType(data.docType) ? data.docType : 'lesson';
+    const day = docType === 'lesson' ? requireString(data.day, 'the lesson date', { max: 10 }) : '';
     const uploadId = requireString(data.uploadId, 'the upload', { max: 32 });
     const parts = Number(data.parts);
     const name = cleanFileName(requireString(data.name, 'the file name', { max: 200 }));
     if (!UPLOAD_ID.test(uploadId) || !Number.isInteger(parts) || parts < 1 || parts > LESSON_MAX_PARTS) throw new HttpsError('invalid-argument', 'This upload is not valid.');
-    if (!isAllowedWeek(monday, today)) throw new HttpsError('invalid-argument', 'Pick a week from the list.');
-    const course = (await coursesOf(orgId, caller.uid, me)).find((c) => c.key === courseKey);
+    if (docType === 'lesson' && !isAllowedDay(day, today)) throw new HttpsError('invalid-argument', 'Pick a lesson date in the last three months or the next month.');
+    const course = coursesFor(caller.uid, me, await contextOf(orgId)).find((c) => c.key === courseKey);
     if (!course) throw new HttpsError('permission-denied', 'This is not one of your courses.');
-    const fileId = weekFileId(courseKey, monday, caller.uid);
+    const fileId = uploadFileId(courseKey, docType, day, caller.uid);
     const ref = db.doc(`organizations/${orgId}/tutorFiles/${fileId}`);
     const before = (await ref.get()).data() as TutorFile | undefined;
-    if (!canChangeWeek(before, today)) throw new HttpsError('failed-precondition', 'This plan is approved and locked. Tap "Ask to change" and the principal can open it for you.');
-    if ((before?.files?.length ?? 0) >= LESSON_MAX_FILES) throw new HttpsError('failed-precondition', `A plan holds up to ${LESSON_MAX_FILES} files. Remove one first.`);
+    if (!canChange(before, today)) throw new HttpsError('failed-precondition', 'This is approved and locked. Tap "Ask to change" and the principal can open it for you.');
+    if ((before?.files?.length ?? 0) >= maxFilesFor(docType)) throw new HttpsError('failed-precondition', `This holds up to ${maxFilesFor(docType)} files. Remove one first.`);
 
     const pieces = Array.from({ length: parts }, (_, n) => bucket().file(lessonPartPath(orgId, caller.uid, uploadId, n)));
     const itemId = randomBytes(8).toString('hex');
@@ -135,10 +185,10 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
       const item: LessonItem = { id: itemId, name, contentType: type.contentType, size, uploadedOn: today };
       const files = [...(before?.files ?? []), item];
       const doc: Partial<TutorFile> & Record<string, unknown> = {
-        orgId, kind: 'week', requestId: null, eventId: null, courseKey, title: course.label, day: monday,
+        orgId, kind: 'upload', docType, requestId: null, eventId: null, courseKey, title: course.label, day,
         tutorUid: caller.uid, tutorName: me.displayName || me.email, status: 'sent',
         fileName: files[0]!.name, contentType: files[0]!.contentType, size: files.reduce((a, f) => a + f.size, 0), files,
-        sentOn: today, late: today > monday, version: (before?.version ?? 0) + 1, reopenRequest: null,
+        sentOn: today, late: false, version: (before?.version ?? 0) + 1, reopenRequest: null,
         // A reopened plan stays open until its day ends; a sent-back one is sent again.
         reopenUntil: before?.reopenUntil ?? null, returnNote: before?.status === 'returned' ? before.returnNote : '', approvedByName: '',
         sentAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid,
@@ -153,7 +203,7 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
   const fileId = requireString(data.fileId, 'the plan', { max: 320 });
   const ref = db.doc(`organizations/${orgId}/tutorFiles/${fileId}`);
   const f = (await ref.get()).data() as TutorFile | undefined;
-  if (!f || f.kind !== 'week') throw new HttpsError('not-found', 'This lesson plan was not found.');
+  if (!f || (f.kind !== 'week' && f.kind !== 'upload')) throw new HttpsError('not-found', 'This lesson plan was not found.');
   const own = f.tutorUid === caller.uid;
   const itemId = requireString(data.itemId, 'the file', { max: 40 });
   const item = (f.files ?? []).find((i) => i.id === itemId);
@@ -169,7 +219,7 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
   }
   if (action === 'remove') {
     if (!own) throw new HttpsError('permission-denied', 'Only the teacher who uploaded it can remove it.');
-    if (!canChangeWeek(f, today)) throw new HttpsError('failed-precondition', 'This plan is approved and locked.');
+    if (!canChange(f, today)) throw new HttpsError('failed-precondition', 'This plan is approved and locked.');
     await bucket().file(lessonItemPath(orgId, fileId, itemId)).delete({ ignoreNotFound: true });
     const files = (f.files ?? []).filter((i) => i.id !== itemId);
     await ref.update({
@@ -182,45 +232,56 @@ export const lessonPlans = onCall({ invoker: 'public', memory: '1GiB', timeoutSe
   throw new HttpsError('invalid-argument', 'Unknown action.');
 });
 
-/** 6A: each Friday, teachers who have not uploaded next week's plan for every course get one email listing what's missing. */
-export async function remindLessonPlans(now = new Date()): Promise<number> {
-  const today = localDateKey(now);
-  const monday = addDays(mondayOf(today), 7);
-  const orgs = await db.collection('organizations').where('type', '==', 'college').get();
+async function mailer() {
   const from = letterheadFor({ type: 'college', name: '' }).email;
   const test = process.env.PETTY_MAIL_TEST_DIR;
-  let transport: Transporter | null = null;
+  const pass = test ? 'test' : PETTY_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
+  if (!from || !pass) { logger.warn('Lesson plan reminders: ADIA email is not set up.'); return null; }
+  const transport: Transporter = test ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport({ service: 'gmail', auth: { user: from, pass } });
+  return async (to: { uid: string; name: string; email: string }, mail: { subject: string; text: string }) => {
+    try {
+      const info = await transport.sendMail({ from: `"ADIA Training Centre" <${from}>`, replyTo: from, to: `"${to.name.replace(/"/g, '')}" <${to.email}>`, ...mail });
+      if (test) {
+        await mkdir(test, { recursive: true });
+        await writeFile(join(test, `${Date.now()}-lessonplan-${to.uid}.json`), String((info as { message?: unknown }).message ?? ''));
+      }
+      return true;
+    } catch (err) { logger.warn(`Lesson plan reminder to ${to.email} failed`, err); return false; }
+  };
+}
+
+/**
+ * 8A: at 6pm, a tutor who marked a register today but sent no plan gets an email; on Friday, every tutor gets one
+ * email listing the lessons of the last two weeks that still have no plan.
+ */
+export async function remindLessonPlans(kind: 'evening' | 'friday', now = new Date()): Promise<number> {
+  const today = localDateKey(now);
+  const from = kind === 'evening' ? today : addDays(today, -13);
+  const orgs = await db.collection('organizations').where('type', '==', 'college').get();
+  let send: Awaited<ReturnType<typeof mailer>> | undefined;
   let sent = 0;
   for (const org of orgs.docs) {
-    const teachers = await teachersOf(org.id);
-    const plans = (await db.collection(`organizations/${org.id}/tutorFiles`).where('day', '==', monday).get()).docs
-      .map((d) => d.data() as TutorFile).filter((p) => p.kind === 'week');
+    const [teachers, events, plans] = await Promise.all([
+      teachersOf(org.id),
+      classEventsSince(org.id, from),
+      db.collection(`organizations/${org.id}/tutorFiles`).where('day', '>=', from).get().then((q) => q.docs.map((d) => d.data() as TutorFile & { docType?: string }).filter((p) => p.kind === 'upload')),
+    ]);
     for (const t of teachers) {
-      if (!EMAIL.test(t.email) || !t.courses.length) continue;
-      const missing = missingCourses(t.courses, plans.filter((p) => p.tutorUid === t.uid).map((p) => ({ ...p, courseKey: p.courseKey ?? '' })));
+      if (!EMAIL.test(t.email)) continue;
+      const missing = missingLessons(lessonDaysOf(t.courses, events, today), t.courses, plans.filter((p) => p.tutorUid === t.uid));
       if (!missing.length) continue;
-      if (!transport) {
-        const pass = test ? 'test' : PETTY_EMAIL_APP_PASSWORD.value().replace(/\s+/g, '');
-        if (!from || !pass) { logger.warn('Lesson plan reminders: ADIA email is not set up.'); return sent; }
-        transport = test ? nodemailer.createTransport({ jsonTransport: true }) : nodemailer.createTransport({ service: 'gmail', auth: { user: from, pass } });
-      }
-      const mail = reminderEmail(t.name.split(' ')[0] ?? t.name, monday, missing, `${appUrl()}/tutor-files/lesson-plans`);
-      try {
-        const info = await transport.sendMail({ from: `"ADIA Training Centre" <${from}>`, replyTo: from ?? undefined, to: `"${t.name.replace(/"/g, '')}" <${t.email}>`, ...mail });
-        if (test) {
-          await mkdir(test, { recursive: true });
-          await writeFile(join(test, `${Date.now()}-lessonplan-${t.uid}.json`), String((info as { message?: unknown }).message ?? ''));
-        }
-        sent++;
-      } catch (err) { logger.warn(`Lesson plan reminder to ${t.email} failed`, err); }
+      if (send === undefined) send = await mailer();
+      if (!send) return sent;
+      const link = `${appUrl()}/tutor-files/lesson-plans`;
+      const first = t.name.split(' ')[0] ?? t.name;
+      if (await send(t, kind === 'evening' ? sixPmEmail(first, missing, link) : fridayEmail(first, missing, link))) sent++;
     }
   }
-  logger.info(`Lesson plan reminders for ${weekRange(monday)}: ${sent} sent.`);
+  logger.info(`Lesson plan reminders (${kind}): ${sent} sent.`);
   return sent;
 }
 
-export const lessonPlanReminders = onSchedule(
-  // Cloud Scheduler isn't offered in africa-south1, so this runs from Europe; Friday 8 a.m. in Nairobi.
-  { schedule: 'every friday 08:00', timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, secrets: [PETTY_EMAIL_APP_PASSWORD] },
-  async () => { await remindLessonPlans(); },
-);
+// Cloud Scheduler isn't offered in africa-south1, so these run from Europe, on Nairobi time.
+const schedule = (when: string) => ({ schedule: when, timeZone: 'Africa/Nairobi', region: process.env.SCHEDULER_REGION || 'europe-west1', timeoutSeconds: 300, secrets: [PETTY_EMAIL_APP_PASSWORD] });
+export const lessonPlanReminders = onSchedule(schedule('every friday 16:00'), async () => { await remindLessonPlans('friday'); });
+export const lessonPlanEvening = onSchedule(schedule('every day 18:00'), async () => { await remindLessonPlans('evening'); });

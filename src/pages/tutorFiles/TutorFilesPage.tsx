@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
-import { weekRange } from '../../../functions/src/shared/lessonPlans';
+import { dayLabel, weekRange } from '../../../functions/src/shared/lessonPlans';
 import { collection, doc, query, where } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../state/AuthContext';
@@ -72,7 +72,7 @@ function TutorView({ orgId }: { orgId: string }) {
 
       <h2>Lesson plans</h2>
       <section className="card">
-        <p className="small">Upload each week's lesson plan for your courses.</p>
+        <p className="small">Upload your lesson plans, schemes of work, notes and papers for your courses.</p>
         <Link to="/tutor-files/lesson-plans" className="btn lp-gold align-start">Upload lesson plan</Link>
       </section>
     </div>
@@ -173,7 +173,7 @@ export function LessonPlanCard() {
   return (
     <section className="card tf-plan-card">
       <h3>Lesson plan</h3>
-      <p className="muted small">Lesson plans now go in one place, a plan for each course and week.</p>
+      <p className="muted small">Upload today's lesson plan: pick the course and the date, then choose the file.</p>
       <Link to="/tutor-files/lesson-plans" className="btn lp-gold align-start">Upload lesson plan</Link>
     </section>
   );
@@ -216,7 +216,7 @@ function PrincipalView({ orgId }: { orgId: string }) {
 
       <section className="card">
         <h2>Lesson plans</h2>
-        <p className="small">Every teacher's weekly lesson plans, with Approve and Download all.</p>
+        <p className="small">Every teacher's lesson plans and course files, with Approve and Download all.</p>
         <Link to="/tutor-files/lesson-plans" className="btn lp-gold align-start">Open lesson plans</Link>
       </section>
     </div>
@@ -308,7 +308,7 @@ export function ReopenAsk({ orgId, file: f }: { orgId: string; file: FileRow }) 
   }
   return (
     <div className="inv-banner inv-banner-late tf-askbar" role="status">
-      <span><strong>{f.reopenRequest!.byName}</strong> asks to change <strong>{f.kind === 'lesson' ? `the lesson plan for ${f.title}` : f.kind === 'week' ? `the lesson plan for ${f.title}, ${weekRange(f.day)}` : f.title}</strong>: “{f.reopenRequest!.reason}”</span>
+      <span><strong>{f.reopenRequest!.byName}</strong> asks to change <strong>{f.kind === 'lesson' ? `the lesson plan for ${f.title}` : f.kind === 'week' ? `the lesson plan for ${f.title}, ${weekRange(f.day)}` : f.kind === 'upload' ? `${f.day ? `the lesson plan for ${dayLabel(f.day)}` : 'a file'} for ${f.title}` : f.title}</strong>: “{f.reopenRequest!.reason}”</span>
       <span className="tf-askbar-ctl">
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} aria-label="Open for">
           {[1, 2, 3, 5, 7].map((d) => <option key={d} value={d}>{d === 1 ? 'Today only' : `${d} days`}</option>)}

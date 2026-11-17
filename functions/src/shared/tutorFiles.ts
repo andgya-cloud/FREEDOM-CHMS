@@ -37,8 +37,10 @@ export type TutorFileStatus = 'sent' | 'approved' | 'returned';
 /** A tutor's file (a requested file or a lesson plan). Written only by Cloud Functions. */
 export interface TutorFile {
   orgId: string;
-  /** 'week' is a weekly lesson plan (shared/lessonPlans.ts, 2026-11-17), with its files in `files`. */
-  kind: 'request' | 'lesson' | 'week';
+  /** 'upload' is a lesson plan or course file (shared/lessonPlans.ts, 2026-11-17), files in `files`; 'week' the first, weekly version. */
+  kind: 'request' | 'lesson' | 'week' | 'upload';
+  /** For 'upload': lesson, scheme, outline, notes, paper or report. */
+  docType?: string;
   requestId: string | null;
   eventId: string | null;
   /** The request's title, or the class name for a lesson plan. */

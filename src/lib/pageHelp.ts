@@ -14,9 +14,9 @@ const HELP: [RegExp, PageHelp][] = [
     'Press Reminders and turn pop-ups on, once on each phone and computer. Tap an event to see it, answer Yes or No, change or delete it.',
   ] }],
   [/^\/tutor-files\/lesson-plans/, { title: 'Lesson plans', steps: [
-    'Teachers: pick your course and the week, then press Choose files or Take a photo. You can add several files.',
-    'You can remove or add files until the principal approves. Then it locks; press Ask to change if you need to.',
-    'Principal: tap a box to open a teacher\'s plans, then Approve or Send back. ⬇ All downloads the whole week.',
+    'Tutors: pick your course and what it is. For a lesson plan, tap the date on the calendar (red = register marked, no plan yet).',
+    'Press Choose or Take a photo. The file goes to the principal at once. You can add or remove files until it is approved.',
+    'Principal: tap a box to open a teacher\'s plans, then Approve or Send back. ⬇ All downloads the week. Add courses under Courses and tutors.',
   ] }],
   [/^\/manual(\/|$)/, { title: 'User manual', steps: [
     'Type a word in the search box, or open the part for your place.',
