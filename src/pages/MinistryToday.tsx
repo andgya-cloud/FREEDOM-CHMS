@@ -9,6 +9,7 @@ import { PoweredBy } from '../components/PoweredBy';
 import { CelebrationsCard, SundayCard } from './ChurchSunday';
 import { NeedsTodayCard } from '../components/NeedsToday';
 import { ComingUpCard } from '../components/ComingUpCard';
+import { ServiceHostCard } from '../components/ServiceHostCard';
 import type { Organization } from '../state/OrgContext';
 
 /**
@@ -37,6 +38,7 @@ export function MinistryToday({ org, hope }: { org: Organization; hope: boolean 
       <FirstRunChecklist />
       <NeedsTodayCard org={org} />
       <ComingUpCard org={org} />
+      <ServiceHostCard org={org} />
       <SundayCard org={org} />
       <CelebrationsCard org={org} />
       <PoweredBy />

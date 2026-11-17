@@ -5,6 +5,7 @@ import { ESTIMATE } from '../lib/firestoreOptions';
 import { useAuth } from './AuthContext';
 import { usePeople } from './PeopleContext';
 import type { Organization } from './OrgContext';
+import { useRota } from '../lib/serviceHosts';
 import {
   addDays, daysInMonth, occurrences, serviceSlots, weekdayOf, type CalendarEvent, type EventType,
 } from '../../functions/src/shared/calendar';
@@ -112,6 +113,9 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
   const seesClose = can('pettycash.request') || can('pettycash.approve') || can('pettycash.authorize') || can('finance.reports') || can('users.manage');
   const classOrgs = orgs.filter((o) => o.type !== 'college').map((o) => o.id);
   const classes = useClasses(classOrgs, from, to, seesClasses && layers.has('classes'));
+  // Each service shows its Service Host (Andy, 2026-11-17, 11A).
+  const church = orgs.find((o) => o.type === 'church_campus');
+  const rota = useRota(layers.has('services') && church ? church.id : '', from, to);
 
   return useMemo(() => {
     const out: CalItem[] = [];
@@ -119,13 +123,22 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
     for (let d = from; d <= to && days.length < 400; d = addDays(d, 1)) days.push(d);
 
     if (layers.has('services')) {
+      const shown = new Set<string>();
       for (const org of orgs.filter((o) => o.type === 'church_campus')) {
         const slots = serviceSlots(org.serviceTimes?.length ? org.serviceTimes : ['Sunday 10:00']);
         for (const d of days) {
           for (const s of slots.filter((x) => x.weekday === weekdayOf(d))) {
-            out.push({ key: `auto/svc/${org.id}/${d}/${s.time}`, orgId: org.id, title: s.weekday === 0 ? 'Sunday service' : `Service (${s.name})`, type: 'service', allDay: false, date: d, endDate: d, start: s.time, end: null, place: '', auto: { kind: 'services', link: '/attendance', detail: 'From the service times in Settings. Take attendance on the day.' } });
+            const host = org.id === church?.id ? rota.find((r) => r.status === 'set' && r.date === d && r.time === s.time) : undefined;
+            if (host) shown.add(host.id);
+            const base = s.weekday === 0 ? 'Sunday service' : `Service (${s.name})`;
+            out.push({ key: `auto/svc/${org.id}/${d}/${s.time}`, orgId: org.id, title: host ? `${base} · Host ${host.hostName}` : base, type: 'service', allDay: false, date: d, endDate: d, start: s.time, end: null, place: '', auto: { kind: 'services', link: host ? '/service-hosts' : '/attendance', detail: host ? `Service Host: ${host.hostName}${host.answer === 'yes' ? ' (accepted)' : host.answer === 'no' ? " (can't come)" : ' (waiting for an answer)'}.` : 'From the service times in Settings. Take attendance on the day.' } });
           }
         }
+      }
+      // Other services that have a host (a Wednesday service, a special night).
+      for (const r of rota) {
+        if (r.status !== 'set' || shown.has(r.id) || !church) continue;
+        out.push({ key: `auto/host/${r.id}`, orgId: church.id, title: `${r.serviceName} · Host ${r.hostName}`, type: 'service', allDay: false, date: r.date, endDate: r.date, start: r.time || null, end: null, place: '', auto: { kind: 'services', link: '/service-hosts', detail: `Service Host: ${r.hostName}.` } });
       }
     }
     if (layers.has('classes') && seesClasses) {
@@ -161,7 +174,7 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
       }
     }
     return out;
-  }, [orgs, from, to, layers, classes, people, seesPeople, seesClasses, seesClose]);
+  }, [orgs, from, to, layers, classes, people, seesPeople, seesClasses, seesClose, rota, church]);
 }
 
 /** This person's email reminder choice (on unless they switched it off). */

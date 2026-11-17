@@ -398,6 +398,26 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ---- Service hosts (Andy, 2026-11-17) -----------------------------------------
+      // Everyone at the church sees who hosts each service (names only). The hosts list (phones and emails), the
+      // services and the requirements document are for Andy and the leaders he ticks ("rota.manage"). Every
+      // change goes through the serviceHosts function; serviceHostSent is the server's own record.
+      function hostManager(orgId) {
+        return canAccessOrg(orgId) && (has('rota.manage') || has('users.manage'));
+      }
+      match /serviceRota/{slotId} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
+      match /serviceHosts/{hostId} {
+        allow read: if hostManager(orgId);
+        allow write: if false;
+      }
+      match /serviceHostSettings/{docId} {
+        allow read: if hostManager(orgId);
+        allow write: if false;
+      }
+
       // One record per person per gathering. It must point at a real gathering
       // and a real person in this organization, on the gathering's date.
       // A check-in carries its gathering's date, programme and group, so a

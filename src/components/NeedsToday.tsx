@@ -11,6 +11,7 @@ import { useCircleNeeds } from './CircleNeedsYou';
 import { useAiToday } from './useAiToday';
 import { AI_MARK } from './Ai';
 import { useReviewerNotes } from '../lib/reviewerNotes';
+import { useHostNeeds } from './ServiceHostCard';
 
 interface Row { key: string; icon: string; count?: number; label: string; to?: string; tone: 'red' | 'gold' | 'blue' | 'violet' | 'ai' }
 
@@ -31,6 +32,7 @@ export function NeedsTodayCard({ org }: { org: Organization }) {
   const counts = useFollowUpCounts(reach ? org.id : '', org.timeZone || 'Africa/Nairobi');
   const [reachOpen, setReachOpen] = useState(false);
   const reviews = useReviewerNotes(can('users.manage')).rows.filter((n) => n.status === 'new').length;
+  const hostNeeds = useHostNeeds(org);
 
   const rows: Row[] = [];
   if (needs?.reader) {
@@ -43,6 +45,7 @@ export function NeedsTodayCard({ org }: { org: Organization }) {
   if (signups.length) rows.push({ key: 'signups', icon: '📝', count: signups.length, label: signups.length === 1 ? 'family sign-up to approve' : 'family sign-ups to approve', to: '/people/signups', tone: 'red' });
   else if (olderSignups) rows.push({ key: 'older', icon: '📝', count: olderSignups, label: olderSignups === 1 ? 'new sign-up to check' : 'new sign-ups to check', to: '/people?status=signup', tone: 'blue' });
   if (reviews) rows.push({ key: 'reviews', icon: '✍️', count: reviews, label: reviews === 1 ? 'new review from a reviewer' : 'new reviews from reviewers', to: '/reviews', tone: 'gold' });
+  hostNeeds.forEach((h) => rows.push({ ...h, to: '/service-hosts' }));
   ai.forEach((a) => rows.push({ key: a.to, icon: AI_MARK, label: a.text, to: a.to, tone: 'ai' }));
 
   const staffSend = needs && !needs.reader && needs.sends;

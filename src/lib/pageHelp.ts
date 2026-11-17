@@ -8,6 +8,11 @@ export interface PageHelp { title: string; steps: [string, string, string] }
 const PETTY = '^/(school/|hope/)?petty-cash';
 
 const HELP: [RegExp, PageHelp][] = [
+  [/^\/service-hosts/, { title: 'Service hosts', steps: [
+    'Add each host once (Add a host). Away dates stop them being suggested on those days.',
+    'Press Suggest fair turns, then Use suggestions, or choose a host on each date yourself. Nothing is sent until you choose.',
+    'Green ✓ means they said yes. Red means they can\'t, with the next free host shown. Upload the requirements under Services and requirements document.',
+  ] }],
   [/^\/calendar/, { title: 'Calendar', steps: [
     'Choose Month, Week, Day or Coming up. The arrows move back and forward; Today comes back to today.',
     'Tap a day or New event to add one. Pick its kind, time, place, whether it repeats, and when to remind.',

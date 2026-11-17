@@ -35,6 +35,8 @@ export const PERMISSIONS = [
   'fees.balances',
   // The events calendar (Andy, 2026-11-14, 3A): Andy, plus the leaders he ticks, add and change events
   'calendar.manage',
+  // Service hosts (Andy, 2026-11-17, 10A): Andy, plus the leaders he ticks, plan who hosts each service
+  'rota.manage',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -60,6 +62,7 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'exams.mark',
   'exams.manage',
   'calendar.manage',
+  'rota.manage',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -85,6 +88,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'school.manage': 'Students: admission numbers, graduation and certificates',
   'fees.balances': "Each student's fee balance (no payments)",
   'calendar.manage': 'Calendar: add and change events',
+  'rota.manage': 'Service hosts: add hosts and plan who hosts each service',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',

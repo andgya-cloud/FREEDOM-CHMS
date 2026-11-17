@@ -65,6 +65,8 @@ const AiHelperPage = lazy(() => import('./pages/AiHelperPage').then((m) => ({ de
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage').then((m) => ({ default: m.ReviewsPage })));
 const AskPage = lazy(() => import('./pages/AskPage').then((m) => ({ default: m.AskPage })));
 const NoticePage = lazy(() => import('./pages/NoticePage').then((m) => ({ default: m.NoticePage })));
+const ServiceHostsPage = lazy(() => import('./pages/serviceHosts/ServiceHostsPage').then((m) => ({ default: m.ServiceHostsPage })));
+const HostAnswerPage = lazy(() => import('./pages/serviceHosts/HostAnswerPage').then((m) => ({ default: m.HostAnswerPage })));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
 const ManualPage = lazy(() => import('./pages/ManualPage').then((m) => ({ default: m.ManualPage })));
 const MorePage = lazy(() => import('./pages/MorePage').then((m) => ({ default: m.MorePage })));
@@ -131,7 +133,7 @@ export function App() {
   const settings = useAppSettings();
   const path = useLocation().pathname;
   // The class check-in and a student's progress page are open to anyone too (Freedom 252, 2026-11-09).
-  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path === '/install';
+  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path.startsWith('/host/') || path === '/install';
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -151,6 +153,7 @@ export function App() {
             <Route path="/class/:orgId/p/:token" element={<ClassProgressPage />} />
             <Route path="/class/:orgId/:eventId" element={<ClassCheckInPage />} />
             <Route path="/install" element={<InstallPage />} />
+            <Route path="/host/:orgId/:token" element={<HostAnswerPage />} />
           </Routes>
         </div>
       </Suspense>
@@ -338,6 +341,7 @@ function AppRoutes() {
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<OpenGuide />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/service-hosts" element={<ServiceHostsPage />} />
         <Route path="/manual" element={<ManualPage />} />
         <Route path="/manual/:id" element={<ManualPage />} />
         <Route path="/settings/reviewer-notes" element={<ReviewsPage />} />
