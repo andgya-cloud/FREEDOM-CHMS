@@ -3,6 +3,8 @@ import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
 import { fromBase64, hostCall, toBase64, useChurch, useHostManager, useHostSettings, useHosts, useRota } from '../../lib/serviceHosts';
 import { usePeople } from '../../state/PeopleContext';
+import type { Organization } from '../../state/OrgContext';
+import { downloadRota } from '../../lib/rotaDownload';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import {
   addDays, clock, dayLabel, daysBetween, DOC_MAX_BYTES, isAway, nextFree, PLAN_WEEKS, plannedDates, WEEKDAYS,
@@ -25,6 +27,7 @@ export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
     <div className="page narrow sh-page">
       <h1>{t.icon} {t.title}</h1>
       <p className="muted">One {t.role} leads each {team === 'prayer' ? 'prayer time' : 'service'}. They get an email at 6 PM a week before (to say Yes or I can't), then 3 days, 2 days and the day before.</p>
+      <DownloadRow org={org} say={setMsg} />
       {msg && <p className="notice" role="status" onClick={() => setMsg('')}>{msg}</p>}
       <Schedule team={team} orgId={org.id} serviceTimes={org.serviceTimes} tz={org.timeZone || 'Africa/Nairobi'} say={setMsg} />
       <Hosts team={team} orgId={org.id} say={setMsg} />
@@ -34,6 +37,22 @@ export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
 }
 
 type Say = (m: string) => void;
+
+/** Download the Service host and Sunday prayer calendar, as PDF or Excel (Andy, 2026-11-17). */
+function DownloadRow({ org, say }: { org: Organization; say: Say }) {
+  const [busy, setBusy] = useState('');
+  async function get(kind: 'pdf' | 'xlsx') {
+    setBusy(kind);
+    try { await downloadRota(org, kind); } catch (e) { say(friendlyError(e)); } finally { setBusy(''); }
+  }
+  return (
+    <div className="sh-actions">
+      <span className="muted small">Download the Service host and Sunday prayer calendar:</span>
+      <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void get('pdf')}>{busy === 'pdf' ? 'Making…' : '⬇ PDF'}</button>
+      <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void get('xlsx')}>{busy === 'xlsx' ? 'Making…' : '⬇ Excel'}</button>
+    </div>
+  );
+}
 
 const ANSWER = { pending: { label: 'Waiting', cls: 'sh-wait' }, yes: { label: '✓ Accepted', cls: 'sh-yes' }, no: { label: "✗ Can't", cls: 'sh-no' } } as const;
 
