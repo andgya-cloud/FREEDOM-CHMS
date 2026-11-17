@@ -94,6 +94,7 @@ export function PersonPage() {
   if (person.firstVisitDate) details.push(['First visit', formatDateKey(person.firstVisitDate)]);
   if (person.serviceAttended) details.push(['Service attended', person.serviceAttended]);
   if (person.howHeard) details.push(['Heard about us', person.howHeard]);
+  if (typeof person.customFields?.visitorNote === 'string' && person.customFields.visitorNote) details.push(['Anything else', person.customFields.visitorNote]);
   // Tithing shows only to staff who may see giving.
   for (const l of aboutLines(person.about)) if (l.label !== 'Tithes' || can('giving.person.read')) details.push([l.label, l.value]);
   if (person.invitedBy) {

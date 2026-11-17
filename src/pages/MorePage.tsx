@@ -12,8 +12,8 @@ export function MorePage() {
   const items = [
     { show: can('people.read') && profile?.roleId !== USHER_ROLE_ID, to: '/reports', label: 'Reports', detail: 'The scorecard, weekly, monthly and giving reports' },
     { show: true, to: '/calendar', label: '📅 Calendar', detail: 'Upcoming events, with reminders on your phone and by email' },
-    { show: current?.type === 'church_campus' && (can('rota.manage') || can('users.manage')), to: '/service-hosts', label: '🎤 Service hosts', detail: 'Who hosts each service, the hosts list and the requirements document' },
-    { show: current?.type === 'church_campus' && (can('rota.manage') || can('users.manage')), to: '/prayer-schedule', label: '🙏 Sunday prayer', detail: 'Who leads prayer each Sunday, the prayer leaders and their requirements' },
+    { show: current?.type === 'church_campus' && (can('rota.manage') || can('users.manage')), to: '/service-hosts', label: '🎤 Service Hosts', detail: 'Who hosts each service, the hosts list and the requirements document' },
+    { show: current?.type === 'church_campus' && (can('rota.manage') || can('users.manage')), to: '/prayer-schedule', label: '🙏 Sunday Prayer', detail: 'Who leads prayer each Sunday, the prayer leaders and their requirements' },
     { show: current?.type === 'church_campus', to: '/updates', label: 'Photos and wins', detail: 'Testimonies, events, pastoral care and incidents, as conversations' },
     { show: current?.type === 'church_campus', to: '/conversations', label: 'Private conversations', detail: 'Worries about a member, read only by Andy, Doreen and the leaders' },
     { show: can('pastoral.read') || can('followups.manage') || can('settings.manage'), to: '/notice', label: '✦ Write a notice', detail: 'Type a few lines; the helper writes the WhatsApp group message' },

@@ -31,6 +31,8 @@ interface FormState {
   household: { id: string | null; name: string };
   guardian: { id: string | null; name: string };
   howHeard: string;
+  /** "Anything else" about a visitor (Andy, 2026-11-17), kept in customFields.visitorNote. */
+  note: string;
   invitedBy: { id: string | null; name: string };
   serviceAttended: string;
   customFields: Record<string, unknown>;
@@ -53,6 +55,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
     household: { id: householdPeer?.id ?? null, name: householdPeer?.fullName ?? '' },
     guardian: { id: p.guardianId ?? null, name: p.guardianId ? byId(p.guardianId)?.fullName ?? '' : '' },
     howHeard: p.howHeard ?? '',
+    note: typeof p.customFields?.visitorNote === 'string' ? p.customFields.visitorNote : '',
     invitedBy: { id: p.invitedById ?? null, name: p.invitedBy ?? '' },
     serviceAttended: p.serviceAttended ?? '',
     customFields: p.customFields ?? {},
@@ -62,7 +65,7 @@ function fromPerson(p: Person, byId: (id: string) => Person | undefined): FormSt
 const EMPTY: FormState = {
   fullName: '', phone: '', sameWhatsApp: true, whatsapp: '', consent: false, email: '', status: 'regular',
   firstVisitDate: '', gender: '', birthday: '', birthYear: '', household: { id: null, name: '' }, guardian: { id: null, name: '' },
-  howHeard: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
+  howHeard: '', note: '', invitedBy: { id: null, name: '' }, serviceAttended: '', customFields: {},
 };
 
 /**
@@ -87,6 +90,8 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
   const blank = (): FormState => (visitor ? { ...EMPTY, status: 'visitor', firstVisitDate: localDateKey(new Date(), current?.timeZone) } : EMPTY);
   const [form, setForm] = useState<FormState>(blank);
   const [prayer, setPrayer] = useState('');
+  // Recording a visitor shows only what matters, all on one screen (Andy, 2026-11-17): name, phone, how they heard, anything else.
+  const quickVisitor = visitor && !personId;
   const [added, setAdded] = useState<{ orgId: string; personId: string; name: string } | null>(null);
   const [loaded, setLoaded] = useState(isNew);
   const [errors, setErrors] = useState<string[]>([]);
@@ -144,7 +149,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
       invitedBy: form.invitedBy.name.trim() || null,
       invitedById: form.invitedBy.id,
       serviceAttended: form.serviceAttended || null,
-      customFields: form.customFields,
+      customFields: { ...form.customFields, visitorNote: form.note.trim().slice(0, 500) || null },
     };
 
     try {
@@ -191,7 +196,7 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
   return (
     <div className="page narrow">
       <p><Link to={existing ? `/people/${orgId}/${existing.id}` : visitor ? '/' : '/people'}>← {existing ? existing.fullName : visitor ? 'Today' : 'People'}</Link></p>
-      <h1>{existing ? 'Edit details' : 'Add person'}</h1>
+      <h1>{existing ? 'Edit details' : quickVisitor ? 'Record a visitor' : 'Add person'}</h1>
       {isNew && visitor && org?.type === 'church_campus' && (
         <p className="notice">Visitors can fill in their own card on their phone. <Link to="/visitors/qr">Show the QR poster</Link></p>
       )}
@@ -220,8 +225,23 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
           <input type="checkbox" checked={form.consent} onChange={(e) => set('consent', e.target.checked)} />
           <span><strong>They agreed</strong> to receive WhatsApp messages from us</span>
         </label>
+        {quickVisitor && (
+          <>
+            <label className="field">
+              <span>How they got to know our church</span>
+              <select value={form.howHeard} onChange={(e) => set('howHeard', e.target.value)}>
+                <option value="">Choose…</option>
+                {HOW_HEARD_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              <span>Anything else (optional)</span>
+              <textarea rows={3} maxLength={500} placeholder="e.g. Lives in Kileleshwa, new in Nairobi, came with a colleague" value={form.note} onChange={(e) => set('note', e.target.value)} />
+            </label>
+          </>
+        )}
         {/* At Freedom Church only Andrew and Doreen change an existing person's status (Andy, 2026-11-02, 3). */}
-        {existing && org?.type === 'church_campus' && !canKeepAccounts(profile) ? (
+        {quickVisitor ? null : existing && org?.type === 'church_campus' && !canKeepAccounts(profile) ? (
           <p className="field muted small">Status: <span className={`badge badge-${existing.status}`}>{PERSON_STATUS_LABELS[existing.status]}</span> (only Andrew and Doreen change it)</p>
         ) : (
           <fieldset className="field">
@@ -259,13 +279,21 @@ export function PersonFormPage({ visitor = false }: { visitor?: boolean } = {}) 
               </label>
             </div>
             <BirthdayField value={form.birthday} onChange={(v) => set('birthday', v)} year={form.birthYear} onYear={(v) => set('birthYear', v)} />
-            <label className="field">
-              <span>How they heard about us</span>
-              <select value={form.howHeard} onChange={(e) => set('howHeard', e.target.value)}>
-                <option value="">Not recorded</option>
-                {HOW_HEARD_OPTIONS.map((o) => <option key={o}>{o}</option>)}
-              </select>
-            </label>
+            {!quickVisitor && (
+              <label className="field">
+                <span>How they heard about us</span>
+                <select value={form.howHeard} onChange={(e) => set('howHeard', e.target.value)}>
+                  <option value="">Not recorded</option>
+                  {HOW_HEARD_OPTIONS.map((o) => <option key={o}>{o}</option>)}
+                </select>
+              </label>
+            )}
+            {!quickVisitor && (
+              <label className="field">
+                <span>Anything else</span>
+                <textarea rows={2} maxLength={500} value={form.note} onChange={(e) => set('note', e.target.value)} />
+              </label>
+            )}
             <PersonPicker label="Invited by" value={form.invitedBy} onChange={(v) => set('invitedBy', v)} allowFreeText excludeId={personId} />
             {(org?.serviceTimes?.length ?? 0) > 0 && (
               <label className="field">

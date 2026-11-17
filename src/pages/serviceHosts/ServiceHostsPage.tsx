@@ -25,7 +25,7 @@ export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
   if (!manager) return <div className="page narrow"><h1>{t.title}</h1><p>Only Mr Andrew and the leaders he chooses plan this schedule.</p></div>;
   return (
     <div className="page narrow sh-page">
-      <h1>{t.icon} {t.title}</h1>
+      <h1 className="sh-band sh-band-title" style={{ background: t.colour }}>{t.icon} {t.title}</h1>
       <p className="muted">One {t.role} leads each {team === 'prayer' ? 'prayer time' : 'service'}. They get an email at 6 PM a week before (to say Yes or I can't), then 3 days, 2 days and the day before.</p>
       <DownloadRow org={org} say={setMsg} />
       {msg && <p className="notice" role="status" onClick={() => setMsg('')}>{msg}</p>}
@@ -47,7 +47,7 @@ function DownloadRow({ org, say }: { org: Organization; say: Say }) {
   }
   return (
     <div className="sh-actions">
-      <span className="muted small">Download the Service host and Sunday prayer calendar:</span>
+      <span className="muted small">Download the Service Hosts and Sunday Prayer calendar:</span>
       <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void get('pdf')}>{busy === 'pdf' ? 'Making…' : '⬇ PDF'}</button>
       <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void get('xlsx')}>{busy === 'xlsx' ? 'Making…' : '⬇ Excel'}</button>
     </div>

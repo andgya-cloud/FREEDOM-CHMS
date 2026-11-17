@@ -21,18 +21,20 @@ export const TEAMS = ['host', 'prayer'] as const;
 export interface TeamInfo {
   /** One person: "Service Host". Many: "Service Hosts". The page title and its address. */
   role: string; roles: string; title: string; page: string; answerPath: string; icon: string;
+  /** Each schedule's own colour, so the two headings never look alike (Andy, 2026-11-17). */
+  colour: string; rgb: [number, number, number];
   /** The default service name for a weekday. */
   serviceName: (weekday: number) => string;
   col: { people: string; rota: string; settings: string; sent: string };
 }
 export const TEAM_INFO: Record<Team, TeamInfo> = {
   host: {
-    role: 'Service Host', roles: 'Service Hosts', title: 'Service hosts', page: '/service-hosts', answerPath: 'host', icon: '🎤',
+    role: 'Service Host', roles: 'Service Hosts', title: 'Service Hosts', page: '/service-hosts', answerPath: 'host', icon: '🎤', colour: '#1d4e89', rgb: [29, 78, 137],
     serviceName: (w) => (w === 0 ? 'Sunday service' : `${WEEKDAYS[w]} service`),
     col: { people: 'serviceHosts', rota: 'serviceRota', settings: 'serviceHostSettings', sent: 'serviceHostSent' },
   },
   prayer: {
-    role: 'Prayer Leader', roles: 'Prayer Leaders', title: 'Sunday prayer', page: '/prayer-schedule', answerPath: 'prayer', icon: '🙏',
+    role: 'Prayer Leader', roles: 'Prayer Leaders', title: 'Sunday Prayer', page: '/prayer-schedule', answerPath: 'prayer', icon: '🙏', colour: '#5b3a8c', rgb: [91, 58, 140],
     serviceName: (w) => (w === 0 ? 'Sunday prayer' : `${WEEKDAYS[w]} prayer`),
     col: { people: 'prayerLeaders', rota: 'prayerRota', settings: 'prayerSettings', sent: 'prayerSent' },
   },

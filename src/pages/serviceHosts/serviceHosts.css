@@ -32,3 +32,10 @@
 .sh-today ul { list-style: none; margin: 0; padding: 0; }
 .sh-today li { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-top: 1px solid var(--border); flex-wrap: wrap; }
 @media (max-width: 520px) { .sh-row { grid-template-columns: 1fr; } }
+
+/* The two schedules' headings: each its own colour band, white text (Andy, 2026-11-17). */
+.sh-band { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #fff; border-radius: 10px; padding: 10px 14px; margin: 0 0 6px; }
+.sh-band h2 { margin: 0; font-size: 1.15rem; color: #fff; letter-spacing: 0.02em; }
+.sh-band-title { font-size: 1.6rem; padding: 14px 18px; }
+.sh-band-btn { color: #fff; font-weight: 700; text-decoration: none; background: rgb(255 255 255 / 0.18); border-radius: 999px; padding: 6px 12px; }
+.sh-today > div + div { margin-top: 12px; }

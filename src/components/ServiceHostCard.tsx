@@ -53,9 +53,9 @@ export function ServiceHostCard({ org }: { org: Organization }) {
     <section className="card sh-today" aria-label="Sunday leaders">
       {teams.map(([team, c]) => (
         <div key={team}>
-          <div className="card-head">
+          <div className="sh-band" style={{ background: TEAM_INFO[team].colour }}>
             <h2>{TEAM_INFO[team].icon} {TEAM_INFO[team].title}</h2>
-            {c.manager && <Link className="btn btn-small" to={TEAM_INFO[team].page}>Plan</Link>}
+            {c.manager && <Link className="sh-band-btn" to={TEAM_INFO[team].page}>Plan ›</Link>}
           </div>
           <TeamRows team={team} dates={c.dates} />
         </div>

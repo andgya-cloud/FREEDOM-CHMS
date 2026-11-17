@@ -55,7 +55,7 @@ export async function rotaLines(org: Organization): Promise<RotaLine[]> {
   return [...days.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-const fileName = (ext: string) => `Service-hosts-and-Sunday-prayer-${localDateKey()}.${ext}`;
+const fileName = (ext: string) => `Service-Hosts-and-Sunday-Prayer-${localDateKey()}.${ext}`;
 
 export async function rotaPdf(org: Organization): Promise<File> {
   const lines = await rotaLines(org);
@@ -63,14 +63,17 @@ export async function rotaPdf(org: Organization): Promise<File> {
   const w = pdf.internal.pageSize.getWidth();
   const bottom = pdf.internal.pageSize.getHeight() - 22;
   const lh = letterheadFor(org);
-  let y = drawLetterhead(pdf, lh, await logoImage(lh.crest), 'Service hosts and Sunday prayer', `${dayLabel(lines[0]?.date ?? localDateKey())} to ${dayLabel(lines.at(-1)?.date ?? localDateKey())}`);
+  let y = drawLetterhead(pdf, lh, await logoImage(lh.crest), 'Service Hosts and Sunday Prayer', `${dayLabel(lines[0]?.date ?? localDateKey())} to ${dayLabel(lines.at(-1)?.date ?? localDateKey())}`);
   const cols = [14, 50, 50 + (w - 64) / 2];
   const colW = (w - 64) / 2 - 4;
   const header = () => {
-    pdf.setFillColor(31, 92, 61); pdf.rect(14, y, w - 28, 8, 'F');
-    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(255, 255, 255);
-    pdf.text('Date', cols[0]! + 2, y + 5.5); pdf.text('Service host', cols[1]! + 2, y + 5.5); pdf.text('Sunday prayer', cols[2]! + 2, y + 5.5);
-    y += 10;
+    // Each schedule's heading in its own colour (Andy, 2026-11-17).
+    pdf.setFillColor(55, 65, 81); pdf.rect(14, y, cols[1]! - 14, 10, 'F');
+    pdf.setFillColor(...TEAM_INFO.host.rgb); pdf.rect(cols[1]!, y, cols[2]! - cols[1]!, 10, 'F');
+    pdf.setFillColor(...TEAM_INFO.prayer.rgb); pdf.rect(cols[2]!, y, w - 14 - cols[2]!, 10, 'F');
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(10.5); pdf.setTextColor(255, 255, 255);
+    pdf.text('DATE', cols[0]! + 2, y + 6.8); pdf.text('SERVICE HOSTS', cols[1]! + 2, y + 6.8); pdf.text('SUNDAY PRAYER', cols[2]! + 2, y + 6.8);
+    y += 12;
   };
   header();
   pdf.setFontSize(9);
@@ -98,10 +101,11 @@ export async function rotaExcel(org: Organization): Promise<File> {
   const writeXlsxFile = (await import('write-excel-file')).default;
   const lines = await rotaLines(org);
   const bold = (value: string) => ({ value, fontWeight: 'bold' as const });
+  const band = (value: string, backgroundColor: string) => ({ value, fontWeight: 'bold' as const, color: '#FFFFFF', backgroundColor, height: 24 });
   const rows = [
-    [bold(`${org.name} · Service hosts and Sunday prayer`)],
+    [bold(`${org.name} · Service Hosts and Sunday Prayer`)],
     [],
-    [bold('Date'), bold('Service host'), bold('Sunday prayer')],
+    [band('DATE', '#374151'), band('SERVICE HOSTS', TEAM_INFO.host.colour), band('SUNDAY PRAYER', TEAM_INFO.prayer.colour)],
     ...lines.map((l) => [
       { value: new Date(`${l.date}T12:00:00Z`), type: Date, format: 'ddd dd mmm yyyy' },
       { value: l.host, type: String, wrap: true },
