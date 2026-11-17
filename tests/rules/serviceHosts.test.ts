@@ -22,6 +22,9 @@ beforeEach(async () => {
     await setDoc(doc(db, 'organizations/fcn/serviceRota/2026-11-22_sun1000'), { date: '2026-11-22', hostName: 'Mary', status: 'set' });
     await setDoc(doc(db, 'organizations/fcn/serviceHostSettings/main'), { services: [] });
     await setDoc(doc(db, 'organizations/fcn/serviceHostSent/x'), { days: 7 });
+    await setDoc(doc(db, 'organizations/fcn/prayerLeaders/p1'), { name: 'John', deletedAt: null });
+    await setDoc(doc(db, 'organizations/fcn/prayerRota/2026-11-22_sun0900'), { date: '2026-11-22', hostName: 'John', status: 'set' });
+    await setDoc(doc(db, 'organizations/fcn/prayerSent/x'), { days: 7 });
   });
 });
 
@@ -37,6 +40,13 @@ describe('service hosts', () => {
     await assertFails(getDocs(collection(as('usher'), 'organizations/fcn/serviceHosts')));
     await assertFails(getDoc(doc(as('usher'), 'organizations/fcn/serviceHostSettings/main')));
     await assertFails(getDocs(collection(as('adiaPlanner'), 'organizations/fcn/serviceHosts')));
+  });
+  it('treats the Sunday prayer schedule the same way', async () => {
+    await assertSucceeds(getDocs(collection(as('usher'), 'organizations/fcn/prayerRota')));
+    await assertSucceeds(getDocs(collection(as('planner'), 'organizations/fcn/prayerLeaders')));
+    await assertFails(getDocs(collection(as('usher'), 'organizations/fcn/prayerLeaders')));
+    await assertFails(getDoc(doc(as('pastor'), 'organizations/fcn/prayerSent/x')));
+    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/prayerRota/2026-11-29_sun0900'), { date: '2026-11-29' }));
   });
   it('lets nobody write or read the sent record', async () => {
     await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/serviceHosts/h2'), { name: 'X' }));

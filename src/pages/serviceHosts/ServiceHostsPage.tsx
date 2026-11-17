@@ -6,7 +6,7 @@ import { usePeople } from '../../state/PeopleContext';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import {
   addDays, clock, dayLabel, daysBetween, DOC_MAX_BYTES, isAway, nextFree, PLAN_WEEKS, plannedDates, WEEKDAYS,
-  type AwaySpan, type HostService, type HostSettings, type RotaSlot, type SpecialService,
+  type AwaySpan, type HostService, type HostSettings, type RotaSlot, type SpecialService, type Team, TEAM_INFO,
 } from '../../../functions/src/shared/serviceHosts';
 import './serviceHosts.css';
 
@@ -14,20 +14,21 @@ import './serviceHosts.css';
  * Service hosts (Andy, 2026-11-17): who hosts each service for the next three months, the hosts themselves, and
  * the services and requirements document. Andy chooses every host; "Suggest fair turns" only fills in suggestions.
  */
-export function ServiceHostsPage() {
+export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
   const org = useChurch();
   const manager = useHostManager();
   const [msg, setMsg] = useState('');
-  if (!org) return <div className="page narrow"><h1>Service hosts</h1><p>Service hosts are part of Freedom Church.</p></div>;
-  if (!manager) return <div className="page narrow"><h1>Service hosts</h1><p>Only Mr Andrew and the leaders he chooses plan the service hosts.</p></div>;
+  const t = TEAM_INFO[team];
+  if (!org) return <div className="page narrow"><h1>{t.title}</h1><p>{t.title} is part of Freedom Church.</p></div>;
+  if (!manager) return <div className="page narrow"><h1>{t.title}</h1><p>Only Mr Andrew and the leaders he chooses plan this schedule.</p></div>;
   return (
     <div className="page narrow sh-page">
-      <h1>Service hosts</h1>
-      <p className="muted">One Service Host leads each service. Hosts get an email at 6 PM a week before (to say Yes or I can't), then 3 days, 2 days and the day before.</p>
+      <h1>{t.icon} {t.title}</h1>
+      <p className="muted">One {t.role} leads each {team === 'prayer' ? 'prayer time' : 'service'}. They get an email at 6 PM a week before (to say Yes or I can't), then 3 days, 2 days and the day before.</p>
       {msg && <p className="notice" role="status" onClick={() => setMsg('')}>{msg}</p>}
-      <Schedule orgId={org.id} serviceTimes={org.serviceTimes} tz={org.timeZone || 'Africa/Nairobi'} say={setMsg} />
-      <Hosts orgId={org.id} say={setMsg} />
-      <SettingsFold orgId={org.id} serviceTimes={org.serviceTimes} say={setMsg} />
+      <Schedule team={team} orgId={org.id} serviceTimes={org.serviceTimes} tz={org.timeZone || 'Africa/Nairobi'} say={setMsg} />
+      <Hosts team={team} orgId={org.id} say={setMsg} />
+      <SettingsFold team={team} orgId={org.id} serviceTimes={org.serviceTimes} say={setMsg} />
     </div>
   );
 }
@@ -36,13 +37,13 @@ type Say = (m: string) => void;
 
 const ANSWER = { pending: { label: 'Waiting', cls: 'sh-wait' }, yes: { label: '✓ Accepted', cls: 'sh-yes' }, no: { label: "✗ Can't", cls: 'sh-no' } } as const;
 
-function Schedule({ orgId, serviceTimes, tz, say }: { orgId: string; serviceTimes?: string[]; tz: string; say: Say }) {
+function Schedule({ team, orgId, serviceTimes, tz, say }: { team: Team; orgId: string; serviceTimes?: string[]; tz: string; say: Say }) {
   const today = localDateKey(new Date(), tz);
   const from = addDays(today, 1);
   const to = addDays(from, PLAN_WEEKS * 7);
-  const settings = useHostSettings(orgId, serviceTimes);
-  const hosts = useHosts(orgId);
-  const rota = useRota(orgId, addDays(today, -180), to);
+  const settings = useHostSettings(team, orgId, serviceTimes);
+  const hosts = useHosts(team, orgId);
+  const rota = useRota(team, orgId, addDays(today, -180), to);
   const [busy, setBusy] = useState('');
   const dates = useMemo(() => plannedDates(settings, from), [settings, from]);
   const byId = useMemo(() => new Map(rota.map((r) => [r.id, r])), [rota]);
@@ -53,12 +54,12 @@ function Schedule({ orgId, serviceTimes, tz, say }: { orgId: string; serviceTime
     setBusy(key);
     try { const m = await fn(); if (m) say(m); } catch (err) { say(friendlyError(err)); } finally { setBusy(''); }
   }
-  const assign = (slotId: string, hostId: string) => run(slotId, async () => { await hostCall({ orgId, action: 'assign', slotId, hostId }); });
+  const assign = (slotId: string, hostId: string) => run(slotId, async () => { await hostCall({ team, orgId, action: 'assign', slotId, hostId }); });
   async function whatsapp(slot: RotaSlot) {
     // Opened before the call returns, so the phone does not block the new window.
     const w = window.open('', '_blank');
     await run(`wa${slot.id}`, async () => {
-      const r = await hostCall<{ phone: string; text: string }>({ orgId, action: 'whatsapp', slotId: slot.id });
+      const r = await hostCall<{ phone: string; text: string }>({ team, orgId, action: 'whatsapp', slotId: slot.id });
       const url = `https://wa.me/${r.phone}?text=${encodeURIComponent(r.text)}`;
       if (w) w.location.href = url; else window.location.href = url;
     });
@@ -67,21 +68,21 @@ function Schedule({ orgId, serviceTimes, tz, say }: { orgId: string; serviceTime
   return (
     <section className="card">
       <div className="card-head"><h2>Schedule</h2></div>
-      {active.length === 0 ? <p className="muted">Add your hosts below first.</p> : (
+      {active.length === 0 ? <p className="muted">Add your people below first.</p> : (
         <div className="sh-actions">
           <button type="button" className="btn" disabled={!!busy} onClick={() => run('suggest', async () => {
-            const r = await hostCall<{ suggested: number }>({ orgId, action: 'suggest' });
-            return r.suggested ? `${r.suggested} dates have a suggested host. Check them, then press Use suggestions.` : 'Every date already has a host.';
+            const r = await hostCall<{ suggested: number }>({ team, orgId, action: 'suggest' });
+            return r.suggested ? `${r.suggested} dates have a suggestion. Check them, then press Use suggestions.` : 'Every date already has someone.';
           })}>Suggest fair turns</button>
           {suggested.length > 0 && (
             <>
-              <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => run('use', async () => { await hostCall({ orgId, action: 'useSuggestions' }); return 'Done. Those hosts will be reminded at 6 PM, starting a week before their date.'; })}>Use {suggested.length} suggestions</button>
-              <button type="button" className="btn" disabled={!!busy} onClick={() => run('clear', async () => { await hostCall({ orgId, action: 'clearSuggestions' }); })}>Clear suggestions</button>
+              <button type="button" className="btn btn-primary" disabled={!!busy} onClick={() => run('use', async () => { await hostCall({ team, orgId, action: 'useSuggestions' }); return 'Done. They will be reminded at 6 PM, starting a week before their date.'; })}>Use {suggested.length} suggestions</button>
+              <button type="button" className="btn" disabled={!!busy} onClick={() => run('clear', async () => { await hostCall({ team, orgId, action: 'clearSuggestions' }); })}>Clear suggestions</button>
             </>
           )}
         </div>
       )}
-      {active.length > 0 && <p className="muted small">Suggestions give everyone fair turns, nobody twice in a row, and skip the days a host is away. Nothing is sent until you choose.</p>}
+      {active.length > 0 && <p className="muted small">Suggestions give everyone fair turns, nobody twice in a row, and skip the days someone is away. Nothing is sent until you choose.</p>}
       <ul className="sh-list">
         {dates.map((d) => {
           const r = byId.get(d.id);
@@ -96,8 +97,8 @@ function Schedule({ orgId, serviceTimes, tz, say }: { orgId: string; serviceTime
                 <span className="muted small">{d.serviceName}{d.time ? ` · ${clock(d.time)}` : ''}</span>
               </div>
               <div className="sh-who">
-                <select aria-label={`Host for ${dayLabel(d.date, false)}`} value={r?.hostId ?? ''} disabled={busy === d.id} onChange={(e) => void assign(d.id, e.target.value)}>
-                  <option value="">Choose a host…</option>
+                <select aria-label={`Who leads on ${dayLabel(d.date, false)}`} value={r?.hostId ?? ''} disabled={busy === d.id} onChange={(e) => void assign(d.id, e.target.value)}>
+                  <option value="">Choose someone…</option>
                   {active.map((h) => <option key={h.id} value={h.id} disabled={isAway(h, d.date)}>{h.name}{isAway(h, d.date) ? ' (away)' : ''}</option>)}
                   {r?.hostId && !active.some((h) => h.id === r.hostId) && <option value={r.hostId}>{r.hostName}</option>}
                 </select>
@@ -118,9 +119,9 @@ function Schedule({ orgId, serviceTimes, tz, say }: { orgId: string; serviceTime
 
 const blank = { id: '', name: '', phone: '', email: '', personId: null as string | null, active: true, away: [] as AwaySpan[] };
 
-function Hosts({ orgId, say }: { orgId: string; say: Say }) {
-  const hosts = useHosts(orgId);
-  const rota = useRota(orgId, addDays(localDateKey(), -180), addDays(localDateKey(), PLAN_WEEKS * 7));
+function Hosts({ team, orgId, say }: { team: Team; orgId: string; say: Say }) {
+  const hosts = useHosts(team, orgId);
+  const rota = useRota(team, orgId, addDays(localDateKey(), -180), addDays(localDateKey(), PLAN_WEEKS * 7));
   const [edit, setEdit] = useState<typeof blank | null>(null);
   const turns = useMemo(() => {
     const m = new Map<string, number>();
@@ -130,11 +131,11 @@ function Hosts({ orgId, say }: { orgId: string; say: Say }) {
   return (
     <section className="card">
       <div className="card-head">
-        <h2>Hosts ({hosts.filter((h) => h.active).length})</h2>
-        {!edit && <button type="button" className="btn btn-primary btn-small" onClick={() => setEdit({ ...blank })}>+ Add a host</button>}
+        <h2>{TEAM_INFO[team].roles} ({hosts.filter((h) => h.active).length})</h2>
+        {!edit && <button type="button" className="btn btn-primary btn-small" onClick={() => setEdit({ ...blank })}>+ Add a person</button>}
       </div>
-      {edit && <HostForm orgId={orgId} value={edit} done={(m) => { setEdit(null); if (m) say(m); }} />}
-      {hosts.length === 0 && !edit && <p className="muted">No hosts yet. Press Add a host for each person who can lead a service.</p>}
+      {edit && <HostForm team={team} orgId={orgId} value={edit} done={(m) => { setEdit(null); if (m) say(m); }} />}
+      {hosts.length === 0 && !edit && <p className="muted">Nobody yet. Press Add a person for each one who can lead.</p>}
       <ul className="row-list sh-hosts">
         {hosts.map((h) => (
           <li key={h.id}>
@@ -150,7 +151,7 @@ function Hosts({ orgId, say }: { orgId: string; say: Say }) {
   );
 }
 
-function HostForm({ orgId, value, done }: { orgId: string; value: typeof blank; done: (m?: string) => void }) {
+function HostForm({ team, orgId, value, done }: { team: Team; orgId: string; value: typeof blank; done: (m?: string) => void }) {
   const { people } = usePeople();
   const [f, setF] = useState(value);
   const [find, setFind] = useState('');
@@ -164,14 +165,14 @@ function HostForm({ orgId, value, done }: { orgId: string; value: typeof blank; 
   async function save() {
     setBusy(true); setErr('');
     try {
-      const r = await hostCall<{ welcomed: boolean }>({ orgId, action: 'saveHost', ...f });
+      const r = await hostCall<{ welcomed: boolean }>({ team, orgId, action: 'saveHost', ...f });
       done(f.id ? 'Saved.' : r.welcomed ? `${f.name} is added, and a welcome email with the requirements has gone to them.` : `${f.name} is added.`);
     } catch (e) { setErr(friendlyError(e)); setBusy(false); }
   }
   async function remove() {
-    if (!window.confirm(`Remove ${f.name} from the hosts? Their coming dates become empty.`)) return;
+    if (!window.confirm(`Remove ${f.name} from this list? Their coming dates become empty.`)) return;
     setBusy(true);
-    try { await hostCall({ orgId, action: 'removeHost', id: f.id }); done(`${f.name} is removed.`); } catch (e) { setErr(friendlyError(e)); setBusy(false); }
+    try { await hostCall({ team, orgId, action: 'removeHost', id: f.id }); done(`${f.name} is removed.`); } catch (e) { setErr(friendlyError(e)); setBusy(false); }
   }
 
   return (
@@ -208,7 +209,7 @@ function HostForm({ orgId, value, done }: { orgId: string; value: typeof blank; 
       {f.id && <label className="sh-check"><input type="checkbox" checked={!f.active} onChange={(e) => set({ active: !e.target.checked })} /> Resting for now (not suggested, keeps their history)</label>}
       {err && <p className="error" role="alert">{err}</p>}
       <div className="sh-actions">
-        <button type="button" className="btn btn-primary" disabled={busy || f.name.trim().length < 2} onClick={() => void save()}>{busy ? 'Saving…' : f.id ? 'Save' : 'Add host'}</button>
+        <button type="button" className="btn btn-primary" disabled={busy || f.name.trim().length < 2} onClick={() => void save()}>{busy ? 'Saving…' : f.id ? 'Save' : 'Add'}</button>
         <button type="button" className="btn" disabled={busy} onClick={() => done()}>Cancel</button>
         {f.id && <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void remove()}>Remove</button>}
       </div>
@@ -216,58 +217,58 @@ function HostForm({ orgId, value, done }: { orgId: string; value: typeof blank; 
   );
 }
 
-function SettingsFold({ orgId, serviceTimes, say }: { orgId: string; serviceTimes?: string[]; say: Say }) {
-  const s = useHostSettings(orgId, serviceTimes);
+function SettingsFold({ team, orgId, serviceTimes, say }: { team: Team; orgId: string; serviceTimes?: string[]; say: Say }) {
+  const s = useHostSettings(team, orgId, serviceTimes);
   return (
     <details className="card sh-fold">
-      <summary><strong>Services and requirements document</strong></summary>
-      <DocBox orgId={orgId} doc={s.doc} say={say} />
-      <ServicesBox key={JSON.stringify([s.services, s.specials])} orgId={orgId} settings={s} say={say} />
+      <summary><strong>{team === 'prayer' ? 'Prayer times' : 'Services'} and requirements document</strong></summary>
+      <DocBox team={team} orgId={orgId} doc={s.doc} say={say} />
+      <ServicesBox team={team} key={JSON.stringify([s.services, s.specials])} orgId={orgId} settings={s} say={say} />
     </details>
   );
 }
 
-function DocBox({ orgId, doc, say }: { orgId: string; doc: HostSettings['doc']; say: Say }) {
+function DocBox({ team, orgId, doc, say }: { team: Team; orgId: string; doc: HostSettings['doc']; say: Say }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   async function upload(file: File | undefined) {
     if (!file) return;
     if (file.size > DOC_MAX_BYTES) { say('The document must be smaller than 6 MB.'); return; }
     setBusy(true);
-    try { await hostCall({ orgId, action: 'uploadDoc', name: file.name, base64: await toBase64(file) }); say('The requirements document is saved. It goes with every host email from now on.'); }
+    try { await hostCall({ team, orgId, action: 'uploadDoc', name: file.name, base64: await toBase64(file) }); say('The requirements document is saved. It goes with every email from now on.'); }
     catch (e) { say(friendlyError(e)); } finally { setBusy(false); if (input.current) input.current.value = ''; }
   }
   async function view() {
     setBusy(true);
-    try { const r = await hostCall<{ name: string; type: string; base64: string }>({ orgId, action: 'downloadDoc' }); downloadFile(fromBase64(r.base64, r.name, r.type)); }
+    try { const r = await hostCall<{ name: string; type: string; base64: string }>({ team, orgId, action: 'downloadDoc' }); downloadFile(fromBase64(r.base64, r.name, r.type)); }
     catch (e) { say(friendlyError(e)); } finally { setBusy(false); }
   }
   return (
     <div className="sh-doc">
       <h3>Requirements document</h3>
       <p className="muted small">Sent with the welcome email and every reminder.</p>
-      {doc ? <p>📄 <strong>{doc.name}</strong> <span className="muted small">· {Math.max(1, Math.round(doc.size / 1024))} KB</span></p> : <p className="notice-warn notice">No document yet. Upload your Service Host requirements (PDF or Word).</p>}
+      {doc ? <p>📄 <strong>{doc.name}</strong> <span className="muted small">· {Math.max(1, Math.round(doc.size / 1024))} KB</span></p> : <p className="notice-warn notice">No document yet. Upload your {TEAM_INFO[team].role} requirements (PDF or Word).</p>}
       <input ref={input} type="file" hidden accept=".pdf,.doc,.docx,.odt,.txt" onChange={(e) => void upload(e.target.files?.[0])} />
       <div className="sh-actions">
         <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => input.current?.click()}>{busy ? 'Please wait…' : doc ? 'Replace' : 'Upload document'}</button>
         {doc && <button type="button" className="btn btn-small" disabled={busy} onClick={() => void view()}>Open</button>}
-        {doc && <button type="button" className="btn btn-small" disabled={busy} onClick={() => { if (window.confirm('Remove the requirements document?')) void hostCall({ orgId, action: 'removeDoc' }).catch((e) => say(friendlyError(e))); }}>Remove</button>}
+        {doc && <button type="button" className="btn btn-small" disabled={busy} onClick={() => { if (window.confirm('Remove the requirements document?')) void hostCall({ team, orgId, action: 'removeDoc' }).catch((e) => say(friendlyError(e))); }}>Remove</button>}
       </div>
     </div>
   );
 }
 
-function ServicesBox({ orgId, settings, say }: { orgId: string; settings: HostSettings; say: Say }) {
+function ServicesBox({ team, orgId, settings, say }: { team: Team; orgId: string; settings: HostSettings; say: Say }) {
   const [services, setServices] = useState<HostService[]>(settings.services);
   const [specials, setSpecials] = useState<SpecialService[]>(settings.specials.filter((x) => x.date >= localDateKey()));
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true);
-    try { await hostCall({ orgId, action: 'saveSettings', services, specials }); say('Services saved.'); } catch (e) { say(friendlyError(e)); } finally { setBusy(false); }
+    try { await hostCall({ team, orgId, action: 'saveSettings', services, specials }); say('Services saved.'); } catch (e) { say(friendlyError(e)); } finally { setBusy(false); }
   }
   return (
     <div className="sh-services">
-      <h3>Services that need a host</h3>
+      <h3>{team === 'prayer' ? 'Prayer times that need a leader' : 'Services that need a host'}</h3>
       {services.map((sv, i) => (
         <div key={sv.key} className="sh-svc">
           <input aria-label="Service name" value={sv.name} maxLength={60} onChange={(e) => setServices(services.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
@@ -278,8 +279,8 @@ function ServicesBox({ orgId, settings, say }: { orgId: string; settings: HostSe
           {services.length > 1 && <button type="button" className="btn btn-small" aria-label="Remove this service" onClick={() => setServices(services.filter((_, j) => j !== i))}>✕</button>}
         </div>
       ))}
-      <button type="button" className="btn btn-small" onClick={() => setServices([...services, { key: `svc${Date.now().toString(36)}`, name: 'Bible study', weekday: 3, time: '20:00' }])}>+ Add a weekly service</button>
-      <h3>Special services (one date)</h3>
+      <button type="button" className="btn btn-small" onClick={() => setServices([...services, { key: `svc${Date.now().toString(36)}`, name: team === 'prayer' ? 'Midweek prayer' : 'Bible study', weekday: 3, time: '20:00' }])}>+ Add a weekly service</button>
+      <h3>{team === 'prayer' ? 'Special prayer times (one date)' : 'Special services (one date)'}</h3>
       {specials.map((sp, i) => (
         <div key={sp.key} className="sh-svc">
           <input aria-label="Service name" value={sp.name} maxLength={60} onChange={(e) => setSpecials(specials.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)))} />
@@ -288,7 +289,7 @@ function ServicesBox({ orgId, settings, say }: { orgId: string; settings: HostSe
           <button type="button" className="btn btn-small" aria-label="Remove this service" onClick={() => setSpecials(specials.filter((_, j) => j !== i))}>✕</button>
         </div>
       ))}
-      <button type="button" className="btn btn-small" onClick={() => setSpecials([...specials, { key: `x${Date.now().toString(36)}`, name: 'Special service', date: addDays(localDateKey(), 7), time: '18:00' }])}>+ Add a special service</button>
+      <button type="button" className="btn btn-small" onClick={() => setSpecials([...specials, { key: `x${Date.now().toString(36)}`, name: team === 'prayer' ? 'Special prayer' : 'Special service', date: addDays(localDateKey(), 7), time: '18:00' }])}>+ Add a special service</button>
       <div><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>{busy ? 'Saving…' : 'Save services'}</button></div>
     </div>
   );

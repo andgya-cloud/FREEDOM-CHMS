@@ -45,7 +45,7 @@ export function NeedsTodayCard({ org }: { org: Organization }) {
   if (signups.length) rows.push({ key: 'signups', icon: '📝', count: signups.length, label: signups.length === 1 ? 'family sign-up to approve' : 'family sign-ups to approve', to: '/people/signups', tone: 'red' });
   else if (olderSignups) rows.push({ key: 'older', icon: '📝', count: olderSignups, label: olderSignups === 1 ? 'new sign-up to check' : 'new sign-ups to check', to: '/people?status=signup', tone: 'blue' });
   if (reviews) rows.push({ key: 'reviews', icon: '✍️', count: reviews, label: reviews === 1 ? 'new review from a reviewer' : 'new reviews from reviewers', to: '/reviews', tone: 'gold' });
-  hostNeeds.forEach((h) => rows.push({ ...h, to: '/service-hosts' }));
+  hostNeeds.forEach((h) => rows.push(h));
   ai.forEach((a) => rows.push({ key: a.to, icon: AI_MARK, label: a.text, to: a.to, tone: 'ai' }));
 
   const staffSend = needs && !needs.reader && needs.sends;

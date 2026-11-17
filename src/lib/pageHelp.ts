@@ -8,6 +8,11 @@ export interface PageHelp { title: string; steps: [string, string, string] }
 const PETTY = '^/(school/|hope/)?petty-cash';
 
 const HELP: [RegExp, PageHelp][] = [
+  [/^\/prayer-schedule/, { title: 'Sunday prayer', steps: [
+    'Add each prayer leader once (Add a person). Away dates stop them being suggested on those days.',
+    'Press Suggest fair turns, then Use suggestions, or choose someone on each date. Nothing is sent until you choose.',
+    'Set the prayer time under Prayer times and requirements document, and upload the requirements there.',
+  ] }],
   [/^\/service-hosts/, { title: 'Service hosts', steps: [
     'Add each host once (Add a host). Away dates stop them being suggested on those days.',
     'Press Suggest fair turns, then Use suggestions, or choose a host on each date yourself. Nothing is sent until you choose.',

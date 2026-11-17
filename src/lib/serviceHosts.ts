@@ -5,10 +5,10 @@ import { db, functions } from '../firebase';
 import { useLiveDoc, useLiveQuery } from './useQuery';
 import { useOrg, type Organization } from '../state/OrgContext';
 import { useAuth } from '../state/AuthContext';
-import { settingsOr, type HostSettings, type RotaSlot, type ServiceHost } from '../../functions/src/shared/serviceHosts';
+import { settingsOr, TEAM_INFO, type HostSettings, type RotaSlot, type ServiceHost, type Team } from '../../functions/src/shared/serviceHosts';
 
 /** Every change to Service hosts goes through the serviceHosts function (Andy, 2026-11-17). */
-export const hostCall = <R,>(data: Record<string, unknown> & { orgId: string; action: string }) =>
+export const hostCall = <R,>(data: Record<string, unknown> & { orgId: string; action: string; team: Team }) =>
   httpsCallable<typeof data, R>(functions, 'serviceHosts', { timeout: 120_000 })(data).then((r) => r.data);
 
 /** The church these pages are about: the one chosen, or the first church. */
@@ -22,18 +22,18 @@ export function useHostManager(): boolean {
   return can('rota.manage') || can('users.manage');
 }
 
-export function useHostSettings(orgId: string, serviceTimes?: string[], on = true): HostSettings {
-  const { data } = useLiveDoc<Partial<HostSettings>>(() => (orgId && on ? doc(db, 'organizations', orgId, 'serviceHostSettings', 'main') : null), [orgId, on]);
-  return useMemo(() => settingsOr(data, serviceTimes), [data, serviceTimes]);
+export function useHostSettings(team: Team, orgId: string, serviceTimes?: string[], on = true): HostSettings {
+  const { data } = useLiveDoc<Partial<HostSettings>>(() => (orgId && on ? doc(db, 'organizations', orgId, TEAM_INFO[team].col.settings, 'main') : null), [team, orgId, on]);
+  return useMemo(() => settingsOr(data, serviceTimes, team), [data, serviceTimes, team]);
 }
 
-export function useHosts(orgId: string, on = true): ServiceHost[] {
-  const { rows } = useLiveQuery<ServiceHost>(() => (orgId && on ? query(collection(db, 'organizations', orgId, 'serviceHosts'), where('deletedAt', '==', null)) : null), [orgId, on]);
+export function useHosts(team: Team, orgId: string, on = true): ServiceHost[] {
+  const { rows } = useLiveQuery<ServiceHost>(() => (orgId && on ? query(collection(db, 'organizations', orgId, TEAM_INFO[team].col.people), where('deletedAt', '==', null)) : null), [team, orgId, on]);
   return rows.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export function useRota(orgId: string, from: string, to: string): RotaSlot[] {
-  const { rows } = useLiveQuery<RotaSlot>(() => (orgId ? query(collection(db, 'organizations', orgId, 'serviceRota'), where('date', '>=', from), where('date', '<=', to)) : null), [orgId, from, to]);
+export function useRota(team: Team, orgId: string, from: string, to: string): RotaSlot[] {
+  const { rows } = useLiveQuery<RotaSlot>(() => (orgId ? query(collection(db, 'organizations', orgId, TEAM_INFO[team].col.rota), where('date', '>=', from), where('date', '<=', to)) : null), [team, orgId, from, to]);
   return rows;
 }
 

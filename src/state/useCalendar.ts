@@ -115,7 +115,8 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
   const classes = useClasses(classOrgs, from, to, seesClasses && layers.has('classes'));
   // Each service shows its Service Host (Andy, 2026-11-17, 11A).
   const church = orgs.find((o) => o.type === 'church_campus');
-  const rota = useRota(layers.has('services') && church ? church.id : '', from, to);
+  const rota = useRota('host', layers.has('services') && church ? church.id : '', from, to);
+  const prayer = useRota('prayer', layers.has('services') && church ? church.id : '', from, to);
 
   return useMemo(() => {
     const out: CalItem[] = [];
@@ -134,6 +135,11 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
             out.push({ key: `auto/svc/${org.id}/${d}/${s.time}`, orgId: org.id, title: host ? `${base} · Host ${host.hostName}` : base, type: 'service', allDay: false, date: d, endDate: d, start: s.time, end: null, place: '', auto: { kind: 'services', link: host ? '/service-hosts' : '/attendance', detail: host ? `Service Host: ${host.hostName}${host.answer === 'yes' ? ' (accepted)' : host.answer === 'no' ? " (can't come)" : ' (waiting for an answer)'}.` : 'From the service times in Settings. Take attendance on the day.' } });
           }
         }
+      }
+      // Prayer times with their leader (the Sunday prayer schedule).
+      for (const r of prayer) {
+        if (r.status !== 'set' || !church) continue;
+        out.push({ key: `auto/pray/${r.id}`, orgId: church.id, title: `🙏 ${r.serviceName} · ${r.hostName}`, type: 'service', allDay: false, date: r.date, endDate: r.date, start: r.time || null, end: null, place: '', auto: { kind: 'services', link: '/prayer-schedule', detail: `Prayer Leader: ${r.hostName}${r.answer === 'yes' ? ' (accepted)' : r.answer === 'no' ? " (can't come)" : ' (waiting for an answer)'}.` } });
       }
       // Other services that have a host (a Wednesday service, a special night).
       for (const r of rota) {
@@ -174,7 +180,7 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
       }
     }
     return out;
-  }, [orgs, from, to, layers, classes, people, seesPeople, seesClasses, seesClose, rota, church]);
+  }, [orgs, from, to, layers, classes, people, seesPeople, seesClasses, seesClose, rota, prayer, church]);
 }
 
 /** This person's email reminder choice (on unless they switched it off). */

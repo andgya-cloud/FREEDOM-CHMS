@@ -417,6 +417,19 @@ service cloud.firestore {
         allow read: if hostManager(orgId);
         allow write: if false;
       }
+      // The Sunday prayer schedule (Andy, 2026-11-17) works the same way.
+      match /prayerRota/{slotId} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
+      match /prayerLeaders/{leaderId} {
+        allow read: if hostManager(orgId);
+        allow write: if false;
+      }
+      match /prayerSettings/{docId} {
+        allow read: if hostManager(orgId);
+        allow write: if false;
+      }
 
       // One record per person per gathering. It must point at a real gathering
       // and a real person in this organization, on the gathering's date.

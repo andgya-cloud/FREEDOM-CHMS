@@ -88,7 +88,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'school.manage': 'Students: admission numbers, graduation and certificates',
   'fees.balances': "Each student's fee balance (no payments)",
   'calendar.manage': 'Calendar: add and change events',
-  'rota.manage': 'Service hosts: add hosts and plan who hosts each service',
+  'rota.manage': 'Service hosts and Sunday prayer: add people and plan the schedules',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',

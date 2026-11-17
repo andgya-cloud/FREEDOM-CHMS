@@ -12,6 +12,33 @@ import { addDays, dayLabel, daysBetween, isDateKey, isTime, weekdayOf } from './
 
 export { addDays, daysBetween, dayLabel, isDateKey, isTime, weekdayOf };
 
+/**
+ * Teams that share this engine. The Sunday prayer schedule (Andy, 2026-11-17: "clone what you have created") works
+ * exactly like Service hosts, with its own people, schedule, services and document. Church only.
+ */
+export type Team = 'host' | 'prayer';
+export const TEAMS = ['host', 'prayer'] as const;
+export interface TeamInfo {
+  /** One person: "Service Host". Many: "Service Hosts". The page title and its address. */
+  role: string; roles: string; title: string; page: string; answerPath: string; icon: string;
+  /** The default service name for a weekday. */
+  serviceName: (weekday: number) => string;
+  col: { people: string; rota: string; settings: string; sent: string };
+}
+export const TEAM_INFO: Record<Team, TeamInfo> = {
+  host: {
+    role: 'Service Host', roles: 'Service Hosts', title: 'Service hosts', page: '/service-hosts', answerPath: 'host', icon: '🎤',
+    serviceName: (w) => (w === 0 ? 'Sunday service' : `${WEEKDAYS[w]} service`),
+    col: { people: 'serviceHosts', rota: 'serviceRota', settings: 'serviceHostSettings', sent: 'serviceHostSent' },
+  },
+  prayer: {
+    role: 'Prayer Leader', roles: 'Prayer Leaders', title: 'Sunday prayer', page: '/prayer-schedule', answerPath: 'prayer', icon: '🙏',
+    serviceName: (w) => (w === 0 ? 'Sunday prayer' : `${WEEKDAYS[w]} prayer`),
+    col: { people: 'prayerLeaders', rota: 'prayerRota', settings: 'prayerSettings', sent: 'prayerSent' },
+  },
+};
+export const isTeam = (v: unknown): v is Team => v === 'host' || v === 'prayer';
+
 export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 
 /** A service that needs a host every week (2A). */
@@ -75,7 +102,7 @@ export const slotId = (date: string, serviceKey: string) => `${date}_${serviceKe
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] ?? '';
 
 /** The weekly services from the church's service times ("Sunday 10:00"), or one Sunday 10:00 service. */
-export function defaultServices(serviceTimes: readonly string[] | null | undefined): HostService[] {
+export function defaultServices(serviceTimes: readonly string[] | null | undefined, team: Team = 'host'): HostService[] {
   const out: HostService[] = [];
   for (const s of serviceTimes ?? []) {
     const m = /^(sunday|monday|tuesday|wednesday|thursday|friday|saturday)\s+([01]?\d|2[0-3])[:.]([0-5]\d)\s*(am|pm)?/i.exec(s.trim());
@@ -84,16 +111,18 @@ export function defaultServices(serviceTimes: readonly string[] | null | undefin
     let h = Number(m[2]);
     if (m[4]?.toLowerCase() === 'pm' && h < 12) h += 12;
     if (m[4]?.toLowerCase() === 'am' && h === 12) h = 0;
+    // Prayer is before the service: an hour earlier by default (Andy can change it).
+    if (team === 'prayer') h = Math.max(0, h - 1);
     const time = `${String(h).padStart(2, '0')}:${m[3]}`;
     const key = `${WEEKDAYS[weekday]!.slice(0, 3).toLowerCase()}${time.replace(':', '')}`;
-    if (!out.some((o) => o.key === key)) out.push({ key, name: weekday === 0 ? 'Sunday service' : `${WEEKDAYS[weekday]} service`, weekday, time });
+    if (!out.some((o) => o.key === key)) out.push({ key, name: TEAM_INFO[team].serviceName(weekday), weekday, time });
   }
-  return out.length ? out : [{ key: 'sun1000', name: 'Sunday service', weekday: 0, time: '10:00' }];
+  return out.length ? out : [team === 'prayer' ? { key: 'sun0900', name: TEAM_INFO.prayer.serviceName(0), weekday: 0, time: '09:00' } : { key: 'sun1000', name: TEAM_INFO.host.serviceName(0), weekday: 0, time: '10:00' }];
 }
 
-export function settingsOr(raw: Partial<HostSettings> | null | undefined, serviceTimes?: readonly string[] | null): HostSettings {
+export function settingsOr(raw: Partial<HostSettings> | null | undefined, serviceTimes?: readonly string[] | null, team: Team = 'host'): HostSettings {
   return {
-    services: raw?.services?.length ? raw.services : defaultServices(serviceTimes),
+    services: raw?.services?.length ? raw.services : defaultServices(serviceTimes, team),
     specials: raw?.specials ?? [],
     doc: raw?.doc ?? null,
   };
@@ -220,6 +249,7 @@ export interface HostMessageInput {
   days: number;
   kind: ReminderKind;
   link: string;
+  team?: Team;
   /** Where the requirements are: attached to the email, on the link (WhatsApp), or none uploaded. */
   doc: 'attached' | 'link' | null;
 }
@@ -228,23 +258,25 @@ export interface HostMessageInput {
 export function hostMessage(m: HostMessageInput): { subject: string; text: string } {
   const when = `${dayLabel(m.date, false)}${m.time ? ` at ${clock(m.time)}` : ''}`;
   const hello = `Hello ${firstName(m.hostName)},`;
-  const doc = m.doc === 'attached' ? ' The Service Host requirements are attached. Please read them before the day.' : m.doc === 'link' ? ' The Service Host requirements are on the link below. Please read them before the day.' : '';
+  const role = TEAM_INFO[m.team ?? 'host'].role;
+  const doc = m.doc === 'attached' ? ` The ${role} requirements are attached. Please read them before the day.` : m.doc === 'link' ? ` The ${role} requirements are on the link below. Please read them before the day.` : '';
   if (m.kind === 'ask') {
     return {
-      subject: `Can you host the ${m.serviceName} on ${dayLabel(m.date, false)}?`,
-      text: `${hello} you are the Service Host for the ${m.serviceName} at ${m.church} ${daysLabel(m.days)}, ${when}.${doc}\n\nPlease tap to say "Yes, I'll lead" or "I can't": ${m.link}\n\nThank you and God bless.`,
+      subject: `Can you lead the ${m.serviceName} on ${dayLabel(m.date, false)}?`,
+      text: `${hello} you are the ${role} for the ${m.serviceName} at ${m.church} ${daysLabel(m.days)}, ${when}.${doc}\n\nPlease tap to say "Yes, I'll lead" or "I can't": ${m.link}\n\nThank you and God bless.`,
     };
   }
   return {
-    subject: `Reminder: you host the ${m.serviceName} ${daysLabel(m.days)}`,
-    text: `${hello} a reminder that you are the Service Host for the ${m.serviceName} at ${m.church} ${daysLabel(m.days)}, ${when}. Thank you for saying yes.${doc}\n\nYour details: ${m.link}\n\nGod bless.`,
+    subject: `Reminder: you lead the ${m.serviceName} ${daysLabel(m.days)}`,
+    text: `${hello} a reminder that you are the ${role} for the ${m.serviceName} at ${m.church} ${daysLabel(m.days)}, ${when}. Thank you for saying yes.${doc}\n\nYour details: ${m.link}\n\nGod bless.`,
   };
 }
 
-export function welcomeMessage(church: string, hostName: string, hasDoc: boolean): { subject: string; text: string } {
+export function welcomeMessage(church: string, hostName: string, hasDoc: boolean, team: Team = 'host'): { subject: string; text: string } {
+  const t = TEAM_INFO[team];
   return {
-    subject: `Welcome to the Service Hosts team at ${church}`,
-    text: `Hello ${firstName(hostName)}, welcome to the Service Hosts team at ${church}. Thank you for serving.\n\nWhen it is your turn to host a service you will get a message a week before, asking you to confirm, and short reminders 3 days, 2 days and the day before.${hasDoc ? '\n\nThe Service Host requirements are attached. Please read them carefully.' : ''}\n\nGod bless.`,
+    subject: `Welcome to the ${t.roles} team at ${church}`,
+    text: `Hello ${firstName(hostName)}, welcome to the ${t.roles} team at ${church}. Thank you for serving.\n\nWhen it is your turn to lead you will get a message a week before, asking you to confirm, and short reminders 3 days, 2 days and the day before.${hasDoc ? `\n\nThe ${t.role} requirements are attached. Please read them carefully.` : ''}\n\nGod bless.`,
   };
 }
 

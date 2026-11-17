@@ -133,7 +133,7 @@ export function App() {
   const settings = useAppSettings();
   const path = useLocation().pathname;
   // The class check-in and a student's progress page are open to anyone too (Freedom 252, 2026-11-09).
-  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path.startsWith('/host/') || path === '/install';
+  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path.startsWith('/host/') || path.startsWith('/prayer/') || path === '/install';
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -154,6 +154,7 @@ export function App() {
             <Route path="/class/:orgId/:eventId" element={<ClassCheckInPage />} />
             <Route path="/install" element={<InstallPage />} />
             <Route path="/host/:orgId/:token" element={<HostAnswerPage />} />
+            <Route path="/prayer/:orgId/:token" element={<HostAnswerPage team="prayer" />} />
           </Routes>
         </div>
       </Suspense>
@@ -342,6 +343,7 @@ function AppRoutes() {
         <Route path="/help" element={<OpenGuide />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/service-hosts" element={<ServiceHostsPage />} />
+        <Route path="/prayer-schedule" element={<ServiceHostsPage key="prayer" team="prayer" />} />
         <Route path="/manual" element={<ManualPage />} />
         <Route path="/manual/:id" element={<ManualPage />} />
         <Route path="/settings/reviewer-notes" element={<ReviewsPage />} />

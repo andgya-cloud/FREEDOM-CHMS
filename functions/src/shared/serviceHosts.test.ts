@@ -16,6 +16,7 @@ describe('service hosts', () => {
       { key: 'wed2000', name: 'Wednesday service', weekday: 3, time: '20:00' },
     ]);
     expect(defaultServices([])).toHaveLength(1);
+    expect(defaultServices(['Sunday 10:00'], 'prayer')).toEqual([{ key: 'sun0900', name: 'Sunday prayer', weekday: 0, time: '09:00' }]);
   });
 
   it('lists every Sunday for 13 weeks plus specials', () => {
@@ -67,5 +68,8 @@ describe('service hosts', () => {
     const m = hostMessage({ church: 'Freedom Church', hostName: 'Mary Atieno', serviceName: 'Sunday service', date: '2026-11-29', time: '10:00', days: 7, kind: 'ask', link: 'L', doc: 'attached' });
     expect(m.text).toContain('Hello Mary');
     expect(m.text).toContain('Sun 29 Nov at 10:00 AM');
+    expect(m.text).toContain('Service Host');
+    const p = hostMessage({ church: 'Freedom Church', hostName: 'Mary', serviceName: 'Sunday prayer', date: '2026-11-29', time: '09:00', days: 3, kind: 'routine', link: 'L', doc: null, team: 'prayer' });
+    expect(p.text).toContain('Prayer Leader for the Sunday prayer');
   });
 });
