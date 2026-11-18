@@ -21,6 +21,7 @@ import { AdiaIcon, type AdiaIconName } from '../../components/icons';
 import { usePettyCashAccess } from '../../state/usePettyCash';
 import { usePayrollAccess } from '../../state/usePayroll';
 import { useInventoryAccess } from '../../state/useInventory';
+import { useLibraryAccess } from '../../state/useLibrary';
 import { money, pct, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 import { CircleNeedsYou } from '../../components/CircleNeedsYou';
@@ -56,6 +57,7 @@ export function AdiaToday({ org }: { org: Organization }) {
   const petty = usePettyCashAccess();
   const payroll = usePayrollAccess();
   const inventory = useInventoryAccess();
+  const library = useLibraryAccess();
   const { funds } = useFunds(org.id);
   const toast = useToast();
   const [busy, setBusy] = useState(false);
@@ -119,6 +121,7 @@ export function AdiaToday({ org }: { org: Organization }) {
     { to: '/school/petty-cash', icon: 'pettyCash', label: 'Sign requisitions', sub: 'Approve what is waiting', show: petty.canSign },
     { to: '/school/payroll', icon: 'payroll', label: 'Payroll', sub: 'This month’s pay', show: payroll.any },
     { to: '/inventory', icon: 'inventory', label: 'Inventory', sub: 'Count your department’s items', show: inventory.counts },
+    { to: '/library', icon: 'library', label: 'Library', sub: 'Lend and return books', show: library.manager },
   ];
   const attendanceChange = thisWeek != null && lastWeek != null ? Math.round(thisWeek - lastWeek) : null;
 

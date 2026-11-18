@@ -123,6 +123,11 @@ const HELP: [RegExp, PageHelp][] = [
     'Press Save at the bottom of each box.',
     'Ask Mr Andrew if you are not sure.',
   ] }],
+  [/^\/library/, { title: 'Library', steps: [
+    'To lend: pick the book (or scan its sticker), pick the borrower, press Lend.',
+    'To return: press Returned next to the book, or scan its sticker.',
+    'Add books under Books: one at a time, or upload an Excel or PDF list, then print the QR stickers.',
+  ] }],
   [/^\/inventory\/[^/]+/, { title: 'Inventory form', steps: [
     'Count each item and type the number.',
     'Write a note for anything missing or broken.',

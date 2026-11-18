@@ -15,7 +15,7 @@ import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
-import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -47,6 +47,7 @@ const ROLE_HINTS: Record<string, string> = {
   principal: ': ADIA students, attendance, Exam Records and graduation, with each student\'s fee balance; nothing else',
   trainer: ': keys in marks for their own ADIA classes in Exam Records, and sees nothing else',
   labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
+  librarian: ': runs the ADIA library (lends and returns books), and sees nothing else',
   reviewer: ': an outsider who reviews the app. Sees every area of the places you tick, changes nothing, and writes reviews in My reviews for you to answer. Never sees pastoral notes, private conversations, staff accounts or the full download',
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
@@ -96,7 +97,7 @@ export function UserFormPage() {
   // The principal works at ADIA only, with no extra ticks (Andy, 2026-10-25).
   // A trainer works at ADIA only too, in Exam Records (Andy, 2026-10-25).
   // A lab technician works at ADIA only, on inventory (Andy, 2026-10-29).
-  const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID || form.roleId === LABTECH_ROLE_ID;
+  const principal = form.roleId === PRINCIPAL_ROLE_ID || form.roleId === TRAINER_ROLE_ID || form.roleId === LABTECH_ROLE_ID || form.roleId === LIBRARIAN_ROLE_ID;
   // Trainers, lab technicians and staff can be in charge of a department's inventory (Andy, 2026-10-29, 2A).
   const counts = !teamOnly && ['trainer', 'labtech', 'staff', 'head'].includes(form.roleId);
   const colleges = organizations.filter((o) => o.type === 'college').map((o) => o.id);
@@ -122,7 +123,7 @@ export function UserFormPage() {
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
-    if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : form.roleId === LABTECH_ROLE_ID ? 'lab technician' : 'principal'} works at ADIA only. Untick the other organizations.`);
+    if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : form.roleId === LABTECH_ROLE_ID ? 'lab technician' : form.roleId === LIBRARIAN_ROLE_ID ? 'librarian' : 'principal'} works at ADIA only. Untick the other organizations.`);
     if (form.roleId === LABTECH_ROLE_ID && form.inventory.length === 0) return setError('Tick the department whose inventory they count.');
     if (form.roleId === TRAINER_ROLE_ID && !teamOnly && form.departments.length === 0) return setError('Tick the department this trainer teaches.');
     if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
@@ -214,7 +215,7 @@ export function UserFormPage() {
             <legend>Role</legend>
             {roles.filter((r) => r.id !== REVIEWER_ROLE_ID || isDirectorProfile(me) || form.roleId === REVIEWER_ROLE_ID).map((r) => (
               <label key={r.id} className="check">
-                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID || r.id === TRAINER_ROLE_ID || r.id === LABTECH_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
+                <input type="radio" name="role" checked={form.roleId === r.id} onChange={() => setForm((f) => (r.id === PRINCIPAL_ROLE_ID || r.id === TRAINER_ROLE_ID || r.id === LABTECH_ROLE_ID || r.id === LIBRARIAN_ROLE_ID ? { ...f, roleId: r.id, allOrgs: false, orgIds: colleges } : { ...f, roleId: r.id }))} disabled={uid === me?.uid} />
                 <span><strong>{r.name}</strong>{r.isOwner ? ': full access to everything' : ROLE_HINTS[r.id] ?? ''}</span>
               </label>
             ))}

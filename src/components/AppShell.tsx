@@ -15,7 +15,7 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isReviewer, isInventoryManager, LABTECH_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isReviewer, isInventoryManager, isLibraryManager, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 import { AiDot } from './Ai';
 import { roleRedirect } from '../lib/roleAccess';
@@ -37,7 +37,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const trainer = profile?.roleId === TRAINER_ROLE_ID;
   // A lab technician only counts their department's inventory (Andy, 2026-10-29).
   const labtech = profile?.roleId === LABTECH_ROLE_ID;
-  const full = profile?.roleId !== SIGNATORY_ROLE_ID && !trainer && !labtech;
+  // A Librarian only runs the ADIA library (Andy, 2026-11-18, 2A).
+  const librarian = profile?.roleId === LIBRARIAN_ROLE_ID;
+  const full = profile?.roleId !== SIGNATORY_ROLE_ID && !trainer && !labtech && !librarian;
+  const libraryTab = current?.type === 'college' && !!profile && isLibraryManager(profile);
   const counter = (profile?.inventoryCourseIds?.length ?? 0) > 0;
   const inventoryTab = current?.type === 'college' && (counter || (!!profile && isInventoryManager(profile)));
   // Loaded once at the start, so a WhatsApp message opens with the pastor's words straight away, offline too.
@@ -264,6 +267,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/inventory" className={`tab${extra}`}>
           {adia ? <AdiaIcon name="inventory" /> : <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7l9-4 9 4v10l-9 4-9-4zM3 7l9 4 9-4M12 11v10" /></svg>}
           Inventory
+        </NavLink>
+      )}
+      {libraryTab && (
+        <NavLink to="/library" className={`tab${extra}`}>
+          <AdiaIcon name="library" />
+          Library
         </NavLink>
       )}
       <NavLink to="/settings" className={`tab${extra}`}>

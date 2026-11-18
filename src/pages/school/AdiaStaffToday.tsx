@@ -7,6 +7,7 @@ import { TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { usePettyCashAccess } from '../../state/usePettyCash';
 import { usePayrollAccess } from '../../state/usePayroll';
 import { useInventoryAccess } from '../../state/useInventory';
+import { useLibraryAccess } from '../../state/useLibrary';
 import { AdiaWelcome } from '../../components/AdiaWelcome';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
 import { PoweredBy } from '../../components/PoweredBy';
@@ -20,6 +21,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
   const petty = usePettyCashAccess();
   const payroll = usePayrollAccess();
   const inventory = useInventoryAccess();
+  const library = useLibraryAccess();
   const trainer = profile?.roleId === TRAINER_ROLE_ID;
   const register = (trainer && (profile?.registerClasses?.length ?? 0) > 0) || can('attendance.write');
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
@@ -27,6 +29,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
     { to: '/school/exams', icon: 'exams', label: 'Enter marks', sub: 'CATs, finals and results', show: can('exams.mark') || can('exams.manage') },
     { to: '/tutor-files', icon: 'files', label: 'Tutor Files', sub: 'Course outlines and reports', show: trainer },
     { to: '/inventory', icon: 'inventory', label: 'Inventory', sub: 'Count your department’s items', show: inventory.counts },
+    { to: '/library', icon: 'library', label: 'Library', sub: 'Lend and return books', show: library.manager },
     { to: '/school/petty-cash/new', icon: 'pettyCash', label: 'New requisition', sub: 'Ask for petty cash', show: petty.canRequest },
     { to: '/school/petty-cash', icon: 'pettyCash', label: 'Sign requisitions', sub: 'Approve what is waiting', show: petty.canSign },
     { to: '/school/payroll', icon: 'payroll', label: 'Payroll', sub: 'This month’s pay', show: payroll.any },

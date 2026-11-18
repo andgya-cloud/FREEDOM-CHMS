@@ -2943,3 +2943,36 @@ a.fin-chip:hover { background: #fdecea; }
 .lp-file-ctl select { max-width: 200px; }
 .lp-cell { display: inline-flex; flex-direction: column; align-items: center; gap: 1px; }
 .lp-miss { font-size: 0.74rem; color: #b91c1c; font-weight: 700; }
+
+/* ADIA library (Andy, 2026-11-18) */
+.lib-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.lib-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 10px 14px; }
+.lib-stat b { display: block; font-size: 1.6rem; line-height: 1.2; font-variant-numeric: tabular-nums; color: var(--navy); }
+.lib-stat span { font-size: 0.75rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.lib-stat.lib-late b { color: var(--red); }
+.lib-tabs { margin-bottom: 14px; }
+.lib-pick .field input { margin-bottom: 6px; }
+.lib-three { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.lib-problem { color: var(--red); font-weight: 600; }
+.lib-buttons { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lib-buttons label.btn { cursor: pointer; }
+.lib-actions { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.lib-lost { width: 100%; max-width: 260px; }
+.lib-table td { vertical-align: top; }
+.lib-row { cursor: pointer; }
+.lib-row:hover td { background: var(--surface-2); }
+.lib-no { white-space: nowrap; font-variant-numeric: tabular-nums; font-weight: 600; }
+.lib-edit td { background: var(--surface-2); }
+.lib-fold summary { cursor: pointer; color: var(--muted); padding: 4px 0; }
+.lib-fold[open] summary { margin-bottom: 8px; }
+.lib-panel { border-top: 1px solid var(--border); padding-top: 12px; }
+.lib-preview { max-height: 420px; overflow-y: auto; }
+.lib-narrow { max-width: 360px; }
+.lib-bar { display: grid; grid-template-columns: minmax(0, 220px) 1fr 44px; gap: 10px; align-items: center; font-size: 0.9rem; margin: 6px 0; }
+.lib-bar i { display: block; height: 10px; border-radius: 6px; background: linear-gradient(90deg, var(--navy), var(--gold)); min-width: 4px; }
+.lib-bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.lib-most { margin: 0; padding-left: 1.2rem; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 640px) {
+  .lib-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .lib-bar { grid-template-columns: minmax(0, 120px) 1fr 32px; }
+}

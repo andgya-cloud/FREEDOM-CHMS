@@ -2048,6 +2048,60 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // The ADIA library (Andy, 2026-11-18, 2A): Admin, the Principal, the organization head, the Librarian, the
+      // pastor and Doreen run it. Every copy of a book is one document (LIB-0001); a loan is written on the book and
+      // in libraryLoans; borrowers who are not students are library members; libraryMeta holds the settings and the
+      // book counter; libraryChecks the termly shelf checks. Nothing is ever deleted, only soft-deleted.
+      function libManager() {
+        return canAccessOrg(orgId) && (has('users.manage') || me().roleId in ['admin', 'principal', 'head', 'librarian']);
+      }
+      function libWrite(d) {
+        return libManager() && d.orgId == orgId && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+      }
+      match /libraryBooks/{bookId} {
+        allow read: if libManager();
+        allow create, update: if libWrite(request.resource.data)
+          && request.resource.data.keys().hasOnly(['orgId', 'no', 'n', 'title', 'author', 'category', 'isbn', 'shelf', 'price', 'status', 'loan',
+               'timesOut', 'lostNote', 'addedOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.no == bookId && request.resource.data.n is int
+          && shortText(request.resource.data.title, 200) && request.resource.data.title.size() > 0
+          && request.resource.data.status in ['in', 'out', 'lost', 'damaged']
+          && (resource == null || (request.resource.data.n == resource.data.n && request.resource.data.no == resource.data.no));
+        allow delete: if false;
+      }
+      match /libraryLoans/{loanId} {
+        allow read: if libManager();
+        allow create, update: if libWrite(request.resource.data)
+          && request.resource.data.keys().hasOnly(['orgId', 'bookId', 'bookNo', 'title', 'category', 'who', 'whoName', 'kind', 'phone', 'outOn', 'dueOn',
+               'returnedOn', 'state', 'cost', 'byName', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.kind in ['student', 'staff', 'church'] && request.resource.data.state in ['out', 'returned', 'lost', 'damaged']
+          && shortText(request.resource.data.whoName, 120);
+        allow delete: if false;
+      }
+      match /libraryMembers/{memberId} {
+        allow read: if libManager();
+        allow create, update: if libWrite(request.resource.data)
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'phone', 'kind', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.name, 120) && request.resource.data.kind in ['staff', 'church'];
+        allow delete: if false;
+      }
+      match /libraryMeta/{metaId} {
+        allow read: if libManager();
+        allow create, update: if libWrite(request.resource.data) && metaId in ['settings', 'counter']
+          && request.resource.data.keys().hasOnly(['orgId', 'next', 'categories', 'loanDays', 'renewals', 'limits',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (metaId != 'counter' || (request.resource.data.next is int && (resource == null || request.resource.data.next >= resource.data.next)))
+          && (!('categories' in request.resource.data) || (request.resource.data.categories is list && request.resource.data.categories.size() <= 60));
+        allow delete: if false;
+      }
+      match /libraryChecks/{checkId} {
+        allow read: if libManager();
+        allow create, update: if libWrite(request.resource.data)
+          && request.resource.data.keys().hasOnly(['orgId', 'name', 'startedOn', 'seen', 'closedOn', 'byName', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && shortText(request.resource.data.name, 80) && request.resource.data.seen is list && request.resource.data.seen.size() <= 10000;
+        allow delete: if false;
+      }
+
       // ADIA Tutor Files (Andy, 2026-11-04). The principal (and Admin, the pastor, Doreen) asks tutors for a file with
       // a deadline; tutors read the requests. The files themselves and their status are written only by Cloud
       // Functions (callable tutorFiles), which keep the lock; a tutor reads only their own.

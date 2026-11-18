@@ -126,6 +126,16 @@ export function isInventoryManager(profile: (AccessProfile & { roleId?: string }
   return can(profile, 'users.manage') || (!!profile?.active && (INVENTORY_MANAGER_ROLES as readonly string[]).includes(profile.roleId ?? ''));
 }
 
+/**
+ * The ADIA library (Andy, 2026-11-18, 2A): a Librarian sees only the Library (and reads the student names to lend
+ * to them). Admin, the Principal and the organization head (Elizabeth runs the library) and the pastor run it too.
+ */
+export const LIBRARIAN_ROLE_ID = 'librarian';
+export const LIBRARY_MANAGER_ROLES = ['admin', PRINCIPAL_ROLE_ID, 'head', LIBRARIAN_ROLE_ID] as const;
+export function isLibraryManager(profile: (AccessProfile & { roleId?: string }) | null | undefined): boolean {
+  return can(profile, 'users.manage') || (!!profile?.active && (LIBRARY_MANAGER_ROLES as readonly string[]).includes(profile.roleId ?? ''));
+}
+
 /** The role for the petty cash signatories: they raise and sign requests, top-ups and resets, and see nothing else. */
 export const SIGNATORY_ROLE_ID = 'signatory';
 
@@ -150,7 +160,7 @@ const REVIEWER_SEES: Permission[] = ['people.read', 'people.write', 'attendance.
   'payroll.manage', 'payroll.approve', 'exams.mark', 'exams.manage', 'school.manage', 'fees.balances'];
 export const isReviewer = (profile: { roleId?: string } | null | undefined) => profile?.roleId === REVIEWER_ROLE_ID;
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'usher' | 'finance' | 'helper' | 'reviewer', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'reviewer', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -174,6 +184,8 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   trainer: { name: 'Trainer', permissions: ['exams.mark'] },
   // Inventory only, for the departments ticked on their account (Andy, 2026-10-29, 2A).
   labtech: { name: 'Lab technician', permissions: [] },
+  // The ADIA library only (Andy, 2026-11-18, 2A); people.read lets them pick the student who borrows.
+  librarian: { name: 'Librarian', permissions: ['people.read'] },
   // Freedom Church (Andy, 2026-11-01, 8A): an usher sees only Sunday and People; a finance person only Giving and Petty Cash.
   usher: { name: 'Usher', permissions: ['people.read', 'people.write', 'attendance.write'] },
   finance: { name: 'Finance', permissions: ['people.read', 'gifts.write', 'receipts.issue', 'giving.person.read', 'finance.reports'] },
