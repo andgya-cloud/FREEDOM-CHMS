@@ -22,7 +22,11 @@ export type AmountPer = (typeof AMOUNT_PER)[number];
 export const AMOUNT_PER_LABELS: Record<AmountPer, string> = { month: 'a month', term: 'a term', year: 'a year' };
 
 /** One bank account well-wishers can send to (8A: boxes for the particulars, more than one bank). */
-export interface SponsorBank { bank: string; branch: string; accountName: string; accountNumber: string; swift: string; note: string }
+export interface SponsorBank {
+  bank: string; branch: string; accountName: string; accountNumber: string; swift: string;
+  /** For transfers from abroad (Andy, 2026-11-18): Family Bank's bank code 70 and the Utawala branch code 034. */
+  bankCode: string; branchCode: string; note: string;
+}
 export interface SponsorSettings {
   /** The suggested amount for one child, in KES (5A). Null shows no amount. */
   amount: number | null;
@@ -121,7 +125,7 @@ export const DEFAULT_DROP_OFF = 'Please call the Hope Centre on 0794 645 455 to 
 export const DEFAULT_SETTINGS: SponsorSettings = {
   amount: null,
   per: 'month',
-  banks: [{ bank: 'Family Bank', branch: 'Utawala', accountName: 'Freedom in Christ Church', accountNumber: '034000022705', swift: '', note: '' }],
+  banks: [{ bank: 'Family Bank', branch: 'Utawala', accountName: 'Freedom in Christ Church', accountNumber: '034000022705', swift: 'FABLKENA', bankCode: '70', branchCode: '034', note: '' }],
   paybill: '222118',
   needs: DEFAULT_NEEDS,
   dropOff: DEFAULT_DROP_OFF,
@@ -139,8 +143,14 @@ export function cleanBank(v: unknown): SponsorBank | null {
   const b = (v ?? {}) as Record<string, unknown>;
   const out: SponsorBank = {
     bank: text(b.bank, 80), branch: text(b.branch, 80), accountName: text(b.accountName, 120),
-    accountNumber: text(b.accountNumber, 40), swift: text(b.swift, 20).toUpperCase(), note: text(b.note, 160),
+    accountNumber: text(b.accountNumber, 40), swift: text(b.swift, 20).toUpperCase().replace(/\s/g, ''),
+    bankCode: text(b.bankCode, 20), branchCode: text(b.branchCode, 20), note: text(b.note, 160),
   };
+  // The church's own Family Bank account gets its international codes even if it was saved before they existed.
+  const home = DEFAULT_SETTINGS.banks[0]!;
+  if (out.accountNumber.replace(/\s/g, '') === home.accountNumber) {
+    out.swift ||= home.swift; out.bankCode ||= home.bankCode; out.branchCode ||= home.branchCode;
+  }
   return out.bank || out.accountNumber ? out : null;
 }
 
@@ -315,6 +325,8 @@ export function bankLines(s: SponsorSettings, ref: string): string[] {
     if (b.accountName) lines.push(`Account name: ${b.accountName}`);
     if (b.accountNumber) lines.push(`Account number: ${b.accountNumber}`);
     if (b.swift) lines.push(`SWIFT code: ${b.swift}`);
+    if (b.bankCode) lines.push(`Bank code: ${b.bankCode}`);
+    if (b.branchCode) lines.push(`Branch code: ${b.branchCode}`);
     if (b.note) lines.push(b.note);
     lines.push('');
   }

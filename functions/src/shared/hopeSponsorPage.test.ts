@@ -95,3 +95,12 @@ describe('Hope Centre needs (Andy, 2026-11-18, 1A-10A)', () => {
     expect(receivedText('Grace', ['the Hope Centre'], 'SP-0003', 0, items, true)).toMatch(/reached the children[\s\S]*Blanket × 2[\s\S]*attached a photo/);
   });
 });
+
+describe('International transfer codes (Andy, 2026-11-18)', () => {
+  it('fills the Family Bank codes on the church account saved before they existed', () => {
+    const s = cleanSettings({ banks: [{ bank: 'Family Bank', accountNumber: '034000022705' }, { bank: 'Other Bank', accountNumber: '123' }] });
+    expect(s.banks[0]).toMatchObject({ swift: 'FABLKENA', bankCode: '70', branchCode: '034' });
+    expect(s.banks[1]).toMatchObject({ swift: '', bankCode: '', branchCode: '' });
+    expect(bankLines(DEFAULT_SETTINGS, 'SP-0001')).toEqual(expect.arrayContaining(['SWIFT code: FABLKENA', 'Bank code: 70', 'Branch code: 034']));
+  });
+});

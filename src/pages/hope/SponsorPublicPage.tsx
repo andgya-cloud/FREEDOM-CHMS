@@ -223,6 +223,8 @@ function ThankYou({ data, sent, onBack }: { data: SponsorPageData; sent: PledgeR
               {b.accountName && <div><dt>Account name</dt><dd>{b.accountName}</dd></div>}
               {b.accountNumber && <div><dt>Account number</dt><dd>{b.accountNumber}</dd></div>}
               {b.swift && <div><dt>SWIFT code</dt><dd>{b.swift}</dd></div>}
+              {b.bankCode && <div><dt>Bank code</dt><dd>{b.bankCode}</dd></div>}
+              {b.branchCode && <div><dt>Branch code</dt><dd>{b.branchCode}</dd></div>}
               {b.note && <div><dt>Note</dt><dd>{b.note}</dd></div>}
             </dl>
           ))}

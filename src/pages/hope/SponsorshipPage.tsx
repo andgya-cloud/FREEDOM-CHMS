@@ -295,7 +295,7 @@ function ChildRow({ org, c, name, open, onOpen, settings, reload, toast }: {
   );
 }
 
-const BLANK_BANK: SponsorBank = { bank: '', branch: '', accountName: '', accountNumber: '', swift: '', note: '' };
+const BLANK_BANK: SponsorBank = { bank: '', branch: '', accountName: '', accountNumber: '', swift: '', bankCode: '', branchCode: '', note: '' };
 function Settings({ org, settings, onSaved, toast }: { org: Organization; settings: SponsorSettings; onSaved: (s: SponsorSettings) => void; toast: Show }) {
   const [amount, setAmount] = useState(settings.amount ? String(settings.amount) : '');
   const [per, setPer] = useState(settings.per);
@@ -335,6 +335,8 @@ function Settings({ org, settings, onSaved, toast }: { org: Organization; settin
             {box(i, 'accountName', 'Account name')}
             {box(i, 'accountNumber', 'Account number')}
             {box(i, 'swift', 'SWIFT code', 'for givers abroad')}
+            {box(i, 'bankCode', 'Bank code', 'for givers abroad')}
+            {box(i, 'branchCode', 'Branch code', 'for givers abroad')}
             {box(i, 'note', 'Note', 'optional, e.g. "For US dollars"')}
           </div>
         </section>
