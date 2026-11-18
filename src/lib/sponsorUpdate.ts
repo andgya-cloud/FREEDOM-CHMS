@@ -23,13 +23,14 @@ async function logo(): Promise<string | null> {
 }
 
 /** A one-page update per child, for their sponsor and for the OneChild reports. */
-export async function sponsorUpdatePdf(org: Organization, pages: SponsorPage[], period: string): Promise<File> {
+/** sponsorCopy: the copy that goes to the sponsor (Andy, 2026-11-18, 4A): first name only, no Child ID or school. */
+export async function sponsorUpdatePdf(org: Organization, pages: SponsorPage[], period: string, opts: { sponsorCopy?: boolean } = {}): Promise<File> {
   const pdf = await newPdf('a4');
   const W = pdf.internal.pageSize.getWidth();
   const mark = await logo();
   for (let i = 0; i < pages.length; i++) {
     if (i > 0) pdf.addPage();
-    const c = pages[i]!;
+    const c = opts.sponsorCopy ? { ...pages[i]!, name: pages[i]!.name.split(/\s+/)[0] ?? '', childId: '', code: '', school: '', schoolClass: '' } : pages[i]!;
     pdf.setFillColor(...GREEN); pdf.rect(0, 0, W, 30, 'F');
     if (mark) { try { pdf.addImage(mark, 'PNG', 12, 5, 20, 20); } catch { /* no logo */ } }
     pdf.setTextColor(255, 255, 255); pdf.setFont('helvetica', 'bold'); pdf.setFontSize(18);
@@ -58,7 +59,7 @@ export async function sponsorUpdatePdf(org: Organization, pages: SponsorPage[], 
       pdf.setTextColor(...INK); pdf.text(value, x + 38, y);
       y += 6.5;
     };
-    line('Child ID', c.childId || c.code);
+    if (c.childId || c.code) line('Child ID', c.childId || c.code);
     line('Age', c.age != null ? `${c.age} years` : '');
     if (c.klass) {
       try { pdf.addImage(await stonePng(c.klass), 'PNG', x + 38, y - 4, 5, 5); } catch { /* text only */ }
@@ -100,5 +101,5 @@ export async function sponsorUpdatePdf(org: Organization, pages: SponsorPage[], 
   }
   stampPoweredBy(pdf);
   const safe = (s: string) => s.replace(/[^\w-]+/g, '-');
-  return new File([pdf.output('blob')], `${safe(pages.length === 1 ? pages[0]!.name : org.name)}-sponsor-update.pdf`, { type: 'application/pdf' });
+  return new File([pdf.output('blob')], `${safe(pages.length === 1 ? (opts.sponsorCopy ? pages[0]!.name.split(/\s+/)[0] ?? '' : pages[0]!.name) : org.name)}-sponsor-update.pdf`, { type: 'application/pdf' });
 }

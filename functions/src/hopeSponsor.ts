@@ -13,7 +13,7 @@ import { poweredByHtml } from './shared/poweredBy.js';
 import { canAccessOrg } from './shared/permissions.js';
 import {
   amountLabel, BIO_MAX, cleanAmount, cleanPledge, cleanSettings, heldChildren, holdUntil, listed, pledgeFor, pledgeRef,
-  receivedText, thankYouText, type PledgeForm, type PledgeState, type SponsorSettings,
+  receivedText, thankYouText, SAFETY_PROMISE, DATA_CONSENT, updateText, type PledgeForm, type PledgeState, type SponsorSettings,
 } from './shared/hopeSponsorPage.js';
 
 const MAX_PER_DAY = 100;
@@ -35,13 +35,14 @@ const kidsCol = (orgId: string) => db.collection(`organizations/${orgId}/sponsor
 const pledgesCol = (orgId: string) => db.collection(`organizations/${orgId}/sponsorPledges`);
 const loadSettings = async (orgId: string) => cleanSettings((await settingsRef(orgId).get()).data());
 
-interface KidInfo { bio: string; hidden: boolean; amount: number | null }
+interface KidInfo { bio: string; hidden: boolean; amount: number | null; photoOk: boolean }
 async function loadKids(orgId: string): Promise<Map<string, KidInfo>> {
   const snap = await kidsCol(orgId).get();
-  return new Map(snap.docs.map((d) => [d.id, { bio: String(d.get('bio') ?? ''), hidden: d.get('hidden') === true, amount: cleanAmount(d.get('amount')) }]));
+  return new Map(snap.docs.map((d) => [d.id, { bio: String(d.get('bio') ?? ''), hidden: d.get('hidden') === true, amount: cleanAmount(d.get('amount')), photoOk: d.get('photoOk') === true }]));
 }
 
 interface PledgeDoc {
+  lastUpdateOn?: string | null;
   ref: string; state: PledgeState; childIds: string[]; childNames: string[]; general: boolean; name: string; email: string; phone: string; country: string;
   date: string; holdUntil: string; receivedOn?: string | null; receivedByName?: string | null; createdAt?: Timestamp;
 }
@@ -61,13 +62,13 @@ async function publicChildren(orgId: string, today: string, settings: SponsorSet
     const k = kids.get(d.id);
     return {
       key: d.id, name: nameOf.get(d.id) ?? '', age: ageOn(c.dateOfBirth, today), stone: classOf(c.dateOfBirth, today)?.id ?? null,
-      bio: k?.bio ?? '', amount: k?.amount ?? settings.amount, photo: c.photoConsent?.given === true && c.hasPhoto === true, held: held.has(d.id),
+      bio: k?.bio ?? '', amount: k?.amount ?? settings.amount, photo: c.photoConsent?.given === true && c.hasPhoto === true && (k?.photoOk ?? false), held: held.has(d.id),
     };
   }).filter((k) => k.name).sort((a, b) => Number(a.held) - Number(b.held) || (a.age ?? 99) - (b.age ?? 99) || a.name.localeCompare(b.name));
 }
 
 /** Sends one email from the Hope Centre's Gmail. A failed email never loses the pledge. */
-async function send(to: string[], cc: string[], subject: string, text: string, tag: string, replyTo?: string) {
+async function send(to: string[], cc: string[], subject: string, text: string, tag: string, replyTo?: string, attachments?: { filename: string; content: Buffer; contentType: string }[]) {
   if (!to.length) return false;
   try {
     const m = circleMailer('ministry');
@@ -76,13 +77,23 @@ async function send(to: string[], cc: string[], subject: string, text: string, t
 <h2 style="color:#5b3f8f;margin:0 0 12px">${esc(subject)}</h2>
 ${text.split('\n\n').map((p) => `<p style="margin:0 0 12px">${esc(p).replace(/\n/g, '<br>')}</p>`).join('\n')}
 ${poweredByHtml()}</div>`;
-    const info = await m.transport.sendMail({ from: `"Freedom Hope Centre" <${m.from}>`, to: to.join(', '), cc: cc.length ? cc.join(', ') : undefined, replyTo: replyTo || m.from, subject, text, html });
+    const info = await m.transport.sendMail({ from: `"Freedom Hope Centre" <${m.from}>`, to: to.join(', '), cc: cc.length ? cc.join(', ') : undefined, replyTo: replyTo || m.from, subject, text, html, attachments });
     await keepTestMail(m.test, info, tag);
     return true;
   } catch (err) {
     logger.warn('Sponsorship email failed', err);
     return false;
   }
+}
+
+/** A PDF made on the phone ({ name, data: base64 }), at most 6 MB. */
+function pdfAttachment(v: unknown): { filename: string; content: Buffer; contentType: string }[] | undefined {
+  const f = (v ?? {}) as { name?: unknown; data?: unknown };
+  if (typeof f.data !== 'string' || !f.data || f.data.length > 8_000_000) return undefined;
+  const content = Buffer.from(f.data, 'base64');
+  if (content.subarray(0, 4).toString() !== '%PDF') return undefined;
+  const filename = (typeof f.name === 'string' ? f.name : 'Sponsor-update.pdf').replace(/[^\w.-]+/g, '-').slice(0, 80);
+  return [{ filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`, content, contentType: 'application/pdf' }];
 }
 
 /** Only Diana (the Director), Andy and Doreen manage the page (4A, 5A, 10A). */
@@ -117,7 +128,7 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     if (!/^[A-Za-z0-9_-]+$/.test(key)) throw new HttpsError('not-found', 'No photo.');
     const [c, k, p] = await Promise.all([db.doc(`organizations/${orgId}/children/${key}`).get(), kidsCol(orgId).doc(key).get(), db.doc(`organizations/${orgId}/childPhotos/${key}`).get()]);
     const child = c.data();
-    if (!child || !listed(child as never, k.get('hidden') === true) || child.photoConsent?.given !== true || !p.exists) throw new HttpsError('not-found', 'No photo.');
+    if (!child || !listed(child as never, k.get('hidden') === true) || child.photoConsent?.given !== true || k.get('photoOk') !== true || !p.exists) throw new HttpsError('not-found', 'No photo.');
     return { photo: String(p.get('photo') ?? '') };
   }
 
@@ -156,6 +167,7 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
       tx.set(pledge, {
         orgId, ref, state: 'waiting', childIds: form.childIds, childNames: names, general: form.general,
         name: form.name, email: form.email, phone: form.phone, country: form.country,
+        promise: form.childIds.length ? SAFETY_PROMISE : null, dataConsent: DATA_CONSENT, agreedOn: today,
         date: today, holdUntil: holdUntil(today), createdAt: FieldValue.serverTimestamp(), createdBy: 'sponsor-page',
         receivedOn: null, receivedBy: null, receivedByName: null,
       });
@@ -193,7 +205,7 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
       const k = kids.get(d.id);
       return {
         id: d.id, code: String(c.code ?? ''), sponsorName: String(c.sponsorName ?? ''), sponsored: !!String(c.sponsorName ?? '').trim(), hidden: k?.hidden ?? false, bio: k?.bio ?? '', amount: k?.amount ?? null,
-        held: held.has(d.id), photo: c.photoConsent?.given === true && c.hasPhoto === true, consent: c.photoConsent?.given ?? null,
+        held: held.has(d.id), photo: c.photoConsent?.given === true && c.hasPhoto === true, consent: c.photoConsent?.given ?? null, photoOk: k?.photoOk ?? false,
       };
     });
     return { settings, children: rows, pledges: list, today };
@@ -213,7 +225,7 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     const c = await db.doc(`organizations/${orgId}/children/${childId}`).get();
     if (!c.exists || c.get('deletedAt')) throw new HttpsError('not-found', 'This child was not found.');
     const bio = typeof data.bio === 'string' ? data.bio.replace(/\s+/g, ' ').trim().slice(0, BIO_MAX) : '';
-    await kidsCol(orgId).doc(childId).set({ orgId, bio, hidden: data.hidden === true, amount: cleanAmount(data.amount), ...stamp });
+    await kidsCol(orgId).doc(childId).set({ orgId, bio, hidden: data.hidden === true, amount: cleanAmount(data.amount), photoOk: data.photoOk === true, ...stamp });
     return { ok: true };
   }
 
@@ -244,9 +256,25 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     });
     let emailed = false;
     if (action === 'received' && p.email) {
-      emailed = await send([p.email], [], `Your gift has arrived, ${firstName(p.name)}`, receivedText(firstName(p.name), pledgeFor(p.childNames, p.general), p.ref), 'sponsor-received');
+      // The welcome pack (4A): each child's Sponsor update, made on the phone, attached.
+      emailed = await send([p.email], [], `Your gift has arrived, ${firstName(p.name)}`, receivedText(firstName(p.name), pledgeFor(p.childNames, p.general), p.ref), 'sponsor-received', undefined, pdfAttachment(data.pdf));
     }
     return { ok: true, emailed };
+  }
+
+  if (action === 'update') {
+    // The term update (4A): Diana, Andy or Doreen send it when they choose. Nothing goes out on its own.
+    const id = requireString(data.id, 'the pledge', { max: 60 });
+    const ref = pledgesCol(orgId).doc(id);
+    const pl = (await ref.get()).data() as PledgeDoc | undefined;
+    if (!pl || pl.state !== 'received') throw new HttpsError('failed-precondition', 'Updates go to sponsors whose money has arrived.');
+    if (!EMAIL.test(pl.email)) throw new HttpsError('failed-precondition', 'This sponsor gave no email. Please send it on WhatsApp instead.');
+    const files = pdfAttachment(data.pdf);
+    if (!files) throw new HttpsError('invalid-argument', 'The update could not be attached. Please try again.');
+    const ok = await send([pl.email], [], `News from Freedom Hope Centre, ${firstName(pl.name)}`, updateText(firstName(pl.name), pledgeFor(pl.childNames, false)), 'sponsor-update', undefined, files);
+    if (!ok) throw new HttpsError('unavailable', 'The email could not be sent. Please try again.');
+    await ref.update({ lastUpdateOn: today, lastUpdateBy: myName });
+    return { ok: true };
   }
 
   throw new HttpsError('invalid-argument', 'Unknown action.');

@@ -95,6 +95,10 @@ export function listed(c: { status: string; deletedAt?: unknown; sponsorName?: s
 }
 
 export interface PledgeForm { childIds: string[]; general: boolean; name: string; email: string; phone: string; country: string }
+
+/** What the sponsor promises before sending (Andy, 2026-11-18, 2A), and the consent for their own details (3A). */
+export const SAFETY_PROMISE = 'I will contact the child only through Freedom Hope Centre, and I will not share the child\u2019s photo or details online.';
+export const DATA_CONSENT = 'I agree that Freedom Hope Centre keeps my details to thank me and send me updates.';
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** The well-wisher's form, checked. Throws a message to show them. */
@@ -104,6 +108,8 @@ export function cleanPledge(v: unknown): PledgeForm {
   const general = d.general === true;
   if (!ids.length && !general) throw new Error('Please choose a child or the Hope Centre.');
   if (ids.length > MAX_CHILDREN) throw new Error(`Please choose up to ${MAX_CHILDREN} children at a time.`);
+  if (ids.length && d.promise !== true) throw new Error('Please tick the promise to keep the children safe.');
+  if (d.dataConsent !== true) throw new Error('Please tick that we may keep your details.');
   const name = text(d.name, 100);
   if (name.length < 2) throw new Error('Please write your name.');
   const email = text(d.email, 120).toLowerCase();
@@ -164,5 +170,19 @@ export function receivedText(first: string, names: readonly string[], ref: strin
     '',
     'With love and gratitude,',
     'Freedom Hope Centre, Freedom Church Nairobi',
+  ].join('\n');
+}
+
+/** The term update email (4A); the child's Sponsor update PDF is attached. */
+export function updateText(first: string, names: readonly string[]): string {
+  return [
+    `Dear ${first},`,
+    '',
+    `Here is the latest news of ${namesList(names)} from Freedom Hope Centre, with a photo and how the term has gone. Thank you for walking with ${names.length > 1 ? 'them' : names[0] ?? 'them'}.`,
+    '',
+    'To keep the children safe, please keep this update private and contact them only through the Hope Centre.',
+    '',
+    'With love and gratitude,',
+    'Freedom Hope Centre, Freedom Church Nairobi · 0794 645 455',
   ].join('\n');
 }

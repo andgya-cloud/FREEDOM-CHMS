@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import QRCode from 'qrcode';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { useClubs, useHope, useHopeDays } from '../../state/useHope';
+import { ageOn } from '../../../functions/src/shared/hope';
+import { sponsorUpdatePdf } from '../../lib/sponsorUpdate';
+import { sponsorPage } from './sponsorPages';
 import { useAuth } from '../../state/AuthContext';
 import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
@@ -11,7 +17,7 @@ import {
   AMOUNT_PER, AMOUNT_PER_LABELS, BIO_MAX, MAX_BANKS, amountLabel, cleanAmount, pledgeFor, thankYouText, type SponsorBank, type SponsorSettings,
 } from '../../../functions/src/shared/hopeSponsorPage';
 import {
-  loadSponsorAdmin, markPledge, saveSponsorChild, saveSponsorSettings, sponsorError, sponsorLink, type AdminChild, type Pledge, type SponsorAdmin,
+  loadSponsorAdmin, markPledge, saveSponsorChild, saveSponsorSettings, sendSponsorUpdate, sponsorError, sponsorLink, type AdminChild, type PdfFile, type Pledge, type SponsorAdmin,
 } from '../../lib/hopeSponsor';
 import { HopeGate } from './common';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -69,16 +75,29 @@ type Show = (m: string) => void;
 function Pledges({ org, data, reload, toast }: { org: Organization; data: SponsorAdmin; reload: () => Promise<void>; toast: Show }) {
   const [busy, setBusy] = useState('');
   const [sure, setSure] = useState<{ p: Pledge; action: 'received' | 'cancel' } | null>(null);
+  const makePack = useSponsorPack(org, data);
   const waiting = data.pledges.filter((p) => p.state === 'waiting');
   const done = data.pledges.filter((p) => p.state !== 'waiting');
   const act = async (p: Pledge, action: 'received' | 'cancel') => {
     setBusy(p.id);
     try {
-      const r = await markPledge(org.id, p.id, action);
+      // The welcome pack (4A): each child's Sponsor update, emailed with the thank-you.
+      const pdf = action === 'received' && p.email && p.childIds.length ? await makePack(p).catch(() => null) : null;
+      const r = await markPledge(org.id, p.id, action, pdf);
       toast(action === 'received' ? `Money received for ${p.ref}.${r.emailed ? ' A thank-you email went to the giver.' : ''}` : `${p.ref} cancelled. The children are back on the page.`);
       await reload();
     } catch (err) { toast(sponsorError(err)); }
     setBusy(''); setSure(null);
+  };
+  const update = async (p: Pledge) => {
+    setBusy(p.id);
+    try {
+      const pdf = await makePack(p);
+      await sendSponsorUpdate(org.id, p.id, pdf);
+      toast(`The update went to ${p.email}.`);
+      await reload();
+    } catch (err) { toast(sponsorError(err)); }
+    setBusy('');
   };
   const whatsapp = (p: Pledge) => {
     const phone = normalizePhone(p.phone);
@@ -104,6 +123,12 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
           <button type="button" className="btn btn-primary btn-small" disabled={!!busy} onClick={() => setSure({ p, action: 'received' })}>Money received</button>
           {p.phone && <a className="btn btn-small" href={whatsapp(p)} target="_blank" rel="noopener noreferrer">🟢 Thank-you on WhatsApp</a>}
           <button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => setSure({ p, action: 'cancel' })}>Not coming</button>
+        </div>
+      )}
+      {p.state === 'received' && p.email && p.childIds.length > 0 && (
+        <div className="dialog-actions">
+          <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void update(p)}>{busy === p.id ? 'Sending…' : '✉️ Send term update'}</button>
+          {p.lastUpdateOn && <span className="small muted">Last sent {formatDateKey(p.lastUpdateOn)}</span>}
         </div>
       )}
     </article>
@@ -171,11 +196,12 @@ function ChildRow({ org, c, name, open, onOpen, settings, reload, toast }: {
   const [bio, setBio] = useState(c.bio);
   const [amount, setAmount] = useState(c.amount ? String(c.amount) : '');
   const [hidden, setHidden] = useState(c.hidden);
+  const [photoOk, setPhotoOk] = useState(c.photoOk);
   const [busy, setBusy] = useState(false);
   const first = name.split(/\s+/)[0] ?? name;
   const save = async () => {
     setBusy(true);
-    try { await saveSponsorChild(org.id, c.id, { bio, hidden, amount: cleanAmount(amount) }); toast(`Saved for ${first}`); await reload(); } catch (err) { toast(sponsorError(err)); }
+    try { await saveSponsorChild(org.id, c.id, { bio, hidden, amount: cleanAmount(amount), photoOk: photoOk && c.consent === true }); toast(`Saved for ${first}`); await reload(); } catch (err) { toast(sponsorError(err)); }
     setBusy(false);
   };
   const state = c.sponsored ? `Sponsored by ${c.sponsorName}` : c.hidden ? 'Hidden' : c.held ? 'Chosen, waiting for money' : 'On the page';
@@ -187,7 +213,10 @@ function ChildRow({ org, c, name, open, onOpen, settings, reload, toast }: {
       </button>
       {open && (
         <div className="sps-child-edit">
-          <p className="small muted">The page shows <b>{first}</b>{c.photo ? ' with the photo' : c.consent === true ? ' (no photo yet)' : ' with no photo (no photo consent)'}.</p>
+          <p className="small muted">The page shows <b>{first}</b>{c.photo && c.photoOk ? ' with the photo' : ' with the first letter of the name, no photo'}.</p>
+          {c.consent === true ? (
+            <label className="check"><input type="checkbox" checked={photoOk} onChange={(e) => setPhotoOk(e.target.checked)} /> <span>The parent agreed: the photo may appear on the sponsorship page{c.photo ? '' : ' (add a photo on the child’s page)'}</span></label>
+          ) : <p className="small muted">No photo consent on file, so no photo can be shown.</p>}
           <label className="field">
             <span>Short bio <small className="muted">({bio.length}/{BIO_MAX}) what they love or dream of, no surname, school or home</small></span>
             <textarea rows={2} maxLength={BIO_MAX} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Loves football and wants to be a nurse." />
@@ -323,4 +352,32 @@ function Share({ org, toast }: { org: Organization; toast: Show }) {
       </div>
     </section>
   );
+}
+
+/**
+ * Each child's Sponsor update for the sponsor (Andy, 2026-11-18, 4A): first name only, no Child ID or school, and the
+ * photo only where the parent agreed to the sponsorship page. One PDF for all the children in the pledge.
+ */
+function useSponsorPack(org: Organization, data: SponsorAdmin) {
+  const h = useHope(org);
+  const { days } = useHopeDays(org.id);
+  const clubs = useClubs(org.id);
+  const { byId } = usePeople();
+  return async (p: Pledge): Promise<PdfFile> => {
+    const pages = [];
+    for (const id of p.childIds) {
+      const child = h.children.find((c) => c.id === id);
+      if (!child) continue;
+      const ok = data.children.find((c) => c.id === id)?.photoOk === true;
+      const photo = ok ? String((await getDoc(doc(db, `organizations/${org.id}/childPhotos/${id}`)).catch(() => null))?.get('photo') ?? '') || null : null;
+      const name = byId(id)?.fullName ?? p.childNames[p.childIds.indexOf(id)] ?? 'Child';
+      pages.push(sponsorPage({ child: { ...child, sponsorName: child.sponsorName || p.name }, name, age: ageOn(child.dateOfBirth, h.today), today: h.today, days, clubs: clubs.clubs, wins: clubs.wins, photo }));
+    }
+    if (!pages.length) throw new Error('The children could not be found. Please try again.');
+    const file = await sponsorUpdatePdf(org, pages, h.today.slice(0, 4), { sponsorCopy: true });
+    const buf = new Uint8Array(await file.arrayBuffer());
+    let bin = '';
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode(...buf.subarray(i, i + 0x8000));
+    return { name: file.name, data: btoa(bin) };
+  };
 }

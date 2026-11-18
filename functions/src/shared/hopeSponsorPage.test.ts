@@ -40,10 +40,13 @@ describe('Hope sponsorship page', () => {
 
   it('checks the form', () => {
     expect(() => cleanPledge({ name: 'Grace' })).toThrow(/choose a child/);
-    expect(() => cleanPledge({ general: true, name: 'G' })).toThrow(/your name/);
-    expect(() => cleanPledge({ childIds: ['a', 'b', 'c', 'd', 'e', 'f'], name: 'Grace' })).toThrow(/up to 5/);
-    expect(() => cleanPledge({ general: true, name: 'Grace', email: 'nope' })).toThrow(/email/);
-    expect(cleanPledge({ childIds: ['a', 'a', 'x/y'], name: '  Grace  Wanjiru ', email: 'G@Mail.com', country: 'Kenya' }))
+    expect(() => cleanPledge({ childIds: ['a'], name: 'Grace', dataConsent: true })).toThrow(/promise/);
+    expect(() => cleanPledge({ general: true, name: 'Grace' })).toThrow(/keep your details/);
+    expect(cleanPledge({ general: true, name: 'Grace', dataConsent: true }).general).toBe(true);
+    expect(() => cleanPledge({ general: true, name: 'G', dataConsent: true })).toThrow(/your name/);
+    expect(() => cleanPledge({ childIds: ['a', 'b', 'c', 'd', 'e', 'f'], name: 'Grace', promise: true, dataConsent: true })).toThrow(/up to 5/);
+    expect(() => cleanPledge({ general: true, name: 'Grace', email: 'nope', dataConsent: true })).toThrow(/email/);
+    expect(cleanPledge({ childIds: ['a', 'a', 'x/y'], name: '  Grace  Wanjiru ', email: 'G@Mail.com', country: 'Kenya', promise: true, dataConsent: true }))
       .toEqual({ childIds: ['a'], general: false, name: 'Grace Wanjiru', email: 'g@mail.com', phone: '', country: 'Kenya' });
   });
 

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { useParams } from 'react-router-dom';
 import { HOPE_CLASSES } from '../../../functions/src/shared/hopeClasses';
-import { amountLabel, MAX_CHILDREN, namesList, bankLines } from '../../../functions/src/shared/hopeSponsorPage';
+import { amountLabel, DATA_CONSENT, MAX_CHILDREN, namesList, bankLines, SAFETY_PROMISE } from '../../../functions/src/shared/hopeSponsorPage';
 import { Stone } from '../../components/Stone';
 import { loadSponsorPage, loadSponsorPhoto, sendPledge, sponsorError, type PledgeResult, type SponsorPageData } from '../../lib/hopeSponsor';
 import './sponsor.css';
@@ -132,14 +132,18 @@ function PledgeForm({ orgId, chosen, childIds, general, onClose, onSent }: {
   const [phone, setPhone] = useState('');
   const [country, setCountry] = useState('');
   const [website, setWebsite] = useState('');
+  const [promise, setPromise] = useState(false);
+  const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (name.trim().length < 2) { setError('Please write your name.'); return; }
+    if (childIds.length && !promise) { setError('Please tick the promise to keep the children safe.'); return; }
+    if (!consent) { setError('Please tick that we may keep your details.'); return; }
     setBusy(true); setError('');
     try {
-      const r = await sendPledge(orgId, { childIds, general, name, email, phone, country, website });
+      const r = await sendPledge(orgId, { childIds, general, name, email, phone, country, website, promise, dataConsent: consent });
       onSent({ ...r, first: name.trim().split(/\s+/)[0] ?? '', email: email.trim() });
     } catch (err) { setError(sponsorError(err, 'We could not send your details. Please check your internet and try again.')); setBusy(false); }
   };
@@ -159,7 +163,10 @@ function PledgeForm({ orgId, chosen, childIds, general, onClose, onSent }: {
         </label>
         {/* Left empty by people; robots fill it in (12A). */}
         <input className="sp-hp" tabIndex={-1} autoComplete="off" aria-hidden="true" value={website} onChange={(e) => setWebsite(e.target.value)} name="website" />
-        <p className="sp-small">We only use your details to thank you and send you news of the children you support. We never share them.</p>
+        {childIds.length > 0 && (
+          <label className="sp-tickline" htmlFor="sp-promise"><input id="sp-promise" type="checkbox" checked={promise} onChange={(e) => { setPromise(e.target.checked); setError(''); }} /><span><b>Child-safety promise.</b> {SAFETY_PROMISE}</span></label>
+        )}
+        <label className="sp-tickline" htmlFor="sp-consent"><input id="sp-consent" type="checkbox" checked={consent} onChange={(e) => { setConsent(e.target.checked); setError(''); }} /><span>{DATA_CONSENT} We never share them.</span></label>
         {error && <p className="sp-err" role="alert">{error}</p>}
         <div className="sp-row">
           <button type="button" className="sp-btn ghost" onClick={onClose} disabled={busy}>Back</button>
