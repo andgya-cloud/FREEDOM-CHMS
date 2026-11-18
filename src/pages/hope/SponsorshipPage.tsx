@@ -11,13 +11,14 @@ import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import type { Organization } from '../../state/OrgContext';
 import { canDeletePhotoReport } from '../../../functions/src/shared/hopePhotos';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 import {
   AMOUNT_PER, AMOUNT_PER_LABELS, BIO_MAX, MAX_BANKS, amountLabel, cleanAmount, pledgeFor, thankYouText, type SponsorBank, type SponsorSettings,
 } from '../../../functions/src/shared/hopeSponsorPage';
 import {
-  loadSponsorAdmin, markPledge, saveSponsorChild, saveSponsorSettings, sendSponsorUpdate, sponsorError, sponsorLink, type AdminChild, type PdfFile, type Pledge, type SponsorAdmin,
+  deletePledge, loadSponsorAdmin, markPledge, saveSponsorChild, saveSponsorSettings, sendSponsorUpdate, sponsorError, sponsorLink, type AdminChild, type PdfFile, type Pledge, type SponsorAdmin,
 } from '../../lib/hopeSponsor';
 import { HopeGate } from './common';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
@@ -76,6 +77,14 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
   const [busy, setBusy] = useState('');
   const [sure, setSure] = useState<{ p: Pledge; action: 'received' | 'cancel' } | null>(null);
   const makePack = useSponsorPack(org, data);
+  const { profile } = useAuth();
+  const canDelete = canKeepAccounts(profile);
+  const [del, setDel] = useState<Pledge | null>(null);
+  const remove = async (p: Pledge) => {
+    setBusy(p.id);
+    try { await deletePledge(org.id, p.id); toast(`${p.ref} deleted.`); await reload(); } catch (err) { toast(sponsorError(err)); }
+    setBusy(''); setDel(null);
+  };
   const waiting = data.pledges.filter((p) => p.state === 'waiting');
   const done = data.pledges.filter((p) => p.state !== 'waiting');
   const act = async (p: Pledge, action: 'received' | 'cancel') => {
@@ -108,7 +117,10 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
     <article key={p.id} className="card sps-pledge">
       <div className="sps-pledge-head">
         <b>{p.ref}</b>
+        <span className="sps-head-right">
+        {canDelete && <button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => setDel(p)} aria-label={`Delete ${p.ref}`}>🗑 Delete</button>}
         <span className={`sps-pill ${p.state}`}>{p.state === 'waiting' ? 'Waiting for money' : p.state === 'received' ? 'Money received' : 'Cancelled'}</span>
+        </span>
       </div>
       <p className="sps-who"><b>{p.name}</b>{p.country ? ` · ${p.country}` : ''}</p>
       <p className="small">For <b>{pledgeFor(p.childNames, p.general).join(', ')}</b></p>
@@ -151,6 +163,15 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
         confirmLabel={busy ? 'Saving…' : sure?.action === 'received' ? 'Yes, money received' : 'Yes, cancel it'}
         onConfirm={() => { if (sure && !busy) void act(sure.p, sure.action); }}
         onCancel={() => { if (!busy) setSure(null); }}
+      />
+      <ConfirmDialog
+        open={!!del}
+        title={`Delete ${del?.ref ?? ''}?`}
+        body={!del ? '' : `${del.name}'s entry leaves the Sponsorship page${del.state === 'waiting' && del.childIds.length ? ' and the children go back on the public page' : ''}.${del.state === 'received' ? ' The sponsor name stays on the child’s page; change it there if needed.' : ''}`}
+        confirmLabel={busy ? 'Deleting…' : 'Yes, delete'}
+        danger
+        onConfirm={() => { if (del && !busy) void remove(del); }}
+        onCancel={() => { if (!busy) setDel(null); }}
       />
     </>
   );

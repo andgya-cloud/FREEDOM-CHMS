@@ -98,3 +98,4 @@
 .sps-bank input, .sps-amount input, .sps-amount select { width: 100%; }
 .sp-card .sp-tickline { display: flex; align-items: flex-start; gap: 10px; font-weight: 400; font-size: 14px; background: var(--sp-plum-soft); border-radius: 10px; padding: 10px 12px; cursor: pointer; }
 .sp-card .sp-tickline input { width: 20px; height: 20px; flex: none; margin: 1px 0 0; accent-color: var(--sp-plum); padding: 0; }
+.sps-head-right { display: flex; align-items: center; gap: 8px; }

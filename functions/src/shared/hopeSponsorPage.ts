@@ -79,7 +79,7 @@ export const pledgeRef = (n: number) => `SP-${String(n).padStart(4, '0')}`;
 /** The last day a pledge holds its children (6A). */
 export const holdUntil = (date: string) => addDays(date, HOLD_DAYS);
 
-export type PledgeState = 'waiting' | 'received' | 'cancelled';
+export type PledgeState = 'waiting' | 'received' | 'cancelled' | 'deleted';
 export interface PledgeLike { state: PledgeState; childIds: string[]; holdUntil: string }
 
 /** Children held by pledges still waiting for money and not past their 60 days. */

@@ -23,6 +23,7 @@ export const saveSponsorSettings = (orgId: string, settings: SponsorSettings) =>
 export const saveSponsorChild = (orgId: string, childId: string, v: { bio: string; hidden: boolean; amount: number | null; photoOk: boolean }) => call<{ ok: true }>({ orgId, action: 'child', childId, ...v });
 export interface PdfFile { name: string; data: string }
 export const markPledge = (orgId: string, id: string, action: 'received' | 'cancel', pdf?: PdfFile | null) => call<{ ok: true; emailed?: boolean }>({ orgId, action, id, pdf: pdf ?? null });
+export const deletePledge = (orgId: string, id: string) => call<{ ok: true }>({ orgId, action: 'delete', id });
 export const sendSponsorUpdate = (orgId: string, id: string, pdf: PdfFile) => call<{ ok: true }>({ orgId, action: 'update', id, pdf });
 
 /** The server's own words when it explains a problem; otherwise a plain message. */

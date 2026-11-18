@@ -10,7 +10,7 @@ import { classOf } from './shared/hopeClasses.js';
 import { canDeletePhotoReport } from './shared/hopePhotos.js';
 import { firstName } from './shared/people.js';
 import { poweredByHtml } from './shared/poweredBy.js';
-import { canAccessOrg } from './shared/permissions.js';
+import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import {
   amountLabel, BIO_MAX, cleanAmount, cleanPledge, cleanSettings, heldChildren, holdUntil, listed, pledgeFor, pledgeRef,
   receivedText, thankYouText, SAFETY_PROMISE, DATA_CONSENT, updateText, type PledgeForm, type PledgeState, type SponsorSettings,
@@ -198,7 +198,7 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     const [children, kids, pledges] = await Promise.all([
       db.collection(`organizations/${orgId}/children`).get(), loadKids(orgId), pledgesCol(orgId).orderBy('createdAt', 'desc').limit(300).get(),
     ]);
-    const list = pledges.docs.map((d) => ({ id: d.id, ...(d.data() as PledgeDoc), createdAt: undefined }));
+    const list = pledges.docs.map((d) => ({ id: d.id, ...(d.data() as PledgeDoc), createdAt: undefined })).filter((p) => p.state !== 'deleted');
     const held = heldChildren(list, today);
     const rows = children.docs.filter((d) => listed({ ...d.data(), sponsorName: '' } as never, false)).map((d) => {
       const c = d.data();
@@ -226,6 +226,18 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     if (!c.exists || c.get('deletedAt')) throw new HttpsError('not-found', 'This child was not found.');
     const bio = typeof data.bio === 'string' ? data.bio.replace(/\s+/g, ' ').trim().slice(0, BIO_MAX) : '';
     await kidsCol(orgId).doc(childId).set({ orgId, bio, hidden: data.hidden === true, amount: cleanAmount(data.amount), photoOk: data.photoOk === true, ...stamp });
+    return { ok: true };
+  }
+
+  if (action === 'delete') {
+    // Andy or Doreen may delete any entry (Andy, 2026-11-18). It leaves every list and frees any child it held;
+    // the record is kept underneath, marked deleted, so it can be found again if needed.
+    if (!canKeepAccounts(caller.profile)) throw new HttpsError('permission-denied', 'Only Mr Andrew or Doreen can delete an entry.');
+    const id = requireString(data.id, 'the entry', { max: 60 });
+    const ref = pledgesCol(orgId).doc(id);
+    const snap = await ref.get();
+    if (!snap.exists || snap.get('state') === 'deleted') throw new HttpsError('not-found', 'That entry is no longer there.');
+    await ref.update({ state: 'deleted', stateBefore: snap.get('state') ?? null, deletedOn: today, deletedAt: FieldValue.serverTimestamp(), deletedBy: caller.uid, deletedByName: myName });
     return { ok: true };
   }
 
