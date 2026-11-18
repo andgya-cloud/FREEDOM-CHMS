@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useOrg, type Organization } from '../../state/OrgContext';
@@ -14,12 +14,13 @@ import {
   addBooks, addMember, backOnShelf, closeShelfCheck, lendBook, markLost, removeBook, removeMember, renewBook, returnBook,
   saveLibrarySettings, shelfSeen, startShelfCheck, updateBook, type Borrower,
 } from '../../lib/libraryWrites';
+import { searchWorldBooks } from '../../lib/bookSearch';
 import { bookListWorkbook, bookTemplate, readBookList, reportPdf, reportWorkbook, stickersPdf } from '../../lib/libraryFiles';
 import { localDateKey } from '../../../functions/src/shared/datetime';
 import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import {
   BORROWER_LABELS, REFERENCE, addDays, STATUS_LABELS, canRenew, cannotLend, daysLate, isOverdue, libraryReport, monthName, prettyDay, readBookNo,
-  reminderMessage, shelfMissing, termName, type BorrowerKind, type ImportedBook, type LibraryBook, type LibrarySettings,
+  reminderMessage, shelfMissing, termName, newCategory, categoryForFound, type FoundBook, type BorrowerKind, type ImportedBook, type LibraryBook, type LibrarySettings,
 } from '../../../functions/src/shared/library';
 
 type Tab = 'lend' | 'books' | 'reports';
@@ -37,6 +38,41 @@ export function LibraryPage() {
 
 interface Person extends Borrower { detail: string }
 
+/** The library's data for the category dropdowns, so each can add a new category (Andy, 2026-11-18). */
+const LibCtx = createContext<{ orgId: string; lib: LibraryData } | null>(null);
+
+/** A category dropdown whose last choice is "+ Add a new category…" (Andy, 2026-11-18). */
+function CategorySelect({ value, onChange, label = 'Category', extra = [] }: { value: string; onChange: (c: string) => void; label?: string; extra?: string[] }) {
+  const ctx = useContext(LibCtx)!;
+  const toast = useToast();
+  const [adding, setAdding] = useState(false);
+  const [name, setName] = useState('');
+  const list = [...ctx.lib.settings.categories, ...extra.filter((c) => !ctx.lib.settings.categories.includes(c))];
+  function add() {
+    const r = newCategory(name, ctx.lib.settings.categories);
+    if ('error' in r) return toast.show(r.error);
+    saveLibrarySettings(ctx.orgId, { ...ctx.lib.settings, categories: [...ctx.lib.settings.categories, r.name] }, ctx.lib.settingsSaved).catch((e) => toast.show(friendlyError(e)));
+    onChange(r.name);
+    toast.show(`${r.name} added to the categories.`);
+    setAdding(false); setName('');
+  }
+  if (adding) return (
+    <span className="lib-newcat">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="New category, e.g. Kiswahili" aria-label="New category" autoFocus
+        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); add(); } }} />
+      <button type="button" className="btn btn-primary btn-small" onClick={add}>Add</button>
+      <button type="button" className="btn btn-quiet btn-small" onClick={() => setAdding(false)}>Cancel</button>
+    </span>
+  );
+  return (
+    <select value={value} aria-label={label} onChange={(e) => (e.target.value === '__new' ? setAdding(true) : onChange(e.target.value))}>
+      {!list.includes(value) && <option value={value}>{value}</option>}
+      {list.map((c) => <option key={c} value={c}>{c}</option>)}
+      <option value="__new">+ Add a new category…</option>
+    </select>
+  );
+}
+
 function Library({ org }: { org: Organization }) {
   const lib = useLibrary(org.id);
   const [params, setParams] = useSearchParams();
@@ -46,6 +82,7 @@ function Library({ org }: { org: Organization }) {
   const late = out.filter((b) => b.loan && isOverdue(b.loan, today));
 
   return (
+    <LibCtx.Provider value={{ orgId: org.id, lib }}>
     <div className="page lib-page">
       <div className="page-head"><h1>Library</h1></div>
       <div className="lib-stats">
@@ -65,6 +102,7 @@ function Library({ org }: { org: Organization }) {
         : <ReportsTab org={org} lib={lib} today={today} />}
       <PoweredBy />
     </div>
+    </LibCtx.Provider>
   );
 }
 
@@ -360,7 +398,7 @@ function BookRow({ b, open, onToggle, cats, today, onSave, onShelf, onRemove }: 
           <div className="field-row lib-three">
             <label className="field"><span>Title</span><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></label>
             <label className="field"><span>Author</span><input value={f.author} onChange={(e) => setF({ ...f, author: e.target.value })} /></label>
-            <label className="field"><span>Category</span><select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{cats.map((c) => <option key={c}>{c}</option>)}</select></label>
+            <label className="field"><span>Category</span><CategorySelect value={f.category} onChange={(c) => setF({ ...f, category: c })} extra={cats} /></label>
             <label className="field"><span>Shelf</span><input value={f.shelf} onChange={(e) => setF({ ...f, shelf: e.target.value })} /></label>
             <label className="field"><span>ISBN</span><input value={f.isbn} onChange={(e) => setF({ ...f, isbn: e.target.value })} /></label>
             <label className="field"><span>Price to replace (KES)</span><input value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} inputMode="numeric" /></label>
@@ -380,7 +418,7 @@ function BookRow({ b, open, onToggle, cats, today, onSave, onShelf, onRemove }: 
 
 function AddBook({ org, lib, today, onDone }: { org: Organization; lib: LibraryData; today: string; onDone: (nos: string[]) => void }) {
   const toast = useToast();
-  const [f, setF] = useState({ title: '', author: '', category: lib.settings.categories[0] ?? 'Other', copies: '1', shelf: '', price: '' });
+  const [f, setF] = useState({ title: '', author: '', category: lib.settings.categories[0] ?? 'Other', copies: '1', shelf: '', price: '', isbn: '' });
   const [busy, setBusy] = useState(false);
   async function add() {
     if (!f.title.trim()) return toast.show('Type the title.');
@@ -388,28 +426,67 @@ function AddBook({ org, lib, today, onDone }: { org: Organization; lib: LibraryD
     const p = Number(f.price.replace(/[^0-9]/g, ''));
     setBusy(true);
     try {
-      const nos = await addBooks(org.id, [{ title: f.title, author: f.author, category: f.category, isbn: '', shelf: f.shelf.trim(), price: f.price.trim() && p > 0 ? p : null, copies }], today, lib.highest);
+      const nos = await addBooks(org.id, [{ title: f.title, author: f.author, category: f.category, isbn: f.isbn.replace(/[^0-9Xx-]/g, '').slice(0, 20), shelf: f.shelf.trim(), price: f.price.trim() && p > 0 ? p : null, copies }], today, lib.highest);
       toast.show(`Added ${nos.length === 1 ? nos[0] : `${nos[0]} to ${nos[nos.length - 1]}`}. Print the stickers next.`);
-      setF({ ...f, title: '', author: '', copies: '1', price: '' });
+      setF({ ...f, title: '', author: '', copies: '1', price: '', isbn: '' });
       onDone(nos);
     } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
   }
   return (
     <div className="stack lib-panel">
+      <WorldSearch onPick={(b) => setF({ ...f, title: b.title, author: b.author, isbn: b.isbn, category: categoryForFound(b, lib.settings.categories) || f.category })} />
       <div className="field-row lib-three">
         <label className="field"><span>Title</span><input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></label>
         <label className="field"><span>Author</span><input value={f.author} onChange={(e) => setF({ ...f, author: e.target.value })} /></label>
-        <label className="field"><span>Category</span><select value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })}>{lib.settings.categories.map((c) => <option key={c}>{c}</option>)}</select></label>
+        <label className="field"><span>Category</span><CategorySelect value={f.category} onChange={(c) => setF({ ...f, category: c })} /></label>
         <label className="field"><span>Copies</span><input value={f.copies} onChange={(e) => setF({ ...f, copies: e.target.value })} inputMode="numeric" /></label>
       </div>
-      <details className="lib-fold"><summary>Shelf and price (optional)</summary>
-        <div className="field-row">
+      <details className="lib-fold"><summary>ISBN, shelf and price (optional)</summary>
+        <div className="field-row lib-three">
+          <label className="field"><span>ISBN</span><input value={f.isbn} onChange={(e) => setF({ ...f, isbn: e.target.value })} inputMode="numeric" /></label>
           <label className="field"><span>Shelf</span><input value={f.shelf} onChange={(e) => setF({ ...f, shelf: e.target.value })} placeholder="e.g. A1" /></label>
           <label className="field"><span>Price to replace (KES)</span><input value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} inputMode="numeric" /></label>
         </div>
       </details>
       <p className="hint">Each copy gets its own number, starting at LIB-{String(lib.highest + 1).padStart(4, '0')}.</p>
       <div><button type="button" className="btn btn-primary" disabled={busy} onClick={() => void add()}>{busy ? 'Adding…' : 'Add'}</button></div>
+    </div>
+  );
+}
+
+/**
+ * Find a book in the world's library catalogues (Andy, 2026-11-18): type a few words of the title, the author or
+ * the ISBN, and pick it from the dropdown; the title, author, ISBN and category fill in.
+ */
+function WorldSearch({ onPick }: { onPick: (b: FoundBook) => void }) {
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState<FoundBook[] | null>(null);
+  const [state, setState] = useState<'' | 'busy' | 'offline' | 'none'>('');
+  useEffect(() => {
+    setFound(null);
+    if (q.trim().length < 3) { setState(''); return; }
+    if (!navigator.onLine) { setState('offline'); return; }
+    const ctl = new AbortController();
+    const t = window.setTimeout(() => {
+      setState('busy');
+      searchWorldBooks(q, ctl.signal).then((r) => { setFound(r); setState(r.length ? '' : 'none'); }, (e) => { if ((e as { name?: string }).name !== 'AbortError') setState('none'); });
+    }, 500);
+    return () => { ctl.abort(); window.clearTimeout(t); };
+  }, [q]);
+  return (
+    <div className="stack lib-world">
+      <label className="field"><span>Find it in the world's libraries</span>
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Type the title, author or ISBN, e.g. Spiritual Leadership" />
+      </label>
+      {state === 'busy' && <p className="hint">Searching Open Library and Google Books…</p>}
+      {state === 'offline' && <p className="hint">Connect to the internet to search, or type the book below.</p>}
+      {state === 'none' && <p className="hint">Nothing found. Check the spelling, or type the book below.</p>}
+      {found && found.length > 0 && (
+        <select value="" aria-label="Books found" onChange={(e) => { const b = found[Number(e.target.value)]; if (b) { onPick(b); setQ(''); } }}>
+          <option value="">{found.length} found. Choose the book…</option>
+          {found.map((b, i) => <option key={i} value={i}>{b.title}{b.author ? ` · ${b.author}` : ''}{b.year ? ` (${b.year})` : ''}</option>)}
+        </select>
+      )}
     </div>
   );
 }
@@ -451,7 +528,7 @@ function UploadList({ org, lib, today, onDone }: { org: Organization; lib: Libra
             <button type="button" className="btn btn-quiet" onClick={() => bookTemplate(lib.settings.categories).then(downloadFile, fail)}>Download the Excel template</button>
           </div>
           <label className="field lib-narrow"><span>Category for books the list doesn't give one</span>
-            <select value={fallback} onChange={(e) => setFallback(e.target.value)}>{lib.settings.categories.map((c) => <option key={c}>{c}</option>)}</select></label>
+            <CategorySelect value={fallback} onChange={setFallback} /></label>
         </>
       ) : (
         <>
@@ -460,7 +537,7 @@ function UploadList({ org, lib, today, onDone }: { org: Organization; lib: Libra
             <thead><tr><th>Title</th><th>Author</th><th>Copies</th><th>Category</th><th /></tr></thead>
             <tbody>{found.books.map((b, i) => (
               <tr key={i}><td>{b.title}</td><td className="small">{b.author}</td><td>{b.copies}</td>
-                <td><select value={b.category} onChange={(e) => setCat(i, e.target.value)} aria-label="Category">{lib.settings.categories.map((c) => <option key={c}>{c}</option>)}</select></td>
+                <td><CategorySelect value={b.category} onChange={(c) => setCat(i, c)} /></td>
                 <td><button type="button" className="btn btn-quiet btn-small" onClick={() => drop(i)} aria-label={`Leave out ${b.title}`}>✕</button></td></tr>
             ))}</tbody>
           </table></div>

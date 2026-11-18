@@ -2976,3 +2976,6 @@ a.fin-chip:hover { background: #fdecea; }
   .lib-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .lib-bar { grid-template-columns: minmax(0, 120px) 1fr 32px; }
 }
+.lib-newcat { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lib-newcat input { flex: 1 1 140px; min-width: 0; }
+.lib-world { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }

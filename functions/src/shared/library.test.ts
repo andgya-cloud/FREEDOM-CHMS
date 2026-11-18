@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_LIBRARY_SETTINGS as S, LIBRARY_CATEGORIES, bookNo, booksFromRows, canRenew, cannotLend, libraryReport, matchCategory, readBookNo,
-  reminderMessage, shelfMissing, termName, type LibraryBook, type LibraryLoanRecord,
+  reminderMessage, shelfMissing, termName, newCategory, parseOpenLibrary, parseGoogleBooks, categoryForFound, type LibraryBook, type LibraryLoanRecord,
 } from './library';
 
 const cats = [...LIBRARY_CATEGORIES];
@@ -89,5 +89,21 @@ describe('report and shelf check', () => {
     expect(shelfMissing(books, []).map((b) => b.no)).toEqual(['LIB-0002']);
     expect(shelfMissing(books, ['LIB-0002'])).toEqual([]);
     expect(termName('2026-11-18')).toBe('Term 3 2026');
+  });
+});
+
+describe('categories and the world catalogue', () => {
+  it('adds a new category once', () => {
+    expect(newCategory('  Kiswahili  books ', cats)).toEqual({ name: 'Kiswahili books' });
+    expect(newCategory('reference', cats)).toEqual({ error: 'Reference is already a category.' });
+  });
+  it('reads Open Library and Google Books answers', () => {
+    const ol = parseOpenLibrary({ docs: [{ title: 'Spiritual Leadership', subtitle: 'Principles of Excellence', author_name: ['J. Oswald Sanders'], isbn: ['0802482279', '9780802482273'], first_publish_year: 1967, subject: ['Christian leadership'] }] });
+    expect(ol[0]).toMatchObject({ title: 'Spiritual Leadership: Principles of Excellence', author: 'J. Oswald Sanders', isbn: '9780802482273', year: '1967' });
+    expect(categoryForFound(ol[0]!, cats)).toBe('Leadership & Ministry');
+    const gb = parseGoogleBooks({ items: [{ volumeInfo: { title: 'Things Fall Apart', authors: ['Chinua Achebe'], categories: ['Fiction'], publishedDate: '1994-09-01', industryIdentifiers: [{ type: 'ISBN_13', identifier: '9780385474542' }] } }] });
+    expect(gb[0]).toMatchObject({ title: 'Things Fall Apart', author: 'Chinua Achebe', isbn: '9780385474542', year: '1994' });
+    expect(categoryForFound(gb[0]!, cats)).toBe('Stories & Novels');
+    expect(parseOpenLibrary({})).toEqual([]);
   });
 });
