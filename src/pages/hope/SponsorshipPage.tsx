@@ -167,7 +167,7 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
       <ConfirmDialog
         open={!!del}
         title={`Delete ${del?.ref ?? ''}?`}
-        body={!del ? '' : `${del.name}'s entry leaves the Sponsorship page${del.state === 'waiting' && del.childIds.length ? ' and the children go back on the public page' : ''}.${del.state === 'received' ? ' The sponsor name stays on the child’s page; change it there if needed.' : ''}`}
+        body={!del ? '' : `${del.name}'s entry goes to the Bin (More › Bin)${del.state === 'waiting' && del.childIds.length ? ' and the children go back on the public page' : ''}.${del.state === 'received' ? ' The sponsor name stays on the child’s page; change it there if needed.' : ''} Only you or Doreen can put it back.`}
         confirmLabel={busy ? 'Deleting…' : 'Yes, delete'}
         danger
         onConfirm={() => { if (del && !busy) void remove(del); }}

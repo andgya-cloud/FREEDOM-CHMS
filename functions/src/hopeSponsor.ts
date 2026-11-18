@@ -235,9 +235,22 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     if (!canKeepAccounts(caller.profile)) throw new HttpsError('permission-denied', 'Only Mr Andrew or Doreen can delete an entry.');
     const id = requireString(data.id, 'the entry', { max: 60 });
     const ref = pledgesCol(orgId).doc(id);
-    const snap = await ref.get();
-    if (!snap.exists || snap.get('state') === 'deleted') throw new HttpsError('not-found', 'That entry is no longer there.');
-    await ref.update({ state: 'deleted', stateBefore: snap.get('state') ?? null, deletedOn: today, deletedAt: FieldValue.serverTimestamp(), deletedBy: caller.uid, deletedByName: myName });
+    // It goes to the Bin (Andy, 2026-11-18): after 30 days the Bin moves it to Dormant, kept for good, and only
+    // Andy or Doreen can put it back.
+    const binRef = db.collection(`organizations/${orgId}/cleanupBin`).doc();
+    const now = Timestamp.now();
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(ref);
+      const pl = snap.data() as PledgeDoc | undefined;
+      if (!pl || pl.state === 'deleted') throw new HttpsError('not-found', 'That entry is no longer there.');
+      tx.set(binRef, {
+        orgId, kind: 'sponsorPledge', targetId: id, label: `Sponsorship ${pl.ref} · ${pl.name}`,
+        detail: [pl.date, pledgeFor(pl.childNames, pl.general).join(', ')].filter(Boolean).join(' · '), official: false,
+        refs: [`sponsorPledges/${id}`], linked: {}, reason: '', deletedBy: caller.uid, deletedByName: myName, state: 'bin', bare: [],
+        deletedAt: now, foreverAt: null, restoredAt: null, restoredBy: null, restoredByName: null, copy: snap.data(),
+      });
+      tx.delete(ref);
+    });
     return { ok: true };
   }
 
