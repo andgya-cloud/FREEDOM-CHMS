@@ -1,0 +1,98 @@
+/* The public sponsorship page (Andy, 2026-11-18): one warm look on every phone, lavender and gold like the Hope Centre. */
+.sp {
+  --sp-bg: #f7f5fb; --sp-surface: #ffffff; --sp-ink: #2b2440; --sp-muted: #6c6584; --sp-line: #e3def0;
+  --sp-plum: #5b3f8f; --sp-plum-soft: #ece5f7; --sp-gold: #e0a526; --sp-gold-soft: #fbf0d6;
+  color-scheme: light; min-height: 100vh; min-height: 100dvh; background: var(--sp-bg); color: var(--sp-ink);
+  font-size: 15px; line-height: 1.55; padding-bottom: 110px;
+}
+.sp-wrap { max-width: 980px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.sp-hero { background: linear-gradient(160deg, rgb(43 36 64 / 0.86), rgb(91 63 143 / 0.78)), url('/hope-intro.jpg') center / cover no-repeat, #3d2d63; color: #fff; padding-block: 34px 26px; }
+.sp-brand { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-weight: 600; font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+.sp-heart { display: inline-grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--sp-gold); color: #fff; font-size: 14px; }
+.sp-hero h1 { font-size: clamp(30px, 6vw, 44px); line-height: 1.08; margin: 0 0 10px; text-wrap: balance; color: #fff; }
+.sp-hero h1 em { font-style: normal; color: #f6cd6a; }
+.sp-lead { max-width: 62ch; margin: 0 0 14px; color: #ece7f7; }
+.sp-facts { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-facts span { background: rgb(255 255 255 / 0.16); border: 1px solid rgb(255 255 255 / 0.3); border-radius: 999px; padding: 4px 12px; font-size: 13px; font-weight: 600; }
+.sp h2 { font-size: 22px; margin: 28px 0 6px; color: var(--sp-ink); }
+.sp-sub { margin: 0 0 14px; color: var(--sp-muted); }
+.sp-general { width: 100%; display: flex; align-items: center; gap: 14px; text-align: left; background: var(--sp-surface); color: var(--sp-ink); border: 2px solid var(--sp-line); border-radius: 16px; padding: 14px 16px; cursor: pointer; font: inherit; position: relative; }
+.sp-general > span:nth-child(2) { display: grid; flex: 1; min-width: 0; }
+.sp-general b { font-size: 18px; }
+.sp-general span span { color: var(--sp-muted); font-size: 14px; }
+.sp-general.on { border-color: var(--sp-gold); background: var(--sp-gold-soft); }
+.sp-gift { font-size: 28px; }
+.sp-general .sp-tick { position: static; }
+.sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.sp-kid { position: relative; display: flex; flex-direction: column; text-align: left; padding: 0; font: inherit; color: inherit; background: var(--sp-surface); border: 2px solid var(--sp-line); border-radius: 16px; overflow: hidden; cursor: pointer; }
+.sp-kid.on { border-color: var(--sp-plum); box-shadow: 0 0 0 3px var(--sp-plum-soft); }
+.sp-kid.held { opacity: 0.55; cursor: default; }
+.sp-kid:focus-visible, .sp-general:focus-visible, .sp-btn:focus-visible { outline: 3px solid var(--sp-gold); outline-offset: 2px; }
+.sp-pic { aspect-ratio: 1 / 1; max-width: 100%; display: grid; place-items: center; background: linear-gradient(135deg, var(--sp-plum-soft), var(--sp-line)); overflow: hidden; }
+.sp-pic img { width: 100%; height: 100%; object-fit: cover; }
+.sp-initial { font-size: 54px; font-weight: 800; color: var(--sp-plum); }
+.sp-tick { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; flex: none; border-radius: 50%; background: var(--sp-surface); border: 2px solid var(--sp-line); display: grid; place-items: center; font-weight: 700; color: transparent; }
+.sp-kid.on .sp-tick, .sp-general.on .sp-tick { background: var(--sp-plum); border-color: var(--sp-plum); color: #fff; }
+.sp-held { position: absolute; top: 10px; left: 10px; background: var(--sp-surface); color: var(--sp-muted); font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; }
+.sp-body { display: grid; gap: 3px; padding: 10px 14px 14px; }
+.sp-name { font-size: 20px; font-weight: 700; line-height: 1.15; }
+.sp-meta { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--sp-muted); }
+.sp-bio { font-size: 14px; }
+.sp-amt { font-size: 12px; color: var(--sp-plum); font-weight: 600; }
+.sp-empty, .sp-loading, .sp-error { background: var(--sp-surface); border-radius: 14px; padding: 18px; margin-top: 40px; }
+.sp-error { color: #a12a2a; }
+.sp-privacy { font-size: 13px; color: var(--sp-muted); margin: 22px 0 0; }
+.sp-powered { display: flex; align-items: center; justify-content: center; gap: 6px; font-size: 12px; color: var(--sp-muted); margin: 18px 0 0; }
+.sp-bar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 10; background: var(--sp-surface); border-top: 1px solid var(--sp-line); padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(12px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }
+.sp-bar-in { max-width: 980px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sp-bar-in span { min-width: 0; font-weight: 600; }
+.sp-btn { font: 600 15px inherit; font-family: inherit; border: 0; border-radius: 12px; padding: 12px 20px; background: var(--sp-plum); color: #fff; cursor: pointer; }
+.sp-btn:disabled { opacity: 0.45; cursor: default; }
+.sp-btn.ghost { background: transparent; color: var(--sp-plum); border: 2px solid var(--sp-line); }
+.sp-sheet { position: fixed; inset: 0; z-index: 20; background: rgb(20 15 30 / 0.55); display: grid; place-items: end center; padding: 16px; }
+@media (min-width: 640px) { .sp-sheet { place-items: center; } }
+.sp-card { width: 100%; max-width: 520px; max-height: 92vh; overflow: auto; background: var(--sp-surface); color: var(--sp-ink); border-radius: 20px; padding: 22px; display: grid; gap: 12px; }
+.sp-card h3 { margin: 0; font-size: 22px; }
+.sp-card label { display: grid; gap: 4px; font-size: 14px; font-weight: 600; }
+.sp-card label small { font-weight: 400; color: var(--sp-muted); }
+.sp-card input, .sp-card select { font: inherit; font-size: 16px; padding: 11px 12px; border-radius: 10px; border: 1.5px solid var(--sp-line); background: #fbfaff; color: var(--sp-ink); width: 100%; }
+.sp-card input:focus, .sp-card select:focus { border-color: var(--sp-plum); outline: 2px solid var(--sp-plum-soft); }
+.sp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.sp-chips span { background: var(--sp-plum-soft); color: var(--sp-plum); border-radius: 999px; padding: 3px 12px; font-size: 13px; font-weight: 600; }
+.sp-hp { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.sp-small { font-size: 13px; color: var(--sp-muted); margin: 0; }
+.sp-err { color: #a12a2a; margin: 0; font-size: 14px; }
+.sp-row { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; }
+.sp-row.start { justify-content: flex-start; }
+.sp-letter { background: var(--sp-surface); border: 1px solid var(--sp-line); border-radius: 20px; padding: 28px clamp(18px, 4vw, 40px); max-width: 640px; margin: 28px auto 0; display: grid; gap: 14px; }
+.sp-letter .sp-brand { color: var(--sp-plum); }
+.sp-letter h1 { margin: 0; font-size: 30px; line-height: 1.1; color: var(--sp-ink); }
+.sp-letter p { margin: 0; }
+.sp-bank { background: var(--sp-plum-soft); border-radius: 14px; padding: 14px 16px; margin: 0; display: grid; gap: 6px; }
+.sp-bank div { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sp-bank dt { color: var(--sp-muted); font-size: 13px; }
+.sp-bank dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; user-select: all; }
+.sp-ref b { color: var(--sp-plum); font-size: 20px; }
+.sp-toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 90px; z-index: 30; background: var(--sp-ink); color: #fff; padding: 8px 16px; border-radius: 999px; font-size: 14px; }
+
+/* The Sponsorship page in the Hope menu (staff). */
+.sps-list { display: grid; gap: 10px; margin-top: 12px; }
+.sps-pledge p { margin: 2px 0; }
+.sps-pledge-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sps-pledge-head h2 { margin: 0; }
+.sps-who { font-size: 1.05rem; }
+.sps-pill { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 10px; white-space: nowrap; background: #ece5f7; color: #5b3f8f; }
+.sps-pill.waiting { background: #fbf0d6; color: #8a5f00; }
+.sps-pill.received { background: #e2f4ea; color: #1f7a4d; }
+.sps-pill.cancelled { background: #eeeef2; color: #5c5c6b; }
+.sps-done { margin-top: 14px; }
+.sps-done summary { cursor: pointer; font-weight: 600; }
+.sps-filter p { margin: 6px 0 0; }
+.sps-child { padding: 0; overflow: hidden; }
+.sps-child-head { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0; padding: 12px 14px; font: inherit; color: inherit; cursor: pointer; }
+.sps-child-head .grow { flex: 1; min-width: 0; }
+.sps-child-edit { padding: 0 14px 14px; display: grid; gap: 8px; }
+.sps-child-edit textarea { width: 100%; }
+.sps-amount { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.sps-bank { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 12px; }
+.sps-bank input, .sps-amount input, .sps-amount select { width: 100%; }

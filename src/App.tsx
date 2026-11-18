@@ -123,6 +123,8 @@ const ClubsPage = lazy(() => import('./pages/hope/ClubsPage').then((m) => ({ def
 const ClubPage = lazy(() => import('./pages/hope/ClubPage').then((m) => ({ default: m.ClubPage })));
 const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((m) => ({ default: m.ChildImportPage })));
 const HopeMessagesPage = lazy(() => import('./pages/hope/HopeMessagesPage').then((m) => ({ default: m.HopeMessagesPage })));
+const SponsorPublicPage = lazy(() => import('./pages/hope/SponsorPublicPage').then((m) => ({ default: m.SponsorPublicPage })));
+const SponsorshipPage = lazy(() => import('./pages/hope/SponsorshipPage').then((m) => ({ default: m.SponsorshipPage })));
 const SponsorListPage = lazy(() => import('./pages/hope/SponsorListPage').then((m) => ({ default: m.SponsorListPage })));
 const PhotoUploadPage = lazy(() => import('./pages/hope/PhotoUploadPage').then((m) => ({ default: m.PhotoUploadPage })));
 const GatePage = lazy(() => import('./pages/hope/GatePage').then((m) => ({ default: m.GatePage })));
@@ -141,6 +143,14 @@ export function App() {
   const idleMinutes = handlesMoney ? Math.min(MONEY_IDLE_MINUTES, shared ? settings.inactivityMinutes : MONEY_IDLE_MINUTES) : settings.inactivityMinutes;
   useIdleSignOut(idleMinutes, !!user && (shared || handlesMoney), onIdle);
 
+  // The Hope Centre sponsorship page: open to anyone, no sign-in (Andy, 2026-11-18).
+  if (path.startsWith('/sponsor/')) {
+    return (
+      <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
+        <Routes><Route path="/sponsor/:orgId" element={<SponsorPublicPage />} /></Routes>
+      </Suspense>
+    );
+  }
   // The visitor's own card behind the QR poster: open to anyone, no sign-in (Andy, 2026-10-31, 3A).
   if (welcome) {
     return (
@@ -299,6 +309,7 @@ function AppRoutes() {
         <Route path="/hope/meals" element={<MealsMoved />} />
         <Route path="/hope/bin" element={<HopeBinPage />} />
         <Route path="/hope/more" element={<HopeMorePage />} />
+        <Route path="/hope/sponsorship" element={<SponsorshipPage />} />
         <Route path="/hope/reports" element={<RequirePermission permission="people.read"><HopeReportsPage /></RequirePermission>} />
         <Route path="/hope/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/hope/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />

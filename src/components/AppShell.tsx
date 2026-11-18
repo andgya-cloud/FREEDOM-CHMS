@@ -1,3 +1,4 @@
+import { canDeletePhotoReport } from '../../functions/src/shared/hopePhotos';
 import { useCloseLeftOpen } from '../lib/pastOpen';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link, Navigate, NavLink, useLocation } from 'react-router-dom';
@@ -139,6 +140,13 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/hope/reports" className={({ isActive }) => `tab${isActive || /^\/hope\/(exports|photos|chats|attendance|records|meals)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></svg>
           Reports{dot('reports')}
+        </NavLink>
+      )}
+      {/* Sponsorship in the menu for Diana, Andy and Doreen (Andy, 2026-11-18, 1). */}
+      {current && canDeletePhotoReport(profile, current.id) && (
+        <NavLink to="/hope/sponsorship" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-6.5-4-8.4-8A4.6 4.6 0 0 1 12 7.3 4.6 4.6 0 0 1 20.4 12C18.5 16 12 20 12 20Z" /><path d="M8.5 12.2h7M12 8.8v6.8" /></svg>
+          <TabLabel full="Sponsorship" short="Sponsors" />
         </NavLink>
       )}
       {/* Petty Cash is pinned on the menu, not in More (Andy, 2026-11-08). */}
