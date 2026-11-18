@@ -1,16 +1,16 @@
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
-import type { PledgeState, SponsorSettings } from '../../functions/src/shared/hopeSponsorPage';
+import type { CentreGift, PledgeState, SponsorSettings } from '../../functions/src/shared/hopeSponsorPage';
 
 /** Calls for the Hope Centre sponsorship page (Andy, 2026-11-18). All go through the hopeSponsor function. */
 const call = <T,>(data: Record<string, unknown>) => httpsCallable<Record<string, unknown>, T>(functions, 'hopeSponsor', { timeout: 60_000 })(data).then((r) => r.data);
 
 export interface PublicChild { key: string; name: string; age: number | null; stone: string | null; bio: string; amount: number | null; photo: boolean; held: boolean }
 export interface SponsorPageData { name: string; settings: SponsorSettings; children: PublicChild[] }
-export interface PledgeResult { ref: string; names: string[]; text: string; amount: string }
+export interface PledgeResult { ref: string; names: string[]; text: string; amount: string; gift?: CentreGift | null; money?: boolean }
 export interface AdminChild { id: string; code: string; sponsorName: string; sponsored: boolean; hidden: boolean; bio: string; amount: number | null; held: boolean; photo: boolean; consent: boolean | null; photoOk: boolean }
 export interface Pledge {
-  id: string; ref: string; state: PledgeState; childIds: string[]; childNames: string[]; general: boolean;
+  id: string; ref: string; state: PledgeState; childIds: string[]; childNames: string[]; general: boolean; gift?: CentreGift | null;
   name: string; email: string; phone: string; country: string; date: string; holdUntil: string; receivedOn?: string | null; receivedByName?: string | null; lastUpdateOn?: string | null;
 }
 export interface SponsorAdmin { settings: SponsorSettings; children: AdminChild[]; pledges: Pledge[]; today: string }
@@ -22,7 +22,8 @@ export const loadSponsorAdmin = (orgId: string) => call<SponsorAdmin>({ orgId, a
 export const saveSponsorSettings = (orgId: string, settings: SponsorSettings) => call<{ settings: SponsorSettings }>({ orgId, action: 'settings', settings });
 export const saveSponsorChild = (orgId: string, childId: string, v: { bio: string; hidden: boolean; amount: number | null; photoOk: boolean }) => call<{ ok: true }>({ orgId, action: 'child', childId, ...v });
 export interface PdfFile { name: string; data: string }
-export const markPledge = (orgId: string, id: string, action: 'received' | 'cancel', pdf?: PdfFile | null) => call<{ ok: true; emailed?: boolean }>({ orgId, action, id, pdf: pdf ?? null });
+export const markPledge = (orgId: string, id: string, action: 'received' | 'cancel', pdf?: PdfFile | null, photo?: PdfFile | null) =>
+  call<{ ok: true; emailed?: boolean }>({ orgId, action, id, pdf: pdf ?? null, photo: photo ?? null });
 export const deletePledge = (orgId: string, id: string) => call<{ ok: true }>({ orgId, action: 'delete', id });
 export const sendSponsorUpdate = (orgId: string, id: string, pdf: PdfFile) => call<{ ok: true }>({ orgId, action: 'update', id, pdf });
 

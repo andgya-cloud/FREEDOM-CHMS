@@ -15,8 +15,11 @@ import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { normalizePhone } from '../../../functions/src/shared/phone';
 import {
-  AMOUNT_PER, AMOUNT_PER_LABELS, BIO_MAX, MAX_BANKS, amountLabel, cleanAmount, pledgeFor, thankYouText, type SponsorBank, type SponsorSettings,
+  AMOUNT_PER, AMOUNT_PER_LABELS, BIO_MAX, DEFAULT_DROP_OFF, MAX_BANKS, amountLabel, cleanAmount, giftLines, needsMoney, pledgeFor, thankYouText,
+  type SponsorBank, type SponsorSettings,
 } from '../../../functions/src/shared/hopeSponsorPage';
+import { shrinkForUpload } from '../../lib/hopePhotos';
+import { NeedsTab } from './SponsorNeeds';
 import {
   deletePledge, loadSponsorAdmin, markPledge, saveSponsorChild, saveSponsorSettings, sendSponsorUpdate, sponsorError, sponsorLink, type AdminChild, type PdfFile, type Pledge, type SponsorAdmin,
 } from '../../lib/hopeSponsor';
@@ -24,8 +27,8 @@ import { HopeGate } from './common';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import './sponsor.css';
 
-type Tab = 'pledges' | 'children' | 'settings' | 'share';
-const TABS: [Tab, string][] = [['pledges', 'Sponsors'], ['children', 'Children'], ['settings', 'Amount and bank'], ['share', 'Share the page']];
+type Tab = 'pledges' | 'needs' | 'children' | 'settings' | 'share';
+const TABS: [Tab, string][] = [['pledges', 'Sponsors'], ['needs', 'Needs'], ['children', 'Children'], ['settings', 'Amount and bank'], ['share', 'Share the page']];
 
 export function SponsorshipPage() {
   return <HopeGate title="Sponsorship">{(org) => <Sponsorship org={org} />}</HopeGate>;
@@ -64,6 +67,7 @@ function Sponsorship({ org }: { org: Organization }) {
       {error && <p className="error" role="alert">{error}</p>}
       {!data && !error && <p className="muted">Loading…</p>}
       {data && tab === 'pledges' && <Pledges org={org} data={data} reload={reload} toast={toast.show} />}
+      {data && tab === 'needs' && <NeedsTab org={org} data={data} onSaved={(s) => setData({ ...data, settings: s })} toast={toast.show} />}
       {data && tab === 'children' && <Children org={org} data={data} reload={reload} toast={toast.show} />}
       {data && tab === 'settings' && <Settings org={org} settings={data.settings} onSaved={(s) => setData({ ...data, settings: s })} toast={toast.show} />}
       {tab === 'share' && <Share org={org} toast={toast.show} />}
@@ -87,13 +91,17 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
   };
   const waiting = data.pledges.filter((p) => p.state === 'waiting');
   const done = data.pledges.filter((p) => p.state !== 'waiting');
+  const [giftPhoto, setGiftPhoto] = useState<File | null>(null);
   const act = async (p: Pledge, action: 'received' | 'cancel') => {
     setBusy(p.id);
     try {
       // The welcome pack (4A): each child's Sponsor update, emailed with the thank-you.
       const pdf = action === 'received' && p.email && p.childIds.length ? await makePack(p).catch(() => null) : null;
-      const r = await markPledge(org.id, p.id, action, pdf);
-      toast(action === 'received' ? `Money received for ${p.ref}.${r.emailed ? ' A thank-you email went to the giver.' : ''}` : `${p.ref} cancelled. The children are back on the page.`);
+      // A photo of the gift for the Hope Centre (8A): the items only, no children's faces.
+      const photo = action === 'received' && p.email && giftPhoto ? await photoFile(giftPhoto).catch(() => null) : null;
+      const r = await markPledge(org.id, p.id, action, pdf, photo);
+      setGiftPhoto(null);
+      toast(action === 'received' ? `${receivedLabel(p)} for ${p.ref}.${r.emailed ? ' A thank-you email went to the giver.' : ''}` : `${p.ref} cancelled. The children are back on the page.`);
       await reload();
     } catch (err) { toast(sponsorError(err)); }
     setBusy(''); setSure(null);
@@ -110,7 +118,7 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
   };
   const whatsapp = (p: Pledge) => {
     const phone = normalizePhone(p.phone);
-    const text = thankYouText(p.name.split(/\s+/)[0] ?? p.name, pledgeFor(p.childNames, p.general), p.ref, data.settings);
+    const text = thankYouText(p.name.split(/\s+/)[0] ?? p.name, pledgeFor(p.childNames, p.general), p.ref, data.settings, p.childNames.length, p.gift ?? null);
     return `https://wa.me/${phone ? phone.replace(/^\+/, '') : ''}?text=${encodeURIComponent(text)}`;
   };
   const row = (p: Pledge) => (
@@ -119,11 +127,17 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
         <b>{p.ref}</b>
         <span className="sps-head-right">
         {canDelete && <button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => setDel(p)} aria-label={`Delete ${p.ref}`}>🗑 Delete</button>}
-        <span className={`sps-pill ${p.state}`}>{p.state === 'waiting' ? 'Waiting for money' : p.state === 'received' ? 'Money received' : 'Cancelled'}</span>
+        <span className={`sps-pill ${p.state}`}>{p.state === 'waiting' ? (needsMoney(p.childIds.length, p.gift) ? 'Waiting for money' : 'Waiting for items') : p.state === 'received' ? receivedLabel(p) : 'Cancelled'}</span>
         </span>
       </div>
       <p className="sps-who"><b>{p.name}</b>{p.country ? ` · ${p.country}` : ''}</p>
       <p className="small">For <b>{pledgeFor(p.childNames, p.general).join(', ')}</b></p>
+      {p.gift && (
+        <div className="small sps-gift">
+          {p.gift.giveBy === 'items' && <span className="sps-pill waiting">📦 Bringing the items</span>}
+          <ul>{giftLines(p.gift).map((l) => <li key={l}>{l}</li>)}</ul>
+        </div>
+      )}
       <p className="small muted">{[p.email, p.phone].filter(Boolean).join(' · ') || 'No email or phone given'}</p>
       <p className="small muted">
         Chose on {formatDateKey(p.date)}
@@ -132,7 +146,7 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
       </p>
       {p.state === 'waiting' && (
         <div className="dialog-actions">
-          <button type="button" className="btn btn-primary btn-small" disabled={!!busy} onClick={() => setSure({ p, action: 'received' })}>Money received</button>
+          <button type="button" className="btn btn-primary btn-small" disabled={!!busy} onClick={() => { setGiftPhoto(null); setSure({ p, action: 'received' }); }}>{receivedLabel(p)}</button>
           {p.phone && <a className="btn btn-small" href={whatsapp(p)} target="_blank" rel="noopener noreferrer">🟢 Thank-you on WhatsApp</a>}
           <button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => setSure({ p, action: 'cancel' })}>Not coming</button>
         </div>
@@ -156,14 +170,21 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
       )}
       <ConfirmDialog
         open={!!sure}
-        title={sure?.action === 'received' ? `Has the money for ${sure.p.ref} arrived?` : `Cancel ${sure?.p.ref ?? ''}?`}
+        title={sure?.action === 'received' ? `Has the gift for ${sure.p.ref} arrived?` : `Cancel ${sure?.p.ref ?? ''}?`}
         body={!sure ? '' : sure.action === 'received'
-          ? `${pledgeFor(sure.p.childNames, sure.p.general).join(', ')} will be marked Sponsored by ${sure.p.name}${sure.p.childIds.length ? ' and leave the public page' : ''}.${sure.p.email ? ' A thank-you email goes to the giver.' : ''}`
-          : `Use this when the money is not coming.${sure.p.childIds.length ? ' The children go back on the public page straight away.' : ''}`}
-        confirmLabel={busy ? 'Saving…' : sure?.action === 'received' ? 'Yes, money received' : 'Yes, cancel it'}
+          ? `${sure.p.childIds.length ? `${sure.p.childNames.join(', ')} will be marked Sponsored by ${sure.p.name} and leave the public page.` : `${sure.p.name}'s gift for the Hope Centre will be marked received.`}${sure.p.email ? ` An email goes to the giver${sure.p.childIds.length ? '' : ' saying their gift has reached the children'}.` : ''}`
+          : `Use this when the gift is not coming.${sure.p.childIds.length ? ' The children go back on the public page straight away.' : ''}`}
+        confirmLabel={busy ? 'Saving…' : sure?.action === 'received' ? 'Yes, received' : 'Yes, cancel it'}
         onConfirm={() => { if (sure && !busy) void act(sure.p, sure.action); }}
-        onCancel={() => { if (!busy) setSure(null); }}
-      />
+        onCancel={() => { if (!busy) { setSure(null); setGiftPhoto(null); } }}
+      >
+        {sure?.action === 'received' && sure.p.general && sure.p.email && (
+          <label className="field">
+            <span>Photo of the gift <small className="muted">optional. The items only, no children&rsquo;s faces.</small></span>
+            <input type="file" accept="image/*" onChange={(e) => setGiftPhoto(e.target.files?.[0] ?? null)} />
+          </label>
+        )}
+      </ConfirmDialog>
       <ConfirmDialog
         open={!!del}
         title={`Delete ${del?.ref ?? ''}?`}
@@ -175,6 +196,24 @@ function Pledges({ org, data, reload, toast }: { org: Organization; data: Sponso
       />
     </>
   );
+}
+
+/** "Money received", "Items received" or just "Received" when it is both. */
+function receivedLabel(p: Pledge): string {
+  const items = p.gift?.giveBy === 'items';
+  return items ? (p.childIds.length ? 'Received' : 'Items received') : 'Money received';
+}
+
+/** The gift photo, made smaller on the phone, as base64 for the email. */
+async function photoFile(f: File): Promise<PdfFile> {
+  const blob = await shrinkForUpload(f);
+  const data = await new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ''));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(blob);
+  });
+  return { name: 'gift.jpg', data };
 }
 
 type Filter = 'page' | 'hidden' | 'sponsored' | 'all';
@@ -262,11 +301,12 @@ function Settings({ org, settings, onSaved, toast }: { org: Organization; settin
   const [per, setPer] = useState(settings.per);
   const [banks, setBanks] = useState<SponsorBank[]>(settings.banks.length ? settings.banks : [BLANK_BANK]);
   const [paybill, setPaybill] = useState(settings.paybill);
+  const [dropOff, setDropOff] = useState(settings.dropOff);
   const [busy, setBusy] = useState(false);
   const setBank = (i: number, k: keyof SponsorBank, v: string) => setBanks((b) => b.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const save = async () => {
     setBusy(true);
-    try { const r = await saveSponsorSettings(org.id, { amount: cleanAmount(amount), per, banks, paybill }); onSaved(r.settings); setBanks(r.settings.banks.length ? r.settings.banks : [BLANK_BANK]); toast('Saved. The public page shows it now.'); } catch (err) { toast(sponsorError(err)); }
+    try { const r = await saveSponsorSettings(org.id, { ...settings, amount: cleanAmount(amount), per, banks, paybill, dropOff }); onSaved(r.settings); setBanks(r.settings.banks.length ? r.settings.banks : [BLANK_BANK]); toast('Saved. The public page shows it now.'); } catch (err) { toast(sponsorError(err)); }
     setBusy(false);
   };
   const box = (i: number, k: keyof SponsorBank, label: string, hint = '') => (
@@ -304,6 +344,11 @@ function Settings({ org, settings, onSaved, toast }: { org: Organization; settin
         <h2>M-Pesa</h2>
         <label className="field"><span>Paybill number <small className="muted">leave empty to hide M-Pesa. The account is the giver's reference, like SP-0012.</small></span>
           <input inputMode="numeric" value={paybill} onChange={(e) => setPaybill(e.target.value)} /></label>
+      </section>
+      <section className="card">
+        <h2>Bringing items</h2>
+        <label className="field"><span>What givers who bring items are told <small className="muted">shown on the thank-you and in the email</small></span>
+          <textarea rows={3} maxLength={400} value={dropOff} onChange={(e) => setDropOff(e.target.value)} placeholder={DEFAULT_DROP_OFF} /></label>
       </section>
       <div className="dialog-actions"><button type="button" className="btn btn-primary" onClick={() => void save()} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></div>
     </>

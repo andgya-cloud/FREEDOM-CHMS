@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { amountLabel, bankLines, cleanPledge, cleanSettings, DEFAULT_SETTINGS, heldChildren, holdUntil, listed, namesList, pledgeRef, thankYouText } from './hopeSponsorPage';
+import { amountLabel, bankLines, cleanGift, cleanNeeds, cleanPledge, DEFAULT_NEEDS, giftEstimate, giftLines, receivedText, cleanSettings, DEFAULT_SETTINGS, heldChildren, holdUntil, listed, namesList, pledgeRef, thankYouText } from './hopeSponsorPage';
 
 describe('Hope sponsorship page', () => {
   it('starts with the Family Bank account and the Paybill', () => {
@@ -42,12 +42,13 @@ describe('Hope sponsorship page', () => {
     expect(() => cleanPledge({ name: 'Grace' })).toThrow(/choose a child/);
     expect(() => cleanPledge({ childIds: ['a'], name: 'Grace', dataConsent: true })).toThrow(/promise/);
     expect(() => cleanPledge({ general: true, name: 'Grace' })).toThrow(/keep your details/);
-    expect(cleanPledge({ general: true, name: 'Grace', dataConsent: true }).general).toBe(true);
+    expect(() => cleanPledge({ general: true, name: 'Grace', dataConsent: true })).toThrow(/tick what you would like/);
+    expect(cleanPledge({ general: true, name: 'Grace', dataConsent: true, gift: { other: 'A bicycle' } }).general).toBe(true);
     expect(() => cleanPledge({ general: true, name: 'G', dataConsent: true })).toThrow(/your name/);
     expect(() => cleanPledge({ childIds: ['a', 'b', 'c', 'd', 'e', 'f'], name: 'Grace', promise: true, dataConsent: true })).toThrow(/up to 5/);
     expect(() => cleanPledge({ general: true, name: 'Grace', email: 'nope', dataConsent: true })).toThrow(/email/);
     expect(cleanPledge({ childIds: ['a', 'a', 'x/y'], name: '  Grace  Wanjiru ', email: 'G@Mail.com', country: 'Kenya', promise: true, dataConsent: true }))
-      .toEqual({ childIds: ['a'], general: false, name: 'Grace Wanjiru', email: 'g@mail.com', phone: '', country: 'Kenya' });
+      .toEqual({ childIds: ['a'], general: false, name: 'Grace Wanjiru', email: 'g@mail.com', phone: '', country: 'Kenya', gift: null });
   });
 
   it('writes the thank-you with the reference and bank details', () => {
@@ -58,5 +59,39 @@ describe('Hope sponsorship page', () => {
     expect(t).toContain('Account number: 034000022705');
     expect(t).toContain('M-Pesa Paybill: 222118, Account: SP-0012');
     expect(bankLines({ ...DEFAULT_SETTINGS, paybill: '' }, 'SP-1').join('\n')).not.toContain('Paybill');
+  });
+});
+
+describe('Hope Centre needs (Andy, 2026-11-18, 1A-10A)', () => {
+  it('keeps at most three stars and unique ids', () => {
+    const list = cleanNeeds([
+      { id: 'a', label: 'Shoes', star: true, count: true, cost: '1,500', per: 'a pair' }, { id: 'a', label: 'Shoes again', star: true },
+      { label: 'Blankets', star: true }, { label: 'Pads', star: true }, { label: '' }, { id: 'most-needed', label: 'Sneaky' },
+    ]);
+    expect(list.map((n) => n.id)).toEqual(['a', 'a-2', 'blankets', 'pads', 'sneaky']);
+    expect(list.filter((n) => n.star)).toHaveLength(3);
+    expect(list[0]).toMatchObject({ cost: 1500, per: 'a pair', count: true, group: 'centre' });
+    expect(cleanNeeds(undefined)).toBe(DEFAULT_NEEDS);
+  });
+  it('checks the gift against the list and copies the label and cost', () => {
+    const g = cleanGift({ needs: [{ id: 'school-shoes', qty: 3 }, { id: 'porridge', qty: 9 }, { id: 'nope' }, { id: 'school-shoes' }], other: '  a  bicycle ', mostNeeded: { amount: 2000, often: 'monthly' } }, DEFAULT_NEEDS);
+    expect(g.needs).toEqual([{ id: 'school-shoes', label: 'School shoes', qty: 3, cost: 1500 }, { id: 'porridge', label: 'Breakfast porridge', qty: null, cost: 3000 }]);
+    expect(g.other).toBe('a bicycle');
+    expect(giftLines(g)).toEqual(['Where most needed: KES 2,000 every month', 'School shoes × 3', 'Breakfast porridge', 'Other: a bicycle']);
+    expect(giftEstimate(g)).toBe(4500 + 3000 + 2000);
+    // Items in kind never carry a money gift.
+    expect(cleanGift({ giveBy: 'items', needs: [{ id: 'blanket', qty: 2 }], mostNeeded: { amount: 500 } }, DEFAULT_NEEDS).mostNeeded).toBeNull();
+    expect(() => cleanGift({ giveBy: 'items', mostNeeded: { amount: 500 } }, DEFAULT_NEEDS)).toThrow(/tick what/);
+  });
+  it('words the thank-you for money or items', () => {
+    const items = cleanGift({ giveBy: 'items', needs: [{ id: 'blanket', qty: 2 }] }, DEFAULT_NEEDS);
+    const t = thankYouText('Grace', ['the Hope Centre'], 'SP-0003', DEFAULT_SETTINGS, 0, items);
+    expect(t).toContain('• Blanket × 2');
+    expect(t).toContain('Bringing the items');
+    expect(t).not.toContain('034000022705');
+    const both = thankYouText('Grace', ['Amani', 'the Hope Centre'], 'SP-0004', DEFAULT_SETTINGS, 1, items);
+    expect(both).toContain('034000022705');
+    expect(both).toContain('Bringing the items');
+    expect(receivedText('Grace', ['the Hope Centre'], 'SP-0003', 0, items, true)).toMatch(/reached the children[\s\S]*Blanket × 2[\s\S]*attached a photo/);
   });
 });

@@ -13,7 +13,7 @@ import { poweredByHtml } from './shared/poweredBy.js';
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import {
   amountLabel, BIO_MAX, cleanAmount, cleanPledge, cleanSettings, heldChildren, holdUntil, listed, pledgeFor, pledgeRef,
-  receivedText, thankYouText, SAFETY_PROMISE, DATA_CONSENT, updateText, type PledgeForm, type PledgeState, type SponsorSettings,
+  receivedText, thankYouText, SAFETY_PROMISE, DATA_CONSENT, updateText, giftLines, needsMoney, type CentreGift, type PledgeForm, type PledgeState, type SponsorSettings,
 } from './shared/hopeSponsorPage.js';
 
 const MAX_PER_DAY = 100;
@@ -43,6 +43,7 @@ async function loadKids(orgId: string): Promise<Map<string, KidInfo>> {
 
 interface PledgeDoc {
   lastUpdateOn?: string | null;
+  gift?: CentreGift | null;
   ref: string; state: PledgeState; childIds: string[]; childNames: string[]; general: boolean; name: string; email: string; phone: string; country: string;
   date: string; holdUntil: string; receivedOn?: string | null; receivedByName?: string | null; createdAt?: Timestamp;
 }
@@ -96,6 +97,17 @@ function pdfAttachment(v: unknown): { filename: string; content: Buffer; content
   return [{ filename: filename.endsWith('.pdf') ? filename : `${filename}.pdf`, content, contentType: 'application/pdf' }];
 }
 
+/** A photo of the gift ({ name, data: base64 JPEG or PNG }), at most 4 MB. */
+function imageAttachment(v: unknown): { filename: string; content: Buffer; contentType: string }[] | undefined {
+  const f = (v ?? {}) as { data?: unknown };
+  if (typeof f.data !== 'string' || !f.data || f.data.length > 5_600_000) return undefined;
+  const content = Buffer.from(f.data, 'base64');
+  const jpg = content[0] === 0xff && content[1] === 0xd8;
+  const png = content.subarray(1, 4).toString() === 'PNG';
+  if (!jpg && !png) return undefined;
+  return [{ filename: `Your-gift.${jpg ? 'jpg' : 'png'}`, content, contentType: jpg ? 'image/jpeg' : 'image/png' }];
+}
+
 /** Only Diana (the Director), Andy and Doreen manage the page (4A, 5A, 10A). */
 async function keeper(request: CallableRequest, orgId: string) {
   const caller = await requireCaller(request, undefined, { reviewerOk: true });
@@ -134,12 +146,12 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
 
   if (action === 'pledge') {
     if (typeof data.website === 'string' && data.website.trim()) return { ref: '', names: [], text: '' };
+    const settings = await loadSettings(orgId);
     let form: PledgeForm;
-    try { form = cleanPledge(data); } catch (err) { throw new HttpsError('invalid-argument', (err as Error).message); }
+    try { form = cleanPledge(data, settings.needs); } catch (err) { throw new HttpsError('invalid-argument', (err as Error).message); }
     const sender = createHash('sha256').update(`${today}|${request.rawRequest?.ip ?? ''}`).digest('hex').slice(0, 24);
     const dayRef = db.doc(`organizations/${orgId}/welcomeDays/sponsor_${today}`);
     const senderRef = db.doc(`organizations/${orgId}/welcomeDays/sponsor_${today}_${sender}`);
-    const settings = await loadSettings(orgId);
     const kids = await loadKids(orgId);
     const counter = db.doc(`organizations/${orgId}/counters/sponsorPledges`);
     const pledge = pledgesCol(orgId).doc();
@@ -165,7 +177,7 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
       tx.set(dayRef, { count: FieldValue.increment(1), date: today }, { merge: true });
       tx.set(senderRef, { count: FieldValue.increment(1), date: today }, { merge: true });
       tx.set(pledge, {
-        orgId, ref, state: 'waiting', childIds: form.childIds, childNames: names, general: form.general,
+        orgId, ref, state: 'waiting', childIds: form.childIds, childNames: names, general: form.general, gift: form.gift,
         name: form.name, email: form.email, phone: form.phone, country: form.country,
         promise: form.childIds.length ? SAFETY_PROMISE : null, dataConsent: DATA_CONSENT, agreedOn: today,
         date: today, holdUntil: holdUntil(today), createdAt: FieldValue.serverTimestamp(), createdBy: 'sponsor-page',
@@ -175,16 +187,17 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     });
     const names = pledgeFor(result.names, form.general);
     const first = firstName(form.name);
-    const note = thankYouText(first, names, result.ref, settings);
+    const note = thankYouText(first, names, result.ref, settings, result.names.length, form.gift);
+    const giftNote = giftLines(form.gift);
     if (form.email) await send([form.email], [], `Thank you, ${first}`, note, 'sponsor-thanks');
     // Diana, with Andy and Doreen copied, hears about every pledge (10A).
     const leads = await circleLeadEmails('ministry', orgId).catch(() => ({ to: [] as string[], cc: [] as string[] }));
     const who = [form.name, form.country].filter(Boolean).join(', ');
     const contact = [form.email, form.phone].filter(Boolean).join(' · ') || 'no email or phone given';
     await send(leads.to, leads.cc, `New sponsor: ${form.name} (${result.ref})`,
-      `${who} would like to support ${names.join(', ')}.\n\nContact: ${contact}\nReference: ${result.ref}\n\nWhen the money shows in the bank, open Sponsorship and tap Money received:\n${appUrl()}/hope/sponsorship`,
+      `${who} would like to support ${names.join(', ')}.${giftNote.length ? `\n\nFor the Hope Centre${form.gift?.giveBy === 'items' ? ' (bringing the items)' : ''}:\n${giftNote.map((l) => `• ${l}`).join('\n')}` : ''}\n\nContact: ${contact}\nReference: ${result.ref}\n\n${needsMoney(result.names.length, form.gift) ? 'When the money shows in the bank, open Sponsorship and tap Money received:' : 'When the items arrive, open Sponsorship and tap Items received:'}\n${appUrl()}/hope/sponsorship`,
       'sponsor-new', EMAIL.test(form.email) ? form.email : undefined);
-    return { ref: result.ref, names, text: note, amount: amountLabel(settings.amount, settings.per) };
+    return { ref: result.ref, names, text: note, amount: amountLabel(settings.amount, settings.per), gift: form.gift, money: needsMoney(result.names.length, form.gift) };
   }
 
   // Everything below is for Diana, Andy and Doreen.
@@ -282,7 +295,11 @@ export const hopeSponsor = onCall({ invoker: 'public', memory: '512MiB', timeout
     let emailed = false;
     if (action === 'received' && p.email) {
       // The welcome pack (4A): each child's Sponsor update, made on the phone, attached.
-      emailed = await send([p.email], [], `Your gift has arrived, ${firstName(p.name)}`, receivedText(firstName(p.name), pledgeFor(p.childNames, p.general), p.ref), 'sponsor-received', undefined, pdfAttachment(data.pdf));
+      // For the Hope Centre, a photo of the gift (8A, the items only, never children's faces) may be attached.
+      const photo = imageAttachment(data.photo);
+      const files = [...(pdfAttachment(data.pdf) ?? []), ...(photo ?? [])];
+      const subject = p.childIds.length ? `Your gift has arrived, ${firstName(p.name)}` : `Your gift has reached the children, ${firstName(p.name)}`;
+      emailed = await send([p.email], [], subject, receivedText(firstName(p.name), pledgeFor(p.childNames, p.general), p.ref, p.childNames.length, p.gift ?? null, !!photo), 'sponsor-received', undefined, files.length ? files : undefined);
     }
     return { ok: true, emailed };
   }
