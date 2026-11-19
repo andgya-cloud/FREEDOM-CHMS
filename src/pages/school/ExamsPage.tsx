@@ -23,7 +23,9 @@ import {
 } from '../../../functions/src/shared/examCohorts';
 import { examNoticeText, type ExamNoticeKind } from '../../../functions/src/shared/examNotices';
 import { bandsText, marksSheetPdf, resultSlipsPdf } from '../../lib/examPdf';
-import { MarksUpload, ResultsAndTranscripts, ResultsUpload, TranscriptButton } from './ExamResults';
+import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
+import { ExamRegisterView, TranscriptsView } from './ExamRegister';
+import { GraduationBoard } from './GraduationPage';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
@@ -60,10 +62,10 @@ export function CommonFinalsPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type View = 'home' | 'results' | 'setup' | 'student';
+type View = 'home' | 'results' | 'setup' | 'student' | 'register' | 'transcripts' | 'graduation';
 /** Links saved before the redesign (Andy, 2026-10-25) still land on the right screen. */
 const OLD_VIEWS: Record<string, View> = {
-  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'results', setup: 'setup', sheets: 'setup', grading: 'setup',
+  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'transcripts', register: 'register', graduation: 'graduation', setup: 'setup', sheets: 'setup', grading: 'setup',
   log: 'setup', student: 'student',
 };
 type CohortOrder = ReturnType<typeof orderCohorts>;
@@ -132,20 +134,28 @@ function Exams({ org }: { org: Organization }) {
 
   if (!a.canMark) return <div className="page narrow"><h1>Exam Records</h1><p>Exam Records are for trainers and the principal. Ask Mr Andrew to tick it for your account.</p></div>;
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} allStudents={allStudents} courseName={s.courseName} />;
-  const sub = view === 'results' ? 'Results' : view === 'setup' ? 'Setup' : view === 'student' ? 'Student' : '';
+  const sub = view === 'student' ? 'Student' : '';
+  // One row of sections (Andy, 2026-11-19): the three new ones sit beside Results and Setup.
+  const SECTIONS: [View, string][] = [['home', 'Courses'], ['results', 'Results'], ['register', 'Exam register'], ['transcripts', 'Transcripts'], ['graduation', 'Graduation'], ['setup', 'Setup']];
+  const dates = (() => {
+    const start = s.intakes.filter((i) => i.name === cohort && i.startDate).map((i) => i.startDate).sort()[0];
+    const parts = [start ? `Started ${dayMonthYear(start).replace(/^\d+ /, '')}` : '', choice?.graduationDate ? `Graduated ${dayMonthYear(choice.graduationDate)}` : ''].filter(Boolean);
+    return parts.join(' · ');
+  })();
 
   return (
     <div className="page narrow exams">
       <div className="page-head">
         <h1>Exam Records{sub && <span className="muted"> · {sub}</span>}</h1>
-        {cohorts.length > 0 && (
-          <span className="row-actions no-print">
-            {view === 'home'
-              ? <><button type="button" className="btn btn-quiet" onClick={() => go({ view: 'results' })}>Results</button><button type="button" className="btn btn-quiet" onClick={() => go({ view: 'setup' })}>Setup</button></>
-              : <button type="button" className="btn btn-quiet" onClick={() => go({ view: '', student: '', section: '' })}>← Courses</button>}
-          </span>
+        {cohorts.length > 0 && view === 'student' && (
+          <span className="row-actions no-print"><button type="button" className="btn btn-quiet" onClick={() => go({ view: '', student: '', section: '' })}>← Courses</button></span>
         )}
       </div>
+      {cohorts.length > 0 && view !== 'student' && (
+        <div className="segmented exam-tabs no-print" role="tablist" aria-label="Exam Records">
+          {SECTIONS.map(([v, text]) => <button key={v} type="button" role="tab" aria-selected={view === v} className={view === v ? 'on' : ''} onClick={() => go({ view: v === 'home' ? '' : v, section: '', student: '' })}>{text}</button>)}
+        </div>
+      )}
       {cohorts.length === 0 ? (
         <section className="stack">
           <div className="notice">No cohorts yet. {canStart ? 'Start the first one here.' : <>Add a cohort in <Link to="/school/courses">Settings → Departments</Link> first.</>}</div>
@@ -179,6 +189,12 @@ function Exams({ org }: { org: Organization }) {
             </>
           )}
           {view === 'results' && <Results org={org} cohort={cohort} label={label} sheets={sheets} students={students} courses={courses} courseName={s.courseName} attendance={attendance} minAttendance={settings.minAttendance ?? null} />}
+          {view === 'register' && <ExamRegisterView org={org} cohort={cohort} label={label} students={students} sheets={sheets} courseName={s.courseName} attendance={attendance} today={s.today} />}
+          {view === 'transcripts' && (
+            <TranscriptsView org={org} cohort={cohort} label={label} students={students} sheets={sheets} courseName={s.courseName} attendance={attendance} today={s.today}
+              dates={dates} pick={params.get('student') ?? ''} onPick={(id) => go({ student: id })} />
+          )}
+          {view === 'graduation' && <GraduationBoard org={org} cohort={cohort} />}
           {view === 'setup' && (
             <Setup org={org} cohort={cohort} cohorts={cohorts} order={order} closed={closed} info={info} sheets={sheets} students={students} courses={courses} programmes={s.courses}
               courseList={courseList} allStudents={allStudents} today={s.today} canStart={canStart} section={rawView === 'log' ? 'log' : params.get('section') ?? ''}
@@ -232,7 +248,7 @@ function StudentRecord({ org, studentId, s, studentsOf, info, attendance, minAtt
   return (
     <section className="stack">
       <section className="card stack">
-        <div className="card-head"><h2>{me.name}</h2><TranscriptButton org={org} cohort={cohort} label={label} student={me} sheets={sheets} courseName={s.courseName} /></div>
+        <div className="card-head"><h2>{me.name}</h2><Link className="btn btn-primary" to={`${BASE}?cohort=${encodeURIComponent(cohort)}&view=transcripts&student=${st.id}`}>Transcript</Link></div>
         <p className="muted">{me.admissionNo || 'No admission no.'} · {me.courseName || 'No department'} · {label || 'No cohort'} · {st.status}</p>
         <KpiRow label="Standing">
           <KpiCard label="So far" value={standing?.soFar == null ? '–' : `${standing.soFar}%`} note={standing?.grade || ''} tone="gold" />

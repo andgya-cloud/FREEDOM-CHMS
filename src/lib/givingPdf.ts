@@ -10,9 +10,9 @@ import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
  * work offline. They can be shared to WhatsApp from a phone or printed.
  */
 
-export async function newPdf(format: 'a5' | 'a4'): Promise<JsPdf> {
+export async function newPdf(format: 'a5' | 'a4', orientation: 'portrait' | 'landscape' = 'portrait'): Promise<JsPdf> {
   const { jsPDF } = await import('jspdf');
-  return new jsPDF({ unit: 'mm', format });
+  return new jsPDF({ unit: 'mm', format, orientation });
 }
 
 export const GOLD: [number, number, number] = [176, 137, 52];

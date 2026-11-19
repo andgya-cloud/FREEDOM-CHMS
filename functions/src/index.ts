@@ -17,6 +17,7 @@ export { setPettyPin, listPettySigners, signWithPin, topUpWithPin, setPettyBudge
 export { pettyBinSign } from './pettyBin.js';
 export { examNotify, listExamTrainers } from './exams.js';
 export { certificateFile } from './certificates.js';
+export { verifyTranscript } from './examVerify.js';
 export { rosterOnStudent, rosterOnPerson } from './rosters.js';
 export { examSheetToLecturer } from './examAssign.js';
 export { commonCourseAccess } from './commonCourses.js';

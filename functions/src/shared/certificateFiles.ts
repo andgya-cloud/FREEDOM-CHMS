@@ -8,9 +8,12 @@ import { poweredByHtml } from './poweredBy.js';
 export const CERTIFICATE_MAX_BYTES = 5 * 1024 * 1024;
 
 /** Where a graduate's certificate is kept in Storage. Only Cloud Functions read or write it. */
-export function certificatePath(orgId: string, studentId: string): string {
-  return `certificates/${orgId}/${studentId}.pdf`;
+export function certificatePath(orgId: string, studentId: string, kind: CertificateKind = 'final'): string {
+  return kind === 'provisional' ? `certificates/${orgId}/${studentId}-provisional.pdf` : `certificates/${orgId}/${studentId}.pdf`;
 }
+
+/** Two copies for each student (Andy, 2026-11-19): the provisional certificate and the final one. */
+export type CertificateKind = 'final' | 'provisional';
 
 /** Admission numbers and file names compared without case, spaces, slashes or dashes. */
 export function fileAdmissionKey(value: string): string {
@@ -23,9 +26,9 @@ export function looksLikePdf(bytes: Uint8Array): boolean {
 }
 
 /** The PDF's name when downloaded or attached: "Certificate - Jane Achieng - ADIA-2025-014.pdf". */
-export function certificateFileName(name: string, admissionNo?: string | null): string {
+export function certificateFileName(name: string, admissionNo?: string | null, kind: CertificateKind = 'final'): string {
   const clean = (s: string) => s.replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, ' ').trim();
-  return `Certificate - ${clean(name) || 'Graduate'}${admissionNo ? ` - ${clean(admissionNo).replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')}` : ''}.pdf`;
+  return `${kind === 'provisional' ? 'Provisional certificate' : 'Certificate'} - ${clean(name) || 'Graduate'}${admissionNo ? ` - ${clean(admissionNo).replace(/\s*-\s*/g, '-').replace(/\s+/g, '-')}` : ''}.pdf`;
 }
 
 export interface CertificateEmail { studentName: string; programme: string; serial?: string | null }

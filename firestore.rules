@@ -2305,6 +2305,54 @@ service cloud.firestore {
           && (request.resource.data.sheetId == null || shortText(request.resource.data.sheetId, 80));
         allow update, delete: if false;
       }
+      // The exam register (Andy, 2026-11-19): one per cohort and exam sitting, kept by the principal for ADIA's own records.
+      match /examRegisters/{registerId} {
+        allow read: if ex('exams.manage');
+        allow create, update: if ex('exams.manage') && registerId.size() <= 150
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'sitting', 'entries', 'locked', 'lockedOn', 'lockedByName', 'rules',
+               'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && shortText(request.resource.data.sitting, 80) && request.resource.data.sitting.size() >= 2
+          && request.resource.data.entries is map && request.resource.data.entries.size() <= 600
+          && request.resource.data.locked is bool
+          && (request.resource.data.lockedOn == null || isDate(request.resource.data.lockedOn))
+          && (request.resource.data.lockedByName == null || shortText(request.resource.data.lockedByName, 120))
+          && request.resource.data.rules is map
+          && (resource == null ? stampedCreate() && freshRecord()
+              : stampedUpdate() && validSoftDelete() && request.resource.data.cohort == resource.data.cohort && request.resource.data.sitting == resource.data.sitting);
+        allow delete: if false;
+      }
+      // Each transcript printed (Andy, 2026-11-19, 7A): its serial number and what it said, for the public check page.
+      match /examTranscripts/{token} {
+        allow read: if ex('exams.manage');
+        allow create: if ex('exams.manage') && token.matches('^[A-Za-z0-9]{16,40}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'serial', 'year', 'n', 'studentId', 'cohort', 'name', 'admissionNo', 'programme', 'finalPoints', 'finalGrade',
+               'provisional', 'fingerprint', 'issuedOn', 'issuedByName', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && stampedCreate() && freshRecord()
+          && shortText(request.resource.data.serial, 40) && request.resource.data.year is int && request.resource.data.n is int
+          && shortText(request.resource.data.studentId, 128) && shortText(request.resource.data.cohort, 80)
+          && shortText(request.resource.data.name, 160) && shortText(request.resource.data.admissionNo, 80) && shortText(request.resource.data.programme, 120)
+          && (request.resource.data.finalPoints == null || request.resource.data.finalPoints is number)
+          && shortText(request.resource.data.finalGrade, 40) && request.resource.data.provisional is bool
+          && shortText(request.resource.data.fingerprint, 6000) && isDate(request.resource.data.issuedOn) && shortText(request.resource.data.issuedByName, 120)
+          && getAfter(/databases/$(database)/documents/organizations/$(orgId)/examCounters/$('transcripts-' + string(request.resource.data.year))).data.last >= request.resource.data.n;
+        allow update, delete: if false;
+      }
+      match /examCounters/{counterId} {
+        allow read: if ex('exams.manage');
+        allow create, update: if ex('exams.manage') && counterId.matches('^transcripts-[0-9]{4}$')
+          && request.resource.data.keys().hasOnly(['orgId', 'year', 'last', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.year is int && request.resource.data.last is int
+          && counterId == 'transcripts-' + string(request.resource.data.year)
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete() && request.resource.data.last >= resource.data.last);
+        allow delete: if false;
+      }
+      // Provisional certificate copies (Andy, 2026-11-19): written by the certificateFile function only.
+      match /provisionalCertificates/{studentId} {
+        allow read: if schoolRead();
+        allow write: if false;
+      }
 
       // Clean-up Recycle Bin and Forever (Andy, 2026-10-30): read and written only by the Clean-up functions,
       // which check that the caller is Andrew Guya or Doreen.

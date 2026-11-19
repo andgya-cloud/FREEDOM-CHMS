@@ -9,6 +9,7 @@ import { examMetaId } from '../lib/examWrites';
 import { EXAM_COMPONENTS, examSettingsWithDefaults, mergedMarks, type ExamSettings, type ExamSheet, type ReportMeta } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
 import type { ExamCohort } from '../../functions/src/shared/examCohorts';
+import type { ExamRegister, TranscriptRecord } from '../../functions/src/shared/examRegister';
 
 export interface ExamSheetRow extends ExamSheet { submittedAt?: Timestamp | null; updatedAt?: Timestamp }
 export interface ExamLogRow { id: string; action: string; cohort: string; sheetId: string | null; detail: string; byName: string; at?: Timestamp }
@@ -161,4 +162,21 @@ export function useDepartmentResults(orgId: string, courseIds: string[]) {
     return () => offs.forEach((off) => off());
   }, [orgId, key]);
   return useMemo(() => Object.values(byCourse).flat().filter((r) => !r.deletedAt), [byCourse]);
+}
+
+/** A cohort's exam registers, one for each sitting (Andy, 2026-11-19). */
+export function useExamRegisters(orgId: string, cohort: string) {
+  const a = useExamAccess();
+  const q = useLiveQuery<ExamRegister & { id: string; deletedAt?: unknown }>(
+    () => (orgId && cohort && a.canManage ? query(col(orgId, 'examRegisters'), where('cohort', '==', cohort)) : null), [orgId, cohort, a.canManage]);
+  const registers = useMemo(() => q.rows.filter((r) => !r.deletedAt), [q.rows]);
+  return { registers, loading: q.loading };
+}
+
+/** The transcripts already printed for a cohort, so an unchanged result keeps its serial number. */
+export function useCohortTranscripts(orgId: string, cohort: string) {
+  const a = useExamAccess();
+  const q = useLiveQuery<TranscriptRecord & { id: string }>(
+    () => (orgId && cohort && a.canManage ? query(col(orgId, 'examTranscripts'), where('cohort', '==', cohort)) : null), [orgId, cohort, a.canManage]);
+  return { transcripts: q.rows, loading: q.loading };
 }

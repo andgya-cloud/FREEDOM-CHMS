@@ -124,6 +124,7 @@ const ClubsPage = lazy(() => import('./pages/hope/ClubsPage').then((m) => ({ def
 const ClubPage = lazy(() => import('./pages/hope/ClubPage').then((m) => ({ default: m.ClubPage })));
 const ChildImportPage = lazy(() => import('./pages/hope/ChildImportPage').then((m) => ({ default: m.ChildImportPage })));
 const HopeMessagesPage = lazy(() => import('./pages/hope/HopeMessagesPage').then((m) => ({ default: m.HopeMessagesPage })));
+const VerifyTranscriptPage = lazy(() => import('./pages/verify/VerifyTranscriptPage').then((m) => ({ default: m.VerifyTranscriptPage })));
 const SponsorPublicPage = lazy(() => import('./pages/hope/SponsorPublicPage').then((m) => ({ default: m.SponsorPublicPage })));
 const SponsorshipPage = lazy(() => import('./pages/hope/SponsorshipPage').then((m) => ({ default: m.SponsorshipPage })));
 const SponsorListPage = lazy(() => import('./pages/hope/SponsorListPage').then((m) => ({ default: m.SponsorListPage })));
@@ -144,6 +145,14 @@ export function App() {
   const idleMinutes = handlesMoney ? Math.min(MONEY_IDLE_MINUTES, shared ? settings.inactivityMinutes : MONEY_IDLE_MINUTES) : settings.inactivityMinutes;
   useIdleSignOut(idleMinutes, !!user && (shared || handlesMoney), onIdle);
 
+  // The transcript check behind each QR code: open to anyone, no sign-in (Andy, 2026-11-19, 7A).
+  if (path.startsWith('/verify/')) {
+    return (
+      <Suspense fallback={<div className="splash" aria-busy="true"><span className="splash-mark" />Loading…</div>}>
+        <Routes><Route path="/verify/:orgId/:token" element={<VerifyTranscriptPage />} /><Route path="/verify/:orgId" element={<VerifyTranscriptPage />} /></Routes>
+      </Suspense>
+    );
+  }
   // The Hope Centre sponsorship page: open to anyone, no sign-in (Andy, 2026-11-18).
   if (path.startsWith('/sponsor/')) {
     return (

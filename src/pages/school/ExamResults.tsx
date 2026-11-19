@@ -1,11 +1,12 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { Link } from 'react-router-dom';
 import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { readSpreadsheetSheets } from '../../lib/statementFile';
 import { examResultId, logExam, saveExamMarks, saveExamResults } from '../../lib/examWrites';
 import { correctAdmissionNo } from '../../lib/schoolWrites';
-import { transcriptsPdf, type Transcript, type TranscriptSemester } from '../../lib/examPdf';
+import type { TranscriptSemester } from '../../lib/examPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { CsvButton, KpiCard, KpiRow } from '../../components/charts';
@@ -22,22 +23,15 @@ import type { Organization } from '../../state/OrgContext';
  * Excel, sees every student's Semester 1, Semester 2 and final result, and prints transcripts. New
  * cohorts' semesters are worked out from the trainers' marks sheets as the CATs come in.
  */
-export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, students, courseName }: {
+export function ResultsAndTranscripts({ org, cohort, sheets, students, courseName }: {
   org: Organization; cohort: string; label?: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courseName: (id: string) => string;
 }) {
   const { settings } = useExamSettings(org.id);
   const { results: cohortResults } = useExamResults(org.id, cohort);
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
   const finder = useStudentFinder();
   const rows = useMemo(() => buildRows(cohort, students, cohortResults, sheets, settings, courseName), [cohort, students, cohortResults, sheets, settings, courseName]);
   const counts = { provisional: rows.filter((r) => r.sems.some((x) => x.provisional)).length, done: rows.filter((r) => r.final.complete).length, incomplete: rows.filter((r) => !r.final.complete).length, differ: rows.filter((r) => printedDiffers(r.printed, r.final.final, settings)).length };
   const byGrade = (g: string) => rows.filter((r) => r.final.grade === g).length;
-
-  async function pdf(list: Row[], title: string) {
-    setBusy(true);
-    try { downloadFile(await transcriptsPdf({ transcripts: list.map((r) => ({ ...toTranscript(r), cohort: label })), settings, title })); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
-  }
 
   return (
     <section className="stack">
@@ -56,7 +50,7 @@ export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, stu
         {rows.length === 0 ? <p className="muted">No students or results for {cohort} yet. Upload past results under Setup, or set up the cohort's Semester 1 and 2 courses.</p> : (
           <>
             <div className="row-actions no-print">
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void pdf(rows, `${cohort} transcripts`)}>{busy ? 'Preparing…' : 'Transcripts for everyone (PDF)'}</button>
+              <Link className="btn btn-primary" to={{ search: `?cohort=${encodeURIComponent(cohort)}&view=transcripts&student=all` }}>Transcripts for everyone</Link>
               <CsvButton name={`${cohort} results`} csv={() => toCsv(['Admission no', 'Name', 'Department', 'Semester 1', 'Semester 2', 'Final points', 'Final grade', 'Printed list points', 'Printed list grade', 'Matches printed list'],
                 rows.map((r) => [r.admissionNo, r.name, r.programme, r.sems[0].points ?? '', r.sems[1].points ?? '', r.final.final ?? '', r.final.grade, r.printed?.points ?? '', r.printed?.grade ?? '',
                   r.printed ? (printedDiffers(r.printed, r.final.final, settings) ? 'No' : 'Yes') : '']))} />
@@ -73,7 +67,7 @@ export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, stu
                       <td className="num"><strong>{r.final.final ?? '–'}</strong></td>
                       <td>{r.final.grade === 'Incomplete' ? <span className="badge badge-warn">Incomplete</span> : r.final.grade}</td>
                       <td className="small">{r.printed ? <span className={printedDiffers(r.printed, r.final.final, settings) ? 'up-bad' : 'muted'}>{r.printed.points}{r.printed.grade ? ` ${r.printed.grade}` : ''}{printedDiffers(r.printed, r.final.final, settings) ? ' · check' : ''}</span> : ''}</td>
-                      <td className="no-print"><button type="button" className="btn btn-quiet btn-small" disabled={busy} onClick={() => void pdf([r], r.name)}>Transcript</button></td>
+                      <td className="no-print"><Link className="btn btn-quiet btn-small" to={{ search: `?cohort=${encodeURIComponent(cohort)}&view=transcripts&student=${r.key}` }}>Transcript</Link></td>
                     </tr>
                   ))}
                 </tbody>
@@ -87,10 +81,10 @@ export function ResultsAndTranscripts({ org, cohort, label = cohort, sheets, stu
   );
 }
 
-interface RowSem extends TranscriptSemester { points: number | null; provisional: boolean }
-interface Row { key: string; name: string; admissionNo: string; programme: string; cohort: string; sems: [RowSem, RowSem]; final: ReturnType<typeof finalResult>; printed: ExamResult['printed']; notes: string[] }
+export interface RowSem extends TranscriptSemester { points: number | null; provisional: boolean }
+export interface Row { key: string; name: string; admissionNo: string; programme: string; cohort: string; sems: [RowSem, RowSem]; final: ReturnType<typeof finalResult>; printed: ExamResult['printed']; notes: string[] }
 
-function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[], sheets: ExamSheetRow[], settings: ExamSettings, courseName: (id: string) => string): Row[] {
+export function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[], sheets: ExamSheetRow[], settings: ExamSettings, courseName: (id: string) => string): Row[] {
   const byStudent = new Map(results.map((r) => [r.studentId, r]));
   const people: { id: string; name: string; admissionNo: string; courseId: string; programme: string }[] = students.map((s) => ({ id: s.id, name: s.name, admissionNo: s.admissionNo, courseId: s.courseId, programme: s.courseName }));
   for (const r of results) if (!people.some((p) => p.id === r.studentId)) people.push({ id: r.studentId, name: r.studentName, admissionNo: r.admissionNo, courseId: r.courseId ?? '', programme: courseName(r.courseId ?? '') });
@@ -109,26 +103,6 @@ function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[
     const sems: [RowSem, RowSem] = [sem(1), sem(2)];
     return { key: p.id, name: p.name, admissionNo: p.admissionNo, programme: p.programme, cohort, sems, final: finalResult(sems[0].points, sems[1].points, settings), printed: res?.printed ?? null, notes: res?.notes ?? [] };
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.admissionNo.localeCompare(b.admissionNo));
-}
-
-const toTranscript = (r: Row): Transcript => ({ name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: r.cohort, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes });
-
-/** One student's transcript (Andy, 2026-10-25, 5A: Find a student). */
-export function TranscriptButton({ org, cohort, label = cohort, student, sheets, courseName }: {
-  org: Organization; cohort: string; label?: string; student: ExamStudent; sheets: ExamSheetRow[]; courseName: (id: string) => string;
-}) {
-  const { settings } = useExamSettings(org.id);
-  const { results } = useExamResults(org.id, cohort);
-  const toast = useToast();
-  const [busy, setBusy] = useState(false);
-  async function pdf() {
-    setBusy(true);
-    try {
-      const rows = buildRows(cohort, [student], results.filter((r) => r.studentId === student.id), sheets, settings, courseName);
-      downloadFile(await transcriptsPdf({ transcripts: rows.map((r) => ({ ...toTranscript(r), cohort: label })), settings, title: student.name }));
-    } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(false); }
-  }
-  return <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void pdf()}>{busy ? 'Preparing…' : 'Transcript (PDF)'}</button>;
 }
 
 /** The principal's upload of past semester results, with a preview before anything is saved. */

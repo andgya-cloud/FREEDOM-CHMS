@@ -23,7 +23,9 @@ export interface IntakeRow extends Intake { orgId: string }
 export interface InvoiceRow extends Invoice { orgId: string; voidReason?: string; createdAt?: Timestamp }
 export interface BalanceRow { id: string; studentId: string; billedCents: number; paidCents: number; balanceCents: number; oldestDue: string | null }
 export interface FeeStructureRow { id: string; courseId: string; intakeId: string; items: FeeItem[]; deletedAt?: unknown }
-export interface CertificateRow { id: string; studentId: string; courseId: string; issuedOn: string; serial?: string; file?: { size: number } | null; emailedTo?: string; emailedAt?: unknown }
+export interface CertificateRow { id: string; studentId: string; courseId: string; issuedOn: string; serial?: string; file?: { size: number } | null; emailedTo?: string; emailedAt?: unknown; handedOverOn?: string | null; handedOverByName?: string | null }
+/** A provisional certificate copy (Andy, 2026-11-19). */
+export interface ProvisionalRow { id: string; studentId: string; file?: { size: number } | null }
 export interface OutcomeRow { id: string; studentId: string; months: number; due: string; status: OutcomeStatus | null; note: string; recordedOn: string | null }
 
 const col = (orgId: string, name: string) => collection(db, 'organizations', orgId, name);
@@ -57,6 +59,7 @@ export function useSchool(orgId: string) {
   const balances = useLiveQuery<BalanceRow>(() => (full && balancesAllowed ? col(orgId, 'feeBalances') : null), [orgId, full, balancesAllowed]);
   const structures = useLiveQuery<FeeStructureRow>(() => (full && feesAllowed ? col(orgId, 'feeStructures') : null), [orgId, full, feesAllowed]);
   const certificates = useLiveQuery<CertificateRow>(() => (full ? col(orgId, 'certificates') : null), [orgId, full]);
+  const provisionals = useLiveQuery<ProvisionalRow>(() => (full ? col(orgId, 'provisionalCertificates') : null), [orgId, full]);
   const outcomes = useLiveQuery<OutcomeRow & { deletedAt?: unknown }>(() => (full ? col(orgId, 'outcomes') : null), [orgId, full]);
   const events = useLiveQuery<ClassEvent>(() => (full ? query(col(orgId, 'events'), where('type', '==', 'class')) : null), [orgId, full]);
   const records = useLiveQuery<ClassRecord & { id: string }>(() => (full ? col(orgId, 'attendance') : null), [orgId, full]);
@@ -84,6 +87,7 @@ export function useSchool(orgId: string) {
     balances: balances.rows,
     structures: live(structures.rows),
     certificates: live(certificates.rows),
+    provisionals: provisionals.rows,
     outcomes: live(outcomes.rows),
     events: trainer ? (classEvents.events as unknown as ClassEvent[]) : live(events.rows),
     records: live(records.rows),

@@ -183,7 +183,11 @@ export function bandsText(settings: Pick<ExamSettings, 'bands'>) {
 }
 
 export interface TranscriptSemester { label: string; points: number | null; partial: number | null; grade: string; source: string; courses: CourseLine[] }
-export interface Transcript { name: string; admissionNo: string; programme: string; cohort: string; semesters: TranscriptSemester[]; final: FinalResult; printed: SemesterScore | null; notes: string[] }
+export interface Transcript {
+  name: string; admissionNo: string; programme: string; cohort: string; semesters: TranscriptSemester[]; final: FinalResult; printed: SemesterScore | null; notes: string[];
+  /** Added for the Students transcripts section (Andy, 2026-11-19, 6A-8A). */
+  serial?: string; verify?: string; attendance?: number | null; nita?: string; dates?: string; provisional?: boolean; issuedOn?: string;
+}
 
 /**
  * Full academic transcripts on the ADIA letterhead, one A4 page per student (Andy, 2026-10-24): each
@@ -193,6 +197,8 @@ export interface Transcript { name: string; admissionNo: string; programme: stri
 export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings: ExamSettings; title: string }): Promise<File> {
   const { transcripts, settings, title } = opts;
   const pdf = await newPdf('a4');
+  const QRCode = transcripts.some((t) => t.verify) ? (await import('qrcode')).default : null;
+  const qrs = await Promise.all(transcripts.map((t) => (QRCode && t.verify ? QRCode.toDataURL(t.verify, { margin: 0, width: 260, errorCorrectionLevel: 'M' }) : Promise.resolve(''))));
   const w = pdf.internal.pageSize.getWidth();
   const h = pdf.internal.pageSize.getHeight();
   const img = await crestImage();
@@ -218,7 +224,17 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
     pdf.setCharSpace(0);
     pdf.setTextColor(220, 224, 235);
     pdf.setFont('helvetica', 'normal');
-    pdf.text(t.cohort, 44, 29.5);
+    pdf.text(t.dates ? `${t.cohort} · ${t.dates}` : t.cohort, 44, 29.5);
+    if (t.serial) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(255, 255, 255);
+      pdf.text(`No. ${t.serial}`, w - 14, 16, { align: 'right' });
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8);
+      pdf.setTextColor(220, 224, 235);
+      if (t.issuedOn) pdf.text(`Issued ${t.issuedOn}`, w - 14, 22, { align: 'right' });
+    }
 
     let y = 46;
     pdf.setFillColor(...GOLD_SOFT);
@@ -255,21 +271,20 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
         pdf.setFont('helvetica', 'bold');
         pdf.setFontSize(7.5);
         pdf.setTextColor(...GREY);
-        pdf.text('Course', 16, y); pdf.text('Trainer', 100, y); pdf.text('Score', 160, y); pdf.text('Grade', 178, y);
+        pdf.text('Course', 16, y); pdf.text('Mark %', 160, y, { align: 'right' }); pdf.text('Grade', 172, y);
         y += 5;
         for (const c of sem.courses) {
           pdf.setFont('helvetica', 'normal');
           pdf.setFontSize(8.5);
           pdf.setTextColor(...INK);
-          pdf.text(pdf.splitTextToSize(c.courseName, 80)[0] as string, 16, y);
-          pdf.text(pdf.splitTextToSize(c.teacherName, 56)[0] as string, 100, y);
-          pdf.text(c.total == null ? (c.partial != null ? `(${c.partial})` : '–') : String(c.total), 160, y);
-          pdf.text(c.total == null ? '–' : gradeFor(c.total, settings).grade, 178, y);
+          pdf.text(pdf.splitTextToSize(c.courseName, 130)[0] as string, 16, y);
+          pdf.text(c.total == null ? (c.partial != null ? `(${c.partial})` : '–') : String(c.total), 160, y, { align: 'right' });
+          pdf.text(c.total == null ? '–' : gradeFor(c.total, settings).grade, 172, y);
           pdf.setDrawColor(229, 231, 235);
           pdf.setLineWidth(0.2);
           pdf.line(14, y + 2, w - 14, y + 2);
           y += 6;
-          if (y > h - 90) break;
+          if (y > h - 112) break;
         }
       }
       pdf.setFont('helvetica', 'bold');
@@ -304,14 +319,45 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7.5);
     pdf.setTextColor(...GREY);
+    const extra = [t.attendance != null ? `Attendance: ${Math.round(t.attendance)}%` : '', t.nita ? `NITA: ${t.nita}` : ''].filter(Boolean).join('     ');
+    if (extra) {
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(9);
+      pdf.setTextColor(...NAVY);
+      pdf.text(extra, 14, y);
+      y += 6;
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(...GREY);
+    }
     const lines = [
-      `Final points are the average of Semester 1 and Semester 2. Grades: ${bandsText(settings)}. A figure in brackets is not final: some papers are not yet marked.`,
+      `Final points are the average of Semester 1 and Semester 2. Grading key: ${bandsText(settings)}. A figure in brackets is not final: some papers are not yet marked.`,
       ...(t.printed ? [`Printed graduation list: ${t.printed.points}${t.printed.grade ? ` ${t.printed.grade}` : ''}.`] : []),
       ...t.notes.slice(0, 3),
     ];
     for (const l of lines) { const part = pdf.splitTextToSize(l, w - 28) as string[]; pdf.text(part, 14, y); y += 3.6 * part.length + 1; }
 
-    const sy = h - 34;
+    const sy = t.serial ? h - 48 : h - 34;
+    if (t.serial) {
+      // The college stamp goes between the two signatures (6A).
+      pdf.setDrawColor(...GREY);
+      pdf.setLineWidth(0.3);
+      pdf.setLineDashPattern([1.2, 1.2], 0);
+      pdf.circle(w / 2, sy - 2, 12);
+      pdf.setLineDashPattern([], 0);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7);
+      pdf.setTextColor(...GREY);
+      pdf.text('College stamp', w / 2, sy - 1, { align: 'center' });
+    }
+    if (qrs[n]) {
+      pdf.addImage(qrs[n]!, 'PNG', 14, h - 30, 17, 17);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(7.5);
+      pdf.setTextColor(...GREY);
+      const how = `Scan to check that this transcript is genuine, or open ${t.verify!.replace(/^https?:\/\//, '').replace(/\/[^/]+$/, '')} and enter ${t.serial} with the admission number.`;
+      pdf.text(pdf.splitTextToSize(how, w - 70) as string[], 35, h - 25);
+    }
     pdf.setDrawColor(...GREY);
     pdf.setLineWidth(0.3);
     pdf.line(14, sy, 84, sy);
@@ -326,9 +372,20 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
     pdf.setTextColor(...GREY);
     pdf.text(settings.principalTitle, 14, sy + 9.5);
     pdf.text(settings.directorTitle, w - 84, sy + 9.5);
-    pdf.text('Computer-generated transcript', w / 2, h - 10, { align: 'center' });
+    if (!t.serial) pdf.text('Computer-generated transcript', w / 2, h - 10, { align: 'center' });
     pdf.setFillColor(...GOLD);
     pdf.rect(0, h - 4, w, 4, 'F');
+    if (t.provisional) {
+      // Not final until the principal approves every result (8A).
+      const G = (pdf as unknown as { GState: new (o: { opacity: number }) => unknown }).GState;
+      const set = (o: number) => (pdf as unknown as { setGState: (g: unknown) => void }).setGState(new G({ opacity: o }));
+      set(0.13);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setFontSize(78);
+      pdf.setTextColor(179, 38, 30);
+      pdf.text('PROVISIONAL', w / 2, h / 2 + 20, { align: 'center', angle: 30 });
+      set(1);
+    }
   });
   stampPoweredBy(pdf);
   const safe = (transcripts.length === 1 ? transcripts[0]!.name : title).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');

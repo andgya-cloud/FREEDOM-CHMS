@@ -2979,3 +2979,61 @@ a.fin-chip:hover { background: #fdecea; }
 .lib-newcat { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 .lib-newcat input { flex: 1 1 140px; min-width: 0; }
 .lib-world { background: var(--surface-2); border-radius: 12px; padding: 10px 12px; }
+
+/* Exam Records: exam register, transcripts and graduation (Andy, 2026-11-19). */
+.exam-tabs { display: flex; flex-wrap: wrap; margin-bottom: 14px; }
+.exam-tabs button + button { border-left: 1px solid var(--border); }
+.exam-reg-table select, .exam-reg-table .exam-reg-input { min-width: 104px; max-width: 190px; padding: 6px 8px; font-size: 0.88rem; }
+.exam-reg-table td { vertical-align: middle; }
+.exam-reg-table td:first-child { min-width: 150px; }
+.exam-reg-counts .badge { margin-right: 4px; }
+.exam-reg-new { align-items: end; }
+.grad-table td { vertical-align: top; }
+.grad-table td:first-child { min-width: 150px; }
+.grad-copy { display: flex; flex-direction: column; gap: 4px; }
+.grad-copy .row-actions { gap: 6px; }
+.link-button { background: none; border: 0; padding: 0; color: var(--primary); text-decoration: underline; cursor: pointer; font: inherit; }
+.transcript-paper { position: relative; overflow: hidden; background: #fff; color: #1f2937; border: 1px solid var(--border); border-radius: 8px; padding: 22px 24px; max-width: 720px; width: 100%; margin: 0 auto; font-size: 0.86rem; box-shadow: 0 6px 24px rgb(0 0 0 / 0.08); color-scheme: light; }
+.transcript-head { display: flex; gap: 12px; align-items: center; background: #0b112c; color: #fff; margin: -22px -24px 14px; padding: 14px 20px; border-bottom: 3px solid #d2a74b; }
+.transcript-head strong { display: block; font-size: 1.1rem; }
+.transcript-head span { color: #d2a74b; font-size: 0.7rem; letter-spacing: 0.18em; font-weight: 700; }
+.transcript-crest { width: 40px; height: 40px; border-radius: 50%; background: #fff; padding: 3px; object-fit: contain; }
+.transcript-no { margin-left: auto; text-align: right; font-size: 0.75rem; color: #dce0eb; }
+.transcript-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 18px; margin: 0 0 10px; background: #f6ecd4; border-left: 3px solid #d2a74b; padding: 8px 12px; }
+.transcript-facts dt { font-size: 0.65rem; font-weight: 700; color: #8a6d2c; text-transform: uppercase; letter-spacing: 0.06em; }
+.transcript-facts dd { margin: 0; color: #0b112c; font-weight: 600; }
+.transcript-sem h3 { font-size: 0.85rem; background: #0b112c; color: #fff; padding: 4px 8px; margin: 10px 0 4px; }
+.transcript-sem table { width: 100%; border-collapse: collapse; }
+.transcript-sem th { text-align: left; font-size: 0.7rem; color: #6b7280; padding: 3px 6px; border-bottom: 1px solid #e5e7eb; }
+.transcript-sem td { padding: 3px 6px; border-bottom: 1px solid #f1f1f1; }
+.transcript-sem .num { text-align: right; font-variant-numeric: tabular-nums; }
+.transcript-sum { display: flex; flex-wrap: wrap; gap: 6px 18px; background: #0b112c; color: #fff; border: 1px solid #d2a74b; border-radius: 6px; padding: 8px 12px; margin: 12px 0; }
+.transcript-sum strong { color: #d2a74b; margin-left: 4px; }
+.transcript-sign { display: flex; justify-content: space-between; align-items: end; gap: 14px; margin-top: 24px; text-align: center; font-weight: 600; color: #0b112c; }
+.transcript-sign > div:not(.transcript-stamp) { flex: 1; border-top: 1px solid #9ca3af; padding-top: 4px; font-size: 0.8rem; }
+.transcript-sign span { font-weight: 400; color: #6b7280; }
+.transcript-stamp { flex: 0 0 76px; height: 76px; border: 1px dashed #9ca3af; border-radius: 50%; display: grid; place-items: center; font-size: 0.65rem; color: #9ca3af; font-weight: 400; }
+.transcript-foot { text-align: center; font-size: 0.7rem; color: #6b7280; margin: 14px 0 0; }
+.transcript-foot strong { color: #b08934; }
+.transcript-wm { position: absolute; inset: 40% -10% auto; text-align: center; transform: rotate(-24deg); font-size: clamp(2.5rem, 9vw, 4.6rem); font-weight: 800; letter-spacing: 0.08em; color: rgb(179 38 30 / 0.12); pointer-events: none; }
+@media (max-width: 560px) {
+  .transcript-paper { padding: 16px 14px; font-size: 0.8rem; }
+  .transcript-head { margin: -16px -14px 12px; padding: 12px 14px; flex-wrap: wrap; }
+  .transcript-no { margin-left: 0; text-align: left; width: 100%; }
+  .transcript-facts { grid-template-columns: 1fr; }
+}
+/* The public transcript check page. */
+.verify-page { min-height: 100vh; min-height: 100dvh; background: #0b112c; padding: 24px 16px 40px; color-scheme: light; }
+.verify-card { max-width: 480px; margin: 2vh auto 16px; background: #fff; color: #1f2937; border: 2px solid #d2a74b; border-radius: 20px; padding: 22px 18px; text-align: center; }
+.verify-card h1 { color: #0b112c; margin: 6px 0 0; font-size: 1.4rem; }
+.verify-crest { width: 64px; height: 64px; object-fit: contain; }
+.verify-kicker { color: #b08934; letter-spacing: 0.2em; font-size: 0.72rem; font-weight: 700; margin: 2px 0 14px; }
+.verify-badge { display: inline-block; background: #dff3e8; color: #155c39; font-weight: 700; border-radius: 999px; padding: 6px 14px; }
+.verify-badge.verify-provisional { background: #fff1c7; color: #6b4e00; }
+.verify-result dl { text-align: left; margin: 12px 0; }
+.verify-result dl div { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid #eee; padding: 6px 0; }
+.verify-result dt { color: #6b7280; }
+.verify-result dd { margin: 0; font-weight: 600; text-align: right; }
+.verify-card form { text-align: left; margin-top: 12px; }
+.verify-page .powered-by { color: #c9cde0; }
+.exam-register .field-row > .btn, .exam-tr-pick > .btn { flex: 0 0 auto; }

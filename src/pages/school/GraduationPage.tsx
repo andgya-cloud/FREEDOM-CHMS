@@ -1,4 +1,4 @@
-import { useState, type ChangeEvent } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -17,9 +17,8 @@ import { downloadFile } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { OUTCOME_LABELS, OUTCOME_STATUSES, type OutcomeStatus } from '../../../functions/src/shared/school';
 import { SchoolGate, SchoolTitle, useSchoolPage } from './common';
-import { CertificateActions } from '../../components/CertificateActions';
-import { uploadCertificate } from '../../lib/certificateFiles';
-import { fileAdmissionKey } from '../../../functions/src/shared/certificateFiles';
+import { downloadCertificate, printCertificate, recordHandover, uploadCertificate } from '../../lib/certificateFiles';
+import { fileAdmissionKey, type CertificateKind } from '../../../functions/src/shared/certificateFiles';
 import type { Organization } from '../../state/OrgContext';
 import type { OutcomeRow } from '../../state/useSchool';
 
@@ -35,17 +34,6 @@ function Graduation({ org }: { org: Organization }) {
   const [issuedOn, setIssuedOn] = useState(s.today);
   const candidates = s.students.filter((st) => st.status === 'enrolled').map((st) => ({ st, name: s.nameOf(st.id) })).sort((a, b) => a.name.localeCompare(b.name));
   const picked = s.students.find((x) => x.id === studentId);
-  const register = [...s.certificates].sort((a, b) => b.issuedOn.localeCompare(a.issuedOn));
-  const finder = useStudentFinder();
-  const listed = register.filter((c) => finder.match(s.nameOf(c.studentId), s.students.find((x) => x.id === c.studentId)?.admissionNo ?? ''));
-  const { byName: classes } = useExamCohorts(org.id);
-  /** "Cohort 1 · Class of 2025": each graduating class is dated (Andy, 2026-10-25). */
-  const classFor = (studentId: string, issuedOn: string) => {
-    const st = s.students.find((x) => x.id === studentId);
-    const cohort = st ? s.intakeName(st.intakeId) : '';
-    const year = classOf(classes[cohort]?.graduationDate ?? issuedOn);
-    return cohort ? `${cohort} · ${year}` : year;
-  };
   const due = s.outcomes.filter((o) => o.status == null && o.due <= s.today).sort((a, b) => a.due.localeCompare(b.due));
   const upcoming = s.outcomes.filter((o) => o.status == null && o.due > s.today).sort((a, b) => a.due.localeCompare(b.due));
   const recorded = s.outcomes.filter((o) => o.status != null).sort((a, b) => (b.recordedOn ?? '').localeCompare(a.recordedOn ?? ''));
@@ -53,43 +41,23 @@ function Graduation({ org }: { org: Organization }) {
   function issue() {
     if (!picked || !issuedOn) return;
     issueCertificate(org.id, picked.id, picked.courseId, issuedOn).catch((err) => toast.show(friendlyError(err)));
-    toast.show(`Certificate issued to ${s.nameOf(picked.id)}`);
+    toast.show(`${s.nameOf(picked.id)} added as a graduate`);
     setStudentId('');
   }
 
-  const canFiles = can('school.manage') || can('settings.manage');
-
-  function registerCsv() {
-    const rows = register.map((c) => [c.serial ?? '', s.nameOf(c.studentId), s.courseName(c.courseId), classFor(c.studentId, c.issuedOn), c.issuedOn]);
-    downloadFile(csvFile(`Certificate register ${s.today}.csv`, [['Serial number', 'Name', 'Department', 'Class', 'Issued on'], ...rows]));
-  }
 
   return (
     <div className="page narrow">
       <SchoolTitle feesAllowed={s.feesAllowed} />
 
-      {/* The certificate list first; issuing, uploading and follow-ups fold away until needed (Andy, 2026-10-28, 7A). */}
-      <section className="card stack">
-        <div className="card-head"><h2>Certificates</h2>{register.length > 0 && <button type="button" className="btn btn-quiet" onClick={registerCsv}>Download</button>}</div>
-        {register.length === 0 ? <p className="muted small">No certificates issued yet.</p> : (
-          <>
-          {register.length > 8 && <StudentFinder finder={finder} names={register.map((c) => s.nameOf(c.studentId))} shown={listed.length} total={register.length} />}
-          <div className="table-scroll">
-            <table className="report-table">
-              <thead><tr><th>Serial</th><th>Name</th><th>Department</th><th>Class</th><th>Issued</th><th>Certificate</th></tr></thead>
-              <tbody>{listed.map((c) => <tr key={c.id}><td>{c.serial ?? 'pending'}</td><td><Link to={`/school/students/${c.studentId}`}>{s.nameOf(c.studentId)}</Link></td><td>{s.courseName(c.courseId)}</td><td>{classFor(c.studentId, c.issuedOn)}</td><td>{formatDateKey(c.issuedOn)}</td>
-                <td><CertificateActions orgId={org.id} cert={c} canManage={canFiles} email={s.byId(c.studentId)?.email} compact /></td></tr>)}</tbody>
-            </table>
-          </div>
-          </>
-        )}
-      </section>
+      {/* One list of every student's provisional and final certificates (Andy, 2026-11-19); the same as Exam Records › Graduation. */}
+      <GraduationBoard org={org} />
 
       {(can('settings.manage') || can('school.manage')) && (
         <details className="card fold-card">
-          <summary><span>Issue one certificate</span></summary>
+          <summary><span>Add one graduate</span></summary>
           <div className="stack">
-            <p className="small muted">The student becomes a graduate with the next serial number. This cannot be undone.</p>
+            <p className="small muted">The student becomes a graduate with the next certificate number. This cannot be undone. Then upload the final certificate in the list above and mark it issued when it is handed over.</p>
             <label className="field"><span>Student</span>
               <select value={studentId} onChange={(e) => setStudentId(e.target.value)}>
                 <option value="">Choose…</option>
@@ -97,13 +65,13 @@ function Graduation({ org }: { org: Organization }) {
               </select>
             </label>
             <label className="field"><span>Date issued</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
-            <button type="button" className="btn btn-primary align-start" disabled={!picked || !issuedOn} onClick={issue}>Issue certificate</button>
+            <button type="button" className="btn btn-primary align-start" disabled={!picked || !issuedOn} onClick={issue}>Add graduate</button>
           </div>
         </details>
       )}
 
       {(can('settings.manage') || can('school.manage')) && <GraduationUpload org={org} s={s} />}
-      {register.length > 0 && canFiles && <UploadMany org={org} s={s} />}
+      {s.certificates.length > 0 && (can('school.manage') || can('settings.manage')) && <UploadMany org={org} s={s} />}
 
       <details className="card fold-card">
         <summary><span>Follow-ups with graduates</span>{due.length > 0 && <span className="badge">{due.length} due</span>}</summary>
@@ -306,5 +274,137 @@ function UploadMany({ org, s }: { org: Organization; s: ReturnType<typeof useSch
         </div>
       )}
     </details>
+  );
+}
+
+type Show = 'all' | 'no' | 'yes';
+
+/**
+ * Graduation (Andy, 2026-11-19, 10A 11A + Print and Download): each student of a cohort has two copies, the
+ * provisional certificate and the final certificate, each with Upload, Print and Download. The status reads
+ * Issued only once the final certificate has been handed over and the date recorded; Not issued until then.
+ * The same list shows under School › Graduation and Exam Records › Graduation.
+ */
+export function GraduationBoard({ org, cohort: fixed }: { org: Organization; cohort?: string }) {
+  const s = useSchoolPage(org);
+  const { can } = useAuth();
+  const toast = useToast();
+  const manage = can('school.manage') || can('settings.manage');
+  const { byName: classes } = useExamCohorts(org.id);
+  const order = orderCohorts([...new Set(s.intakes.map((i) => i.name))], s.intakes, classes);
+  const choices = [...order.past, ...order.current];
+  const [picked, setPicked] = useState('');
+  const cohort = fixed ?? (choices.some((c) => c.name === picked) ? picked : choices[0]?.name ?? '');
+  const [show, setShow] = useState<Show>('all');
+  const finder = useStudentFinder();
+  const [on, setOn] = useState(s.today);
+  const certs = new Map(s.certificates.map((c) => [c.studentId, c]));
+  const provs = new Map(s.provisionals.map((p) => [p.studentId, p]));
+  const people = s.students.filter((st) => !st.deletedAt && s.intakeName(st.intakeId) === cohort)
+    .map((st) => ({ st, name: s.nameOf(st.id), cert: certs.get(st.id), prov: provs.get(st.id) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  const issued = (p: (typeof people)[number]) => !!p.cert?.handedOverOn;
+  const shown = people.filter((p) => (show === 'all' || (show === 'yes') === issued(p)) && finder.match(p.name, p.st.admissionNo ?? ''));
+  const nIssued = people.filter(issued).length;
+
+  async function handover(studentId: string, date: string | null, name: string) {
+    try {
+      await recordHandover(org.id, studentId, date);
+      toast.show(date ? `${name}: final certificate issued on ${formatDateKey(date)}` : `${name}: back to Not issued`);
+    } catch (err) { toast.show(friendlyError(err)); }
+  }
+  function listCsv() {
+    const rows = people.map((p) => [p.cert?.serial ?? '', p.name, p.st.admissionNo ?? '', s.courseName(p.st.courseId), p.prov?.file ? 'Yes' : 'No', p.cert?.file ? 'Yes' : 'No',
+      issued(p) ? 'Issued' : 'Not issued', p.cert?.handedOverOn ?? '']);
+    downloadFile(csvFile(`Graduation ${cohort} ${s.today}.csv`, [['Certificate no.', 'Name', 'Admission no', 'Department', 'Provisional copy', 'Final copy', 'Status', 'Issued on'], ...rows]));
+  }
+
+  return (
+    <section className="card stack grad-board">
+      <div className="card-head"><h2>Graduation{fixed ? ` · ${cohort}` : ''}</h2>{people.length > 0 && <button type="button" className="btn btn-quiet" onClick={listCsv}>Download list</button>}</div>
+      <p className="muted small">Copies of every student's provisional and final certificates. The status changes to Issued only when the final certificate is handed over and the date is recorded.</p>
+      <div className="field-row">
+        {!fixed && (
+          <label className="field"><span>Cohort</span>
+            <select value={cohort} onChange={(e) => setPicked(e.target.value)}>
+              {order.past.length > 0 && <optgroup label="Graduated">{order.past.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
+              {order.current.length > 0 && <optgroup label="Current">{order.current.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
+            </select>
+          </label>
+        )}
+        <label className="field"><span>Show</span>
+          <select value={show} onChange={(e) => setShow(e.target.value as Show)}><option value="all">Everyone</option><option value="no">Not issued</option><option value="yes">Issued</option></select>
+        </label>
+        {manage && <label className="field"><span>Date handed over</span><input type="date" value={on} max={s.today} onChange={(e) => setOn(e.target.value)} /></label>}
+      </div>
+      {people.length > 8 && <StudentFinder finder={finder} names={people.map((p) => p.name)} shown={shown.length} total={people.length} />}
+      <p><span className="badge badge-regular">Issued {nIssued}</span> <span className="badge badge-warn">Not issued {people.length - nIssued}</span></p>
+      {people.length === 0 ? <p className="muted">No students in {cohort || 'this cohort'}.</p> : (
+        <div className="table-scroll">
+          <table className="table grad-table">
+            <thead><tr><th>Student</th><th>Provisional certificate</th><th>Final certificate</th><th>Status</th></tr></thead>
+            <tbody>
+              {shown.map((p) => (
+                <tr key={p.st.id}>
+                  <td><Link to={`/school/students/${p.st.id}`}>{p.name}</Link><div className="muted small">{p.st.admissionNo || 'No admission no.'}{p.cert?.serial ? ` · No. ${p.cert.serial}` : ''}</div></td>
+                  <td><CopyCell orgId={org.id} studentId={p.st.id} kind="provisional" has={!!p.prov?.file} manage={manage} /></td>
+                  <td>
+                    <CopyCell orgId={org.id} studentId={p.st.id} kind="final" has={!!p.cert?.file} manage={manage}
+                      before={p.cert ? undefined : async () => {
+                        if (!window.confirm(`${p.name} has no certificate number yet. Record them as a graduate with the next number, then keep this copy?`)) return false;
+                        await issueCertificate(org.id, p.st.id, p.st.courseId, classes[cohort]?.graduationDate ?? s.today);
+                        return true;
+                      }} />
+                  </td>
+                  <td>
+                    {issued(p) ? (
+                      <><span className="badge badge-regular">Issued</span><div className="muted small">{formatDateKey(p.cert!.handedOverOn!)}{p.cert!.handedOverByName ? ` · ${p.cert!.handedOverByName}` : ''}</div>
+                        {manage && <button type="button" className="link-button small" onClick={() => void handover(p.st.id, null, p.name)}>Undo</button>}</>
+                    ) : (
+                      <><span className="badge badge-warn">Not issued</span>
+                        {p.cert?.file
+                          ? manage && <div><button type="button" className="btn btn-gold btn-small" onClick={() => void handover(p.st.id, on, p.name)}>Mark as issued{on !== s.today ? ` (${formatDateKey(on)})` : ''}</button></div>
+                          : <div className="muted small">Upload the final copy first</div>}</>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** One certificate copy: Upload (a PDF or a photo), Print, Download, Replace. */
+function CopyCell({ orgId, studentId, kind, has, manage, before }: { orgId: string; studentId: string; kind: CertificateKind; has: boolean; manage: boolean; before?: () => Promise<boolean> }) {
+  const toast = useToast();
+  const input = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState('');
+  async function run(what: string, job: () => Promise<unknown>, done?: string) {
+    setBusy(what);
+    try { await job(); if (done) toast.show(done); } catch (err) { toast.show(friendlyError(err)); } finally { setBusy(''); }
+  }
+  async function chosen(e: ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f) return;
+    await run('upload', async () => {
+      if (before && !(await before())) return;
+      await uploadCertificate(orgId, studentId, f, kind);
+      toast.show(kind === 'provisional' ? 'Provisional certificate saved' : 'Final certificate saved');
+    });
+  }
+  return (
+    <div className="grad-copy">
+      {has ? <span className="small">📄 Copy kept</span> : <span className="muted small">No copy yet</span>}
+      <div className="row-actions">
+        {has && <button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => void run('print', () => printCertificate(orgId, studentId, kind))}>{busy === 'print' ? 'Opening…' : 'Print'}</button>}
+        {has && <button type="button" className="btn btn-quiet btn-small" disabled={!!busy} onClick={() => void run('download', () => downloadCertificate(orgId, studentId, kind))}>{busy === 'download' ? 'Downloading…' : 'Download'}</button>}
+        {manage && <button type="button" className={`btn btn-small${has ? ' btn-quiet' : ' btn-primary'}`} disabled={!!busy} onClick={() => input.current?.click()}>{busy === 'upload' ? 'Uploading…' : has ? 'Replace' : 'Upload'}</button>}
+      </div>
+      <input ref={input} type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp" hidden onChange={(e) => void chosen(e)} />
+    </div>
   );
 }
