@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -292,12 +292,25 @@ export function GraduationBoard({ org, cohort: fixed }: { org: Organization; coh
   const manage = can('school.manage') || can('settings.manage');
   const { byName: classes } = useExamCohorts(org.id);
   const order = orderCohorts([...new Set(s.intakes.map((i) => i.name))], s.intakes, classes);
-  const choices = [...order.past, ...order.current];
+  const choices = [...order.current, ...order.past];
+  // Any cohort, past or current (Andy, 2026-11-19: Cohort 2 graduates on 11 Dec 2026).
   const [picked, setPicked] = useState('');
-  const cohort = fixed ?? (choices.some((c) => c.name === picked) ? picked : choices[0]?.name ?? '');
+  const cohort = choices.some((c) => c.name === picked) ? picked : fixed ?? choices[0]?.name ?? '';
+  const exams = useExamAccess();
+  useEffect(() => setPicked(''), [fixed]);
   const [show, setShow] = useState<Show>('all');
   const finder = useStudentFinder();
-  const [on, setOn] = useState(s.today);
+  // The graduation date: any date, past or still to come; it also names the class ("Class of 2026").
+  const saved = classes[cohort]?.graduationDate ?? '';
+  const [typed, setTyped] = useState<{ cohort: string; date: string } | null>(null);
+  const on = (typed?.cohort === cohort ? typed.date : '') || saved || s.today;
+  function pickDate(v: string) {
+    if (!v || v.length !== 10) return;
+    setTyped({ cohort, date: v });
+    if (!exams.canManage || v === saved) return;
+    if (classes[cohort]?.closed) { toast.show(`${cohort} is closed, so its graduation date stays ${formatDateKey(saved)}. Reopen it in Exam Records to change it.`); return; }
+    saveExamCohort(org.id, cohort, !!classes[cohort], { graduationDate: v }).then(() => toast.show(`${cohort} graduation date: ${formatDateKey(v)}`), (err) => toast.show(friendlyError(err)));
+  }
   const certs = new Map(s.certificates.map((c) => [c.studentId, c]));
   const provs = new Map(s.provisionals.map((p) => [p.studentId, p]));
   const people = s.students.filter((st) => !st.deletedAt && s.intakeName(st.intakeId) === cohort)
@@ -321,21 +334,21 @@ export function GraduationBoard({ org, cohort: fixed }: { org: Organization; coh
 
   return (
     <section className="card stack grad-board">
-      <div className="card-head"><h2>Graduation{fixed ? ` · ${cohort}` : ''}</h2>{people.length > 0 && <button type="button" className="btn btn-quiet" onClick={listCsv}>Download list</button>}</div>
+      <div className="card-head"><h2>Graduation · {cohort}</h2>{people.length > 0 && <button type="button" className="btn btn-quiet" onClick={listCsv}>Download list</button>}</div>
       <p className="muted small">Copies of every student's provisional and final certificates. The status changes to Issued only when the final certificate is handed over and the date is recorded.</p>
       <div className="field-row">
-        {!fixed && (
+        {(
           <label className="field"><span>Cohort</span>
             <select value={cohort} onChange={(e) => setPicked(e.target.value)}>
+              {order.current.length > 0 && <optgroup label="Current">{order.current.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}{c.graduationDate ? ` · graduates ${formatDateKey(c.graduationDate)}` : ''}</option>)}</optgroup>}
               {order.past.length > 0 && <optgroup label="Graduated">{order.past.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
-              {order.current.length > 0 && <optgroup label="Current">{order.current.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}</optgroup>}
             </select>
           </label>
         )}
         <label className="field"><span>Show</span>
           <select value={show} onChange={(e) => setShow(e.target.value as Show)}><option value="all">Everyone</option><option value="no">Not issued</option><option value="yes">Issued</option></select>
         </label>
-        {manage && <label className="field"><span>Date handed over</span><input type="date" value={on} max={s.today} onChange={(e) => setOn(e.target.value)} /></label>}
+        {(manage || exams.canManage) && <label className="field"><span>Graduation date</span><input type="date" value={on} onChange={(e) => pickDate(e.target.value)} /></label>}
       </div>
       {people.length > 8 && <StudentFinder finder={finder} names={people.map((p) => p.name)} shown={shown.length} total={people.length} />}
       <p><span className="badge badge-regular">Issued {nIssued}</span> <span className="badge badge-warn">Not issued {people.length - nIssued}</span></p>
