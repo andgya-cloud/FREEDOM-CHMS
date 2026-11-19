@@ -3058,3 +3058,46 @@ a.fin-chip:hover { background: #fdecea; }
 .att-hint .link-button { color: inherit; }
 .att-downloads { justify-content: flex-end; }
 .grad-warn { color: var(--red); }
+
+/* Class and exam timetables (Andy, 2026-11-20) */
+.tt-pickers { max-width: 640px; }
+.tt-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tt-check { display: inline-flex; align-items: center; gap: 6px; font-size: 0.92rem; }
+.tt-check input { width: auto; }
+.tt-grid { width: 100%; min-width: 720px; border-collapse: separate; border-spacing: 6px; table-layout: fixed; }
+.tt-grid th { font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); font-weight: 600; text-align: center; }
+.tt-grid .tt-time { width: 96px; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; text-align: left; vertical-align: top; padding-top: 8px; white-space: nowrap; }
+.tt-grid td { vertical-align: top; padding: 0; }
+.tt-slot { width: 100%; min-height: 76px; display: flex; flex-direction: column; gap: 1px; text-align: left; font: inherit; padding: 8px 10px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); color: var(--text); }
+button.tt-slot { cursor: pointer; }
+button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
+.tt-slot b { font-size: 0.86rem; line-height: 1.25; }
+.tt-slot span { font-size: 0.75rem; color: var(--muted); }
+.tt-slot.tt-empty { align-items: center; justify-content: center; border-style: dashed; color: var(--muted); font-size: 0.8rem; background: transparent; }
+.tt-slot.tt-mine { background: rgba(201, 154, 60, 0.16); border-color: var(--gold, #c99a3c); }
+.tt-slot.tt-clash { border-color: var(--red); }
+.tt-slot .tt-warn { color: var(--red); font-weight: 600; }
+.tt-break td:not(.tt-time) { text-align: center; font-size: 0.72rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); background: rgba(201, 154, 60, 0.09); border-radius: 8px; padding: 4px; }
+.tt-break .tt-time { padding-top: 4px; }
+.tt-editor { border: 1px solid var(--gold, #c99a3c); border-radius: 14px; padding: 14px; background: var(--surface-2); display: flex; flex-direction: column; gap: 10px; }
+.tt-settings summary { cursor: pointer; color: var(--muted); }
+.tt-settings > .stack { margin-top: 10px; }
+.tt-periods { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.tt-periods li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tt-periods input[type='time'] { width: 120px; }
+.tt-periods select, .tt-periods input:not([type='time']) { width: 130px; }
+.tt-downloads { justify-content: flex-end; }
+.tt-exams td { vertical-align: top; }
+.tt-exams select, .tt-exams input { padding: 6px 8px; font-size: 0.88rem; }
+.tt-exams { min-width: 1020px; }
+.tt-exams input[type='time'] { width: 124px; }
+.tt-exams input[type='date'] { width: 150px; }
+.tt-exams select { min-width: 150px; }
+.tt-exams select[aria-label='Course'] { min-width: 210px; }
+.tt-nowrap { white-space: nowrap; }
+.tt-day td { border-top: 2px solid var(--border); }
+.tt-row-clash td { background: rgba(220, 38, 38, 0.05); }
+.tt-room-add { max-width: 420px; }
+.tt-today { border-left: 4px solid var(--gold, #c99a3c); }
+.tt-today ul { margin: 6px 0 0; padding-left: 18px; }
+.tt-today li { margin: 3px 0; }

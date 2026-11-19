@@ -11,6 +11,7 @@ import { useLibraryAccess } from '../../state/useLibrary';
 import { AdiaWelcome } from '../../components/AdiaWelcome';
 import { AdiaIcon, type AdiaIconName } from '../../components/icons';
 import { PoweredBy } from '../../components/PoweredBy';
+import { MyClassesToday } from '../../components/MyClassesToday';
 
 /**
  * Today for ADIA staff who don't read the student records: trainers, lab technicians and signatories (Andy,
@@ -27,6 +28,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
     { to: '/attendance', icon: 'register', label: 'Mark register', sub: 'Who came to class today', show: register },
     { to: '/school/exams', icon: 'exams', label: 'Enter marks', sub: 'CATs, finals and results', show: can('exams.mark') || can('exams.manage') },
+    { to: '/school/timetable', icon: 'clock', label: 'Timetable', sub: 'Classes and exams', show: true },
     { to: '/tutor-files', icon: 'files', label: 'Tutor Files', sub: 'Course outlines and reports', show: trainer },
     { to: '/inventory', icon: 'inventory', label: 'Inventory', sub: 'Count your department’s items', show: inventory.counts },
     { to: '/library', icon: 'library', label: 'Library', sub: 'Lend and return books', show: library.manager },
@@ -39,6 +41,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
     <div className="page lav-today">
       <AdiaWelcome org={org} summary={mine.length ? 'Welcome! Your work is below. Tap what you came to do.' : 'Welcome! Ask Mr Andrew if you need anything here.'} />
       <LessonPlanButton />
+      <MyClassesToday org={org} />
       <ComingUpCard org={org} />
       {mine.length > 0 && (
         <section className="lav-jobs" aria-label="What do you want to do?">

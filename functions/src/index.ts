@@ -19,6 +19,7 @@ export { examNotify, listExamTrainers } from './exams.js';
 export { certificateFile } from './certificates.js';
 export { verifyTranscript } from './examVerify.js';
 export { attachmentFile } from './attachmentFiles.js';
+export { timetableOptions, onExamTimetableWritten } from './timetables.js';
 export { rosterOnStudent, rosterOnPerson } from './rosters.js';
 export { examSheetToLecturer } from './examAssign.js';
 export { commonCourseAccess } from './commonCourses.js';

@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { MyCommonCourses } from '../attendance/CommonCourses';
 import { Link } from 'react-router-dom';
 import { LessonPlanButton } from '../../components/LessonPlanButton';
+import { MyClassesToday } from '../../components/MyClassesToday';
 import { useAuth } from '../../state/AuthContext';
 import { isDirectorProfile } from '../../../functions/src/shared/permissions';
 import { useToast } from '../../state/ToastContext';
@@ -113,6 +114,7 @@ export function AdiaToday({ org }: { org: Organization }) {
   const jobs: { to: string; icon: AdiaIconName; label: string; sub: string; show: boolean }[] = [
     { to: '/attendance', icon: 'register', label: 'Mark register', sub: 'Who came to class today', show: canRegister },
     { to: '/school/exams', icon: 'exams', label: can('exams.manage') || can('users.manage') ? 'Exam Records' : 'Enter marks', sub: 'CATs, finals and results', show: can('exams.mark') || can('exams.manage') || can('users.manage') },
+    { to: '/school/timetable', icon: 'clock', label: 'Timetable', sub: 'Classes and exams', show: true },
     { to: '/school/updates', icon: 'files', label: 'Photos and wins', sub: 'Report good news, classes or an incident', show: circleSender(profile, org.id, 'college') },
     { to: '/school/students', icon: 'people', label: 'Find a student', sub: 'By name or admission number', show: can('people.read') },
     { to: '/school/students/new', icon: 'addStudent', label: 'Add a student', sub: 'Enrol into a cohort', show: can('people.write') },
@@ -143,6 +145,7 @@ export function AdiaToday({ org }: { org: Organization }) {
       </AdiaWelcome>
 
       <LessonPlanButton />
+      <MyClassesToday org={org} />
       <CircleNeedsYou org={org} />
       <ComingUpCard org={org} />
 

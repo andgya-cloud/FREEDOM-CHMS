@@ -26,6 +26,7 @@ import { bandsText, marksSheetPdf, resultSlipsPdf } from '../../lib/examPdf';
 import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
 import { ExamRegisterView, TranscriptsView } from './ExamRegister';
 import { GraduationBoard } from './GraduationPage';
+import { ClassBoard, ExamBoard } from './TimetablePage';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
 import { toCsv } from '../../lib/analytics';
 import { ColumnChart, CsvButton, Donut, Gauge, KpiCard, KpiRow, Panel } from '../../components/charts';
@@ -62,10 +63,10 @@ export function CommonFinalsPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type View = 'home' | 'results' | 'setup' | 'student' | 'register' | 'transcripts' | 'graduation';
+type View = 'home' | 'results' | 'setup' | 'student' | 'register' | 'transcripts' | 'graduation' | 'classes' | 'exams';
 /** Links saved before the redesign (Andy, 2026-10-25) still land on the right screen. */
 const OLD_VIEWS: Record<string, View> = {
-  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'transcripts', register: 'register', graduation: 'graduation', setup: 'setup', sheets: 'setup', grading: 'setup',
+  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'transcripts', register: 'register', graduation: 'graduation', classes: 'classes', exams: 'exams', setup: 'setup', sheets: 'setup', grading: 'setup',
   log: 'setup', student: 'student',
 };
 type CohortOrder = ReturnType<typeof orderCohorts>;
@@ -136,7 +137,7 @@ function Exams({ org }: { org: Organization }) {
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} allStudents={allStudents} courseName={s.courseName} />;
   const sub = view === 'student' ? 'Student' : '';
   // One row of sections (Andy, 2026-11-19): the three new ones sit beside Results and Setup.
-  const SECTIONS: [View, string][] = [['home', 'Courses'], ['results', 'Results'], ['register', 'Exam register'], ['transcripts', 'Transcripts'], ['graduation', 'Graduation'], ['setup', 'Setup']];
+  const SECTIONS: [View, string][] = [['home', 'Courses'], ['results', 'Results'], ['register', 'Exam register'], ['transcripts', 'Transcripts'], ['graduation', 'Graduation'], ['classes', 'Class timetable'], ['exams', 'Exam timetable'], ['setup', 'Setup']];
   const dates = (() => {
     const start = s.intakes.filter((i) => i.name === cohort && i.startDate).map((i) => i.startDate).sort()[0];
     const parts = [start ? `Started ${dayMonthYear(start).replace(/^\d+ /, '')}` : '', choice?.graduationDate ? `Graduated ${dayMonthYear(choice.graduationDate)}` : ''].filter(Boolean);
@@ -195,6 +196,9 @@ function Exams({ org }: { org: Organization }) {
               dates={dates} pick={params.get('student') ?? ''} onPick={(id) => go({ student: id })} />
           )}
           {view === 'graduation' && <GraduationBoard org={org} cohort={cohort} />}
+          {/* The timetables (Andy, 2026-11-20, 2A), the same as School › Timetables. */}
+          {view === 'classes' && <ClassBoard org={org} cohort={cohort} />}
+          {view === 'exams' && <ExamBoard org={org} cohort={cohort} />}
           {view === 'setup' && (
             <Setup org={org} cohort={cohort} cohorts={cohorts} order={order} closed={closed} info={info} sheets={sheets} students={students} courses={courses} programmes={s.courses}
               courseList={courseList} allStudents={allStudents} today={s.today} canStart={canStart} section={rawView === 'log' ? 'log' : params.get('section') ?? ''}

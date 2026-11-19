@@ -2382,6 +2382,54 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Class and exam timetables (Andy, 2026-11-20, 1A-14A): the Principal, Admin, the pastor and Doreen keep them
+      // (attachmentKeeper); everyone at ADIA reads them once published (a draft only its keepers see).
+      function periodsOk(v) {
+        return v is list && v.size() >= 1 && v.size() <= 12;
+      }
+      match /classTimetables/{ttId} {
+        allow read: if attachmentKeeper() || (canAccessOrg(orgId) && resource.data.published == true);
+        allow create, update: if attachmentKeeper() && ttId.size() <= 150
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'semester', 'courseId', 'periods', 'saturday', 'slots', 'from', 'to',
+               'published', 'publishedOn', 'changedOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && request.resource.data.semester in [1, 2] && shortText(request.resource.data.courseId, 80)
+          && periodsOk(request.resource.data.periods) && request.resource.data.saturday is bool
+          && request.resource.data.slots is map && request.resource.data.slots.size() <= 80
+          && optionalDate(request.resource.data.from) && optionalDate(request.resource.data.to)
+          && request.resource.data.published is bool && optionalDate(request.resource.data.publishedOn) && optionalDate(request.resource.data.changedOn)
+          && (resource == null ? stampedCreate() && freshRecord()
+              : stampedUpdate() && validSoftDelete() && request.resource.data.cohort == resource.data.cohort
+                && request.resource.data.semester == resource.data.semester && request.resource.data.courseId == resource.data.courseId);
+        allow delete: if false;
+      }
+      match /examTimetables/{ttId} {
+        allow read: if attachmentKeeper() || (canAccessOrg(orgId) && resource.data.published == true);
+        allow create, update: if attachmentKeeper() && ttId.size() <= 150
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'paper', 'semester', 'month', 'name', 'rows',
+               'published', 'publishedOn', 'changedOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && request.resource.data.paper in ['cat1', 'cat2', 'cat3', 'final', 'nita', 'other']
+          && request.resource.data.semester in [1, 2, null]
+          && request.resource.data.month is string && request.resource.data.month.matches('^[0-9]{4}-[0-9]{2}$')
+          && shortText(request.resource.data.name, 120)
+          && request.resource.data.rows is list && request.resource.data.rows.size() <= 150
+          && request.resource.data.published is bool && optionalDate(request.resource.data.publishedOn) && optionalDate(request.resource.data.changedOn)
+          && (resource == null ? stampedCreate() && freshRecord()
+              : stampedUpdate() && validSoftDelete() && request.resource.data.cohort == resource.data.cohort && request.resource.data.paper == resource.data.paper);
+        allow delete: if false;
+      }
+      match /timetableSetup/{setupId} {
+        allow read: if canAccessOrg(orgId);
+        allow create, update: if attachmentKeeper() && setupId == 'main'
+          && request.resource.data.keys().hasOnly(['orgId', 'rooms', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.rooms is list && request.resource.data.rooms.size() <= 60
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+
       // Clean-up Recycle Bin and Forever (Andy, 2026-10-30): read and written only by the Clean-up functions,
       // which check that the caller is Andrew Guya or Doreen.
       match /cleanupBin/{entryId} {
