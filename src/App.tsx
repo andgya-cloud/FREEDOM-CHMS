@@ -77,6 +77,7 @@ const StudentPage = lazy(() => import('./pages/school/StudentPage').then((m) => 
 const CoursesPage = lazy(() => import('./pages/school/CoursesPage').then((m) => ({ default: m.CoursesPage })));
 const FeesPage = lazy(() => import('./pages/school/FeesPage').then((m) => ({ default: m.FeesPage })));
 const GraduationPage = lazy(() => import('./pages/school/GraduationPage').then((m) => ({ default: m.GraduationPage })));
+const AttachmentPage = lazy(() => import('./pages/school/AttachmentPage').then((m) => ({ default: m.AttachmentPage })));
 const SchoolReportsPage = lazy(() => import('./pages/school/SchoolReportsPage').then((m) => ({ default: m.SchoolReportsPage })));
 const PettyCashPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.PettyCashPage })));
 const NewRequisitionPage = lazy(() => import('./pages/school/PettyCashPage').then((m) => ({ default: m.NewRequisitionPage })));
@@ -268,6 +269,7 @@ function AppRoutes() {
         <Route path="/school/results" element={<Navigate to="/school/exams?tab=results" replace />} />
         <Route path="/school/fees" element={<RequirePermission anyOf={['gifts.write', 'finance.reports', 'giving.person.read']}><FeesPage /></RequirePermission>} />
         <Route path="/school/graduation" element={<RequirePermission permission="people.read"><GraduationPage /></RequirePermission>} />
+        <Route path="/school/attachment" element={<RequirePermission permission="people.read"><AttachmentPage /></RequirePermission>} />
         <Route path="/school/reports" element={<RequirePermission anyOf={['finance.reports', 'settings.manage']}><SchoolReportsPage /></RequirePermission>} />
         <Route path="/school/petty-cash" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><PettyCashPage /></RequirePermission>} />
         <Route path="/school/petty-cash/new" element={<RequirePermission anyOf={['pettycash.request', 'pettycash.check', 'pettycash.approve', 'pettycash.authorize', 'users.manage']}><NewRequisitionPage /></RequirePermission>} />

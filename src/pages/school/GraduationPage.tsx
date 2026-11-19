@@ -21,6 +21,8 @@ import { downloadCertificate, printCertificate, recordHandover, uploadCertificat
 import { fileAdmissionKey, type CertificateKind } from '../../../functions/src/shared/certificateFiles';
 import type { Organization } from '../../state/OrgContext';
 import type { OutcomeRow } from '../../state/useSchool';
+import { useAttachments } from '../../state/useAttachments';
+import { attachmentDone } from '../../../functions/src/shared/attachment';
 
 export function GraduationPage() {
   return <SchoolGate title="Graduation">{(org) => <Graduation org={org} />}</SchoolGate>;
@@ -319,6 +321,10 @@ export function GraduationBoard({ org, cohort: fixed }: { org: Organization; coh
   const issued = (p: (typeof people)[number]) => !!p.cert?.handedOverOn;
   const shown = people.filter((p) => (show === 'all' || (show === 'yes') === issued(p)) && finder.match(p.name, p.st.admissionNo ?? ''));
   const nIssued = people.filter(issued).length;
+  // 10A: a reminder for students whose industrial attachment is not finished; it never blocks a certificate.
+  // Shown once the cohort's attachment is being kept, so older cohorts without it stay quiet.
+  const { byStudent: attachments } = useAttachments(org.id);
+  const keepsAttachment = people.some((p) => attachments[p.st.id]);
 
   async function handover(studentId: string, date: string | null, name: string) {
     try {
@@ -359,7 +365,8 @@ export function GraduationBoard({ org, cohort: fixed }: { org: Organization; coh
             <tbody>
               {shown.map((p) => (
                 <tr key={p.st.id}>
-                  <td><Link to={`/school/students/${p.st.id}`}>{p.name}</Link><div className="muted small">{p.st.admissionNo || 'No admission no.'}{p.cert?.serial ? ` · No. ${p.cert.serial}` : ''}</div></td>
+                  <td><Link to={`/school/students/${p.st.id}`}>{p.name}</Link><div className="muted small">{p.st.admissionNo || 'No admission no.'}{p.cert?.serial ? ` · No. ${p.cert.serial}` : ''}</div>
+                    {keepsAttachment && !attachmentDone(attachments[p.st.id]) && <div className="small grad-warn"><Link to="/school/attachment" className="grad-warn">⚠ Attachment not completed and assessed</Link></div>}</td>
                   <td><CopyCell orgId={org.id} studentId={p.st.id} kind="provisional" has={!!p.prov?.file} manage={manage} /></td>
                   <td>
                     <CopyCell orgId={org.id} studentId={p.st.id} kind="final" has={!!p.cert?.file} manage={manage}

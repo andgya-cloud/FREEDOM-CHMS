@@ -9,7 +9,7 @@ type Payload = { orgId: string; studentId: string; action: Action; pdf?: string;
 const call = (data: Payload) =>
   httpsCallable<Payload, { size?: number; fileName?: string; pdf?: string; to?: string }>(functions, 'certificateFile', { timeout: 120_000 })(data).then((r) => r.data);
 
-function toBase64(blob: Blob): Promise<string> {
+export function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result).replace(/^data:[^,]*,/, ''));
@@ -18,10 +18,10 @@ function toBase64(blob: Blob): Promise<string> {
   });
 }
 
-const isImage = (f: File) => /^image\/(jpeg|png|webp)$/.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name);
+export const isImage = (f: File) => /^image\/(jpeg|png|webp)$/.test(f.type) || /\.(jpe?g|png|webp)$/i.test(f.name);
 
 /** A photo of a certificate becomes a one-page PDF on this device (Andy, 2026-11-19: "PDF or photo"). */
-async function photoToPdf(file: File): Promise<Blob> {
+export async function photoToPdf(file: File): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => { const i = new Image(); i.onload = () => resolve(i); i.onerror = () => reject(new Error('That photo could not be read.')); i.src = url; });

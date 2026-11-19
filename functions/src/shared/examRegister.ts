@@ -148,8 +148,9 @@ export interface TranscriptRecord {
 }
 
 /** What a transcript says, in one string: an unchanged result reuses its serial number. */
-export function transcriptFingerprint(t: { semesters: { points: number | null; partial: number | null; courses: { courseName: string; total: number | null }[] }[]; finalPoints: number | null; finalGrade: string; provisional: boolean; nita: string; attendance: number | null }): string {
-  return JSON.stringify([t.semesters.map((s) => [s.points, s.partial, s.courses.map((c) => [c.courseName, c.total])]), t.finalPoints, t.finalGrade, t.provisional, t.nita, t.attendance]);
+export function transcriptFingerprint(t: { semesters: { points: number | null; partial: number | null; courses: { courseName: string; total: number | null }[] }[]; finalPoints: number | null; finalGrade: string; provisional: boolean; nita: string; attendance: number | null; attachment?: string }): string {
+  // The attachment line joins only when there is one, so earlier transcripts keep their serial numbers.
+  return JSON.stringify([t.semesters.map((s) => [s.points, s.partial, s.courses.map((c) => [c.courseName, c.total])]), t.finalPoints, t.finalGrade, t.provisional, t.nita, t.attendance, ...(t.attachment ? [t.attachment] : [])]);
 }
 
 /** The check page's web address, which the QR code holds. */

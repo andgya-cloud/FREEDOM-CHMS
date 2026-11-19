@@ -16,6 +16,8 @@ import {
 } from '../../../functions/src/shared/examRegister';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
 import type { Organization } from '../../state/OrgContext';
+import { useAttachments } from '../../state/useAttachments';
+import { attachmentLine } from '../../../functions/src/shared/attachment';
 
 interface Common {
   org: Organization; cohort: string; label: string; students: ExamStudent[]; sheets: ExamSheetRow[]; courseName: (id: string) => string;
@@ -251,6 +253,7 @@ export function TranscriptsView(p: Common & { dates: string; pick: string; onPic
   const { rows, settings } = useCohortRows(p);
   const { registers } = useExamRegisters(org.id, cohort);
   const { transcripts: issued } = useCohortTranscripts(org.id, cohort);
+  const { byStudent: attachments } = useAttachments(org.id);
   const [busy, setBusy] = useState<'' | 'print' | 'download'>('');
   const chosen = pick === 'all' ? null : rows.find((r) => r.key === pick) ?? rows[0] ?? null;
   const shown = chosen ?? rows[0] ?? null;
@@ -261,11 +264,12 @@ export function TranscriptsView(p: Common & { dates: string; pick: string; onPic
     return {
       name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: label, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes,
       attendance: attendance[r.key] ?? null, nita: nitaLineFor(r.key, registers as ExamRegister[]), dates, provisional, issuedOn: formatDateKey(today),
+      attachment: attachmentLine(attachments[r.key], settings),
     };
   };
   const print = (r: Row, t: Transcript) => transcriptFingerprint({
     semesters: r.sems.map((s) => ({ points: s.points, partial: s.partial, courses: s.courses.map((c) => ({ courseName: c.courseName, total: c.total })) })),
-    finalPoints: r.final.final, finalGrade: r.final.grade, provisional: !!t.provisional, nita: t.nita ?? '', attendance: t.attendance ?? null,
+    finalPoints: r.final.final, finalGrade: r.final.grade, provisional: !!t.provisional, nita: t.nita ?? '', attendance: t.attendance ?? null, attachment: t.attachment,
   });
 
   /** The serial numbers: an unchanged result keeps the one it was given before, a changed one gets the next. */
@@ -351,6 +355,7 @@ function TranscriptPaper({ t, settings, serial }: { t: Transcript; settings: Exa
         <span>Classification <strong>{t.final.grade || '–'}</strong></span>
         {t.attendance != null && <span>Attendance <strong>{Math.round(t.attendance)}%</strong></span>}
         {t.nita && <span>NITA <strong>{t.nita}</strong></span>}
+        {t.attachment && <span>Industrial attachment <strong>{t.attachment}</strong></span>}
       </div>
       <div className="transcript-sign">
         <div>{settings.principalName}<br /><span>{settings.principalTitle}</span></div>

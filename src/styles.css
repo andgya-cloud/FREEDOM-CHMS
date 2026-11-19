@@ -3037,3 +3037,24 @@ a.fin-chip:hover { background: #fdecea; }
 .verify-card form { text-align: left; margin-top: 12px; }
 .verify-page .powered-by { color: #c9cde0; }
 .exam-register .field-row > .btn, .exam-tr-pick > .btn { flex: 0 0 auto; }
+
+/* Industrial attachment (Andy, 2026-11-19) */
+.att-filters { max-width: 640px; }
+@media (min-width: 900px) { .att-tiles { grid-template-columns: repeat(6, minmax(0, 1fr)); } }
+@media (max-width: 719px) { .att-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } .att-tiles .tile-value { font-size: 1.3rem; } }
+.att-tiles .att-alert { border-color: rgba(220, 38, 38, 0.45); }
+.att-tiles .att-alert .tile-value { color: var(--red); }
+.att-table td { vertical-align: top; }
+.att-table select { min-width: 140px; padding: 6px 8px; font-size: 0.88rem; }
+.att-adm { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.att-name { font: inherit; font-weight: 600; background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; text-decoration: underline; text-decoration-color: var(--border); text-underline-offset: 3px; }
+.att-name:hover { text-decoration-color: currentColor; }
+.att-open td { background: rgba(201, 154, 60, 0.07); }
+.att-detail > td { background: var(--surface-2); padding: 14px; }
+.att-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 14px; }
+@media (max-width: 760px) { .att-grid { grid-template-columns: 1fr; } }
+.att-file .row-actions { gap: 6px; align-items: center; }
+.att-hint { color: #9a6a08; margin-top: 3px; }
+.att-hint .link-button { color: inherit; }
+.att-downloads { justify-content: flex-end; }
+.grad-warn { color: var(--red); }

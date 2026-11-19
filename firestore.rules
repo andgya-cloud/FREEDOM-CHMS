@@ -2354,6 +2354,34 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Industrial attachment (Andy, 2026-11-19, 1A-10A): every school reader sees it; the Principal, Admin,
+      // the pastor and Doreen (users.manage) keep it. The log book and assessment form copies sit in Storage,
+      // reached through the attachmentFile function, which also writes attachmentFiles.
+      function attachmentKeeper() {
+        return canAccessOrg(orgId) && (has('users.manage') || me().roleId in ['admin', 'principal']);
+      }
+      match /attachments/{studentId} {
+        allow read: if schoolRead();
+        allow create, update: if attachmentKeeper() && studentId.size() <= 80
+          && request.resource.data.keys().hasOnly(['orgId', 'studentId', 'cohort', 'logBook', 'logBookOn', 'status', 'assessed', 'mark',
+               'company', 'location', 'supervisor', 'supervisorPhone', 'from', 'to', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.studentId == studentId
+          && shortText(request.resource.data.cohort, 80)
+          && request.resource.data.logBook is bool && optionalDate(request.resource.data.logBookOn)
+          && request.resource.data.status in ['not_placed', 'placed', 'ongoing', 'completed']
+          && request.resource.data.assessed is bool
+          && (request.resource.data.mark == null || (request.resource.data.mark is number && request.resource.data.mark >= 0 && request.resource.data.mark <= 100))
+          && shortText(request.resource.data.company, 120) && shortText(request.resource.data.location, 120)
+          && shortText(request.resource.data.supervisor, 120) && shortText(request.resource.data.supervisorPhone, 20)
+          && optionalDate(request.resource.data.from) && optionalDate(request.resource.data.to)
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
+      }
+      match /attachmentFiles/{studentId} {
+        allow read: if schoolRead();
+        allow write: if false;
+      }
+
       // Clean-up Recycle Bin and Forever (Andy, 2026-10-30): read and written only by the Clean-up functions,
       // which check that the caller is Andrew Guya or Doreen.
       match /cleanupBin/{entryId} {

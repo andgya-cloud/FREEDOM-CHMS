@@ -126,6 +126,9 @@ export function isInventoryManager(profile: (AccessProfile & { roleId?: string }
   return can(profile, 'users.manage') || (!!profile?.active && (INVENTORY_MANAGER_ROLES as readonly string[]).includes(profile.roleId ?? ''));
 }
 
+/** Industrial attachment (Andy, 2026-11-19, 4A + Doreen): the Principal, Admin, the pastor and Doreen keep it; other school readers look. */
+export const isAttachmentKeeper = isInventoryManager;
+
 /**
  * The ADIA library (Andy, 2026-11-18, 2A): a Librarian sees only the Library (and reads the student names to lend
  * to them). Admin, the Principal and the organization head (Elizabeth runs the library) and the pastor run it too.

@@ -187,6 +187,8 @@ export interface Transcript {
   name: string; admissionNo: string; programme: string; cohort: string; semesters: TranscriptSemester[]; final: FinalResult; printed: SemesterScore | null; notes: string[];
   /** Added for the Students transcripts section (Andy, 2026-11-19, 6A-8A). */
   serial?: string; verify?: string; attendance?: number | null; nita?: string; dates?: string; provisional?: boolean; issuedOn?: string;
+  /** Industrial attachment mark and grade, e.g. "78 · Credit" (Andy, 2026-11-19, 7A). */
+  attachment?: string;
 }
 
 /**
@@ -319,7 +321,7 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
     pdf.setFont('helvetica', 'normal');
     pdf.setFontSize(7.5);
     pdf.setTextColor(...GREY);
-    const extra = [t.attendance != null ? `Attendance: ${Math.round(t.attendance)}%` : '', t.nita ? `NITA: ${t.nita}` : ''].filter(Boolean).join('     ');
+    const extra = [t.attendance != null ? `Attendance: ${Math.round(t.attendance)}%` : '', t.nita ? `NITA: ${t.nita}` : '', t.attachment ? `Industrial attachment: ${t.attachment}` : ''].filter(Boolean).join('     ');
     if (extra) {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(9);
