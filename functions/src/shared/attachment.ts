@@ -10,8 +10,9 @@ export type AttachmentStatus = (typeof ATTACHMENT_STATUSES)[number];
 export const ATTACHMENT_STATUS_LABELS: Record<AttachmentStatus, string> = { not_placed: 'Not placed', placed: 'Placed', ongoing: 'Ongoing', completed: 'Completed' };
 
 /** The two copies kept for each student: the log book and the assessment form (6A, 7A). */
-export type AttachmentFileKind = 'logbook' | 'form';
-export const ATTACHMENT_FILE_LABELS: Record<AttachmentFileKind, string> = { logbook: 'Log book', form: 'Assessment form' };
+/** 'nita' is the student's NITA certificate copy (Andy, 2026-11-20, 10A), kept the same way. */
+export type AttachmentFileKind = 'logbook' | 'form' | 'nita';
+export const ATTACHMENT_FILE_LABELS: Record<AttachmentFileKind, string> = { logbook: 'Log book', form: 'Assessment form', nita: 'NITA certificate' };
 
 export interface Attachment {
   orgId: string;

@@ -1,3 +1,4 @@
+import { isAttachmentKeeper } from '../../../functions/src/shared/permissions';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -34,7 +35,7 @@ export function SchoolGate({ title, children }: { title: string; children: (org:
  * Programmes moved to Settings (6A); Today and Exam Records are in the side menu.
  */
 export function SchoolTitle({ feesAllowed, children }: { feesAllowed: boolean; children?: ReactNode }) {
-  const { can } = useAuth();
+  const { can, profile } = useAuth();
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const items: [string, string, boolean][] = [
@@ -43,6 +44,8 @@ export function SchoolTitle({ feesAllowed, children }: { feesAllowed: boolean; c
     ['/school/attachment', 'Attachment', true],
     // Class and exam timetables (Andy, 2026-11-20).
     ['/school/timetable', 'Timetables', true],
+    // NITA results, for the keepers (Andy, 2026-11-20).
+    ['/school/nita', 'NITA results', isAttachmentKeeper(profile)],
     ['/school/graduation', 'Graduation', true], ['/school/reports', 'Reports', can('finance.reports') || can('settings.manage')],
     // The conversations (Andy, 2026-11-07, 9A); the server shows each person only what they may see.
     ['/school/updates', 'Photos and wins', true], ['/school/conversations', 'Private conversations', true],

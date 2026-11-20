@@ -16,9 +16,11 @@ export const attachmentFile = onCall({ invoker: 'public', memory: '512MiB' }, as
   const orgId = requireString(data.orgId, 'the organization', { max: 80 });
   const studentId = requireString(data.studentId, 'the student', { max: 80 });
   const action = data.action === 'upload' ? 'upload' : 'download';
-  const kind: AttachmentFileKind = data.kind === 'form' ? 'form' : 'logbook';
+  const kind: AttachmentFileKind = data.kind === 'form' ? 'form' : data.kind === 'nita' ? 'nita' : 'logbook';
   if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this organization.');
-  const read = isAttachmentKeeper(caller.profile) || can(caller.profile, 'people.read') || can(caller.profile, 'attendance.write');
+  // A NITA certificate copy is for the keepers and the principal only (Andy, 2026-11-20, 2A).
+  const read = kind === 'nita' ? isAttachmentKeeper(caller.profile) || can(caller.profile, 'exams.manage')
+    : isAttachmentKeeper(caller.profile) || can(caller.profile, 'people.read') || can(caller.profile, 'attendance.write');
   if (action === 'upload' ? !isAttachmentKeeper(caller.profile) : !read) throw new HttpsError('permission-denied', 'Only the principal or an administrator can do that.');
 
   const [person, student] = await Promise.all([
@@ -41,7 +43,7 @@ export const attachmentFile = onCall({ invoker: 'public', memory: '512MiB' }, as
   }
 
   const [exists] = await file.exists();
-  if (!exists) throw new HttpsError('not-found', kind === 'form' ? 'No assessment form has been uploaded for this student yet.' : 'No log book copy has been uploaded for this student yet.');
+  if (!exists) throw new HttpsError('not-found', `No ${kind === 'form' ? 'assessment form' : kind === 'nita' ? 'NITA certificate copy' : 'log book copy'} has been uploaded for this student yet.`);
   const [bytes] = await file.download();
   const name = String(person.fullName || [person.firstName, person.lastName].filter(Boolean).join(' ') || 'Student');
   return { fileName: attachmentFileName(name, (student.admissionNo as string | null | undefined) ?? null, kind), pdf: bytes.toString('base64') };

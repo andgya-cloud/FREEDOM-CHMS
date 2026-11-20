@@ -2307,7 +2307,8 @@ service cloud.firestore {
       }
       // The exam register (Andy, 2026-11-19): one per cohort and exam sitting, kept by the principal for ADIA's own records.
       match /examRegisters/{registerId} {
-        allow read: if ex('exams.manage');
+        // The NITA results keepers read who sits NITA (Andy, 2026-11-20).
+        allow read: if ex('exams.manage') || attachmentKeeper();
         allow create, update: if ex('exams.manage') && registerId.size() <= 150
           && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'sitting', 'entries', 'locked', 'lockedOn', 'lockedByName', 'rules',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
@@ -2380,6 +2381,37 @@ service cloud.firestore {
       match /attachmentFiles/{studentId} {
         allow read: if schoolRead();
         allow write: if false;
+      }
+
+      // NITA results (Andy, 2026-11-20, 1A-8A 9B 10A-13A): kept by the Principal, Admin, the pastor and Doreen; the
+      // principal's Exam Records reads them for the register and transcripts. Trainers do not see them (2A).
+      function nitaPaper(v) {
+        return v in ['pending', 'pass', 'fail', 'absent'];
+      }
+      match /nitaReleases/{releaseId} {
+        allow read: if attachmentKeeper() || ex('exams.manage');
+        allow create, update: if attachmentKeeper() && releaseId.size() <= 150
+          && request.resource.data.keys().hasOnly(['orgId', 'cohort', 'releasedOn', 'sitting', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId
+          && shortText(request.resource.data.cohort, 80) && request.resource.data.cohort.size() >= 1
+          && optionalDate(request.resource.data.releasedOn)
+          && shortText(request.resource.data.sitting, 40) && request.resource.data.sitting.size() >= 3
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete() && request.resource.data.cohort == resource.data.cohort);
+        allow delete: if false;
+      }
+      match /nitaResults/{studentId} {
+        allow read: if attachmentKeeper() || ex('exams.manage');
+        allow create, update: if attachmentKeeper() && studentId.size() <= 80
+          && request.resource.data.keys().hasOnly(['orgId', 'studentId', 'cohort', 'releaseId', 'trade', 'grade', 'indexNo', 'theory', 'practical', 'overall',
+               'overallSet', 'certificateNo', 'issued', 'issuedOn', 'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && request.resource.data.orgId == orgId && request.resource.data.studentId == studentId
+          && shortText(request.resource.data.cohort, 80) && shortText(request.resource.data.releaseId, 150)
+          && shortText(request.resource.data.trade, 80) && shortText(request.resource.data.grade, 20) && shortText(request.resource.data.indexNo, 40)
+          && nitaPaper(request.resource.data.theory) && nitaPaper(request.resource.data.practical) && nitaPaper(request.resource.data.overall)
+          && request.resource.data.overallSet is bool && shortText(request.resource.data.certificateNo, 40)
+          && request.resource.data.issued is bool && optionalDate(request.resource.data.issuedOn)
+          && (resource == null ? stampedCreate() && freshRecord() : stampedUpdate() && validSoftDelete());
+        allow delete: if false;
       }
 
       // Class and exam timetables (Andy, 2026-11-20, 1A-14A): the Principal, Admin, the pastor and Doreen keep them

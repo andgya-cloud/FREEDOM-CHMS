@@ -5,6 +5,7 @@ import { db, functions } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
 import { ESTIMATE } from '../lib/firestoreOptions';
+import { isAttachmentKeeper } from '../../functions/src/shared/permissions';
 import { examMetaId } from '../lib/examWrites';
 import { EXAM_COMPONENTS, examSettingsWithDefaults, mergedMarks, type ExamSettings, type ExamSheet, type ReportMeta } from '../../functions/src/shared/exams';
 import type { ExamResult } from '../../functions/src/shared/examResults';
@@ -167,8 +168,11 @@ export function useDepartmentResults(orgId: string, courseIds: string[]) {
 /** A cohort's exam registers, one for each sitting (Andy, 2026-11-19). */
 export function useExamRegisters(orgId: string, cohort: string) {
   const a = useExamAccess();
+  // The NITA results keepers read who sits NITA too (Andy, 2026-11-20).
+  const { profile } = useAuth();
+  const on = a.canManage || isAttachmentKeeper(profile);
   const q = useLiveQuery<ExamRegister & { id: string; deletedAt?: unknown }>(
-    () => (orgId && cohort && a.canManage ? query(col(orgId, 'examRegisters'), where('cohort', '==', cohort)) : null), [orgId, cohort, a.canManage]);
+    () => (orgId && cohort && on ? query(col(orgId, 'examRegisters'), where('cohort', '==', cohort)) : null), [orgId, cohort, on]);
   const registers = useMemo(() => q.rows.filter((r) => !r.deletedAt), [q.rows]);
   return { registers, loading: q.loading };
 }

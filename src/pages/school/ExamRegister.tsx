@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNita } from '../../state/useNita';
+import { NITA_PAPER_LABELS, nitaTranscriptLine } from '../../../functions/src/shared/nita';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { useCohortTranscripts, useExamAccess, useExamRegisters, useExamResults, useExamSettings, type ExamSheetRow } from '../../state/useExams';
@@ -55,6 +57,9 @@ export function ExamRegisterView(p: Common) {
   const a = useExamAccess();
   const { rows, settings } = useCohortRows(p);
   const { registers, loading } = useExamRegisters(org.id, cohort);
+  // A result in NITA results is the one record (Andy, 2026-11-20, 7A): it shows here instead of the dropdown.
+  const { byStudent: nitaResults } = useNita(org.id);
+  const nitaDone = (id: string) => (nitaResults[id] && nitaResults[id]!.overall !== 'pending' ? nitaResults[id] : null);
   const sittings = useMemo(() => orderSittings(registers.map((r) => r.sitting)), [registers]);
   const [pick, setPick] = useState('');
   const [adding, setAdding] = useState(false);
@@ -113,7 +118,7 @@ export function ExamRegisterView(p: Common) {
   }
 
   const resultText = (st: ExamStudent, e: RegisterEntry | undefined) => {
-    if (e?.sits === 'nita') return NITA_RESULT_LABELS[e.nitaResult ?? 'pending'];
+    if (e?.sits === 'nita') return nitaDone(st.id) ? NITA_PAPER_LABELS[nitaDone(st.id)!.overall] : NITA_RESULT_LABELS[e.nitaResult ?? 'pending'];
     if (e?.sits !== 'internal') return '';
     const c = computedResult(byId.get(st.id), settings);
     if (c) return `${c.grade} · ${c.points}`;
@@ -195,7 +200,9 @@ export function ExamRegisterView(p: Common) {
                         <td>{nita ? <TextCell value={e?.indexNo ?? ''} placeholder="NITA index" label="NITA index number" onSave={(v) => save(st.id, { indexNo: cleanIndexNo(v) })} /> : <span className="muted">–</span>}</td>
                         <td>{nita ? <input type="checkbox" aria-label="Fee paid" checked={!!e?.feePaid} disabled={locked} onChange={(ev) => save(st.id, { feePaid: ev.target.checked })} /> : <span className="muted">–</span>}</td>
                         <td>
-                          {nita && <select aria-label="NITA result" value={e?.nitaResult ?? 'pending'} onChange={(ev) => save(st.id, { nitaResult: ev.target.value as NitaResult })}>{(Object.keys(NITA_RESULT_LABELS) as NitaResult[]).map((k) => <option key={k} value={k}>{NITA_RESULT_LABELS[k]}</option>)}</select>}
+                          {nita && (nitaDone(st.id)
+                            ? <><span className={`badge ${nitaDone(st.id)!.overall === 'pass' ? 'badge-regular' : 'badge-warn'}`}>{NITA_PAPER_LABELS[nitaDone(st.id)!.overall]}</span><div className="muted small">from NITA results</div></>
+                            : <select aria-label="NITA result" value={e?.nitaResult ?? 'pending'} onChange={(ev) => save(st.id, { nitaResult: ev.target.value as NitaResult })}>{(Object.keys(NITA_RESULT_LABELS) as NitaResult[]).map((k) => <option key={k} value={k}>{NITA_RESULT_LABELS[k]}</option>)}</select>)}
                           {internal && (c
                             ? <><span className="badge badge-regular">{c.grade} · {c.points}</span><div className="muted small">from marks sheets ({c.note})</div></>
                             : <><TextCell value={e?.typedPoints == null ? '' : String(e.typedPoints)} placeholder="Type mark" label="Internal mark" check={typedPointsProblem}
@@ -254,6 +261,13 @@ export function TranscriptsView(p: Common & { dates: string; pick: string; onPic
   const { registers } = useExamRegisters(org.id, cohort);
   const { transcripts: issued } = useCohortTranscripts(org.id, cohort);
   const { byStudent: attachments } = useAttachments(org.id);
+  const nita = useNita(org.id);
+  /** The NITA line: from NITA results once a result is in, else from the Exam register. */
+  const nitaLine = (id: string) => {
+    const r = nita.byStudent[id];
+    const line = r ? nitaTranscriptLine(r, nita.releases.find((x) => x.id === r.releaseId)?.sitting ?? '') : '';
+    return line || nitaLineFor(id, registers as ExamRegister[]);
+  };
   const [busy, setBusy] = useState<'' | 'print' | 'download'>('');
   const chosen = pick === 'all' ? null : rows.find((r) => r.key === pick) ?? rows[0] ?? null;
   const shown = chosen ?? rows[0] ?? null;
@@ -263,7 +277,7 @@ export function TranscriptsView(p: Common & { dates: string; pick: string; onPic
     const provisional = r.sems.some((s) => s.provisional) || !r.final.complete;
     return {
       name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: label, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes,
-      attendance: attendance[r.key] ?? null, nita: nitaLineFor(r.key, registers as ExamRegister[]), dates, provisional, issuedOn: formatDateKey(today),
+      attendance: attendance[r.key] ?? null, nita: nitaLine(r.key), dates, provisional, issuedOn: formatDateKey(today),
       attachment: attachmentLine(attachments[r.key], settings),
     };
   };

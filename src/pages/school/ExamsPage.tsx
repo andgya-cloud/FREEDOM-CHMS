@@ -25,6 +25,7 @@ import { examNoticeText, type ExamNoticeKind } from '../../../functions/src/shar
 import { bandsText, marksSheetPdf, resultSlipsPdf } from '../../lib/examPdf';
 import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
 import { ExamRegisterView, TranscriptsView } from './ExamRegister';
+import { NitaBoard } from './NitaResults';
 import { GraduationBoard } from './GraduationPage';
 import { ClassBoard, ExamBoard } from './TimetablePage';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
@@ -63,10 +64,10 @@ export function CommonFinalsPage() {
 
 const BASE = '/school/exams';
 const COMMON = 'common';
-type View = 'home' | 'results' | 'setup' | 'student' | 'register' | 'transcripts' | 'graduation' | 'classes' | 'exams';
+type View = 'home' | 'results' | 'setup' | 'student' | 'register' | 'nita' | 'transcripts' | 'graduation' | 'classes' | 'exams';
 /** Links saved before the redesign (Andy, 2026-10-25) still land on the right screen. */
 const OLD_VIEWS: Record<string, View> = {
-  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'transcripts', register: 'register', graduation: 'graduation', classes: 'classes', exams: 'exams', setup: 'setup', sheets: 'setup', grading: 'setup',
+  home: 'home', overview: 'home', progress: 'home', departments: 'results', results: 'results', reports: 'results', transcripts: 'transcripts', register: 'register', nita: 'nita', graduation: 'graduation', classes: 'classes', exams: 'exams', setup: 'setup', sheets: 'setup', grading: 'setup',
   log: 'setup', student: 'student',
 };
 type CohortOrder = ReturnType<typeof orderCohorts>;
@@ -137,7 +138,7 @@ function Exams({ org }: { org: Organization }) {
   if (!a.canManage) return <MyClasses org={org} studentsOf={studentsOf} allStudents={allStudents} courseName={s.courseName} />;
   const sub = view === 'student' ? 'Student' : '';
   // One row of sections (Andy, 2026-11-19): the three new ones sit beside Results and Setup.
-  const SECTIONS: [View, string][] = [['home', 'Courses'], ['results', 'Results'], ['register', 'Exam register'], ['transcripts', 'Transcripts'], ['graduation', 'Graduation'], ['classes', 'Class timetable'], ['exams', 'Exam timetable'], ['setup', 'Setup']];
+  const SECTIONS: [View, string][] = [['home', 'Courses'], ['results', 'Results'], ['register', 'Exam register'], ['nita', 'NITA results'], ['transcripts', 'Transcripts'], ['graduation', 'Graduation'], ['classes', 'Class timetable'], ['exams', 'Exam timetable'], ['setup', 'Setup']];
   const dates = (() => {
     const start = s.intakes.filter((i) => i.name === cohort && i.startDate).map((i) => i.startDate).sort()[0];
     const parts = [start ? `Started ${dayMonthYear(start).replace(/^\d+ /, '')}` : '', choice?.graduationDate ? `Graduated ${dayMonthYear(choice.graduationDate)}` : ''].filter(Boolean);
@@ -195,6 +196,7 @@ function Exams({ org }: { org: Organization }) {
             <TranscriptsView org={org} cohort={cohort} label={label} students={students} sheets={sheets} courseName={s.courseName} attendance={attendance} today={s.today}
               dates={dates} pick={params.get('student') ?? ''} onPick={(id) => go({ student: id })} />
           )}
+          {view === 'nita' && <NitaBoard org={org} cohort={cohort} />}
           {view === 'graduation' && <GraduationBoard org={org} cohort={cohort} />}
           {/* The timetables (Andy, 2026-11-20, 2A), the same as School › Timetables. */}
           {view === 'classes' && <ClassBoard org={org} cohort={cohort} />}

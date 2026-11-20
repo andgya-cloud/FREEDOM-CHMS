@@ -5,7 +5,7 @@ import { useLiveQuery } from '../lib/useQuery';
 import type { Attachment } from '../../functions/src/shared/attachment';
 
 export type AttachmentRow = Attachment & { id: string; deletedAt?: unknown };
-export interface AttachmentFilesRow { id: string; studentId: string; logbook?: { size: number } | null; form?: { size: number } | null }
+export interface AttachmentFilesRow { id: string; studentId: string; logbook?: { size: number } | null; form?: { size: number } | null; nita?: { size: number } | null }
 
 /** Every student's industrial attachment record and which copies are kept (Andy, 2026-11-19), by student. */
 export function useAttachments(orgId: string) {

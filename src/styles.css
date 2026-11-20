@@ -3101,3 +3101,33 @@ button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
 .tt-today { border-left: 4px solid var(--gold, #c99a3c); }
 .tt-today ul { margin: 6px 0 0; padding-left: 18px; }
 .tt-today li { margin: 3px 0; }
+
+/* NITA results (Andy, 2026-11-20) */
+.nita-page .tt-cohort, .nita-page > .field { max-width: 360px; }
+.nita-stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; }
+.nita-stat { background: var(--card, #fff); border: 1px solid var(--line, #e5e7eb); border-radius: 14px; padding: 10px 14px; }
+.nita-stat b { display: block; font-size: 1.6rem; font-variant-numeric: tabular-nums; }
+.nita-stat span { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted, #6b7280); }
+.nita-stat.ok b { color: #1d7a46; }
+.nita-stat.bad b { color: #b3261e; }
+.nita-table td { vertical-align: middle; }
+.nita-table select { min-width: 88px; padding-right: 26px; }
+.nita-table td { padding-left: 4px; padding-right: 4px; }
+.nita-table .nita-cell { width: 128px; }
+.nita-overall { font-weight: 600; }
+.nita-cert { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; white-space: nowrap; }
+.nita-cert select { min-width: 150px; }
+.nita-two { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.nita-two .card { margin: 0; }
+.nita-bar { display: grid; grid-template-columns: minmax(90px, 180px) 1fr 44px; gap: 10px; align-items: center; font-size: 0.875rem; margin: 6px 0; }
+.nita-bar i { display: block; height: 10px; border-radius: 6px; background: var(--line, #e5e7eb); overflow: hidden; }
+.nita-bar i b { display: block; height: 100%; background: linear-gradient(90deg, var(--navy, #1f2a5c), var(--gold, #c99a3c)); }
+.nita-bar span:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+.nita-board tr.strong td { font-weight: 600; }
+.nita-add { max-width: 380px; margin-top: 10px; }
+.nita-new { align-items: end; margin-top: 10px; }
+.nita-upload { margin-top: 12px; flex-basis: 100%; }
+@media (max-width: 760px) {
+  .nita-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .nita-two { grid-template-columns: 1fr; }
+}
