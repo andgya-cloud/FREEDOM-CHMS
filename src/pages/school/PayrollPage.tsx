@@ -1,4 +1,5 @@
 import { useMemo, useState, type ChangeEvent } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { formatDate } from '../../../functions/src/shared/datetime';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { PayrollInsights } from '../../components/PayrollInsights';
@@ -70,7 +71,7 @@ function PayrollHome({ org }: { org: Organization }) {
           <h2>Prepare a pay run</h2>
           {active.length === 0 ? <p className="muted">Add staff pay details first. <Link to={`${BASE}/staff`}>Add staff</Link></p> : (
             <div className="row-actions">
-              <label className="field"><span>Month</span><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
+              <label className="field"><span>Month</span><AdiaDate type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
               <button type="button" className="btn btn-primary" disabled={!/^\d{4}-\d{2}$/.test(month)} onClick={() => navigate(`${BASE}/${month}`)}>Open {month && /^\d{4}-\d{2}$/.test(month) ? monthName(month) : 'month'}</button>
             </div>
           )}
@@ -264,7 +265,7 @@ function LoansEditor({ org, staffId, loans, runs, onChange }: { org: Organizatio
             <input aria-label="Loan name" placeholder="For example Salary advance" value={l.name} maxLength={60} onChange={(e) => update(l.id, { name: e.target.value })} />
             <label className="field"><span>Amount lent (KES)</span><input inputMode="decimal" value={l.principal} onChange={(e) => update(l.id, { principal: e.target.value })} /></label>
             <label className="field"><span>Repay each month (KES)</span><input inputMode="decimal" value={l.instalment} onChange={(e) => update(l.id, { instalment: e.target.value })} /></label>
-            <label className="field"><span>Starting</span><input type="month" value={l.startMonth} onChange={(e) => update(l.id, { startMonth: e.target.value })} /></label>
+            <label className="field"><span>Starting</span><AdiaDate type="month" value={l.startMonth} onChange={(e) => update(l.id, { startMonth: e.target.value })} /></label>
             <p className="small muted payroll-loan-balance">Repaid {money(org, repaid)} · balance {money(org, Math.max(0, principal - repaid))}</p>
             <button type="button" className="btn btn-quiet" aria-label="Remove loan" onClick={() => onChange(loans.filter((x) => x.id !== l.id))}>×</button>
           </div>

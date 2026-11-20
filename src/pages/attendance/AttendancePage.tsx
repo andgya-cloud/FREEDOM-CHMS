@@ -1,4 +1,5 @@
 import { useSchool } from '../../state/useSchool';
+import { AdiaDate } from '../../components/AdiaDate';
 import { useAllExamSheets, useExamAccess, useExamCohorts, useMyExamSheets, type ExamSheetRow } from '../../state/useExams';
 import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
@@ -194,7 +195,8 @@ export function AttendancePage() {
               <h2>Take attendance</h2>
               <label className="date-pick">
                 <span className="visually-hidden">Date</span>
-                <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
+                {college ? <AdiaDate value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />
+                  : <input type="date" value={date} max={today} onChange={(e) => setDate(e.target.value || today)} />}
               </label>
             </div>
           )}

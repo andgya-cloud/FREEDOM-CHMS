@@ -1,4 +1,5 @@
 import { attended } from './attendance.js';
+import type { SchoolReportType } from './adiaYears.js';
 import { addDays } from './metrics.js';
 
 /**
@@ -379,7 +380,7 @@ export function lastSchoolWeek(today: string): { from: string; to: string } {
 // ---- Reports to the director ----------------------------------------------------------------------
 
 export interface SchoolReportDoc {
-  type: 'weekly' | 'monthly';
+  type: SchoolReportType;
   from: string;
   to: string;
   label: string;
@@ -398,7 +399,7 @@ export interface SchoolReportDoc {
 export function buildSchoolReport(
   input: SchoolInput & { dueOutcomes: readonly { studentId: string; months: number; due: string; status: string | null }[] },
   names: Record<string, string>,
-  type: 'weekly' | 'monthly',
+  type: SchoolReportType,
   period: { from: string; to: string },
   label: string,
   today: string,

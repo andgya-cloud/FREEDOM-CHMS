@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { Link, useSearchParams } from 'react-router-dom';
 import { collection, doc, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../firebase';
@@ -12,7 +13,10 @@ import { requestSchoolReport } from '../../lib/schoolWrites';
 import { schoolReportPdf } from '../../lib/schoolPdf';
 import { shareOrDownload } from '../../lib/givingPdf';
 import { formatDateKey } from '../../../functions/src/shared/datetime';
-import { lastCompletePeriod, periodFor, periodLabel, type ReportType } from '../../../functions/src/shared/metrics';
+import { lastCompletePeriod, periodFor } from '../../../functions/src/shared/metrics';
+import { SCHOOL_REPORT_TYPES, SCHOOL_REPORT_TYPE_LABELS, academicYearOf, academicYearText, adiaAcademicYears, adiaYears, schoolPeriod, schoolPeriodLabel, type SchoolReportType } from '../../../functions/src/shared/adiaYears';
+
+const CHIP: Record<SchoolReportType, string> = { weekly: 'Week', monthly: 'Month', yearly: 'Year', academic: 'Academic year' };
 import type { SchoolReportDoc } from '../../../functions/src/shared/school';
 import type { StoredSchoolReport } from '../../state/useSchool';
 import { SchoolGate, SchoolTitle, money, pct, useSchoolPage } from './common';
@@ -31,11 +35,15 @@ function Reports({ org }: { org: Organization }) {
   const allowed = can('finance.reports') || can('settings.manage');
   const { rows, loading } = useLiveQuery<StoredSchoolReport & SchoolReportDoc>(
     () => (allowed ? query(collection(db, 'organizations', org.id, 'schoolReports'), orderBy('from', 'desc')) : null), [org.id, allowed]);
-  const [type, setType] = useState<ReportType>('weekly');
+  const [type, setType] = useState<SchoolReportType>('weekly');
   const [day, setDay] = useState(() => lastCompletePeriod('weekly', s.today).from);
   const [month, setMonth] = useState(() => lastCompletePeriod('monthly', s.today).from.slice(0, 7));
+  // Reports by calendar year and by academic year, from 2025 (Andy, 2026-11-20, 3A both).
+  const [year, setYear] = useState(() => Number(s.today.slice(0, 4)));
+  const [acYear, setAcYear] = useState(() => academicYearOf(s.today));
   const [requestId, setRequestId] = useState<string | null>(null);
-  const period = type === 'weekly' ? periodFor('weekly', day || s.today) : periodFor('monthly', `${month || s.today.slice(0, 7)}-01`);
+  const period = type === 'weekly' ? periodFor('weekly', day || s.today) : type === 'monthly' ? periodFor('monthly', `${month || s.today.slice(0, 7)}-01`)
+    : type === 'yearly' ? schoolPeriod('yearly', `${year}-01-01`) : schoolPeriod('academic', `${acYear}-08-01`);
 
   useEffect(() => {
     if (!requestId) return;
@@ -62,14 +70,15 @@ function Reports({ org }: { org: Organization }) {
         <div className="stack">
           <p className="small muted">Weekly reports come every Monday and monthly ones on the 1st on their own.</p>
           <div className="segmented" role="radiogroup" aria-label="Report">
-            {(['weekly', 'monthly'] as const).map((t) => (
-              <button key={t} type="button" role="radio" aria-checked={type === t} className={`chip${type === t ? ' chip-on' : ''}`} onClick={() => setType(t)}>{t === 'weekly' ? 'Week' : 'Month'}</button>
+            {SCHOOL_REPORT_TYPES.map((t) => (
+              <button key={t} type="button" role="radio" aria-checked={type === t} className={`chip${type === t ? ' chip-on' : ''}`} onClick={() => setType(t)}>{CHIP[t]}</button>
             ))}
           </div>
-          {type === 'weekly'
-            ? <label className="field"><span>Any day in the week</span><input type="date" value={day} max={s.today} onChange={(e) => setDay(e.target.value)} /></label>
-            : <label className="field"><span>Month</span><input type="month" value={month} max={s.today.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} /></label>}
-          <p className="small">{periodLabel(type, period)}</p>
+          {type === 'weekly' && <label className="field"><span>Any day in the week</span><AdiaDate type="date" value={day} max={s.today} onChange={(e) => setDay(e.target.value)} /></label>}
+          {type === 'monthly' && <label className="field"><span>Month</span><AdiaDate type="month" value={month} max={s.today.slice(0, 7)} onChange={(e) => setMonth(e.target.value)} /></label>}
+          {type === 'yearly' && <label className="field"><span>Year (January to December)</span><select value={year} onChange={(e) => setYear(Number(e.target.value))}>{adiaYears(s.today).filter((y) => y <= Number(s.today.slice(0, 4))).map((y) => <option key={y}>{y}</option>)}</select></label>}
+          {type === 'academic' && <label className="field"><span>Academic year (August to July)</span><select value={acYear} onChange={(e) => setAcYear(Number(e.target.value))}>{adiaAcademicYears(s.today).map((y) => <option key={y} value={y}>{academicYearText(y)}</option>)}</select></label>}
+          <p className="small">{schoolPeriodLabel(type, period)}{type === 'yearly' || type === 'academic' ? (period.to > s.today ? ' · so far' : '') : ''}</p>
           <button type="button" className="btn btn-primary align-start" disabled={!!requestId || period.from > s.today || !user}
             onClick={() => user && setRequestId(requestSchoolReport(org.id, user.uid, type, period.from))}>
             {requestId ? 'Making the report…' : 'Make the report'}
@@ -82,7 +91,7 @@ function Reports({ org }: { org: Organization }) {
           <summary><span>Earlier reports</span><span className="muted small">{rows.length}</span></summary>
           <ul className="link-list">
             {rows.map((r) => (
-              <li key={r.id}><Link to={`/school/reports?report=${r.id}`}><span className="link-title">{r.label}{r.id === open?.id ? ' (showing)' : ''}</span><span className="link-detail">{r.type === 'weekly' ? 'Weekly' : 'Monthly'} · {r.metrics.enrolled} enrolled · attendance {pct(r.metrics.attendanceRate)}</span></Link></li>
+              <li key={r.id}><Link to={`/school/reports?report=${r.id}`}><span className="link-title">{r.label}{r.id === open?.id ? ' (showing)' : ''}</span><span className="link-detail">{SCHOOL_REPORT_TYPE_LABELS[r.type] ?? 'Report'} · {r.metrics.enrolled} enrolled · attendance {pct(r.metrics.attendanceRate)}</span></Link></li>
             ))}
           </ul>
         </details>

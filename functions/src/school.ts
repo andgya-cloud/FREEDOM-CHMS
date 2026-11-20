@@ -6,7 +6,7 @@ import { db } from './common.js';
 import { ANTHROPIC_API_KEY, weeklyBriefing } from './aiCore.js';
 import { numberFacts } from './shared/aiWrite.js';
 import { DEFAULT_TIME_ZONE } from './shared/datetime.js';
-import { periodFor, periodLabel, type ReportType } from './shared/metrics.js';
+import { SCHOOL_REPORT_TYPES, schoolPeriod, schoolPeriodLabel, type SchoolReportType } from './shared/adiaYears.js';
 import { reportsDue } from './shared/reports.js';
 import { isTraining } from './shared/organizations.js';
 import {
@@ -162,13 +162,13 @@ export async function loadSchool(orgId: string) {
   };
 }
 
-export async function generateSchoolReport(orgId: string, type: ReportType, from: string, now = new Date(), by: string = SYSTEM): Promise<string> {
+export async function generateSchoolReport(orgId: string, type: SchoolReportType, from: string, now = new Date(), by: string = SYSTEM): Promise<string> {
   const org = (await db.doc(`organizations/${orgId}`).get()).data();
   if (!org) throw new Error('Organization not found');
   const today = todayIn((org.timeZone as string) ?? DEFAULT_TIME_ZONE, now);
-  const period = periodFor(type, from);
+  const period = schoolPeriod(type, from);
   const { input, names } = await loadSchool(orgId);
-  const doc: SchoolReportDoc = buildSchoolReport(input, names, type, period, periodLabel(type, period), today);
+  const doc: SchoolReportDoc = buildSchoolReport(input, names, type, period, schoolPeriodLabel(type, period), today);
   if (type === 'weekly') {
     const facts = [`${org.name}, week ${doc.label}`, ...numberFacts(doc.metrics), `students below attendance threshold listed: ${doc.alerts.length}`, `students owing fees: ${doc.arrears.length}`, `graduate follow-ups due: ${doc.outcomesDue.length}`];
     doc.aiSummary = await weeklyBriefing(orgId, today, facts);
@@ -186,8 +186,8 @@ export const onSchoolReportRequested = onDocumentCreated(
     const req = event.data?.data();
     if (!req || !event.data) return;
     try {
-      if (req.type !== 'weekly' && req.type !== 'monthly') throw new Error('Unknown report type');
-      const id = await generateSchoolReport(event.params.orgId, req.type as ReportType, req.from as string, new Date(), req.createdBy as string);
+      if (!SCHOOL_REPORT_TYPES.includes(req.type as SchoolReportType)) throw new Error('Unknown report type');
+      const id = await generateSchoolReport(event.params.orgId, req.type as SchoolReportType, req.from as string, new Date(), req.createdBy as string);
       await event.data.ref.update({ status: 'done', reportId: id, doneAt: FieldValue.serverTimestamp() });
     } catch (err) {
       logger.error(`School report request ${event.params.requestId} failed`, err);

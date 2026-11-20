@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -66,7 +67,7 @@ function Graduation({ org }: { org: Organization }) {
                 {candidates.map(({ st, name }) => <option key={st.id} value={st.id}>{name} · {s.courseName(st.courseId)}</option>)}
               </select>
             </label>
-            <label className="field"><span>Date issued</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
+            <label className="field"><span>Date issued</span><AdiaDate type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
             <button type="button" className="btn btn-primary align-start" disabled={!picked || !issuedOn} onClick={issue}>Add graduate</button>
           </div>
         </details>
@@ -205,7 +206,7 @@ function GraduationUpload({ org, s }: { org: Organization; s: ReturnType<typeof 
             {choices.map((c) => <option key={c.name} value={c.name}>{cohortLabel(c)}</option>)}
           </select>
         </label>
-        <label className="field"><span>Graduation date</span><input type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
+        <label className="field"><span>Graduation date</span><AdiaDate type="date" value={issuedOn} onChange={(e) => setIssuedOn(e.target.value)} /></label>
         <label className="btn btn-primary align-end">Choose the Excel file<input type="file" accept=".xlsx,.csv" hidden onChange={(e) => void choose(e)} /></label>
       </div>
       {plan && (
@@ -354,7 +355,7 @@ export function GraduationBoard({ org, cohort: fixed }: { org: Organization; coh
         <label className="field"><span>Show</span>
           <select value={show} onChange={(e) => setShow(e.target.value as Show)}><option value="all">Everyone</option><option value="no">Not issued</option><option value="yes">Issued</option></select>
         </label>
-        {(manage || exams.canManage) && <label className="field"><span>Graduation date</span><input type="date" value={on} onChange={(e) => pickDate(e.target.value)} /></label>}
+        {(manage || exams.canManage) && <label className="field"><span>Graduation date</span><AdiaDate type="date" value={on} onChange={(e) => pickDate(e.target.value)} /></label>}
       </div>
       {people.length > 8 && <StudentFinder finder={finder} names={people.map((p) => p.name)} shown={shown.length} total={people.length} />}
       <p><span className="badge badge-regular">Issued {nIssued}</span> <span className="badge badge-warn">Not issued {people.length - nIssued}</span></p>

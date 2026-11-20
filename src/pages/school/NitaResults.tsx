@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { useAuth } from '../../state/AuthContext';
@@ -18,6 +19,7 @@ import {
   NITA_PAPER_LABELS, NITA_PAPER_RESULTS, applyUploadRow, blankNitaResult, cleanCertificateNo, matchNitaRows, nitaCounts, orderReleases, overallFrom,
   parseNitaSheet, passRate, releaseLabel, resultFields, sittingText, tradeRates, type NitaMatch, type NitaPaperResult, type NitaResultRecord,
 } from '../../../functions/src/shared/nita';
+import { adiaYears } from '../../../functions/src/shared/adiaYears';
 import { SchoolGate, SchoolTitle, useSchoolPage } from './common';
 import type { Organization } from '../../state/OrgContext';
 
@@ -284,8 +286,7 @@ function Certificate({ org, studentId, has, keeper, issued, issuedOn, onIssued }
 }
 
 function SittingPicker({ month, year, onMonth, onYear }: { month: number; year: number; onMonth: (m: number) => void; onYear: (y: number) => void }) {
-  const now = new Date().getFullYear();
-  const years = Array.from({ length: now - 2019 + 2 }, (_, i) => now + 1 - i);
+  const years = adiaYears(new Date().toISOString().slice(0, 10));
   return (
     <>
       <label className="field"><span>Sitting month</span><select value={month} onChange={(e) => onMonth(Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</select></label>
@@ -306,7 +307,7 @@ function NewRelease({ org, cohort, onAdded }: { org: Organization; cohort: strin
   }
   return (
     <div className="field-row nita-new">
-      <label className="field"><span>Day NITA released the results</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+      <label className="field"><span>Day NITA released the results</span><AdiaDate type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       <SittingPicker month={month} year={year} onMonth={setMonth} onYear={setYear} />
       <button type="button" className="btn btn-primary align-end" onClick={add}>{date ? 'Add' : 'Add (not released yet)'}</button>
     </div>
@@ -321,7 +322,7 @@ function EditRelease({ org, id, releasedOn, sitting }: { org: Organization; id: 
   const [year, setYear] = useState(Number(sitting.slice(-4)) || new Date().getFullYear());
   return (
     <div className="field-row nita-new">
-      <label className="field"><span>Day NITA released the results</span><input type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
+      <label className="field"><span>Day NITA released the results</span><AdiaDate type="date" value={date} onChange={(e) => setDate(e.target.value)} /></label>
       <SittingPicker month={month} year={year} onMonth={setMonth} onYear={setYear} />
       <button type="button" className="btn btn-primary align-end" onClick={() => saveNitaRelease(org.id, id, { releasedOn: date || null, sitting: sittingText(month, year) }).then(() => toast.show('Saved'), (err) => toast.show(friendlyError(err)))}>Save</button>
     </div>

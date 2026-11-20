@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -328,8 +329,8 @@ function TimetableSettings({ t, today, onSave }: { t: ClassTimetableRow; today: 
       <summary>The day's periods and the semester's dates</summary>
       <div className="stack">
         <div className="field-row">
-          <label className="field"><span>Semester starts</span><input type="date" value={t.from ?? ''} onChange={(e) => onSave({ from: e.target.value || null })} /></label>
-          <label className="field"><span>Semester ends</span><input type="date" value={t.to ?? ''} min={t.from ?? undefined} onChange={(e) => onSave({ to: e.target.value || null })} /></label>
+          <label className="field"><span>Semester starts</span><AdiaDate type="date" value={t.from ?? ''} onChange={(e) => onSave({ from: e.target.value || null })} /></label>
+          <label className="field"><span>Semester ends</span><AdiaDate type="date" value={t.to ?? ''} min={t.from ?? undefined} onChange={(e) => onSave({ to: e.target.value || null })} /></label>
         </div>
         <p className="small muted">Lecturers see their classes for today on their Today page while the semester runs{t.from || t.to ? '' : ' (with no dates, always)'}.</p>
         <ul className="tt-periods">
@@ -509,7 +510,7 @@ export function ExamBoard({ org, cohort }: { org: Organization; cohort: string }
                       return (
                         <Fragment key={r.id}>
                           <tr className={clashes[r.id] ? 'tt-row-clash' : undefined}>
-                            <td><input type="date" aria-label="Date" value={r.date ?? ''} onChange={(e) => update(r.id, { date: e.target.value || null })} /></td>
+                            <td><AdiaDate type="date" aria-label="Date" value={r.date ?? ''} onChange={(e) => update(r.id, { date: e.target.value || null })} /></td>
                             <td className="tt-nowrap"><input type="time" aria-label="Starts" value={r.start} onChange={(e) => e.target.value && update(r.id, { start: e.target.value })} /> <input type="time" aria-label="Ends" value={r.end} onChange={(e) => e.target.value && update(r.id, { end: e.target.value })} /></td>
                             <td>
                               {options ? (
@@ -574,7 +575,7 @@ function NewExamPeriod({ today, onCreate, onCancel }: { today: string; onCreate:
       <div className="field-row">
         <label className="field"><span>Exams</span><select value={paper} onChange={(e) => setPaper(e.target.value as ExamPaper)}>{EXAM_PAPERS.map((p) => <option key={p} value={p}>{EXAM_PAPER_LABELS[p]}</option>)}</select></label>
         <label className="field"><span>Semester</span><select value={semester} onChange={(e) => setSemester(e.target.value as '1' | '2' | '')}><option value="1">Semester 1</option><option value="2">Semester 2</option><option value="">No semester</option></select></label>
-        <label className="field"><span>Month</span><input type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
+        <label className="field"><span>Month</span><AdiaDate type="month" value={month} onChange={(e) => setMonth(e.target.value)} /></label>
       </div>
       <p className="small muted">It will be called <strong>{examPeriodName(paper, sem, month)}</strong>.</p>
       <div className="row-actions">

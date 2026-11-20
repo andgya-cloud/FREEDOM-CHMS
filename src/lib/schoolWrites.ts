@@ -1,4 +1,5 @@
 import { collection, doc, serverTimestamp, setDoc, writeBatch, type DocumentData } from 'firebase/firestore';
+import type { SchoolReportType } from '../../functions/src/shared/adiaYears';
 import { db } from '../firebase';
 import { createStamps, updateRecord } from './records';
 import { trackWrite } from './sync';
@@ -145,7 +146,7 @@ export function recordOutcome(orgId: string, studentId: string, months: number, 
   return updateRecord(ref(orgId, 'outcomes', outcomeId(studentId, months)), { status, note: note.slice(0, 500), recordedOn });
 }
 
-export function requestSchoolReport(orgId: string, uid: string, type: 'weekly' | 'monthly', from: string) {
+export function requestSchoolReport(orgId: string, uid: string, type: SchoolReportType, from: string) {
   const r = doc(collection(db, 'organizations', orgId, 'schoolReportRequests'));
   void trackWrite(setDoc(r, { orgId, type, from, status: 'pending', createdAt: serverTimestamp(), createdBy: uid }));
   return r.id;

@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -121,7 +122,7 @@ function Enrol({ org }: { org: Organization }) {
               <option value="enrolled">Enrolled</option><option value="applicant">Applicant</option>
             </select>
           </label>
-          {status === 'enrolled' && <label className="field"><span>Started</span><input type="date" value={enrolledOn} onChange={(e) => setEnrolledOn(e.target.value)} /></label>}
+          {status === 'enrolled' && <label className="field"><span>Started</span><AdiaDate type="date" value={enrolledOn} onChange={(e) => setEnrolledOn(e.target.value)} /></label>}
         </div>
         <h2>Sponsor or guardian</h2>
         <p className="small muted">Fee reminders go here. Tick WhatsApp only if they agreed to get messages that way.</p>

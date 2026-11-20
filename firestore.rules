@@ -1016,7 +1016,7 @@ service cloud.firestore {
         allow create: if canAccessOrg(orgId) && has('people.read')
           && request.resource.data.keys().hasOnly(['orgId', 'type', 'from', 'email', 'status', 'createdAt', 'createdBy'])
           && request.resource.data.orgId == orgId
-          && request.resource.data.type in ['weekly', 'monthly']
+          && request.resource.data.type in ['weekly', 'monthly', 'yearly', 'academic']
           && isDate(request.resource.data.from)
           && request.resource.data.status == 'pending'
           && request.resource.data.email is bool
@@ -1062,7 +1062,9 @@ service cloud.firestore {
       match /intakes/{intakeId} {
         allow read: if schoolRead() || (canAccessOrg(orgId) && isTrainer());
         // ...and start a new cohort, which is one new intake for each programme.
-        allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage')))
+        // The principal may also correct a cohort's start date (Andy, 2026-11-20, 5A).
+        allow create, update: if (orgWrite(orgId, 'settings.manage') || (resource == null && orgWrite(orgId, 'school.manage'))
+              || (resource != null && orgWrite(orgId, 'school.manage') && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['startDate', 'updatedAt', 'updatedBy'])))
           && request.resource.data.keys().hasOnly(['orgId', 'courseId', 'name', 'startDate', 'capacity', 'active',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && existsInOrg('courses', request.resource.data.courseId)
@@ -1229,7 +1231,7 @@ service cloud.firestore {
         allow create: if canAccessOrg(orgId) && (has('finance.reports') || has('settings.manage'))
           && request.resource.data.keys().hasOnly(['orgId', 'type', 'from', 'status', 'createdAt', 'createdBy'])
           && request.resource.data.orgId == orgId
-          && request.resource.data.type in ['weekly', 'monthly']
+          && request.resource.data.type in ['weekly', 'monthly', 'yearly', 'academic']
           && isDate(request.resource.data.from)
           && request.resource.data.status == 'pending'
           && request.resource.data.createdBy == request.auth.uid

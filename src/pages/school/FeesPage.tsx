@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { StudentFinder, useStudentFinder } from '../../components/StudentFinder';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
@@ -133,7 +134,7 @@ function Billing({ org, s }: { org: Organization; s: Page }) {
           <h3>Bill the cohort</h3>
           <div className="field-row">
             <label className="field"><span>Bill name</span><input value={label} onChange={(e) => setLabel(e.target.value)} /></label>
-            <label className="field"><span>Due date</span><input type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
+            <label className="field"><span>Due date</span><AdiaDate type="date" value={due} onChange={(e) => setDue(e.target.value)} /></label>
           </div>
           <button type="button" className="btn btn-primary align-start" onClick={bill}>Bill all enrolled students</button>
           <p className="small muted">Anyone who already has this bill is skipped.</p>

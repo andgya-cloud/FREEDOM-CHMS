@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { adiaYears } from '../../../functions/src/shared/adiaYears';
 import { useNita } from '../../state/useNita';
 import { NITA_PAPER_LABELS, nitaTranscriptLine } from '../../../functions/src/shared/nita';
 import { useToast } from '../../state/ToastContext';
@@ -140,7 +141,8 @@ export function ExamRegisterView(p: Common) {
     try { downloadFile(kind === 'xlsx' ? await registerWorkbook(info(), lines()) : await registerPdf(info(), lines())); } catch (err) { toast.show(friendlyError(err)); }
   }
 
-  const years = [now.getFullYear() - 1, now.getFullYear(), now.getFullYear() + 1, now.getFullYear() + 2];
+  // From 2025, when Cohort 1 began, up to next year; it grows by itself (Andy, 2026-11-20, 2A).
+  const years = adiaYears(today);
   const newForm = (
     <div className="field-row exam-reg-new">
       <label className="field"><span>Month</span>

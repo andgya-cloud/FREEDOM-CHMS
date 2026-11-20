@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -182,8 +183,8 @@ function Details({ org, studentId, a, keeper, files, save }: {
       <Text label="Location" value={a?.location ?? ''} max={120} placeholder="Town or area" disabled={!keeper} onSave={(v) => save({ location: v })} />
       <Text label="Supervisor" value={a?.supervisor ?? ''} max={120} placeholder="Name" disabled={!keeper} onSave={(v) => save({ supervisor: v })} />
       <Text label="Supervisor's phone" value={a?.supervisorPhone ?? ''} max={20} placeholder="07…" inputMode="tel" disabled={!keeper} onSave={(v) => save({ supervisorPhone: cleanPhone(v) })} />
-      <label className="field"><span>Start date</span><input type="date" value={a?.from ?? ''} disabled={!keeper} onChange={(e) => save({ from: e.target.value || null })} /></label>
-      <label className="field"><span>End date</span><input type="date" value={a?.to ?? ''} min={a?.from ?? undefined} disabled={!keeper} onChange={(e) => save({ to: e.target.value || null })} /></label>
+      <label className="field"><span>Start date</span><AdiaDate type="date" value={a?.from ?? ''} disabled={!keeper} onChange={(e) => save({ from: e.target.value || null })} /></label>
+      <label className="field"><span>End date</span><AdiaDate type="date" value={a?.to ?? ''} min={a?.from ?? undefined} disabled={!keeper} onChange={(e) => save({ to: e.target.value || null })} /></label>
       <FileBox org={org} studentId={studentId} kind="logbook" has={!!files?.logbook} keeper={keeper} />
       <Text label="Assessment mark (out of 100)" value={a?.mark == null ? '' : String(a.mark)} max={5} placeholder={a?.assessed ? 'e.g. 72' : 'Choose Assessed first'} inputMode="decimal"
         disabled={!keeper || !a?.assessed} check={markProblem} onSave={(v) => save({ mark: v.trim() ? Number(v) : null })} />

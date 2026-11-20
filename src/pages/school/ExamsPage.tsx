@@ -1,4 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
+import { doc } from 'firebase/firestore';
+import { db } from '../../firebase';
+import { updateRecord } from '../../lib/records';
+import { monthYear } from '../../../functions/src/shared/examCohorts';
+import { AdiaDate } from '../../components/AdiaDate';
 import { Greeting } from '../../components/Greeting';
 import { CleanupButton } from '../../components/CleanupDialog';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -209,7 +214,7 @@ function Exams({ org }: { org: Organization }) {
           {view === 'setup' && (
             <Setup org={org} cohort={cohort} cohorts={cohorts} order={order} closed={closed} info={info} sheets={sheets} students={students} courses={courses} programmes={s.courses}
               courseList={courseList} allStudents={allStudents} today={s.today} canStart={canStart} section={rawView === 'log' ? 'log' : params.get('section') ?? ''}
-              onSection={(x) => go({ view: 'setup', section: x })} onStarted={(c) => go({ cohort: c, view: '', section: '' })} />
+              onSection={(x) => go({ view: 'setup', section: x })} onStarted={(c) => go({ cohort: c, view: '', section: '' })} intakes={s.intakes} />
           )}
         </>
       )}
@@ -962,18 +967,53 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
 
 /* ---------- Setup ---------- */
 
-type Section = 'courses' | 'graduation' | 'deadlines' | 'list' | 'cohort' | 'percentages' | 'grading' | 'upload' | 'log';
+type Section = 'courses' | 'graduation' | 'deadlines' | 'list' | 'cohort' | 'starts' | 'percentages' | 'grading' | 'upload' | 'log';
+
+/**
+ * Each cohort's start month (Andy, 2026-11-20, 5A): Cohort 1 began in August 2025. Changing a month moves the
+ * start of every department's intake in that cohort, which also orders the cohort dropdown.
+ */
+function CohortStarts({ org, order, intakes }: { org: Organization; order: CohortOrder; intakes: { id: string; name: string; startDate?: string | null }[] }) {
+  const toast = useToast();
+  const { can } = useAuth();
+  const edit = can('settings.manage') || can('school.manage');
+  const all = [...order.current, ...order.past].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  function move(name: string, month: string) {
+    if (!/^\d{4}-\d{2}$/.test(month)) return;
+    const mine = intakes.filter((i) => i.name === name && (i.startDate ?? '').slice(0, 7) !== month);
+    Promise.all(mine.map((i) => updateRecord(doc(db, 'organizations', org.id, 'intakes', i.id), { startDate: `${month}-01` })))
+      .then(() => toast.show(`${name} now starts in ${monthYear(`${month}-01`)}`), (err) => toast.show(friendlyError(err)));
+  }
+  return (
+    <div className="card stack">
+      <h2>Cohort start dates</h2>
+      <p className="muted small">ADIA began with Cohort 1 in August 2025. Each cohort's start month orders the Cohort dropdown and shows beside its name. Check each one and correct any that are wrong.</p>
+      <ul className="link-list cohort-starts">
+        {all.map((c) => {
+          const n = intakes.filter((i) => i.name === c.name).length;
+          return (
+            <li key={c.name}>
+              <div><span className="link-title">{c.name}</span><span className="link-detail">{c.startDate ? `Started ${monthYear(c.startDate)}` : 'No start date'} · {n} {n === 1 ? 'department' : 'departments'}{c.closed ? ' · graduated' : ''}</span></div>
+              {edit && <AdiaDate type="month" aria-label={`${c.name} start month`} defaultValue={c.startDate?.slice(0, 7) ?? ''} key={c.startDate ?? ''} onChange={(e) => move(c.name, e.target.value)} />}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 /** Setup: one dropdown, and only the part picked shows (Andy, 2026-10-25, 4A). */
-function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, courses, programmes, courseList, allStudents, today, canStart, section, onSection, onStarted }: {
+function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, courses, programmes, courseList, allStudents, today, canStart, section, onSection, onStarted, intakes }: {
   org: Organization; cohort: string; cohorts: string[]; order: CohortOrder; closed: boolean; info: Record<string, ExamCohort | undefined>; sheets: ExamSheetRow[]; students: ExamStudent[];
   courses: { id: string; name: string }[]; programmes: Programme[]; courseList: CourseList; allStudents: Parameters<typeof ResultsUpload>[0]['allStudents'];
   today: string; canStart: boolean; section: string; onSection: (section: Section) => void; onStarted: (cohort: string) => void;
+  intakes: { id: string; name: string; startDate?: string | null }[];
 }) {
   const { can } = useAuth();
   const sections: [Section, string][] = [
     ['courses', `Courses and trainers · ${cohort}`], ['graduation', `Graduation date · ${cohort}`], ['deadlines', `Deadlines and attendance · ${cohort}`],
-    ['list', 'Course list and departments'], ...(canStart ? [['cohort', `Start a new cohort (next: ${nextCohortName(cohorts)})`] as [Section, string]] : []),
+    ['list', 'Course list and departments'], ['starts', 'Cohort start dates'], ...(canStart ? [['cohort', `Start a new cohort (next: ${nextCohortName(cohorts)})`] as [Section, string]] : []),
     ['percentages', 'Starting percentages'], ['grading', 'Grading and signatures'], ['upload', 'Upload past results'], ['log', 'Change log'],
   ];
   const pick: Section = sections.some(([k]) => k === section) ? (section as Section) : 'courses';
@@ -991,6 +1031,7 @@ function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, co
         : <Graduation org={org} cohort={cohort} info={info[cohort]} sheets={sheets} today={today} />)}
       {pick === 'deadlines' && <Deadlines org={org} cohort={cohort} info={info[cohort]} closed={closed} />}
       {pick === 'list' && <CourseListEditor org={org} courses={courses} courseList={courseList} canAddDepartment={can('settings.manage') || can('school.manage')} current={order.current} />}
+      {pick === 'starts' && <CohortStarts org={org} order={order} intakes={intakes} />}
       {pick === 'cohort' && <NewCohort org={org} cohorts={cohorts} programmes={programmes} today={today} onStarted={onStarted} />}
       {pick === 'percentages' && <Weighting org={org} />}
       {pick === 'grading' && <Grading org={org} />}
@@ -1031,7 +1072,7 @@ function Deadlines({ org, cohort, info, closed }: { org: Organization; cohort: s
         <p className="muted small">When each paper's marks are due. A course that has not sent a paper by its date shows as late, and Remind says how late.</p>
         <div className="form-grid">
           {EXAM_COMPONENTS.map((c) => (
-            <label key={c} className="field"><span>{paperName(c)}</span><input type="date" disabled={closed} defaultValue={due[c] ?? ''} key={`${c}-${due[c] ?? ''}`} onChange={(e) => setDue(c, e.target.value)} /></label>
+            <label key={c} className="field"><span>{paperName(c)}</span><AdiaDate type="date" disabled={closed} defaultValue={due[c] ?? ''} key={`${c}-${due[c] ?? ''}`} onChange={(e) => setDue(c, e.target.value)} /></label>
           ))}
         </div>
       </section>
@@ -1071,7 +1112,7 @@ function Graduation({ org, cohort, info, sheets, today }: { org: Organization; c
     <section className="card stack">
       <h2>Graduation · {cohort}</h2>
       <div className="row-actions">
-        <label className="field"><span>Graduation date</span><input type="date" defaultValue={date} key={date} onChange={(e) => setDate(e.target.value)} /></label>
+        <label className="field"><span>Graduation date</span><AdiaDate type="date" defaultValue={date} key={date} onChange={(e) => setDate(e.target.value)} /></label>
         <button type="button" className="btn btn-quiet align-end" disabled={!date} onClick={close}>Close {cohort} after graduation</button>
       </div>
       <p className="muted small">The date names the class, such as "{classOf(date || today)}", on results, transcripts and certificates. Close the cohort after graduation so nobody can change its marks.</p>
@@ -1307,7 +1348,7 @@ function NewCohort({ org, cohorts, programmes, today, onStarted }: { org: Organi
       <p className="muted small">The cohort starts in every department ({live.map((p) => p.name).join(', ') || 'none yet'}).</p>
       <div className="row-actions">
         <label className="field"><span>Name</span><input value={name} maxLength={80} onChange={(e) => setName(e.target.value)} /></label>
-        <label className="field"><span>Start date</span><input type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
+        <label className="field"><span>Start date</span><AdiaDate type="date" value={start} onChange={(e) => setStart(e.target.value)} /></label>
         <button type="button" className="btn btn-primary align-end" onClick={create}>Start {name.trim() || 'cohort'}</button>
       </div>
     </section>

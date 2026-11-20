@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { AdiaDate } from '../../components/AdiaDate';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../../state/AuthContext';
 import { useToast } from '../../state/ToastContext';
@@ -148,7 +149,7 @@ function NewCohort({ org, courseId, today, suggested, onDone }: { org: Organizat
     <div className="stack exam-add">
       <div className="form-grid">
         <label className="field"><span>Cohort name</span><input value={name} maxLength={60} placeholder="Cohort 5" onChange={(e) => setName(e.target.value)} /></label>
-        <label className="field"><span>Starts</span><input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
+        <label className="field"><span>Starts</span><AdiaDate type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
         <label className="field"><span>Places (leave blank for no limit)</span><input type="number" inputMode="numeric" min={0} value={capacity} onChange={(e) => setCapacity(e.target.value)} /></label>
       </div>
       <p className="muted small">Use the same cohort name in every department (for example "Cohort 5"), so Exam Records keeps them together.</p>
