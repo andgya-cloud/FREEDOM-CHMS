@@ -15,7 +15,7 @@ import { millis, usePettyCash, usePettyCashAccess, usePettyMonths, useReceipts, 
 import { addReceipt, savePayment, receiptData, rejectRequisition, submitRequisition } from '../../lib/pettyCashWrites';
 import { requisitionPdf } from '../../lib/pettyPdf';
 import { takePettyPrefill } from '../../lib/pettyPrefill';
-import { listPettyContacts, listPettySigners, raisePettyRequest, sendPettyEmail, signWithPin, type PettySigner } from '../../lib/pettyPin';
+import { listPettyContacts, listPettySigners, pettyAvailable, raisePettyRequest, sendPettyEmail, signWithPin, type PettySigner } from '../../lib/pettyPin';
 import { PettySignBox } from './PettySignBox';
 import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 
@@ -319,6 +319,7 @@ function NewRequisition({ org }: { org: Organization }) {
     <div className="page narrow">
       <div className="page-head"><h1>New requisition</h1></div>
       <PettyNav org={org} />
+      <AvailableNow org={org} bank={bank} />
       {/* A small link, so the form comes first (Andy 6A, 2026-10-30). */}
       {previous.length > 0 && (
         <details className="petty-copy">
@@ -416,6 +417,24 @@ function NewRequisition({ org }: { org: Organization }) {
   );
 }
 
+/**
+ * "Available now" on the New requisition form, so people know how much they can ask for (Andy, 2026-11-20, 5A).
+ * Those who keep the books see it from the statements; everyone else asks the server for the figure only.
+ */
+function AvailableNow({ org, bank }: { org: Organization; bank: ReturnType<typeof useBankMoney> }) {
+  const [remote, setRemote] = useState<{ asOf: string; availableCents: number } | null>(null);
+  const local = bank.ready && !!bank.asOf;
+  useEffect(() => {
+    if (local) return;
+    let live = true;
+    pettyAvailable(org.id).then((x) => { if (live) setRemote(x); }).catch(() => undefined);
+    return () => { live = false; };
+  }, [org.id, local]);
+  const m = local ? { asOf: bank.asOf, availableCents: bank.availableCents } : remote;
+  if (!m?.asOf) return null;
+  return <p className="petty-left">Available now: <strong>{money(org, m.availableCents)}</strong> <span className="small muted">(bank balance on {m.asOf.split('-').reverse().join('/')}, less what was approved since)</span></p>;
+}
+
 export function RequisitionPage() {
   return <PettyGate title="Requisition">{(org) => <Requisition org={org} />}</PettyGate>;
 }
@@ -451,7 +470,7 @@ function Requisition({ org }: { org: Organization }) {
   // The last signature may not take the cash left below zero (Andy, 2026-10-24).
   // Paid from the bank (Andy, 2026-11-09, 4A): the last signature may not go above the money available.
   const shortOfCash = waitingToSign && bank.ready && sigs.length + 1 >= REQUEST_SIGNATURES_NEEDED && (!bank.asOf || bank.availableCents - r.totalCents < 0);
-  const cashNote = shortOfCash && <p className="petty-warn">{bank.asOf ? `Not enough money in the bank to approve this: ${money(org, Math.max(0, bank.availableCents))} available, and this request is ${money(org, r.totalCents)}. Upload the latest bank statement, then sign.` : 'Upload the bank statement first (Financial statements), then sign.'}</p>;
+  const cashNote = shortOfCash && <p className="petty-warn">{bank.asOf ? `Not enough money in the bank to approve this: ${money(org, Math.max(0, bank.availableCents))} available, and this request is ${money(org, r.totalCents)}. Upload the latest bank statement or type today's balance, then sign.` : 'Upload the bank statement or type the bank balance first (Petty cash › Money in the bank), then sign.'}</p>;
   const signOffs = r.signatures
     ? Array.from({ length: REQUEST_SIGNATURES_NEEDED }, (_, n) => {
       const s = sigs[n];

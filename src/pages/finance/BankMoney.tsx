@@ -6,6 +6,9 @@ import { KpiCard, KpiRow } from '../../components/charts';
 import { millis, usePettyCash, type RequisitionRow } from '../../state/usePettyCash';
 import { useDaily, useFinance } from '../../state/useFinance';
 import { useToast } from '../../state/ToastContext';
+import { useAuth } from '../../state/AuthContext';
+import { typeBankBalance } from '../../lib/pettyPin';
+import { canTypeBankBalance, typesWithoutPin } from '../../../functions/src/shared/bankTyped';
 import { friendlyError } from '../../lib/errors';
 import { accountKindOf, kenyaToday, planUpload, savePlan, uploadNote, type UploadPlan } from './statementUpload';
 import { bankMoney, FIN_ACCOUNT_SUGGESTIONS, type BankMoney, type ParsedStatement } from '../../../functions/src/shared/finance';
@@ -31,8 +34,8 @@ export function useBankMoney(org: Organization): BankMoney & { ready: boolean; a
   return useMemo(() => {
     const approved = p.requisitions.filter((r) => r.status === 'approved' && !r.pastRecord)
       .map((r) => ({ day: dayOf(millis(r.approved?.at) ?? millis(r.createdAt) ?? Date.now()), cents: r.totalCents }));
-    return { ...bankMoney(fin.statements, approved, kenyaToday()), approved, ready: !fin.loading && !p.loading };
-  }, [fin.statements, fin.loading, p.requisitions, p.loading]);
+    return { ...bankMoney(fin.statements, approved, kenyaToday(), fin.typed), approved, ready: !fin.loading && !p.loading };
+  }, [fin.statements, fin.typed, fin.loading, p.requisitions, p.loading]);
 }
 
 /** The Overview card: bank balance, paid since, available, where it comes from, and an upload right here (2A). */
@@ -44,18 +47,24 @@ export function BankMoneyCard({ org }: { org: Organization }) {
       <h2>Money in the bank</h2>
       {m.asOf ? (
         <KpiRow label="Money in the bank">
-          <KpiCard label={`Bank balance, ${shortDay(m.asOf)}`} value={money(org, m.bankCents)} />
+          <KpiCard label={`Bank balance, ${shortDay(m.asOf)}`} value={money(org, m.bankCents)} note={m.typed ? `Typed by ${m.typed.byName}` : 'From the statement'} />
           <KpiCard label="Approved since" value={money(org, m.paidSinceCents)} note={`${m.paidSince} requisition${m.paidSince === 1 ? '' : 's'}`} />
           <KpiCard label="Available" value={money(org, m.availableCents)} tone={m.availableCents > 0 ? 'ok' : 'warn'} />
         </KpiRow>
-      ) : <p className="petty-warn">No bank statement uploaded yet, so requisitions cannot be approved.</p>}
+      ) : <p className="petty-warn">No bank statement or typed balance yet, so requisitions cannot be approved.</p>}
+      {m.differs.map((x) => (
+        <p key={`${x.day}${x.typedCents}`} className="petty-warn small">
+          On {shortDay(x.day)} {x.byName} typed {money(org, x.typedCents)}, but the statement shows {money(org, x.statementCents)} at the end of that day.
+        </p>
+      ))}
       {m.sources.length > 0 && (
         <p className="small muted">
-          From {m.sources.map((x) => `${x.account}: ${money(org, x.cents)} on ${shortDay(x.asOf)}${x.fileName ? ` (${x.fileName})` : ''}`).join('; ')}.
+          Statement{m.typed ? ' (older than the typed balance)' : ''}: {m.sources.map((x) => `${x.account}: ${money(org, x.cents)} on ${shortDay(x.asOf)}${x.fileName ? ` (${x.fileName})` : ''}`).join('; ')}.
         </p>
       )}
       {m.futureLines > 0 && <p className="petty-warn small">{m.futureLines} statement line{m.futureLines === 1 ? ' is' : 's are'} dated after today and left out. Check the dates in <Link to="/finance">Financial statements</Link>.</p>}
       <QuickUpload org={org} money={m} />
+      <TypeBalance org={org} />
     </section>
   );
 }
@@ -86,7 +95,7 @@ function QuickUpload({ org, money: m }: { org: Organization; money: BankMoney & 
 
   async function save(read: ParsedStatement, plan: UploadPlan, fl: File) {
     if (!plan.lines.length) { setNote(uploadNote(fmt, account, read, m, null)); return; }
-    const after = await savePlan(org.id, account, fl.name, plan, fin.statements, m.approved);
+    const after = await savePlan(org.id, account, fl.name, plan, fin.statements, m.approved, fin.typed);
     setNote(uploadNote(fmt, account, read, m, after));
   }
   async function open(fl: File, pw?: string) {
@@ -154,4 +163,72 @@ function QuickUpload({ org, money: m }: { org: Organization; money: BankMoney & 
       <p className="small muted">Any day, even part of a month. Lines already in are left out. Sorting and reports are in <Link to="/finance">Financial statements</Link>.</p>
     </div>
   );
+}
+
+/**
+ * Type the bank balance (Andy, 2026-11-20, 1A 2A 3A 6A): Andrew, Doreen, Elias and Daniel. Andrew and Doreen
+ * need no PIN; Elias and Daniel type their own. It counts when it is as new as the statements, and the last
+ * five typed balances show who typed them.
+ */
+function TypeBalance({ org }: { org: Organization }) {
+  const fin = useFinance(org);
+  const { profile } = useAuth();
+  const toast = useToast();
+  const name = profile?.displayName ?? '';
+  const mayType = canTypeBankBalance(name);
+  const noPin = typesWithoutPin(name);
+  const [open, setOpen] = useState(false);
+  const [amount, setAmount] = useState('');
+  const [day, setDay] = useState(kenyaToday());
+  const [pin, setPin] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cents = parseBalanceCents(amount);
+  const recent = [...fin.typed].reverse().slice(0, 5);
+  async function save() {
+    if (cents == null || !day) return;
+    setBusy(true);
+    try {
+      const who = await typeBankBalance({ orgId: org.id, day, cents, pin: noPin ? '' : pin.trim() });
+      toast.show(`Bank balance ${money(org, cents)} for ${shortDay(day)} saved by ${who}.`);
+      setAmount(''); setPin(''); setOpen(false); setDay(kenyaToday());
+    } catch (err) {
+      toast.show(friendlyError(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+  if (!mayType && !recent.length) return null;
+  return (
+    <div className="stack">
+      {mayType && !open && <button type="button" className="btn align-start" onClick={() => setOpen(true)}>Type the bank balance</button>}
+      {mayType && open && (
+        <form className="stack" onSubmit={(e) => { e.preventDefault(); void save(); }}>
+          <div className="field-row">
+            <label className="field"><span>Bank balance (KES)</span><input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="84,350" autoFocus /></label>
+            <label className="field"><span>On</span><input type="date" value={day} max={kenyaToday()} onChange={(e) => setDay(e.target.value)} /></label>
+          </div>
+          {!noPin && <label className="field"><span>Your PIN</span><input type="password" inputMode="numeric" value={pin} onChange={(e) => setPin(e.target.value)} /></label>}
+          <div className="field-row">
+            <button type="submit" className="btn btn-primary align-start" disabled={busy || cents == null || (!noPin && !pin.trim())}>{busy ? 'Saving…' : 'Save balance'}</button>
+            <button type="button" className="btn btn-quiet align-start" onClick={() => setOpen(false)}>Cancel</button>
+          </div>
+        </form>
+      )}
+      {recent.length > 0 && (
+        <div className="small">
+          <strong>Typed balances</strong>
+          <ul className="plain small muted">
+            {recent.map((x) => <li key={x.id}>{shortDay(x.day)}: {money(org, x.cents)}, typed by {x.byName}</li>)}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** A typed balance: "84,350", "84350.50"; a minus is allowed for an overdrawn account. */
+function parseBalanceCents(text: string): number | null {
+  const s = text.replace(/KES|Ksh|,|\s/gi, '');
+  if (!/^-?\d+(\.\d{1,2})?$/.test(s)) return null;
+  return Math.round(Number(s) * 100);
 }

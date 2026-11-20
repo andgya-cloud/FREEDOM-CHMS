@@ -282,10 +282,11 @@ export const signWithPin = onCall(PASSWORDS, async (request) => {
       const eatDay = (t: unknown) => new Date(ms(t) + 3 * 3_600_000).toISOString().slice(0, 10);
       const paid = live<{ pastRecord?: boolean; totalCents: number; approved?: { at?: unknown }; createdAt?: unknown }>(spent)
         .filter((x) => !x.pastRecord).map((x) => ({ day: eatDay(x.approved?.at ?? x.createdAt), cents: x.totalCents }));
-      const m = bankMoney(live<BankStatement>(sts), paid, eatDay(null));
-      if (!m.asOf) throw new HttpsError('failed-precondition', 'Upload the bank statement first (Financial statements), so the app knows the money in the bank.');
+      const { typedBalances } = await import('./pettyBankTyped.js');
+      const m = bankMoney(live<BankStatement>(sts), paid, eatDay(null), await typedBalances(orgId));
+      if (!m.asOf) throw new HttpsError('failed-precondition', 'Upload the bank statement or type the bank balance first (Petty cash › Money in the bank), so the app knows the money in the bank.');
       if (m.availableCents - (r.totalCents as number) < 0) {
-        throw new HttpsError('failed-precondition', `Not enough money in the bank: ${formatMoney(Math.max(0, m.availableCents), 'KES')} available (statement to ${m.asOf.split('-').reverse().join('/')}), and this request is ${formatMoney(r.totalCents as number, 'KES')}. Upload the latest bank statement, then sign.`);
+        throw new HttpsError('failed-precondition', `Not enough money in the bank: ${formatMoney(Math.max(0, m.availableCents), 'KES')} available (bank balance on ${m.asOf.split('-').reverse().join('/')}), and this request is ${formatMoney(r.totalCents as number, 'KES')}. Upload the latest bank statement or type today's balance, then sign.`);
       }
     }
     const mine = { name, role, at: FieldValue.serverTimestamp(), ...proxy, ...(director ? { director: true } : {}) };

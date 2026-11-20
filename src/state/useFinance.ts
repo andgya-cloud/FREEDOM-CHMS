@@ -3,7 +3,7 @@ import { collection, doc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import { useLiveDoc, useLiveQuery } from '../lib/useQuery';
-import type { BankStatement, CashCount, DailyBankEntry, OrgKind, OwnedItem } from '../../functions/src/shared/finance';
+import type { BankStatement, TypedBalance, CashCount, DailyBankEntry, OrgKind, OwnedItem } from '../../functions/src/shared/finance';
 import type { Organization } from './OrgContext';
 
 /** Who keeps the financial statements: the petty cash signatories, finance and the pastor (Andy, 2026-11-08, 6A). */
@@ -23,6 +23,9 @@ export interface FinMonthRow {
 export const isLocked = (months: Readonly<Record<string, FinMonthRow>>, d: string) => months[d.slice(0, 7)]?.status === 'closed';
 
 export interface StatementRow extends BankStatement { deletedAt?: unknown }
+/** A bank balance typed in (Andy, 2026-11-20): who typed it, for which day, and when. */
+export interface TypedRow extends TypedBalance { id: string; by: string; at?: unknown; deletedAt?: unknown }
+const millisOf = (v: unknown) => (v && typeof (v as { toMillis?: () => number }).toMillis === 'function' ? (v as { toMillis: () => number }).toMillis() : null);
 
 /** An organization's uploaded statements, the remembered choices, the budget and what it owns and owes. */
 export function useFinance(org: Organization) {
@@ -33,10 +36,13 @@ export function useFinance(org: Organization) {
   const learned = useLiveDoc<{ learned?: Record<string, string> }>(() => (on ? doc(db, 'organizations', org.id, 'finBooks', 'learned') : null), [org.id, on]);
   const budget = useLiveDoc<{ budget?: Record<string, number> }>(() => (on ? doc(db, 'organizations', org.id, 'finBooks', 'budget') : null), [org.id, on]);
   const owned = useLiveDoc<{ owned?: OwnedItem[] }>(() => (on ? doc(db, 'organizations', org.id, 'finBooks', 'owned') : null), [org.id, on]);
+  const t = useLiveQuery<TypedRow>(() => (on ? collection(db, 'organizations', org.id, 'bankTyped') : null), [org.id, on]);
+  // Oldest typed first, so the last one typed for a day is the one that counts.
+  const typed = useMemo(() => t.rows.filter((x) => !x.deletedAt).sort((a, b) => (millisOf(a.at) ?? 0) - (millisOf(b.at) ?? 0)), [t.rows]);
   const m = useLiveQuery<FinMonthRow>(() => (on ? collection(db, 'organizations', org.id, 'finMonths') : null), [org.id, on]);
   const months = useMemo(() => Object.fromEntries(m.rows.map((x) => [x.id, x])), [m.rows]);
   return {
-    allowed, statements, loading: res.loading, months,
+    allowed, statements, loading: res.loading || t.loading, months, typed,
     learned: learned.data?.learned ?? {}, budget: budget.data?.budget ?? {}, owned: owned.data?.owned ?? [],
   };
 }

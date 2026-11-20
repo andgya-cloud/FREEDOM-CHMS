@@ -980,6 +980,24 @@ export interface BankMoney {
   sources: { account: string; asOf: string; cents: number; fileName: string }[];
   /** Lines dated after today, left out: a misread date must not hold the balance on an old line. */
   futureLines: number;
+  /** The typed balance in use, when it is newer than the statements (Andy, 2026-11-20, 3A). */
+  typed: TypedBalance | null;
+  /** Typed balances on days a statement now covers, where the statement says otherwise (4A). */
+  differs: { day: string; typedCents: number; statementCents: number; byName: string }[];
+}
+
+/** A bank balance typed in by Andrew, Doreen, Elias or Daniel (Andy, 2026-11-20, 1A 2A). */
+export interface TypedBalance { day: string; cents: number; byName: string }
+
+/** The statement balance at the end of a day: each bank account's last line on or before it, added up. */
+function balanceOn(byAccount: readonly { d: string; b: number }[][], day: string): number | null {
+  let total = 0; let any = false;
+  for (const ls of byAccount) {
+    let last: { b: number } | null = null;
+    for (const l of ls) { if (l.d <= day) last = l; else break; }
+    if (last) { total += last.b; any = true; }
+  }
+  return any ? total : null;
 }
 
 /** Whether an account is M-Pesa (its money is not the bank's). */
@@ -994,6 +1012,7 @@ export function bankMoney(
   statements: readonly (Pick<BankStatement, 'account' | 'accountKind' | 'from' | 'lines'> & { fileName?: string })[],
   approved: readonly { day: string; cents: number }[],
   today = '9999-12-31',
+  typedIn: readonly TypedBalance[] = [],
 ): BankMoney {
   // An account saved as M-Pesa only because its name said "Paybill" is still the bank (Andy, 2026-11-20).
   const bank = statements.filter((s) => s.accountKind === 'bank' || !isMpesaAccount(s.account));
@@ -1001,6 +1020,7 @@ export function bankMoney(
   let asOf = '';
   let futureLines = 0;
   const sources: BankMoney['sources'] = [];
+  const byAccount: { d: string; b: number }[][] = [];
   for (const account of new Set(bank.map((s) => s.account))) {
     const all = bank.filter((s) => s.account === account).flatMap((s) => s.lines.map((l, n) => ({ ...l, from: s.from, n, fileName: s.fileName ?? '' })));
     const ls = all.filter((l) => l.d <= today)
@@ -1008,11 +1028,25 @@ export function bankMoney(
     futureLines += all.length - ls.length;
     const last = ls[ls.length - 1];
     if (!last) continue;
+    byAccount.push(ls);
     bankCents += last.b;
     sources.push({ account, asOf: last.d, cents: last.b, fileName: last.fileName });
     if (last.d > asOf) asOf = last.d;
   }
+  const statementAsOf = asOf;
+  // A typed balance counts when its day is the same as or later than the statements' (3A).
+  const typedOk = typedIn.filter((t) => t.day <= today).sort((a, b) => a.day.localeCompare(b.day));
+  const latestTyped = typedOk[typedOk.length - 1] ?? null;
+  const typed = latestTyped && latestTyped.day >= asOf ? latestTyped : null;
+  if (typed) { bankCents = typed.cents; asOf = typed.day; }
+  const differs: BankMoney['differs'] = [];
+  if (statementAsOf) {
+    for (const t of typedOk.filter((x) => x.day <= statementAsOf).slice(-5)) {
+      const st = balanceOn(byAccount, t.day);
+      if (st != null && st !== t.cents) differs.push({ day: t.day, typedCents: t.cents, statementCents: st, byName: t.byName });
+    }
+  }
   const since = asOf ? approved.filter((a) => a.day > asOf) : [];
   const paidSinceCents = since.reduce((n, a) => n + a.cents, 0);
-  return { bankCents, asOf, paidSinceCents, paidSince: since.length, availableCents: bankCents - paidSinceCents, sources, futureLines };
+  return { bankCents, asOf, paidSinceCents, paidSince: since.length, availableCents: bankCents - paidSinceCents, sources, futureLines, typed, differs };
 }
