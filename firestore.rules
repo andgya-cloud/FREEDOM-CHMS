@@ -1632,6 +1632,11 @@ service cloud.firestore {
           );
         allow delete: if false;
       }
+      // Typed bank balances (Andy, 2026-11-20): written only by typeBankBalance, which checks who and their PIN.
+      match /bankTyped/{typedId} {
+        allow read: if finBooks();
+        allow write: if false;
+      }
       match /bankStatements/{statementId} {
         allow read: if finBooks();
         allow create: if finBooks() && stampedCreate() && freshRecord()

@@ -91,7 +91,7 @@ export function BankMatchCard({ org }: { org: Organization }) {
     const plan = planUpload(read, account, { statements: fin.statements, learned: fin.learned, orgType: org.type, daily: daily.entries, months: fin.months });
     const fmt = (c: number) => money(org, c);
     if (!plan.lines.length) { setBankNote(uploadNote(fmt, account, read, bank, null)); return true; }
-    const after = await savePlan(org.id, account, file.name, plan, fin.statements, bank.approved);
+    const after = await savePlan(org.id, account, file.name, plan, fin.statements, bank.approved, fin.typed);
     setBankNote(uploadNote(fmt, account, read, bank, after));
     return true;
   }

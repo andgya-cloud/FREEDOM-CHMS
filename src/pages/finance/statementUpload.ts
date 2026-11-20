@@ -1,4 +1,4 @@
-import { autoCategory, bankMoney, isMpesaAccount, lineKey, typedCategory, type BankLine, type BankMoney, type DailyBankEntry, type ParsedStatement } from '../../../functions/src/shared/finance';
+import { autoCategory, bankMoney, isMpesaAccount, lineKey, typedCategory, type BankLine, type BankMoney, type DailyBankEntry, type TypedBalance, type ParsedStatement } from '../../../functions/src/shared/finance';
 import { saveStatement } from '../../lib/financeWrites';
 import { isLocked, orgKind, type FinMonthRow, type StatementRow } from '../../state/useFinance';
 
@@ -29,12 +29,12 @@ export function planUpload(read: ParsedStatement, name: string, ctx: {
 export const accountKindOf = (name: string): 'bank' | 'mpesa' => (isMpesaAccount(name) ? 'mpesa' : 'bank');
 
 /** Saves the plan's lines and returns the money in the bank as it now stands, worked out at once. */
-export async function savePlan(orgId: string, account: string, fileName: string, plan: UploadPlan, statements: readonly StatementRow[], approved: readonly { day: string; cents: number }[]): Promise<BankMoney> {
+export async function savePlan(orgId: string, account: string, fileName: string, plan: UploadPlan, statements: readonly StatementRow[], approved: readonly { day: string; cents: number }[], typed: readonly TypedBalance[] = []): Promise<BankMoney> {
   const lines = plan.lines;
   const first = lines[0]!; const last = lines[lines.length - 1]!;
   const kind = accountKindOf(account);
   await saveStatement(orgId, { account, accountKind: kind, fileName, from: first.d, to: last.d, openingCents: first.b - first.i + first.o, closingCents: last.b, lines });
-  return bankMoney([...statements, { account, accountKind: kind, from: first.d, fileName, lines }], approved, kenyaToday());
+  return bankMoney([...statements, { account, accountKind: kind, from: first.d, fileName, lines }], approved, kenyaToday(), typed);
 }
 
 /** Turns money into "KES 1,234.00"-style text; passed in so this file needs no organization. */
@@ -54,6 +54,9 @@ export function uploadNote(fmt: Fmt, account: string, read: ParsedStatement, bef
   if (accountKindOf(account) === 'mpesa') return { text: `Saved to ${account}. That is an M-Pesa account, so it does not change Money in the bank.`, tone: 'warn' };
   if (mine && read.to && read.to < mine.asOf) {
     return { text: `This file runs to ${showDay(read.to)}, older than the statement already in (to ${showDay(mine.asOf)}). Its missing lines were added; Money in the bank stays at ${fmt(after.bankCents)}.`, tone: 'warn' };
+  }
+  if (after.typed) {
+    return { text: `Saved. The balance ${after.typed.byName} typed for ${showDay(after.typed.day)} is newer than this statement, so Money in the bank stays at ${fmt(after.bankCents)}.`, tone: 'ok' };
   }
   const changed = after.bankCents !== before.bankCents || after.asOf !== before.asOf;
   return {

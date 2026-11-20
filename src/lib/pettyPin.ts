@@ -123,3 +123,15 @@ export async function matchBankPayments(args: { orgId: string; signerUid: string
   const res = await httpsCallable<typeof args, { matched: number; changed: number }>(functions, 'matchBankPayments', { timeout: 120_000 })(args);
   return res.data;
 }
+
+/** Types the bank balance for a day (Andy, 2026-11-20). Andrew and Doreen send no PIN. Returns who typed it. */
+export async function typeBankBalance(args: { orgId: string; day: string; cents: number; pin: string }): Promise<string> {
+  const res = await httpsCallable<typeof args, { name: string }>(functions, 'typeBankBalance')(args);
+  return res.data.name;
+}
+
+/** What petty cash can still use, for anyone with petty cash access (Andy, 2026-11-20, 5A). */
+export async function pettyAvailable(orgId: string): Promise<{ asOf: string; availableCents: number }> {
+  const res = await httpsCallable<{ orgId: string }, { asOf: string; availableCents: number }>(functions, 'pettyAvailable')({ orgId });
+  return res.data;
+}

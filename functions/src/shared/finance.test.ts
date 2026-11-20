@@ -330,6 +330,19 @@ describe('bankMoney', () => {
     expect(m).toMatchObject({ bankCents: 700, asOf: '2026-11-19', futureLines: 1 });
     expect(m.sources[0]!.fileName).toBe('new.pdf');
   });
+  it('uses a typed balance when it is as new as the statements, and flags one a statement disagrees with', () => {
+    const line = (d: string, b: number) => ({ d, t: '', r: '', i: 0, o: 0, b, c: '', s: true });
+    const st = [{ account: 'Family Bank', accountKind: 'bank' as const, from: '2026-11-01', lines: [line('2026-11-10', 1_000), line('2026-11-15', 2_000)] }];
+    const req = [{ day: '2026-11-16', cents: 300 }, { day: '2026-11-18', cents: 100 }];
+    const newer = bankMoney(st, req, '2026-11-20', [{ day: '2026-11-17', cents: 5_000, byName: 'Elias Omondi' }]);
+    expect(newer).toMatchObject({ bankCents: 5_000, asOf: '2026-11-17', paidSinceCents: 100, availableCents: 4_900 });
+    expect(newer.typed?.byName).toBe('Elias Omondi');
+    const older = bankMoney(st, req, '2026-11-20', [{ day: '2026-11-12', cents: 1_500, byName: 'Andrew Guya' }]);
+    expect(older).toMatchObject({ bankCents: 2_000, asOf: '2026-11-15', typed: null });
+    expect(older.differs).toEqual([{ day: '2026-11-12', typedCents: 1_500, statementCents: 1_000, byName: 'Andrew Guya' }]);
+    expect(bankMoney(st, [], '2026-11-20', [{ day: '2026-11-15', cents: 2_000, byName: 'x' }]).differs).toEqual([]);
+    expect(bankMoney([], [], '2026-11-20', [{ day: '2026-11-21', cents: 9, byName: 'x' }]).asOf).toBe('');
+  });
   it('counts an account saved as M-Pesa only because its name says Paybill', () => {
     const st = [{ account: 'Family Bank Paybill 222118', accountKind: 'mpesa' as const, from: '2026-11-01', lines: [{ d: '2026-11-02', t: '', r: '', i: 0, o: 0, b: 50, c: '', s: true }] }];
     expect(bankMoney(st, []).bankCents).toBe(50);

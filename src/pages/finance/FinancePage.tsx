@@ -113,6 +113,7 @@ function UploadCard({ org, statements, learned, months }: { org: Organization; s
   const plan = useMemo(() => (read && name ? planUpload(read, name, { statements, learned, orgType: org.type, daily: daily.entries, months }) : null),
     [read, name, statements, learned, org.type, daily.entries, months]);
   const bank = useBankMoney(org);
+  const typedRows = useFinance(org).typed;
   const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
 
   async function save() {
@@ -121,7 +122,7 @@ function UploadCard({ org, statements, learned, months }: { org: Organization; s
     if (!plan.lines.length) { setNote(uploadNote((c) => money(org, c), name, read, bank, null)); setFile(null); setRead(null); return; }
     setBusy(true);
     try {
-      const after = await savePlan(org.id, name, file.name, plan, statements, bank.approved);
+      const after = await savePlan(org.id, name, file.name, plan, statements, bank.approved, typedRows);
       setNote(uploadNote((c) => money(org, c), name, read, bank, after));
       toast.show(`Saved ${plan.lines.length} lines from ${file.name}, month by month.`);
       setFile(null); setRead(null); setAccount(name);
