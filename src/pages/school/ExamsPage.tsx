@@ -206,7 +206,9 @@ function Exams({ org }: { org: Organization }) {
           {view === 'register' && <ExamRegisterView org={org} cohort={cohort} label={label} students={students} sheets={sheets} courseName={s.courseName} attendance={attendance} today={s.today} />}
           {view === 'transcripts' && (
             <TranscriptsView org={org} cohort={cohort} label={label} students={students} sheets={sheets} courseName={s.courseName} attendance={attendance} today={s.today}
-              dates={dates} pick={params.get('student') ?? ''} onPick={(id) => go({ student: id })} />
+              dates={dates} pick={params.get('student') ?? ''} onPick={(id) => go({ student: id })}
+              intakeStart={(courseId) => s.intakes.filter((i) => i.name === cohort && i.startDate && (!courseId || i.courseId === courseId)).map((i) => i.startDate).sort()[0] ?? null}
+              graduationDate={choice?.graduationDate ?? null} />
           )}
           {view === 'nita' && <NitaBoard org={org} cohort={cohort} />}
           {view === 'graduation' && <GraduationBoard org={org} cohort={cohort} />}
@@ -1484,6 +1486,7 @@ function Grading({ org }: { org: Organization }) {
       <div className="form-grid">
         <label className="field"><span>Principal's name</span><input value={v.principalName} onChange={(e) => setF({ ...v, principalName: e.target.value })} /></label>
         <label className="field"><span>Title</span><input value={v.principalTitle} onChange={(e) => setF({ ...v, principalTitle: e.target.value })} /></label>
+        <label className="field"><span>Registrar's name (printed under the Registrar's line on transcripts)</span><input value={v.registrarName ?? ''} maxLength={120} onChange={(e) => setF({ ...v, registrarName: e.target.value })} /></label>
         <label className="field"><span>Director's name</span><input value={v.directorName} onChange={(e) => setF({ ...v, directorName: e.target.value })} /></label>
         <label className="field"><span>Title</span><input value={v.directorTitle} onChange={(e) => setF({ ...v, directorTitle: e.target.value })} /></label>
       </div>

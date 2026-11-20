@@ -189,14 +189,30 @@ export interface Transcript {
   name: string; admissionNo: string; programme: string; cohort: string; semesters: TranscriptSemester[]; final: FinalResult; printed: SemesterScore | null; notes: string[];
   /** Added for the Students transcripts section (Andy, 2026-11-19, 6A-8A). */
   serial?: string; verify?: string; attendance?: number | null; nita?: string; dates?: string; provisional?: boolean; issuedOn?: string;
-  /** Industrial attachment mark and grade, e.g. "78 · Credit" (Andy, 2026-11-19, 7A). */
+  /** Industrial attachment mark and grade, e.g. "78 · B" (Andy, 2026-11-19, 7A). */
   attachment?: string;
+  /** ADIA's layout (Andy, 2026-11-20, Stage 2): "ATC-2508", "HOSPITALITY", "AUGUST 2025", "DECEMBER 2026", "11-12-2026". */
+  atc?: string; department?: string; admittedOn?: string; completedOn?: string; graduatedOn?: string;
+  /** Hours covered in Semester I and II, and the attachment's hours when it is on the Semester II page. */
+  hours?: [number | null, number | null]; attachmentHours?: number | null;
+  /** Printed beside the Registrar line: the date the transcript is printed, "20-11-2026". */
+  printedOn?: string;
 }
 
+/** The figure a semester shows: its points, or a running figure while marks are still coming in. */
+export const semesterPointsText = (sem: Pick<TranscriptSemester, 'points' | 'partial'>) => (sem.points != null ? sem.points.toFixed(2) : sem.partial != null ? `(${sem.partial.toFixed(2)}) so far` : '–');
+/** A unit's grade on the transcript: the letter once its total is in. */
+export const unitGradeText = (c: Pick<CourseLine, 'total'>, settings: Pick<ExamSettings, 'bands'>) => (c.total == null ? '–' : gradeFor(c.total, settings).grade);
+/** What the transcript prints for a semester whose results came from the past-results upload (Stage 2, 4A). */
+export const PAST_ONLY_NOTE = 'Unit grades held on the college file.';
+export const SEAL_NOTE = ['This Transcript is issued without any alterations whatsoever and is only valid with the College Seal', 'Any queries relating to this document should be addressed to the Academic Registrar'];
+
 /**
- * Full academic transcripts on the ADIA letterhead, one A4 page per student (Andy, 2026-10-24): each
- * semester with its courses (from the marks sheets) or its points (from past results), and the final
- * result, the average of the two semesters.
+ * Academic transcripts in ADIA's own layout (Andy, 2026-11-20, Stage 2: 1A+B 2A 3A 4A), one A4 page per
+ * semester as on the Cohort 2 transcripts: the ATC number, the letterhead, the student's details with
+ * cumulative points and Honours, each unit's code, description, credit and grade, the semester's points and
+ * award, the grading system, hours covered, the Registrar's line with the date and name, and the seal note.
+ * The app adds the serial number and QR check code, and Powered by Insight-IQ.
  */
 export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings: ExamSettings; title: string }): Promise<File> {
   const { transcripts, settings, title } = opts;
@@ -206,190 +222,127 @@ export async function transcriptsPdf(opts: { transcripts: Transcript[]; settings
   const w = pdf.internal.pageSize.getWidth();
   const h = pdf.internal.pageSize.getHeight();
   const img = await crestImage();
+  const L = 20, R = w - 20;
+  const ROMAN = ['I', 'II'];
+  let first = true;
   transcripts.forEach((t, n) => {
-    if (n > 0) pdf.addPage();
-    pdf.setFillColor(...NAVY);
-    pdf.rect(0, 0, w, 36, 'F');
-    pdf.setFillColor(...GOLD);
-    pdf.rect(0, 36, w, 1.8, 'F');
-    pdf.setFillColor(255, 255, 255);
-    pdf.setDrawColor(...GOLD);
-    pdf.setLineWidth(0.9);
-    pdf.circle(26, 18, 12, 'FD');
-    if (img) pdf.addImage(img, 'PNG', 18, 10, 16, 16);
-    pdf.setTextColor(255, 255, 255);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(17);
-    pdf.text('ADIA Training Centre', 44, 16);
-    pdf.setTextColor(...GOLD);
-    pdf.setFontSize(9);
-    pdf.setCharSpace(1.6);
-    pdf.text('ACADEMIC TRANSCRIPT', 44, 23);
-    pdf.setCharSpace(0);
-    pdf.setTextColor(220, 224, 235);
-    pdf.setFont('helvetica', 'normal');
-    pdf.text(t.dates ? `${t.cohort} · ${t.dates}` : t.cohort, 44, 29.5);
-    if (t.serial) {
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(`No. ${t.serial}`, w - 14, 16, { align: 'right' });
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(8);
-      pdf.setTextColor(220, 224, 235);
-      if (t.issuedOn) pdf.text(`Issued ${t.issuedOn}`, w - 14, 22, { align: 'right' });
-    }
-
-    let y = 46;
-    pdf.setFillColor(...GOLD_SOFT);
-    pdf.rect(14, y - 5, w - 28, 12, 'F');
-    pdf.setFillColor(...GOLD);
-    pdf.rect(14, y - 5, 1.2, 12, 'F');
-    const who: [string, string][] = [['NAME', t.name], ['ADMISSION NO.', t.admissionNo || '–'], ['PROGRAMME', t.programme || '–']];
-    const cw = (w - 34) / 3;
-    who.forEach(([k, v], i) => {
-      const x = 18 + i * cw;
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(6.5);
-      pdf.setTextColor(138, 109, 44);
-      pdf.text(k, x, y);
-      pdf.setFontSize(9.5);
+    t.semesters.forEach((sem, si) => {
+      if (!first) pdf.addPage();
+      first = false;
       pdf.setTextColor(...NAVY);
-      pdf.text(pdf.splitTextToSize(v, cw - 3)[0] as string, x, y + 4.2);
-    });
-    y += 16;
+      // The ATC number at the top right, the crest and letterhead in the middle.
+      if (t.atc) { pdf.setFont('times', 'bold'); pdf.setFontSize(11); pdf.text(t.atc, R, 16, { align: 'right' }); }
+      if (img) pdf.addImage(img, 'PNG', w / 2 - 9, 9, 18, 18);
+      pdf.setFont('times', 'bold');
+      pdf.setFontSize(16);
+      pdf.setTextColor(...GOLD);
+      pdf.setCharSpace(3);
+      pdf.text('A D I A', w / 2, 33, { align: 'center' });
+      pdf.setCharSpace(0.8);
+      pdf.setFontSize(9);
+      pdf.text('TRAINING CENTRE', w / 2, 38, { align: 'center' });
+      pdf.setCharSpace(0);
+      pdf.setTextColor(...NAVY);
+      pdf.setFontSize(10);
+      pdf.text('P.O. BOX 22870-00100 NAIROBI', w / 2, 44, { align: 'center' });
+      pdf.setFont('times', 'normal');
+      pdf.setFontSize(9);
+      pdf.text('TEL: +254 105 086 218  —  E-MAIL: info@adiaempowerment.org', w / 2, 49, { align: 'center' });
+      pdf.setFont('times', 'bold');
+      pdf.setFontSize(14);
+      pdf.text('ACADEMIC TRANSCRIPT', w / 2, 59, { align: 'center' });
 
-    for (const sem of t.semesters) {
-      pdf.setFillColor(...NAVY);
-      pdf.rect(14, y - 4.5, w - 28, 7, 'F');
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(8.5);
-      pdf.setTextColor(255, 255, 255);
-      pdf.text(sem.label.toUpperCase(), 16, y);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7.5);
-      pdf.text(sem.source, w - 16, y, { align: 'right' });
-      y += 6.5;
-      pdf.setTextColor(...INK);
-      if (sem.courses.length) {
-        pdf.setFont('helvetica', 'bold');
-        pdf.setFontSize(7.5);
-        pdf.setTextColor(...GREY);
-        pdf.text('Course', 16, y); pdf.text('Mark %', 160, y, { align: 'right' }); pdf.text('Grade', 172, y);
-        y += 5;
-        for (const c of sem.courses) {
-          pdf.setFont('helvetica', 'normal');
-          pdf.setFontSize(8.5);
-          pdf.setTextColor(...INK);
-          pdf.text(pdf.splitTextToSize(c.courseName, 130)[0] as string, 16, y);
-          pdf.text(c.total == null ? (c.partial != null ? `(${c.partial})` : '–') : String(c.total), 160, y, { align: 'right' });
-          pdf.text(c.total == null ? '–' : gradeFor(c.total, settings).grade, 172, y);
-          pdf.setDrawColor(229, 231, 235);
-          pdf.setLineWidth(0.2);
-          pdf.line(14, y + 2, w - 14, y + 2);
-          y += 6;
-          if (y > h - 112) break;
-        }
+      // The student's details, two to a line.
+      let y = 69;
+      const field = (label: string, value: string, x: number, width: number) => {
+        pdf.setFont('times', 'bold'); pdf.setFontSize(10.5); pdf.text(`${label}:`, x, y);
+        const lw = pdf.getTextWidth(`${label}:`) + 2;
+        pdf.setFont('times', 'normal'); pdf.text(pdf.splitTextToSize(value || '', width - lw)[0] as string ?? '', x + lw, y);
+      };
+      const mid = w / 2 + 4;
+      field('NAME', t.name.toUpperCase(), L, mid - L - 4); field('ADMISSION NUMBER', t.admissionNo, mid, R - mid); y += 8;
+      field('DEPARTMENT', (t.department || t.programme).toUpperCase(), L, R - L); y += 8;
+      field('ADMITTED ON', t.admittedOn ?? '', L, mid - L - 4); field('COMPLETED ON', t.completedOn ?? '', mid, R - mid); y += 8;
+      field('CUMULATIVE POINTS', t.final.final == null ? '' : t.final.final.toFixed(2), L, mid - L - 4); field('GRADUATED ON', t.graduatedOn ?? '', mid, R - mid); y += 8;
+      field('HONOURS', t.final.complete ? t.final.grade.toUpperCase() : '', L, R - L); y += 5;
+      pdf.setDrawColor(...NAVY); pdf.setLineWidth(0.6); pdf.line(L, y, R, y); y += 7;
+
+      // The semester's units.
+      pdf.setFont('times', 'bold'); pdf.setFontSize(11);
+      pdf.text(`SEMESTER ${ROMAN[si] ?? si + 1}`, L, y); y += 6;
+      const cx = { code: L, desc: L + 26, credit: 150, grade: 176 };
+      pdf.setFontSize(10);
+      pdf.text('CODE', cx.code, y); pdf.text('DESCRIPTION', cx.desc, y); pdf.text('CREDIT', cx.credit, y, { align: 'center' }); pdf.text('GRADE', cx.grade, y, { align: 'center' });
+      y += 7;
+      pdf.setFont('times', 'normal'); pdf.setFontSize(10.5);
+      if (!sem.courses.length) {
+        pdf.text(sem.points != null ? PAST_ONLY_NOTE : 'No results for this semester yet.', cx.desc, y); y += 7;
       }
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.setTextColor(...NAVY);
-      const pts = sem.points != null ? String(sem.points) : sem.partial != null ? `(${sem.partial}) so far` : 'Not yet available';
-      pdf.text(`${sem.label} points: ${pts}`, 16, y + 1);
-      if (sem.grade) pdf.text(`Grade: ${sem.grade}`, 130, y + 1);
-      y += 10;
-    }
+      for (const c of sem.courses) {
+        pdf.text(c.code || '', cx.code, y);
+        pdf.text(pdf.splitTextToSize(c.unitName || c.courseName, cx.credit - cx.desc - 12)[0] as string, cx.desc, y);
+        pdf.text(c.credit == null ? '–' : c.credit.toFixed(1), cx.credit, y, { align: 'center' });
+        pdf.text(unitGradeText(c, settings), cx.grade, y, { align: 'center' });
+        y += 6.6;
+        if (y > h - 92) break;
+      }
+      y += 2;
+      pdf.setFont('times', 'bold'); pdf.setFontSize(10.5);
+      pdf.text(`POINTS: ${semesterPointsText(sem)}`, L, y); y += 6;
+      pdf.text(`AWARD: ${sem.points != null ? sem.grade : ''}`, L, y); y += 6;
+      // NITA and attendance under Semester II (Stage 2, 3A).
+      if (si === t.semesters.length - 1) {
+        const extra = [t.nita ? `NITA: ${t.nita}` : '', t.attendance != null ? `ATTENDANCE: ${Math.round(t.attendance)}%` : ''].filter(Boolean).join('     ');
+        if (extra) { pdf.setFont('times', 'normal'); pdf.setFontSize(10); pdf.text(pdf.splitTextToSize(extra, R - L) as string[], L, y); y += 6; }
+      }
+      pdf.setDrawColor(...NAVY); pdf.setLineWidth(0.6); pdf.line(L, y, R, y); y += 7;
 
-    // Final result.
-    pdf.setFillColor(...NAVY);
-    pdf.setDrawColor(...GOLD);
-    pdf.setLineWidth(0.8);
-    pdf.roundedRect(14, y, w - 28, 16, 2.5, 2.5, 'FD');
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(8.5);
-    pdf.setTextColor(...GOLD);
-    pdf.setCharSpace(1.1);
-    pdf.text('FINAL POINTS', 20, y + 6.5);
-    pdf.text('FINAL GRADE', 80, y + 6.5);
-    pdf.text('REMARK', 130, y + 6.5);
-    pdf.setCharSpace(0);
-    pdf.setFontSize(12.5);
-    pdf.setTextColor(255, 255, 255);
-    pdf.text(t.final.final == null ? '–' : String(t.final.final), 20, y + 12.5);
-    pdf.text(t.final.grade || '–', 80, y + 12.5);
-    pdf.setFontSize(8.5);
-    pdf.text(pdf.splitTextToSize(t.final.remark || '–', w - 150)[0] as string, 130, y + 12.5);
-    y += 22;
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(7.5);
-    pdf.setTextColor(...GREY);
-    const extra = [t.attendance != null ? `Attendance: ${Math.round(t.attendance)}%` : '', t.nita ? `NITA: ${t.nita}` : '', t.attachment ? `Industrial attachment: ${t.attachment}` : ''].filter(Boolean).join('     ');
-    if (extra) {
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(9);
-      pdf.setTextColor(...NAVY);
-      pdf.text(extra, 14, y);
-      y += 6;
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(...GREY);
-    }
-    const lines = [
-      `Final points are the average of Semester 1 and Semester 2. Grading key: ${bandsText(settings)}. A figure in brackets is not final: some papers are not yet marked.`,
-      ...(t.printed ? [`Printed graduation list: ${t.printed.points}${t.printed.grade ? ` ${t.printed.grade}` : ''}.`] : []),
-      ...t.notes.slice(0, 3),
-    ];
-    for (const l of lines) { const part = pdf.splitTextToSize(l, w - 28) as string[]; pdf.text(part, 14, y); y += 3.6 * part.length + 1; }
+      pdf.setFont('times', 'bold'); pdf.setFontSize(10.5);
+      pdf.text('GRADING SYSTEM:', L, y); y += 5.5;
+      pdf.setFontSize(10);
+      const bands = [...settings.bands].sort((a, b) => b.min - a.min);
+      const gx = (R - L) / Math.max(1, bands.length);
+      bands.forEach((b, i) => pdf.text(`${b.grade}: ${Math.round(b.min)}-${i === 0 ? 100 : Math.round(bands[i - 1]!.min) - 1}%`, L + i * gx, y));
+      y += 9;
+      const hrs = t.hours?.[si];
+      const att = si === 1 && sem.courses.some((c) => c.sheetId === 'attachment') && t.attachmentHours ? ` + ${t.attachmentHours} attachment` : '';
+      pdf.setFontSize(10.5);
+      pdf.text(`HOURS COVERED: ${hrs ?? ''}${hrs != null ? att : ''}`, L, y);
 
-    const sy = t.serial ? h - 48 : h - 34;
-    if (t.serial) {
-      // The college stamp goes between the two signatures (6A).
-      pdf.setDrawColor(...GREY);
-      pdf.setLineWidth(0.3);
-      pdf.setLineDashPattern([1.2, 1.2], 0);
-      pdf.circle(w / 2, sy - 2, 12);
+      // The Registrar's line with the date, and the name under it (Stage 2, 1A and B).
+      const sy = h - 62;
+      pdf.setLineDashPattern([1, 1], 0); pdf.setLineWidth(0.3);
+      pdf.line(L, sy, L + 62, sy);
       pdf.setLineDashPattern([], 0);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7);
-      pdf.setTextColor(...GREY);
-      pdf.text('College stamp', w / 2, sy - 1, { align: 'center' });
-    }
-    if (qrs[n]) {
-      pdf.addImage(qrs[n]!, 'PNG', 14, h - 30, 17, 17);
-      pdf.setFont('helvetica', 'normal');
-      pdf.setFontSize(7.5);
-      pdf.setTextColor(...GREY);
-      const how = `Scan to check that this transcript is genuine, or open ${t.verify!.replace(/^https?:\/\//, '').replace(/\/[^/]+$/, '')} and enter ${t.serial} with the admission number.`;
-      pdf.text(pdf.splitTextToSize(how, w - 70) as string[], 35, h - 25);
-    }
-    pdf.setDrawColor(...GREY);
-    pdf.setLineWidth(0.3);
-    pdf.line(14, sy, 84, sy);
-    pdf.line(w - 84, sy, w - 14, sy);
-    pdf.setFont('helvetica', 'bold');
-    pdf.setFontSize(9);
-    pdf.setTextColor(...NAVY);
-    pdf.text(settings.principalName, 14, sy + 5);
-    pdf.text(settings.directorName, w - 84, sy + 5);
-    pdf.setFont('helvetica', 'normal');
-    pdf.setFontSize(8);
-    pdf.setTextColor(...GREY);
-    pdf.text(settings.principalTitle, 14, sy + 9.5);
-    pdf.text(settings.directorTitle, w - 84, sy + 9.5);
-    if (!t.serial) pdf.text('Computer-generated transcript', w / 2, h - 10, { align: 'center' });
-    pdf.setFillColor(...GOLD);
-    pdf.rect(0, h - 4, w, 4, 'F');
-    if (t.provisional) {
-      // Not final until the principal approves every result (8A).
-      const G = (pdf as unknown as { GState: new (o: { opacity: number }) => unknown }).GState;
-      const set = (o: number) => (pdf as unknown as { setGState: (g: unknown) => void }).setGState(new G({ opacity: o }));
-      set(0.13);
-      pdf.setFont('helvetica', 'bold');
-      pdf.setFontSize(78);
-      pdf.setTextColor(179, 38, 30);
-      pdf.text('PROVISIONAL', w / 2, h / 2 + 20, { align: 'center', angle: 30 });
-      set(1);
-    }
+      pdf.setFont('times', 'bold'); pdf.setFontSize(10);
+      pdf.text('Registrar (Academic Affairs)', L, sy + 5);
+      if (settings.registrarName) { pdf.setFont('times', 'normal'); pdf.text(settings.registrarName, L, sy + 10); }
+      pdf.setFont('times', 'bold');
+      pdf.text(t.printedOn ?? '', R, sy - 1.5, { align: 'right' });
+      pdf.text('Date', R, sy + 5, { align: 'right' });
+      pdf.setFont('times', 'bold'); pdf.setFontSize(9.5);
+      pdf.text(SEAL_NOTE[0]!, w / 2, sy + 18, { align: 'center' });
+      pdf.text(SEAL_NOTE[1]!, w / 2, sy + 23, { align: 'center' });
+
+      // The app's check code and serial.
+      pdf.setDrawColor(...GREY); pdf.setLineWidth(0.2); pdf.line(L, h - 33, R, h - 33);
+      pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7.5); pdf.setTextColor(...GREY);
+      const pageNo = `Page ${si + 1} of ${t.semesters.length}`;
+      if (qrs[n]) {
+        pdf.addImage(qrs[n]!, 'PNG', L, h - 30, 16, 16);
+        const how = `Serial ${t.serial} · ${pageNo} · Scan to check this transcript is genuine, or open ${t.verify!.replace(/^https?:\/\//, '').replace(/\/[^/]+$/, '')} and enter ${t.serial} with the admission number.`;
+        pdf.text(pdf.splitTextToSize(how, R - L - 22) as string[], L + 20, h - 25);
+      } else pdf.text(`${pageNo} · Computer-generated transcript`, L, h - 25);
+      if (t.provisional) {
+        // Not final until the principal approves every result.
+        const G = (pdf as unknown as { GState: new (o: { opacity: number }) => unknown }).GState;
+        const set = (o: number) => (pdf as unknown as { setGState: (g: unknown) => void }).setGState(new G({ opacity: o }));
+        set(0.13);
+        pdf.setFont('helvetica', 'bold'); pdf.setFontSize(78); pdf.setTextColor(179, 38, 30);
+        pdf.text('PROVISIONAL', w / 2, h / 2 + 20, { align: 'center', angle: 30 });
+        set(1);
+      }
+    });
   });
   stampPoweredBy(pdf);
   const safe = (transcripts.length === 1 ? transcripts[0]!.name : title).replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '');

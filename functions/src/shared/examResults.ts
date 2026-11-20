@@ -5,7 +5,7 @@
  * of Semester 1 and Semester 2, graded on ADIA's bands; a missing semester makes it Incomplete.
  */
 import { gradeFor, honoursFor, parseMark, unitTotal, type ExamSettings, type ExamSheet, type MarkValue, type StudentMarks } from './exams.js';
-import { creditPoints, type UnitContext } from './units.js';
+import { creditPoints, unitLabel, type UnitContext } from './units.js';
 
 export type Cell = string | number | Date | boolean | null | undefined;
 export const SEMESTERS = [1, 2] as const;
@@ -215,7 +215,9 @@ export function printedDiffers(printed: SemesterScore | null | undefined, final:
   return Math.abs(printed.points - final) > 0.05;
 }
 
-export interface CourseLine { sheetId: string; courseName: string; teacherName: string; total: number | null; partial: number | null; complete: boolean; approved: boolean; resitUsed: boolean; code: string; credit: number | null }
+export interface CourseLine { sheetId: string; courseName: string; teacherName: string; total: number | null; partial: number | null; complete: boolean; approved: boolean; resitUsed: boolean; code: string; credit: number | null;
+  /** The unit's name as the documents print it ("Leadership Skills II"), when the sheet is on the units list. */
+  unitName?: string }
 export interface SemesterFromSheets {
   courses: CourseLine[]; points: number | null; partial: number | null; complete: boolean; approved: boolean;
   /** Weighted by credit (true), or the plain average while `missingCredits` units have no credit. */
@@ -229,7 +231,7 @@ export interface SemesterFromSheets {
  * `partial` grows as each CAT comes in; `points` is set once every course is complete.
  */
 export type SemesterSheet = Pick<ExamSheet, 'id' | 'courseId' | 'courseName' | 'teacherName' | 'weights' | 'marks'> & { semester?: number | null; status?: string; unitCode?: string | null };
-export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { id: string; courseId: string }, semester: Semester, passMark?: number, ctx?: UnitContext): SemesterFromSheets {
+export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { id: string; courseId: string }, semester: Semester, passMark?: number, ctx?: UnitContext, extra: readonly CourseLine[] = []): SemesterFromSheets {
   const mine = sheets.filter((s) => s.semester === semester && (s.courseId == null || s.courseId === student.courseId) && (!ctx || ctx.counts(s, student.courseId)));
   const courses: CourseLine[] = [];
   for (const s of mine) {
@@ -239,9 +241,11 @@ export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { 
     const unit = ctx?.unitOf(s, student.courseId) ?? null;
     courses.push({
       sheetId: s.id, courseName: s.courseName, teacherName: s.teacherName, total: u.total, partial: u.partial, complete: u.complete,
-      approved: s.status == null || s.status === 'approved', resitUsed: u.resitUsed, code: unit?.code ?? '', credit: unit?.credit ?? null,
+      approved: s.status == null || s.status === 'approved', resitUsed: u.resitUsed, code: unit?.code ?? '', credit: unit?.credit ?? null, ...(unit ? { unitName: unitLabel(unit) } : {}),
     });
   }
+  // Units marked elsewhere, such as the Industrial Attachment (Andy, 2026-11-20, Stage 2 2A).
+  if (courses.length) courses.push(...extra);
   const complete = courses.length > 0 && courses.every((c) => c.complete);
   const partial = creditPoints(courses.filter((c) => c.partial != null).map((c) => ({ value: c.partial!, credit: c.credit })));
   const all = creditPoints(courses.map((c) => ({ value: c.total ?? 0, credit: c.credit })));

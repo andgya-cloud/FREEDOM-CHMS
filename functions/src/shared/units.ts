@@ -318,3 +318,27 @@ export function settingsUnitContext(s: { units?: unknown; unitDepartments?: Reco
   const units = unitsWithDefaults(s.units);
   return unitContext(units, (id) => unitDeptOf(id, courseName(id), s.unitDepartments));
 }
+
+/* ---------- transcripts in ADIA's layout (Andy, 2026-11-20, Stage 2: 1A+B 2A 3A 4A) ---------- */
+
+/** "ATC-2508": the intake's year and month, as on the Cohort 2 transcripts. */
+export function atcNumber(intakeStart: string | null | undefined): string {
+  const m = /^(\d{2})(\d{2})-(\d{2})/.exec(intakeStart ?? '');
+  return m ? `ATC-${m[2]}${m[3]}` : '';
+}
+const MONTHS_UP = ['JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE', 'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'];
+/** "AUGUST 2025". */
+export function monthYearUpper(date: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})/.exec(date ?? '');
+  return m ? `${MONTHS_UP[Number(m[2]) - 1]} ${m[1]}` : '';
+}
+/** "11-12-2026". */
+export function dmyDashes(date: string | null | undefined): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date ?? '');
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+}
+
+/** The attachment unit a department takes in Semester II (ATT 100: credit 20, Hospitality 25), or null. */
+export function attachmentUnit(units: readonly UnitItem[], dept: UnitDept | null): UnitItem | null {
+  return units.find((x) => x.kind === 'attachment' && x.dept === dept) ?? null;
+}

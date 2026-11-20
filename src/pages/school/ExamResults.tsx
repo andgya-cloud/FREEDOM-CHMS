@@ -14,9 +14,10 @@ import { useExamAccess, useExamResults, useExamSettings, type ExamSheetRow } fro
 import { EXAM_COMPONENTS, EXAM_COMPONENT_LABELS, gradeFor, markProblem, type ExamComponent, type ExamSettings, type ExamStudent, type MarkValue, type StudentMarks } from '../../../functions/src/shared/exams';
 import {
   admissionKey, finalResult, parseMarksFile, parseResultsWorkbook, planResultImport, printedDiffers, semesterFromSheets,
-  type ExamResult, type ImportStudent, type ParsedResults, type Semester,
+  type CourseLine, type ExamResult, type ImportStudent, type ParsedResults, type Semester,
 } from '../../../functions/src/shared/examResults';
-import { settingsUnitContext } from '../../../functions/src/shared/units';
+import { useAttachments } from '../../state/useAttachments';
+import { attachmentUnit, settingsUnitContext, unitDeptOf, unitsWithDefaults } from '../../../functions/src/shared/units';
 import type { Organization } from '../../state/OrgContext';
 
 /**
@@ -30,7 +31,8 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, courseNam
   const { settings } = useExamSettings(org.id);
   const { results: cohortResults } = useExamResults(org.id, cohort);
   const finder = useStudentFinder();
-  const rows = useMemo(() => buildRows(cohort, students, cohortResults, sheets, settings, courseName), [cohort, students, cohortResults, sheets, settings, courseName]);
+  const { byStudent: attachments } = useAttachments(org.id);
+  const rows = useMemo(() => buildRows(cohort, students, cohortResults, sheets, settings, courseName, attachments), [cohort, students, cohortResults, sheets, settings, courseName, attachments]);
   const counts = { provisional: rows.filter((r) => r.sems.some((x) => x.provisional)).length, done: rows.filter((r) => r.final.complete).length, incomplete: rows.filter((r) => !r.final.complete).length, differ: rows.filter((r) => printedDiffers(r.printed, r.final.final, settings)).length };
   const byGrade = (g: string) => rows.filter((r) => r.final.grade === g).length;
 
@@ -83,11 +85,20 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, courseNam
 }
 
 export interface RowSem extends TranscriptSemester { points: number | null; provisional: boolean }
-export interface Row { key: string; name: string; admissionNo: string; programme: string; cohort: string; sems: [RowSem, RowSem]; final: ReturnType<typeof finalResult>; printed: ExamResult['printed']; notes: string[] }
+export interface Row { key: string; name: string; admissionNo: string; programme: string; courseId: string; cohort: string; sems: [RowSem, RowSem]; final: ReturnType<typeof finalResult>; printed: ExamResult['printed']; notes: string[] }
 
-export function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[], sheets: ExamSheetRow[], settings: ExamSettings, courseName: (id: string) => string): Row[] {
+export function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[], sheets: ExamSheetRow[], settings: ExamSettings, courseName: (id: string) => string,
+  attachments: Record<string, { assessed?: boolean; mark?: number | null } | undefined> = {}): Row[] {
   const byStudent = new Map(results.map((r) => [r.studentId, r]));
   const ctx = settingsUnitContext(settings, courseName);
+  const units = unitsWithDefaults(settings.units);
+  /** The Industrial Attachment as a Semester II unit with its credit (Andy, 2026-11-20, Stage 2 2A). */
+  const attLine = (studentId: string, courseId: string): CourseLine[] => {
+    const a = attachments[studentId];
+    const unit = attachmentUnit(units, unitDeptOf(courseId, courseName(courseId), settings.unitDepartments));
+    if (!unit || !a?.assessed || typeof a.mark !== 'number') return [];
+    return [{ sheetId: 'attachment', courseName: unit.name, teacherName: '', total: a.mark, partial: a.mark, complete: true, approved: true, resitUsed: false, code: unit.code, credit: unit.credit, unitName: unit.name }];
+  };
   const people: { id: string; name: string; admissionNo: string; courseId: string; programme: string }[] = students.map((s) => ({ id: s.id, name: s.name, admissionNo: s.admissionNo, courseId: s.courseId, programme: s.courseName }));
   for (const r of results) if (!people.some((p) => p.id === r.studentId)) people.push({ id: r.studentId, name: r.studentName, admissionNo: r.admissionNo, courseId: r.courseId ?? '', programme: courseName(r.courseId ?? '') });
   return people.map((p) => {
@@ -95,7 +106,7 @@ export function buildRows(cohort: string, students: ExamStudent[], results: Exam
     const sem = (n: Semester): RowSem => {
       const saved = res?.semesters[String(n) as '1' | '2'];
       if (saved) return { label: `Semester ${n}`, points: saved.points, partial: null, grade: gradeFor(saved.points, settings).grade, source: 'Past results', courses: [], provisional: false };
-      const fromSheets = semesterFromSheets(sheets, { id: p.id, courseId: p.courseId }, n, settings.passMark, ctx);
+      const fromSheets = semesterFromSheets(sheets, { id: p.id, courseId: p.courseId }, n, settings.passMark, ctx, n === 2 ? attLine(p.id, p.courseId) : []);
       const provisional = fromSheets.courses.length > 0 && !fromSheets.approved;
       return {
         label: `Semester ${n}`, points: fromSheets.points, partial: fromSheets.partial, grade: fromSheets.points == null ? '' : gradeFor(fromSheets.points, settings).grade,
@@ -103,7 +114,7 @@ export function buildRows(cohort: string, students: ExamStudent[], results: Exam
       };
     };
     const sems: [RowSem, RowSem] = [sem(1), sem(2)];
-    return { key: p.id, name: p.name, admissionNo: p.admissionNo, programme: p.programme, cohort, sems, final: finalResult(sems[0].points, sems[1].points, settings), printed: res?.printed ?? null, notes: res?.notes ?? [] };
+    return { key: p.id, name: p.name, admissionNo: p.admissionNo, programme: p.programme, courseId: p.courseId, cohort, sems, final: finalResult(sems[0].points, sems[1].points, settings), printed: res?.printed ?? null, notes: res?.notes ?? [] };
   }).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) || a.admissionNo.localeCompare(b.admissionNo));
 }
 

@@ -2289,9 +2289,10 @@ service cloud.firestore {
         allow read: if ex('exams.manage') || ex('exams.mark');
         allow create, update: if ex('exams.manage') && settingId == 'main'
           && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList', 'minAttendance', 'commonCourses',
-               'units', 'unitDepartments', 'semesterHours',
+               'units', 'unitDepartments', 'semesterHours', 'registrarName',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
           && (!('units' in request.resource.data) || listOf(request.resource.data.units, 300))
+          && (!('registrarName' in request.resource.data) || shortText(request.resource.data.registrarName, 120))
           && (!('unitDepartments' in request.resource.data) || (request.resource.data.unitDepartments is map && request.resource.data.unitDepartments.size() <= 40))
           && (!('semesterHours' in request.resource.data) || (request.resource.data.semesterHours is map && request.resource.data.semesterHours.size() <= 10))
           && (!('commonCourses' in request.resource.data) || (request.resource.data.commonCourses is list && request.resource.data.commonCourses.size() <= 40))

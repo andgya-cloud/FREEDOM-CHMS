@@ -98,6 +98,8 @@ export interface ExamSettings {
   principalTitle: string;
   directorName: string;
   directorTitle: string;
+  /** Printed under "Registrar (Academic Affairs)" on transcripts (Andy, 2026-11-20, Stage 2 1B). Blank: the line only. */
+  registrarName?: string;
   /** ADIA's one weighting for every course (Andy, 2026-10-24); trainers cannot change it. */
   weights: ExamWeights;
   /** ADIA's course list (Andy, 2026-10-25): every programme's courses, set once; a new cohort gets them in one step. Absent until first saved. */

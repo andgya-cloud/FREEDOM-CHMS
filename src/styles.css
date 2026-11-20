@@ -3152,3 +3152,33 @@ button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
 .unit-table td { vertical-align: middle; }
 .unit-total td { font-weight: 600; border-top: 2px solid var(--border); }
 .unit-links { margin-top: 8px; max-width: 420px; }
+
+/* Transcripts in ADIA's own layout, one page per semester (Andy, 2026-11-20, Stage 2). */
+.atr-pages { display: grid; gap: 18px; }
+.atr-page { position: relative; overflow: hidden; background: #fff; color: #0b112c; color-scheme: light; font-family: "Times New Roman", Tinos, Georgia, serif; border: 1px solid var(--border); border-radius: 4px; padding: 22px 28px 14px; max-width: 720px; width: 100%; margin: 0 auto; font-size: 0.88rem; box-shadow: 0 6px 24px rgb(0 0 0 / 0.08); display: flex; flex-direction: column; gap: 8px; }
+.atr-page hr { border: 0; border-top: 2px solid #0b112c; margin: 2px 0; width: 100%; }
+.atr-top { display: grid; grid-template-columns: 1fr auto 1fr; align-items: start; }
+.atr-top strong { justify-self: end; }
+.atr-crest { width: 56px; height: 56px; object-fit: contain; }
+.atr-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 1px; }
+.atr-org { color: #b8892b; font-weight: 700; font-size: 1.2rem; letter-spacing: 0.3em; }
+.atr-tc { color: #b8892b; font-weight: 700; font-size: 0.7rem; letter-spacing: 0.12em; }
+.atr-head span { font-size: 0.78rem; }
+.atr-head h3 { margin: 6px 0 0; font-size: 1.05rem; }
+.atr-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; margin: 0; }
+.atr-fields div { display: flex; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.atr-fields .full { grid-column: 1 / -1; }
+.atr-fields dt { font-weight: 700; }
+.atr-fields dd { margin: 0; }
+.atr-table { overflow-x: auto; }
+.atr-table table { width: 100%; border-collapse: collapse; }
+.atr-table th { text-align: left; font-size: 0.8rem; padding: 2px 4px; }
+.atr-table td { padding: 4px; vertical-align: top; }
+.atr-table .c { text-align: center; font-variant-numeric: tabular-nums; }
+.atr-bold { font-weight: 700; }
+.atr-grades { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.atr-sign { display: flex; justify-content: space-between; align-items: end; gap: 12px; margin-top: 18px; font-size: 0.82rem; }
+.atr-line { display: block; width: 220px; max-width: 50vw; border-top: 1px dashed #0b112c; margin-top: 18px; padding-top: 2px; }
+.atr-date { display: flex; flex-direction: column; align-items: flex-end; }
+.atr-seal { text-align: center; font-weight: 700; font-size: 0.74rem; margin: 6px 0 0; }
+@media (max-width: 560px) { .atr-page { padding: 14px 12px; font-size: 0.8rem; } .atr-fields { grid-template-columns: 1fr; } }

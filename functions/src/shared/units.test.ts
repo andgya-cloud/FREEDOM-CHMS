@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_EXAM_SETTINGS, DEFAULT_EXAM_WEIGHTS, examSettingsWithDefaults, honoursFor, type ExamSheet } from './exams';
 import { finalResult, semesterFromSheets } from './examResults';
 import {
-  ADIA_UNITS, creditPoints, guessUnitDept, matchUnit, normCode, sheetsThatDontFit, unitContext, unitDeptOf, unitProblem, unitsFor, unitsMissing, type UnitDept,
+  ADIA_UNITS, atcNumber, attachmentUnit, dmyDashes, monthYearUpper, creditPoints, guessUnitDept, matchUnit, normCode, sheetsThatDontFit, unitContext, unitDeptOf, unitProblem, unitsFor, unitsMissing, type UnitDept,
 } from './units';
 
 const sheet = (id: string, courseName: string, courseId: string | null, semester: 1 | 2, marks: Record<string, number> = {}, extra: Partial<ExamSheet> = {}): ExamSheet => ({
@@ -77,5 +77,15 @@ describe('units list', () => {
     expect(unitProblem({ ...ADIA_UNITS[0]!, credit: 0 }, ADIA_UNITS)).toMatch(/credit/);
     expect(unitProblem(ADIA_UNITS[0]!, [...ADIA_UNITS, ADIA_UNITS[0]!])).toMatch(/twice/);
     expect(ADIA_UNITS.map((x) => unitProblem(x, ADIA_UNITS)).filter(Boolean)).toEqual([]);
+  });
+
+  it('fills the transcript header and counts the attachment in Semester II', () => {
+    expect([atcNumber('2025-08-01'), atcNumber(null), monthYearUpper('2025-08-01'), dmyDashes('2026-12-11')]).toEqual(['ATC-2508', '', 'AUGUST 2025', '11-12-2026']);
+    expect(attachmentUnit(ADIA_UNITS, 'hospitality')).toMatchObject({ code: 'ATT 100', credit: 25 });
+    const att = { sheetId: 'attachment', courseName: 'Industrial Attachment', teacherName: '', total: 80, partial: 80, complete: true, approved: true, resitUsed: false, code: 'ATT 100', credit: 25 };
+    const sheets = [sheet('p', 'Dress Making Practical', 'fd', 2, { f: 60 })];
+    const ctx = unitContext(ADIA_UNITS, deptOf);
+    expect(semesterFromSheets(sheets, { id: 'f', courseId: 'fd' }, 2, 39, ctx, [att]).points).toBe(Math.round((60 * 12.1 + 80 * 25) / 37.1 * 100) / 100);
+    expect(semesterFromSheets([], { id: 'f', courseId: 'fd' }, 2, 39, ctx, [att]).points).toBe(null);
   });
 });

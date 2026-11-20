@@ -7,7 +7,7 @@ import { friendlyError } from '../../lib/errors';
 import { useCohortTranscripts, useExamAccess, useExamRegisters, useExamResults, useExamSettings, type ExamSheetRow } from '../../state/useExams';
 import { fillRegister, issueTranscripts, lockRegister, saveRegisterEntry, startExamRegister, type NewTranscript } from '../../lib/examRegisterWrites';
 import { registerPdf, registerWorkbook, type RegisterLine } from '../../lib/examRegisterFiles';
-import { transcriptsPdf, type Transcript } from '../../lib/examPdf';
+import { PAST_ONLY_NOTE, SEAL_NOTE, semesterPointsText, transcriptsPdf, unitGradeText, type Transcript } from '../../lib/examPdf';
 import { downloadFile } from '../../lib/givingPdf';
 import { printFile } from '../../lib/printFile';
 import { logExam } from '../../lib/examWrites';
@@ -21,6 +21,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import type { Organization } from '../../state/OrgContext';
 import { useAttachments } from '../../state/useAttachments';
 import { attachmentLine } from '../../../functions/src/shared/attachment';
+import { UNIT_DEPT_NAMES, atcNumber, attachmentUnit, dmyDashes, monthYearUpper, semesterHoursWithDefaults, unitDeptOf, unitsWithDefaults } from '../../../functions/src/shared/units';
 
 interface Common {
   org: Organization; cohort: string; label: string; students: ExamStudent[]; sheets: ExamSheetRow[]; courseName: (id: string) => string;
@@ -31,7 +32,8 @@ interface Common {
 function useCohortRows({ org, cohort, students, sheets, courseName }: Common) {
   const { settings } = useExamSettings(org.id);
   const { results } = useExamResults(org.id, cohort);
-  const rows = useMemo(() => buildRows(cohort, students, results, sheets, settings, courseName), [cohort, students, results, sheets, settings, courseName]);
+  const { byStudent: attachments } = useAttachments(org.id);
+  const rows = useMemo(() => buildRows(cohort, students, results, sheets, settings, courseName, attachments), [cohort, students, results, sheets, settings, courseName, attachments]);
   return { rows, settings };
 }
 
@@ -255,8 +257,8 @@ function TextCell({ value, onSave, placeholder, label, disabled, check }: { valu
  * Each printed transcript gets a serial number and a QR code for the public check page, and reads
  * PROVISIONAL until the principal approves every result.
  */
-export function TranscriptsView(p: Common & { dates: string; pick: string; onPick: (id: string) => void }) {
-  const { org, cohort, label, attendance, today, dates, pick, onPick } = p;
+export function TranscriptsView(p: Common & { dates: string; pick: string; onPick: (id: string) => void; intakeStart: (courseId: string) => string | null; graduationDate: string | null }) {
+  const { org, cohort, label, attendance, today, dates, pick, onPick, intakeStart, graduationDate } = p;
   const toast = useToast();
   const a = useExamAccess();
   const { rows, settings } = useCohortRows(p);
@@ -281,6 +283,7 @@ export function TranscriptsView(p: Common & { dates: string; pick: string; onPic
       name: r.name, admissionNo: r.admissionNo, programme: r.programme, cohort: label, semesters: r.sems, final: r.final, printed: r.printed, notes: r.notes,
       attendance: attendance[r.key] ?? null, nita: nitaLine(r.key), dates, provisional, issuedOn: formatDateKey(today),
       attachment: attachmentLine(attachments[r.key], settings),
+      ...adiaLayout(r, settings, p.courseName, intakeStart(r.courseId), graduationDate, today),
     };
   };
   const print = (r: Row, t: Transcript) => transcriptFingerprint({
@@ -331,55 +334,77 @@ export function TranscriptsView(p: Common & { dates: string; pick: string; onPic
             <button type="button" className="btn btn-gold align-end" disabled={!!busy} onClick={() => void run('download')}>{busy === 'download' ? 'Preparing…' : 'Download PDF'}</button>
           </div>
         )}
-        <p className="muted small">Each transcript gets a serial number and a QR code that an employer can scan to check it is genuine. It reads PROVISIONAL until every result is approved and both semesters are in.{pick === 'all' && rows.length ? ` The PDF has one page for each of the ${rows.length} students.` : ''}</p>
+        <p className="muted small">Each transcript gets a serial number and a QR code that an employer can scan to check it is genuine. It reads PROVISIONAL until every result is approved and both semesters are in. Each student gets one page per semester, in ADIA's own layout.{pick === 'all' && rows.length ? ` The PDF has ${rows.length * 2} pages for the ${rows.length} students.` : ''}</p>
       </section>
       {shown && <TranscriptPaper t={base(shown)} settings={settings} serial={issued.filter((x) => x.studentId === shown.key).sort((x, y) => y.n - x.n)[0]?.serial} />}
     </section>
   );
 }
 
-/** The transcript on screen, as it will print. */
+/** The fields of ADIA's own transcript layout (Andy, 2026-11-20, Stage 2). */
+function adiaLayout(r: Row, settings: ExamSettings, courseName: (id: string) => string, start: string | null, graduationDate: string | null, today: string): Partial<Transcript> {
+  const dept = unitDeptOf(r.courseId, courseName(r.courseId), settings.unitDepartments);
+  const hours = dept ? semesterHoursWithDefaults(settings.semesterHours)[dept] : null;
+  const att = attachmentUnit(unitsWithDefaults(settings.units), dept);
+  const graduated = !!graduationDate && graduationDate <= today;
+  return {
+    atc: atcNumber(start), department: dept ? UNIT_DEPT_NAMES[dept] : r.programme, admittedOn: monthYearUpper(start),
+    completedOn: monthYearUpper(graduationDate), graduatedOn: graduated ? dmyDashes(graduationDate) : '',
+    hours: hours ? [hours[1], hours[2]] : [null, null], attachmentHours: att?.hours ?? null, printedOn: dmyDashes(today),
+  };
+}
+
+/** The transcript on screen, one page per semester, as it will print (Andy, 2026-11-20, Stage 2). */
 function TranscriptPaper({ t, settings, serial }: { t: Transcript; settings: ExamSettings; serial?: string }) {
+  const bands = [...settings.bands].sort((a, b) => b.min - a.min);
   return (
-    <article className="transcript-paper" aria-label={`Transcript for ${t.name}`}>
-      {t.provisional && <div className="transcript-wm" aria-hidden>PROVISIONAL</div>}
-      <header className="transcript-head">
-        <img src="/org/adia-crest.png" alt="" className="transcript-crest" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} />
-        <div><strong>ADIA Training Centre</strong><span>ACADEMIC TRANSCRIPT</span></div>
-        <div className="transcript-no">{serial ? `No. ${serial}` : 'Serial number given when printed'}<br />{t.issuedOn}</div>
-      </header>
-      <dl className="transcript-facts">
-        <div><dt>Name</dt><dd>{t.name}</dd></div>
-        <div><dt>Admission no.</dt><dd>{t.admissionNo || '–'}</dd></div>
-        <div><dt>Programme</dt><dd>{t.programme || '–'}</dd></div>
-        <div><dt>Cohort</dt><dd>{t.cohort}{t.dates ? ` · ${t.dates}` : ''}</dd></div>
-      </dl>
-      {t.semesters.map((s) => (
-        <div key={s.label} className="transcript-sem">
-          <h3>{s.label} · {s.points != null ? `${s.points} (${s.grade})` : s.partial != null ? `(${s.partial}) so far` : 'not yet available'}</h3>
-          {s.courses.length > 0 && (
-            <table>
-              <thead><tr><th>Course</th><th className="num">Mark %</th><th>Grade</th></tr></thead>
-              <tbody>{s.courses.map((c) => <tr key={c.sheetId}><td>{c.courseName}</td><td className="num">{c.total ?? (c.partial != null ? `(${c.partial})` : '–')}</td><td>{c.total == null ? '–' : gradeFor(c.total, settings).grade}</td></tr>)}</tbody>
-            </table>
-          )}
-          {!s.courses.length && s.source && <p className="muted small">{s.source}</p>}
-        </div>
-      ))}
-      <div className="transcript-sum">
-        <span>Final points <strong>{t.final.final ?? '–'}</strong></span>
-        <span>Classification <strong>{t.final.grade || '–'}</strong></span>
-        {t.attendance != null && <span>Attendance <strong>{Math.round(t.attendance)}%</strong></span>}
-        {t.nita && <span>NITA <strong>{t.nita}</strong></span>}
-        {t.attachment && <span>Industrial attachment <strong>{t.attachment}</strong></span>}
-      </div>
-      <div className="transcript-sign">
-        <div>{settings.principalName}<br /><span>{settings.principalTitle}</span></div>
-        <div className="transcript-stamp">College stamp</div>
-        <div>{settings.directorName}<br /><span>{settings.directorTitle}</span></div>
-      </div>
-      <p className="transcript-foot">QR code and check details are printed on the PDF · Powered by <strong>Insight-IQ</strong></p>
-    </article>
+    <div className="atr-pages">
+      {t.semesters.map((s, si) => {
+        const last = si === t.semesters.length - 1;
+        const hrs = t.hours?.[si];
+        const att = si === 1 && s.courses.some((c) => c.sheetId === 'attachment') && t.attachmentHours ? ` + ${t.attachmentHours} attachment` : '';
+        return (
+          <article key={s.label} className="atr-page" aria-label={`${s.label} transcript for ${t.name}`}>
+            {t.provisional && <div className="transcript-wm" aria-hidden>PROVISIONAL</div>}
+            <div className="atr-top"><span /><img src="/org/adia-crest.png" alt="" className="atr-crest" onError={(e) => { (e.target as HTMLImageElement).style.visibility = 'hidden'; }} /><strong>{t.atc}</strong></div>
+            <header className="atr-head">
+              <div className="atr-org">A D I A</div><div className="atr-tc">TRAINING CENTRE</div>
+              <b>P.O. BOX 22870-00100 NAIROBI</b><span>TEL: +254 105 086 218 — E-MAIL: info@adiaempowerment.org</span>
+              <h3>ACADEMIC TRANSCRIPT</h3>
+            </header>
+            <dl className="atr-fields">
+              <div><dt>NAME:</dt><dd>{t.name.toUpperCase()}</dd></div><div><dt>ADMISSION NUMBER:</dt><dd>{t.admissionNo}</dd></div>
+              <div className="full"><dt>DEPARTMENT:</dt><dd>{(t.department || t.programme).toUpperCase()}</dd></div>
+              <div><dt>ADMITTED ON:</dt><dd>{t.admittedOn}</dd></div><div><dt>COMPLETED ON:</dt><dd>{t.completedOn}</dd></div>
+              <div><dt>CUMULATIVE POINTS:</dt><dd>{t.final.final == null ? '' : t.final.final.toFixed(2)}</dd></div><div><dt>GRADUATED ON:</dt><dd>{t.graduatedOn}</dd></div>
+              <div className="full"><dt>HONOURS:</dt><dd>{t.final.complete ? t.final.grade.toUpperCase() : ''}</dd></div>
+            </dl>
+            <hr />
+            <strong>SEMESTER {si === 0 ? 'I' : 'II'}</strong>
+            <div className="atr-table">
+              <table>
+                <thead><tr><th>CODE</th><th>DESCRIPTION</th><th className="c">CREDIT</th><th className="c">GRADE</th></tr></thead>
+                <tbody>
+                  {s.courses.map((c) => <tr key={c.sheetId}><td className="nowrap">{c.code}</td><td>{c.unitName || c.courseName}</td><td className="c">{c.credit == null ? '–' : c.credit.toFixed(1)}</td><td className="c">{unitGradeText(c, settings)}</td></tr>)}
+                  {!s.courses.length && <tr><td /><td colSpan={3}>{s.points != null ? PAST_ONLY_NOTE : 'No results for this semester yet.'}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+            <div className="atr-bold">POINTS: {semesterPointsText(s)}<br />AWARD: {s.points != null ? s.grade : ''}</div>
+            {last && (t.nita || t.attendance != null) && <div>{[t.nita ? `NITA: ${t.nita}` : '', t.attendance != null ? `ATTENDANCE: ${Math.round(t.attendance)}%` : ''].filter(Boolean).join('     ')}</div>}
+            <hr />
+            <div className="atr-bold">GRADING SYSTEM:<div className="atr-grades">{bands.map((b, i) => <span key={b.grade}>{b.grade}: {Math.round(b.min)}-{i === 0 ? 100 : Math.round(bands[i - 1]!.min) - 1}%</span>)}</div></div>
+            <div className="atr-bold">HOURS COVERED: {hrs ?? ''}{hrs != null ? att : ''}</div>
+            <div className="atr-sign">
+              <div><span className="atr-line" /><b>Registrar (Academic Affairs)</b>{settings.registrarName && <div>{settings.registrarName}</div>}</div>
+              <div className="atr-date"><b>{t.printedOn}</b><b>Date</b></div>
+            </div>
+            <p className="atr-seal">{SEAL_NOTE[0]}<br />{SEAL_NOTE[1]}</p>
+            <p className="transcript-foot">{serial ? `Serial ${serial} · ` : ''}Page {si + 1} of {t.semesters.length} · QR check code on the PDF · Powered by <strong>Insight-IQ</strong></p>
+          </article>
+        );
+      })}
+    </div>
   );
 }
 
