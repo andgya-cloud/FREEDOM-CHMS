@@ -58,3 +58,23 @@ describe('exam timetable', () => {
     expect(lastExamDate([{ date: null }])).toBeNull();
   });
 });
+
+describe('common courses in the Department dropdown (Andy, 2026-11-20)', () => {
+  it('lists the seven courses and tells them apart from departments', async () => {
+    const m = await import('./timetable');
+    expect(m.TIMETABLE_COMMON_COURSES).toEqual(['Basic Mathematics', 'Business Skills', 'Communication', 'Critical Thinking', 'ICT Skills', 'Leadership', 'Life Skills']);
+    expect(m.commonDeptName(m.commonDeptId('Leadership'))).toBe('Leadership');
+    expect(m.commonDeptName('ict')).toBeNull();
+    expect(m.commonCourseOf('Communication Skills')).toBe('Communication');
+  });
+  it('offers a common course the cohort has no sheet for, with its tutor', async () => {
+    const m = await import('./timetable');
+    const out = m.withCommonCourses([{ sheetId: 's1', name: 'Leadership', courseId: null, semester: 1, lecturer: 'Andrew Guya', lecturerUid: 'a' }], [{ uid: 'f', name: 'Flavier Akinyi' }]);
+    expect(out.filter((c) => c.name === 'Leadership')).toHaveLength(1);
+    const life = out.find((c) => c.name === 'Life Skills')!;
+    expect(life).toMatchObject({ courseId: null, lecturer: 'Flavier Akinyi', lecturerUid: 'f' });
+    expect(m.isStandInSheet(life.sheetId)).toBe(true);
+    expect(m.courseOptionValue(null, 'Life Skills')).toBe(life.sheetId);
+    expect(m.courseOptionValue(null, 'Tailoring')).toBe('');
+  });
+});

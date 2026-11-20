@@ -7,6 +7,7 @@
  * The principal, Admin, the pastor and Doreen keep them; everyone at ADIA reads the published ones.
  */
 import { cohortKey } from './examCohorts.js';
+import { STANDARD_COMMON_COURSES, standardCourse } from './commonCourses.js';
 
 export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
 export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
@@ -120,6 +121,39 @@ export function classesOn(date: string, uid: string, timetables: readonly (Class
     }
   }
   return out.sort((a, b) => a.start.localeCompare(b.start));
+}
+
+// ---- Common courses (Andy, 2026-11-20) -------------------------------------------------------
+
+/**
+ * The seven common courses sit in the Department dropdown under the cohort's departments, so each can have its
+ * own class grid and its own exam list: Business Skills, Communication, Critical Thinking, ICT Skills, Leadership,
+ * Life Skills and Basic Mathematics.
+ */
+export const TIMETABLE_COMMON_COURSES: string[] = STANDARD_COMMON_COURSES.map((c) => c.name).sort((a, b) => a.localeCompare(b));
+const COMMON_PREFIX = 'common:';
+export const commonDeptId = (name: string) => `${COMMON_PREFIX}${name}`;
+/** "Leadership" for "common:Leadership"; null for a real department. */
+export const commonDeptName = (id: string | null | undefined) => (id?.startsWith(COMMON_PREFIX) ? id.slice(COMMON_PREFIX.length) : null);
+/** The common course a course name stands for ("Communication Skills" is Communication), or null. */
+export const commonCourseOf = (name: string) => standardCourse(name)?.name ?? null;
+
+export interface CourseOption { sheetId: string; name: string; courseId: string | null; semester: number | null; lecturer: string; lecturerUid: string }
+/** A common course offered before the cohort has its marks sheet: no sheet, the standard tutor. */
+const STD = 'std:';
+export const isStandInSheet = (sheetId: string | null | undefined) => !!sheetId?.startsWith(STD);
+/** The value a course dropdown shows for a saved box or row. */
+export const courseOptionValue = (sheetId: string | null, course: string) => sheetId ?? (commonCourseOf(course) ? `${STD}${commonCourseOf(course)}` : '');
+
+/** The cohort's courses plus any of the seven common courses it has no sheet for yet, so all seven can be picked. */
+export function withCommonCourses(courses: readonly CourseOption[], staff: readonly { uid: string; name: string }[]): CourseOption[] {
+  const have = new Set(courses.filter((c) => c.courseId == null).map((c) => commonCourseOf(c.name)).filter(Boolean));
+  const extra = STANDARD_COMMON_COURSES.filter((c) => !have.has(c.name)).map((c): CourseOption => {
+    const tutors = c.tutor.map((n) => n.toLowerCase());
+    const who = staff.find((p) => tutors.includes(p.name.trim().toLowerCase()));
+    return { sheetId: `${STD}${c.name}`, name: c.name, courseId: null, semester: null, lecturer: who?.name ?? c.tutor[0] ?? '', lecturerUid: who?.uid ?? '' };
+  });
+  return [...courses, ...extra];
 }
 
 // ---- Exam timetable --------------------------------------------------------------------------

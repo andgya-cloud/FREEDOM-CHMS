@@ -17,6 +17,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import {
   DAY_NAMES, DAY_SHORT, EXAM_PAPERS, EXAM_PAPER_LABELS, classClashes, classTimetableId, cleanRoom, clock, examClashes, examPeriodName, examTimetableId,
   parseSlotKey, periodProblem, periodText, slotKey, sortExamRows,
+  TIMETABLE_COMMON_COURSES, commonCourseOf, commonDeptId, commonDeptName, courseOptionValue, isStandInSheet, withCommonCourses,
   type ClassSlot, type ClassTimetable, type ExamPaper, type ExamRow, type Period,
 } from '../../../functions/src/shared/timetable';
 import { SchoolGate, SchoolTitle, useSchoolPage } from './common';
@@ -65,6 +66,19 @@ function useDepartments(s: ReturnType<typeof useSchoolPage>, cohort: string) {
   return useMemo(() => [...new Set(s.intakes.filter((i) => i.name === cohort).map((i) => i.courseId))]
     .map((id) => ({ id, name: s.courseName(id) || 'Department' })).sort((a, b) => a.name.localeCompare(b.name)), [s.intakes, s.courses, cohort]); // eslint-disable-line react-hooks/exhaustive-deps
 }
+
+/** The seven common courses, under the departments in the Department dropdowns (Andy, 2026-11-20). */
+const COMMON_DEPTS = TIMETABLE_COMMON_COURSES.map((name) => ({ id: commonDeptId(name), name }));
+function DeptOptions({ depts }: { depts: { id: string; name: string }[] }) {
+  return (
+    <>
+      {depts.length > 0 && <optgroup label="Departments">{depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>}
+      <optgroup label="Common courses">{COMMON_DEPTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>
+    </>
+  );
+}
+/** A stand-in for a common course with no marks sheet yet is saved with no sheet. */
+const realSheet = (sheetId: string) => (isStandInSheet(sheetId) ? null : sheetId);
 
 const statusText = (t: { published: boolean; publishedOn: string | null; changedOn: string | null } | undefined) =>
   !t ? '' : t.published ? `Published${t.publishedOn ? ` ${formatDateKey(t.publishedOn)}` : ''}${t.changedOn ? ` · Updated ${formatDateKey(t.changedOn)}` : ''}` : 'Draft · only the timetable keepers see it';
@@ -117,17 +131,19 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
   const depts = useDepartments(s, cohort);
   const [sem, setSem] = useState<1 | 2>(1);
   const [dept, setDept] = useState('');
-  const dep = depts.some((d) => d.id === dept) ? dept : depts[0]?.id ?? '';
-  const depName = depts.find((d) => d.id === dep)?.name ?? '';
+  const dep = depts.some((d) => d.id === dept) || commonDeptName(dept) ? dept : (depts[0] ?? COMMON_DEPTS[0])!.id;
+  const common = commonDeptName(dep);
+  const depName = common ?? depts.find((d) => d.id === dep)?.name ?? '';
   const id = classTimetableId(cohort, sem, dep);
   const t = all.find((x) => x.id === id);
-  const named = useMemo(() => all.map((x) => ({ ...x, departmentName: s.courseName(x.courseId) || 'Department' })), [all, s.courses]); // eslint-disable-line react-hooks/exhaustive-deps
+  const named = useMemo(() => all.map((x) => ({ ...x, departmentName: commonDeptName(x.courseId) ?? (s.courseName(x.courseId) || 'Department') })), [all, s.courses]); // eslint-disable-line react-hooks/exhaustive-deps
   const clashes = t && keeper ? classClashes({ ...t, departmentName: depName }, named) : {};
   const { options, error } = useTimetableOptions(org.id, cohort, keeper);
   const { rooms, exists } = useRooms(org.id);
   const [open, setOpen] = useState('');
   useEffect(() => setOpen(''), [id]);
-  const courses = (options?.courses ?? []).filter((c) => (c.semester == null || c.semester === sem) && (c.courseId == null || c.courseId === dep));
+  const courses = withCommonCourses((options?.courses ?? []).filter((c) => c.semester == null || c.semester === sem), options?.staff ?? [])
+    .filter((c) => (common ? c.courseId == null && commonCourseOf(c.name) === common : c.courseId == null || c.courseId === dep));
   const fail = (err: unknown) => toast.show(friendlyError(err));
   const days = t?.saturday ? 6 : 5;
 
@@ -144,7 +160,7 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
     const byName = new Map(courses.map((c) => [c.name.toLowerCase(), c]));
     const slots = Object.fromEntries(Object.entries(from.slots).map(([k, v]) => {
       const c = byName.get(v.course.toLowerCase());
-      return [k, c ? { ...v, sheetId: c.sheetId, lecturer: c.lecturer, lecturerUid: c.lecturerUid } : v];
+      return [k, c ? { ...v, sheetId: realSheet(c.sheetId), lecturer: c.lecturer, lecturerUid: c.lecturerUid } : v];
     }));
     const copy = { periods: from.periods, saturday: from.saturday, slots };
     if (t) saveClassTimetable(org.id, t, copy, s.today).catch(fail);
@@ -169,7 +185,7 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
           <select value={sem} onChange={(e) => setSem(Number(e.target.value) as 1 | 2)}><option value={1}>Semester 1</option><option value={2}>Semester 2</option></select>
         </label>
         <label className="field"><span>Department</span>
-          <select value={dep} onChange={(e) => setDept(e.target.value)}>{depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+          <select value={dep} onChange={(e) => setDept(e.target.value)}><DeptOptions depts={depts} /></select>
         </label>
       </div>
       {!dep ? <p className="muted">{cohort} has no departments yet.</p> : !t ? (
@@ -247,7 +263,7 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
 function SlotEditor({ title, slot, courses, typed, rooms, clash, onSave, onClose }: {
   title: string; slot: ClassSlot | undefined; courses: TimetableCourse[]; typed: boolean; rooms: string[]; clash?: string[]; onSave: (s: ClassSlot | null) => void; onClose: () => void;
 }) {
-  const [sheetId, setSheetId] = useState(slot?.sheetId ?? '');
+  const [sheetId, setSheetId] = useState(slot ? courseOptionValue(slot.sheetId, slot.course) : '');
   const [course, setCourse] = useState(slot?.course ?? '');
   const [lecturer, setLecturer] = useState(slot?.lecturer ?? '');
   const [room, setRoom] = useState(slot?.room ?? '');
@@ -258,7 +274,7 @@ function SlotEditor({ title, slot, courses, typed, rooms, clash, onSave, onClose
     if (typed && !course.trim()) { onSave(null); return; }
     onSave(typed || !picked
       ? { course: course.trim().slice(0, 120), sheetId: slot?.sheetId ?? null, lecturer: lecturer.trim().slice(0, 120), lecturerUid: slot?.lecturerUid ?? '', room }
-      : { course: picked.name.slice(0, 120), sheetId: picked.sheetId, lecturer: picked.lecturer.slice(0, 120), lecturerUid: picked.lecturerUid, room });
+      : { course: picked.name.slice(0, 120), sheetId: realSheet(picked.sheetId), lecturer: picked.lecturer.slice(0, 120), lecturerUid: picked.lecturerUid, room });
   }
   return (
     <div className="tt-editor no-print">
@@ -395,17 +411,21 @@ export function ExamBoard({ org, cohort }: { org: Organization; cohort: string }
   const { rooms, exists } = useRooms(org.id);
   const fail = (err: unknown) => toast.show(friendlyError(err));
   const clashes = t && keeper ? examClashes(t, all.filter((x) => x.published)) : {};
-  const courses = (options?.courses ?? []).filter((c) => !t?.semester || c.semester == null || c.semester === t.semester);
   const staff = options?.staff ?? [];
-  const deptName = (id: string | null) => (id ? s.courseName(id) || 'Department' : 'All departments');
-  const shown = t ? sortExamRows(t.rows).filter((r) => !dept || r.courseId == null || r.courseId === dept) : [];
+  const courses = withCommonCourses((options?.courses ?? []).filter((c) => !t?.semester || c.semester == null || c.semester === t.semester), staff);
+  const deptName = (id: string | null) => commonDeptName(id) ?? (id ? s.courseName(id) || 'Department' : 'All departments');
+  const common = commonDeptName(dept);
+  const inDept = (r: ExamRow) => !dept || (common ? commonCourseOf(r.course) === common : r.courseId == null || r.courseId === dept);
+  const shown = t ? sortExamRows(t.rows).filter(inDept) : [];
 
   function setRows(rows: ExamRow[]) { if (t) saveExamRows(org.id, t, rows, s.today).catch(fail); }
   const update = (id: string, c: Partial<ExamRow>) => t && setRows(t.rows.map((r) => (r.id === id ? { ...r, ...c } : r)));
   function addRow() {
     if (!t) return;
     const last = sortExamRows(t.rows).pop();
-    setRows([...t.rows, { id: newRowId(), date: last?.date ?? null, start: last?.start ?? '08:00', end: last?.end ?? '10:00', course: '', sheetId: null, courseId: dept || null, room: '', invigilator: '', invigilatorUid: '' }]);
+    // Under a common course, the new paper is that course.
+    const c = common ? courses.find((x) => x.courseId == null && commonCourseOf(x.name) === common) : undefined;
+    setRows([...t.rows, { id: newRowId(), date: last?.date ?? null, start: last?.start ?? '08:00', end: last?.end ?? '10:00', course: c?.name ?? (common || ''), sheetId: c ? realSheet(c.sheetId) : null, courseId: common ? null : dept || null, room: '', invigilator: '', invigilatorUid: '' }]);
   }
   function copyLast() {
     if (!t) return;
@@ -422,7 +442,7 @@ export function ExamBoard({ org, cohort }: { org: Organization; cohort: string }
     publishTimetable('exam', org.id, t.id, on, s.today).catch(fail);
     toast.show(on ? 'Published. The papers go on the calendar, with a reminder the day before.' : 'Back to a draft. The papers come off the calendar.');
   }
-  const lines = (): ExamLine[] => sortExamRows(t?.rows ?? []).filter((r) => !dept || r.courseId == null || r.courseId === dept).map((r) => ({
+  const lines = (): ExamLine[] => sortExamRows(t?.rows ?? []).filter(inDept).map((r) => ({
     date: r.date ? formatDateKey(r.date) : '', time: `${clock(r.start)} – ${clock(r.end)}`, course: r.course, department: deptName(r.courseId), room: r.room, invigilator: r.invigilator,
   }));
   const make = (kind: 'print' | 'xlsx' | 'pdf') => {
@@ -441,7 +461,7 @@ export function ExamBoard({ org, cohort }: { org: Organization; cohort: string }
           </select>
         </label>
         <label className="field"><span>Department</span>
-          <select value={dept} onChange={(e) => setDept(e.target.value)}><option value="">All departments</option>{depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+          <select value={dept} onChange={(e) => setDept(e.target.value)}><option value="">All departments</option><DeptOptions depts={depts} /></select>
         </label>
       </div>
       {keeper && (making || (!loading && lists.length === 0)) && (
@@ -493,12 +513,12 @@ export function ExamBoard({ org, cohort }: { org: Organization; cohort: string }
                             <td className="tt-nowrap"><input type="time" aria-label="Starts" value={r.start} onChange={(e) => e.target.value && update(r.id, { start: e.target.value })} /> <input type="time" aria-label="Ends" value={r.end} onChange={(e) => e.target.value && update(r.id, { end: e.target.value })} /></td>
                             <td>
                               {options ? (
-                                <select aria-label="Course" value={r.sheetId ?? (r.course ? `t:${r.course}` : '')} onChange={(e) => {
+                                <select aria-label="Course" value={courseOptionValue(r.sheetId, r.course) || (r.course ? `t:${r.course}` : '')} onChange={(e) => {
                                   const c = courses.find((x) => x.sheetId === e.target.value);
-                                  if (c) update(r.id, { course: c.name.slice(0, 120), sheetId: c.sheetId, courseId: c.courseId });
+                                  if (c) update(r.id, { course: c.name.slice(0, 120), sheetId: realSheet(c.sheetId), courseId: c.courseId });
                                 }}>
                                   <option value="" disabled>Choose…</option>
-                                  {r.course && !courses.some((c) => c.sheetId === r.sheetId) && <option value={r.sheetId ?? `t:${r.course}`}>{r.course}</option>}
+                                  {r.course && !courses.some((c) => c.sheetId === courseOptionValue(r.sheetId, r.course)) && <option value={courseOptionValue(r.sheetId, r.course) || `t:${r.course}`}>{r.course}</option>}
                                   {courses.map((c) => <option key={c.sheetId} value={c.sheetId}>{c.name}{c.courseId ? ` · ${deptName(c.courseId)}` : ' (common)'}</option>)}
                                 </select>
                               ) : <TypedCell value={r.course} label="Course" onSave={(v) => update(r.id, { course: v.slice(0, 120) })} />}
