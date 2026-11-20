@@ -3131,3 +3131,12 @@ button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
   .nita-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .nita-two { grid-template-columns: 1fr; }
 }
+
+/* Courses page: one card per course with its semesters inside (Andy, 2026-11-20) */
+.exam-list > li.exam-course { flex-direction: column; align-items: stretch; gap: 0; }
+.exam-course-head { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; margin-bottom: 6px; }
+.exam-sem-row { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 10px 0 4px; border-top: 1px solid var(--border); }
+@media (max-width: 760px) {
+  .exam-sem-row { flex-direction: column; align-items: stretch; }
+  .exam-sem-row .exam-list-side { flex-direction: row; justify-content: space-between; align-items: center; }
+}

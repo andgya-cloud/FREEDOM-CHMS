@@ -26,6 +26,7 @@ import { bandsText, marksSheetPdf, resultSlipsPdf } from '../../lib/examPdf';
 import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
 import { ExamRegisterView, TranscriptsView } from './ExamRegister';
 import { NitaBoard } from './NitaResults';
+import { TIMETABLE_COMMON_COURSES, commonCourseOf, commonDeptId, commonDeptName } from '../../../functions/src/shared/timetable';
 import { GraduationBoard } from './GraduationPage';
 import { ClassBoard, ExamBoard } from './TimetablePage';
 import { downloadFile, shareOrDownload } from '../../lib/givingPdf';
@@ -176,8 +177,12 @@ function Exams({ org }: { org: Organization }) {
             {view === 'home' && (
               <select className="exam-dept-pick" aria-label="Department" value={dept} onChange={(e) => go({ dept: e.target.value })}>
                 <option value="">All departments</option>
-                {courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value={COMMON}>Common courses</option>
+                {courses.length > 0 && <optgroup label="Departments">{courses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</optgroup>}
+                {/* Each common course on its own too (Andy, 2026-11-20, 2A 3A). */}
+                <optgroup label="Common courses">
+                  <option value={COMMON}>All common courses</option>
+                  {TIMETABLE_COMMON_COURSES.map((n) => <option key={n} value={commonDeptId(n)}>{n}</option>)}
+                </optgroup>
               </select>
             )}
           </div>
@@ -355,6 +360,19 @@ function departmentsOf<T extends { courseId: string | null }>(items: T[], course
     { id: null, name: 'Common courses', items: items.filter((x) => x.courseId == null) },
     { id: 'other', name: 'Other', items: items.filter((x) => x.courseId != null && !known.has(x.courseId)) },
   ].filter((g) => g.items.length > 0);
+}
+
+/** A department's marks sheets as one card per course, in the order they came (those needing you first), semesters in order. */
+function courseCards<T extends { sh: { courseName: string; semester?: number | null; teacherName: string } }>(items: T[]) {
+  const cards = new Map<string, { key: string; name: string; teachers: string[]; items: T[] }>();
+  for (const r of items) {
+    const key = (commonCourseOf(r.sh.courseName) ?? r.sh.courseName).trim().replace(/\s+/g, ' ').toLowerCase();
+    const c = cards.get(key) ?? { key, name: r.sh.courseName, teachers: [], items: [] };
+    c.items.push(r);
+    if (r.sh.teacherName && !c.teachers.includes(r.sh.teacherName)) c.teachers.push(r.sh.teacherName);
+    cards.set(key, c);
+  }
+  return [...cards.values()].map((c) => ({ ...c, items: [...c.items].sort((a, b) => (a.sh.semester ?? 9) - (b.sh.semester ?? 9)) }));
 }
 
 function StatusPill({ status }: { status: ExamSheetStatus | string }) {
@@ -569,11 +587,16 @@ function Home({ org, cohort, closed, dept, sheets, students, courses, courseList
   };
   const rows = sheets.map((sh) => ({ courseId: sh.courseId ?? null, sh, pct: sheetProgress(sh, rosterFor(students, sh.courseId).map((x) => x.id)) }))
     .sort((x, y) => Number(!!y.sh.changeRequest) - Number(!!x.sh.changeRequest) || (STATUS_ORDER[x.sh.status] ?? 1) - (STATUS_ORDER[y.sh.status] ?? 1) || (x.sh.semester ?? 9) - (y.sh.semester ?? 9) || x.sh.courseName.localeCompare(y.sh.courseName));
-  const groups = departmentsOf(rows, courses).filter((g) => !dept || (dept === COMMON ? g.id == null : g.id === dept));
+  const oneCommon = commonDeptName(dept);
+  const groups = departmentsOf(rows, courses)
+    .filter((g) => !dept || (dept === COMMON || oneCommon ? g.id == null : g.id === dept))
+    .map((g) => (oneCommon ? { ...g, name: oneCommon, items: g.items.filter((r) => commonCourseOf(r.sh.courseName) === oneCommon) } : g))
+    .filter((g) => g.items.length > 0);
+  const cardCount = departmentsOf(rows, courses).reduce((n, g) => n + courseCards(g.items).length, 0);
   return (
     <section className="stack">
       <p className="muted">
-        {sheets.length} {sheets.length === 1 ? 'course' : 'courses'} · {count('approved')} approved · {students.length} students
+        {cardCount} {cardCount === 1 ? 'course' : 'courses'} · {sheets.length} marks {sheets.length === 1 ? 'sheet' : 'sheets'} · {count('approved')} approved · {students.length} students
         {waiting > 0 && <> · <strong className="up-bad">{waiting} waiting for you</strong></>}
         {asks > 0 && <> · <strong className="up-bad">{asks} asking to change marks</strong></>}
         {late > 0 && <> · <strong className="up-bad">{late} late</strong></>}
@@ -587,31 +610,36 @@ function Home({ org, cohort, closed, dept, sheets, students, courses, courseList
           <details key={g.id ?? COMMON} className="card exam-dept" open={!!dept || groups.length === 1}>
             <summary>
               <strong>{g.name}</strong>
-              <span className="muted small">{g.items.length} {g.items.length === 1 ? 'course' : 'courses'} · {done} approved · {g.id == null ? students.length : rosterFor(students, g.id).length} students</span>
+              <span className="muted small">{courseCards(g.items).length} {courseCards(g.items).length === 1 ? 'course' : 'courses'} · {g.items.length} marks {g.items.length === 1 ? 'sheet' : 'sheets'} · {done} approved · {g.id == null ? students.length : rosterFor(students, g.id).length} students</span>
               {needs > 0 && !closed && <span className="badge badge-warn">{needs} need you</span>}
             </summary>
+            {/* One card per course, its Semester 1 and Semester 2 marks sheets inside (Andy, 2026-11-20, 1A 4A). */}
             <ul className="exam-list">
-              {g.items.map(({ sh, pct }) => {
-                const l = lateOf(sh)[0];
-                return (
-                  <li key={sh.id}>
-                    <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
-                      <strong>{sh.courseName || 'Untitled'}</strong>
-                      <span className="muted small">{sh.teacherName} · {semesterText(sh.semester)}{sentText(sh)}</span>
-                      <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
-                      {l && <span className="small up-bad">{dueText(l)}</span>}
-                      {sh.changeRequest && !closed && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
-                    </Link>
-                    <span className="exam-list-side">
-                      {closed ? <StatusPill status={sh.status} /> : <>
-                        {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
-                        {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
-                        {sh.status === 'draft' && <a className={`btn btn-small ${l ? 'btn-primary' : 'btn-quiet'}`} href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
-                      </>}
-                    </span>
-                  </li>
-                );
-              })}
+              {courseCards(g.items).map((c) => (
+                <li key={c.key} className="exam-course">
+                  <div className="exam-course-head"><strong>{c.name || 'Untitled'}</strong><span className="muted small">{c.teachers.join(' · ')}</span></div>
+                  {c.items.map(({ sh, pct }) => {
+                    const l = lateOf(sh)[0];
+                    return (
+                      <div key={sh.id} className="exam-sem-row">
+                        <Link to={`${BASE}/sheet/${sh.id}`} className="exam-list-main">
+                          <span className="small"><strong>{semesterText(sh.semester)}</strong>{c.teachers.length > 1 ? ` · ${sh.teacherName}` : ''}<span className="muted">{sentText(sh)}</span></span>
+                          <span className="exam-bar"><span style={{ width: `${pct}%` }} className={pct >= 100 ? 'done' : ''} /></span>
+                          {l && <span className="small up-bad">{dueText(l)}</span>}
+                          {sh.changeRequest && !closed && <span className="small up-bad">Asks to change {EXAM_COMPONENT_LABELS[sh.changeRequest.component]}: {sh.changeRequest.reason}</span>}
+                        </Link>
+                        <span className="exam-list-side">
+                          {closed ? <StatusPill status={sh.status} /> : <>
+                            {sh.changeRequest ? <Link className="btn btn-primary btn-small" to={`${BASE}/sheet/${sh.id}`}>Unlock</Link> : <StatusPill status={sh.status} />}
+                            {sh.status === 'submitted' && <button type="button" className="btn btn-primary btn-small" onClick={() => act.approve(sh)}>Approve</button>}
+                            {sh.status === 'draft' && <a className={`btn btn-small ${l ? 'btn-primary' : 'btn-quiet'}`} href={remind(sh, pct)} target="_blank" rel="noreferrer">Remind</a>}
+                          </>}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </li>
+              ))}
             </ul>
           </details>
         );
