@@ -3182,3 +3182,8 @@ button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
 .atr-date { display: flex; flex-direction: column; align-items: flex-end; }
 .atr-seal { text-align: center; font-weight: 700; font-size: 0.74rem; margin: 6px 0 0; }
 @media (max-width: 560px) { .atr-page { padding: 14px 12px; font-size: 0.8rem; } .atr-fields { grid-template-columns: 1fr; } }
+
+/* The whole school on one timetable grid (Andy, 2026-11-20, Stage 3). */
+.tt-school td { vertical-align: top; }
+.tt-school td .tt-slot + .tt-slot { margin-top: 4px; }
+.tt-school .tt-common { border-color: var(--gold, #d2a74b); }

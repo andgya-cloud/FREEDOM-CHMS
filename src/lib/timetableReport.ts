@@ -3,7 +3,7 @@ import type { jsPDF as JsPdf } from 'jspdf';
 import { crestImage } from './payrollPdf';
 import { newPdf } from './givingPdf';
 import { stampPoweredBy } from '../../functions/src/shared/poweredBy';
-import { DAY_NAMES, DAY_SHORT, periodText, slotKey, type ClassTimetable } from '../../functions/src/shared/timetable';
+import { DAY_NAMES, DAY_SHORT, periodText, slotKey, type ClassTimetable, type SchoolEntry, type WholeSchool } from '../../functions/src/shared/timetable';
 
 const XLSX = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const NAVY: [number, number, number] = [11, 17, 44];
@@ -112,6 +112,61 @@ export async function classTimetableWorkbook(info: ClassInfo, t: ClassTimetable)
   const top = [[{ value: `ADIA Training Centre · ${classTitle(info)}`, fontWeight: 'bold' as const }], [{ value: info.status, type: String }], []];
   const blob = await writeXlsxFile([...top, head, ...body] as never, { columns: [18, ...Array(days).fill(34)].map((width) => ({ width })), sheet: 'Timetable' } as never) as unknown as Blob;
   return new File([blob], className(info, 'xlsx'), { type: XLSX });
+}
+
+/** The whole school for one cohort and semester (Andy, 2026-11-20, 14A), laid out as ADIA's printed timetables. */
+export interface SchoolInfo { cohort: string; semester: number; status: string }
+const schoolName = (i: SchoolInfo, ext: string) => `Whole-school-timetable-${safe(i.cohort)}-Sem-${i.semester}.${ext}`;
+const schoolTitle = (i: SchoolInfo) => `Semester ${i.semester === 1 ? 'I' : 'II'} academic timetable · ${i.cohort}`;
+export const entryText = (e: SchoolEntry) => (e.common ? e.course.toUpperCase() : `${e.title.toUpperCase()}${e.course ? ` (${e.course})` : ''}`);
+
+export async function wholeSchoolPdf(info: SchoolInfo, g: WholeSchool): Promise<File> {
+  const pdf = await newPdf('a4', 'landscape');
+  const w = pdf.internal.pageSize.getWidth();
+  let y = await letterhead(pdf, schoolTitle(info), info.status);
+  const left = 14, dayW = 30;
+  const colW = (w - 28 - dayW) / Math.max(1, g.times.length);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8.5);
+  pdf.setTextColor(...GREY);
+  pdf.text('DAY / TIME', left, y);
+  g.times.forEach((t, i) => pdf.text(periodText(t), left + dayW + i * colW + colW / 2, y, { align: 'center' }));
+  y += 3;
+  for (let d = 0; d < g.days; d++) {
+    const lists = g.times.map((_, i) => (g.cells[slotKey(d, i)] ?? []).map(entryText));
+    const lines = lists.map((l) => l.flatMap((e) => (pdf.splitTextToSize(e, colW - 6) as string[])));
+    const h = Math.max(16, 6 + Math.max(...lines.map((l) => l.length)) * 3.8);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.setTextColor(...NAVY);
+    pdf.text(DAY_NAMES[d]!.toUpperCase(), left, y + 6);
+    g.times.forEach((_, i) => {
+      const x = left + dayW + i * colW;
+      pdf.setDrawColor(225, 222, 235);
+      pdf.setLineWidth(0.25);
+      pdf.roundedRect(x + 1, y, colW - 2, h, 2, 2, 'S');
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(8.2);
+      pdf.setTextColor(...INK);
+      if (!lines[i]!.length) { pdf.setTextColor(...GREY); pdf.text('—', x + colW / 2, y + 6, { align: 'center' }); return; }
+      lines[i]!.forEach((l, k) => pdf.text(l, x + 3, y + 5 + k * 3.8));
+    });
+    y += h + 2;
+    if (y > pdf.internal.pageSize.getHeight() - 20 && d < g.days - 1) { pdf.addPage(); y = 20; }
+  }
+  stampPoweredBy(pdf);
+  return new File([pdf.output('blob')], schoolName(info, 'pdf'), { type: 'application/pdf' });
+}
+
+export async function wholeSchoolWorkbook(info: SchoolInfo, g: WholeSchool): Promise<File> {
+  const head = ['Day / time', ...g.times.map((t) => periodText(t))].map((value) => ({ value, fontWeight: 'bold' as const }));
+  const body = Array.from({ length: g.days }, (_, d) => [
+    { value: DAY_NAMES[d]!, type: String },
+    ...g.times.map((_, i) => ({ value: (g.cells[slotKey(d, i)] ?? []).map(entryText).join('\n'), type: String, wrap: true })),
+  ]);
+  const top = [[{ value: `ADIA Training Centre · ${schoolTitle(info)}`, fontWeight: 'bold' as const }], [{ value: info.status, type: String }], []];
+  const blob = await writeXlsxFile([...top, head, ...body] as never, { columns: [16, ...g.times.map(() => 42)].map((width) => ({ width })), sheet: 'Whole school' } as never) as unknown as Blob;
+  return new File([blob], schoolName(info, 'xlsx'), { type: XLSX });
 }
 
 export interface ExamLine { date: string; time: string; course: string; department: string; room: string; invigilator: string }

@@ -168,7 +168,7 @@ function AttachmentBoard({ org }: { org: Organization }) {
           </div>
         )}
       </section>
-      <p className="muted small">The assessment mark shows on the student's transcript as "Industrial attachment". Students whose attachment is not completed and assessed get a reminder in the <Link to="/school/graduation">Graduation</Link> list.</p>
+      <p className="muted small">The assessment mark goes on the transcript as ATT 100 Industrial Attachment in Semester II, with its credit (20, Hospitality 25, set in Exam Records › Setup › Units) and grade, and counts in Semester II points. Students whose attachment is not completed and assessed get a reminder in the <Link to="/school/graduation">Graduation</Link> list.</p>
     </div>
   );
 }

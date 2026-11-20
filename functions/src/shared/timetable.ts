@@ -13,12 +13,12 @@ export const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'
 export const DAY_SHORT = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 export interface Period { start: string; end: string; label: string; isBreak: boolean }
-/** 5A: ADIA's day, changeable for each grid. */
+/** ADIA's day from the Semester I and II timetables (Andy, 2026-11-20, 14A): 8-10, 11-1 and 2-4. Each grid can still change it. */
 export const DEFAULT_PERIODS: Period[] = [
   { start: '08:00', end: '10:00', label: '', isBreak: false },
-  { start: '10:00', end: '10:30', label: 'Tea break', isBreak: true },
-  { start: '10:30', end: '12:30', label: '', isBreak: false },
-  { start: '12:30', end: '14:00', label: 'Lunch', isBreak: true },
+  { start: '10:00', end: '11:00', label: 'Break', isBreak: true },
+  { start: '11:00', end: '13:00', label: '', isBreak: false },
+  { start: '13:00', end: '14:00', label: 'Lunch', isBreak: true },
   { start: '14:00', end: '16:00', label: '', isBreak: false },
 ];
 export const MAX_PERIODS = 12;
@@ -223,3 +223,39 @@ export const examEventId = (timetableId: string, rowId: string) => `exam__${time
 /** 14A: rooms typed once in Setup. */
 export const DEFAULT_ROOMS: string[] = [];
 export const cleanRoom = (v: string) => v.replace(/\s+/g, ' ').trim().slice(0, 40);
+
+/* ---------- the whole school on one grid (Andy, 2026-11-20, 14A) ---------- */
+
+export interface SchoolEntry { title: string; course: string; lecturer: string; room: string; common: boolean }
+export interface WholeSchool { times: { start: string; end: string }[]; days: number; cells: Record<string, SchoolEntry[]> }
+
+/**
+ * Every department's grid for one cohort and semester on one sheet, as ADIA's printed timetables are: the days
+ * down the side, the teaching periods across, and in each box the departments (or the common course everyone
+ * takes) with their class. A grid's period goes in the column whose times it overlaps.
+ */
+export function wholeSchool(grids: readonly (Pick<ClassTimetable, 'periods' | 'slots' | 'saturday'> & { title: string; common: boolean })[]): WholeSchool {
+  const seen = new Map<string, { start: string; end: string }>();
+  for (const g of grids) for (const p of g.periods) if (!p.isBreak && !periodProblem(p)) seen.set(`${p.start}-${p.end}`, { start: p.start, end: p.end });
+  if (!seen.size) for (const p of DEFAULT_PERIODS) if (!p.isBreak) seen.set(`${p.start}-${p.end}`, { start: p.start, end: p.end });
+  // Overlapping times share one column, under the earliest.
+  const times: { start: string; end: string }[] = [];
+  for (const t of [...seen.values()].sort((a, b) => a.start.localeCompare(b.start) || a.end.localeCompare(b.end))) {
+    if (!times.some((x) => overlaps(x, t))) times.push(t);
+  }
+  const days = grids.some((g) => g.saturday) ? 6 : 5;
+  const cells: Record<string, SchoolEntry[]> = {};
+  for (const g of [...grids].sort((a, b) => Number(b.common) - Number(a.common) || a.title.localeCompare(b.title))) {
+    for (const [k, slot] of Object.entries(g.slots)) {
+      if (!slot?.course) continue;
+      const { day, period } = parseSlotKey(k);
+      const p = g.periods[period];
+      if (!p || p.isBreak || day >= days) continue;
+      const col = times.findIndex((t) => overlaps(t, p));
+      if (col < 0) continue;
+      const key = slotKey(day, col);
+      (cells[key] ??= []).push({ title: g.common ? slot.course : g.title, course: slot.course, lecturer: slot.lecturer, room: slot.room, common: g.common });
+    }
+  }
+  return { times, days, cells };
+}

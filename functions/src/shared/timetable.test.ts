@@ -78,3 +78,21 @@ describe('common courses in the Department dropdown (Andy, 2026-11-20)', () => {
     expect(m.courseOptionValue(null, 'Tailoring')).toBe('');
   });
 });
+
+describe('whole school timetable', () => {
+  it('puts every department and common course on one grid by time', async () => {
+    const { wholeSchool, DEFAULT_PERIODS } = await import('./timetable');
+    const slot = (course: string) => ({ course, sheetId: null, lecturer: 'T', lecturerUid: 'u', room: '' });
+    const g = wholeSchool([
+      { title: 'Fashion & Design', common: false, saturday: false, periods: DEFAULT_PERIODS, slots: { '0-0': slot('Dress Making'), '0-4': slot('Tailoring') } },
+      { title: 'Information Technology', common: false, saturday: false, periods: DEFAULT_PERIODS, slots: { '0-2': slot('Word Processing'), '0-1': slot('Ignored on a break') } },
+      { title: 'Communication', common: true, saturday: false, periods: DEFAULT_PERIODS, slots: { '1-0': slot('Communication') } },
+    ]);
+    expect(g.times.map((t) => `${t.start}-${t.end}`)).toEqual(['08:00-10:00', '11:00-13:00', '14:00-16:00']);
+    expect(g.days).toBe(5);
+    expect(g.cells['0-0']!.map((e) => e.title)).toEqual(['Fashion & Design']);
+    expect(g.cells['0-1']!.map((e) => e.course)).toEqual(['Word Processing']);
+    expect(g.cells['0-2']!.map((e) => e.course)).toEqual(['Tailoring']);
+    expect(g.cells['1-0']![0]).toMatchObject({ title: 'Communication', common: true });
+  });
+});

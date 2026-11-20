@@ -10,7 +10,8 @@ import {
   type ClassTimetableRow, type TimetableCourse,
 } from '../../state/useTimetables';
 import { publishTimetable, saveClassSlot, saveClassTimetable, saveExamRows, saveRooms, startClassTimetable, startExamTimetable } from '../../lib/timetableWrites';
-import { classTimetablePdf, classTimetableWorkbook, examTimetablePdf, examTimetableWorkbook, type ExamLine } from '../../lib/timetableReport';
+import { classTimetablePdf, classTimetableWorkbook, examTimetablePdf, examTimetableWorkbook, wholeSchoolPdf, wholeSchoolWorkbook, type ExamLine } from '../../lib/timetableReport';
+import { UNIT_DEPT_NAMES, guessUnitDept } from '../../../functions/src/shared/units';
 import { downloadFile } from '../../lib/givingPdf';
 import { printFile } from '../../lib/printFile';
 import { orderCohorts, cohortLabel } from '../../../functions/src/shared/examCohorts';
@@ -18,7 +19,7 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import {
   DAY_NAMES, DAY_SHORT, EXAM_PAPERS, EXAM_PAPER_LABELS, classClashes, classTimetableId, cleanRoom, clock, examClashes, examPeriodName, examTimetableId,
   parseSlotKey, periodProblem, periodText, slotKey, sortExamRows,
-  TIMETABLE_COMMON_COURSES, commonCourseOf, commonDeptId, commonDeptName, courseOptionValue, isStandInSheet, withCommonCourses,
+  TIMETABLE_COMMON_COURSES, commonCourseOf, commonDeptId, commonDeptName, courseOptionValue, isStandInSheet, withCommonCourses, wholeSchool,
   type ClassSlot, type ClassTimetable, type ExamPaper, type ExamRow, type Period,
 } from '../../../functions/src/shared/timetable';
 import { SchoolGate, SchoolTitle, useSchoolPage } from './common';
@@ -70,9 +71,12 @@ function useDepartments(s: ReturnType<typeof useSchoolPage>, cohort: string) {
 
 /** The seven common courses, under the departments in the Department dropdowns (Andy, 2026-11-20). */
 const COMMON_DEPTS = TIMETABLE_COMMON_COURSES.map((name) => ({ id: commonDeptId(name), name }));
+/** The whole school on one grid, as ADIA's printed timetables (Andy, 2026-11-20, 14A). */
+const SCHOOL = 'school';
 function DeptOptions({ depts }: { depts: { id: string; name: string }[] }) {
   return (
     <>
+      <option value={SCHOOL}>Whole school (all departments)</option>
       {depts.length > 0 && <optgroup label="Departments">{depts.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>}
       <optgroup label="Common courses">{COMMON_DEPTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</optgroup>
     </>
@@ -132,7 +136,7 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
   const depts = useDepartments(s, cohort);
   const [sem, setSem] = useState<1 | 2>(1);
   const [dept, setDept] = useState('');
-  const dep = depts.some((d) => d.id === dept) || commonDeptName(dept) ? dept : (depts[0] ?? COMMON_DEPTS[0])!.id;
+  const dep = dept === SCHOOL || depts.some((d) => d.id === dept) || commonDeptName(dept) ? dept : (depts[0] ?? COMMON_DEPTS[0])!.id;
   const common = commonDeptName(dep);
   const depName = common ?? depts.find((d) => d.id === dep)?.name ?? '';
   const id = classTimetableId(cohort, sem, dep);
@@ -189,12 +193,13 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
           <select value={dep} onChange={(e) => setDept(e.target.value)}><DeptOptions depts={depts} /></select>
         </label>
       </div>
-      {!dep ? <p className="muted">{cohort} has no departments yet.</p> : !t ? (
+      {dep === SCHOOL ? <WholeSchoolBoard cohort={cohort} sem={sem} grids={named.filter((x) => x.cohort === cohort && x.semester === sem && (keeper || x.published))} keeper={!!keeper} />
+        : !dep ? <p className="muted">{cohort} has no departments yet.</p> : !t ? (
         <div className="card stack">
           <h2>Class timetable · {cohort} · {depName} · Semester {sem}</h2>
           {loading ? <p className="muted">Loading…</p> : keeper ? (
             <>
-              <p className="muted">No timetable yet. Start with ADIA's usual day (8:00 to 4:00 with tea and lunch), or copy an earlier one.</p>
+              <p className="muted">No timetable yet. Start with ADIA's usual day (8–10, 11–1 and 2–4), or copy an earlier one.</p>
               <div className="row-actions"><button type="button" className="btn btn-primary" onClick={start}>Start the timetable</button><button type="button" className="btn btn-quiet" onClick={copyLast}>Copy from last semester</button></div>
             </>
           ) : <p className="muted">This timetable has not been published yet.</p>}
@@ -258,6 +263,41 @@ export function ClassBoard({ org, cohort }: { org: Organization; cohort: string 
       )}
       {keeper && <RoomsCard orgId={org.id} rooms={rooms} exists={exists} />}
     </section>
+  );
+}
+
+function WholeSchoolBoard({ cohort, sem, grids, keeper }: { cohort: string; sem: 1 | 2; grids: (ClassTimetableRow & { departmentName: string })[]; keeper: boolean }) {
+  const g = useMemo(() => wholeSchool(grids.map((x) => {
+    const common = !!commonDeptName(x.courseId);
+    const dept = guessUnitDept(x.departmentName);
+    return { periods: x.periods, slots: x.slots, saturday: x.saturday, common, title: common ? x.departmentName : dept ? UNIT_DEPT_NAMES[dept] : x.departmentName };
+  })), [grids]);
+  const drafts = grids.filter((x) => !x.published).length;
+  const info = { cohort, semester: sem, status: `${grids.length} ${grids.length === 1 ? 'timetable' : 'timetables'}${drafts ? `, ${drafts} still drafts` : ''}` };
+  return (
+    <div className="card stack">
+      <div className="card-head"><h2>Semester {sem === 1 ? 'I' : 'II'} academic timetable · {cohort}</h2></div>
+      <p className="muted small">Every department and common course on one grid, as ADIA prints it. To change a box, pick its department above.{keeper && drafts ? ` ${drafts} ${drafts === 1 ? 'timetable is' : 'timetables are'} still a draft; only keepers see them here.` : ''}</p>
+      {!grids.length ? <p className="muted">No timetables for {cohort} · Semester {sem} yet.</p> : (
+        <div className="table-scroll">
+          <table className="tt-grid tt-school">
+            <thead><tr><th className="tt-time">Day / time</th>{g.times.map((t) => <th key={t.start}>{periodText(t)}</th>)}</tr></thead>
+            <tbody>
+              {Array.from({ length: g.days }, (_, d) => (
+                <tr key={d}>
+                  <td className="tt-time">{DAY_NAMES[d]}</td>
+                  {g.times.map((_, i) => {
+                    const list = g.cells[slotKey(d, i)] ?? [];
+                    return <td key={i}>{list.length ? list.map((e, k) => <div key={k} className={`tt-slot${e.common ? ' tt-common' : ''}`}><b>{e.common ? e.course : e.title}</b>{!e.common && <span>{e.course}</span>}{e.lecturer && <span>{e.lecturer}</span>}</div>) : <div className="tt-slot tt-empty">—</div>}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {grids.length > 0 && <Downloads make={(kind) => (kind === 'xlsx' ? wholeSchoolWorkbook(info, g) : wholeSchoolPdf(info, g))} />}
+    </div>
   );
 }
 
