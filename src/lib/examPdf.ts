@@ -170,6 +170,8 @@ export async function resultSlipsPdf(opts: { cohort: string; reportTitle: string
 /** "Distinction 79 and above, Credit above 59 to below 79, Pass 39 to 59, Fail below 39" from the bands. */
 export function bandsText(settings: Pick<ExamSettings, 'bands'>) {
   const b = [...settings.bands].sort((x, y) => y.min - x.min);
+  // Whole-number bands read as ranges, as the transcripts print them: "A 79–100, B 69–78, … E 0–38".
+  if (b.every((x) => Number.isInteger(x.min))) return b.map((band, i) => `${band.grade} ${band.min}–${i === 0 ? 100 : b[i - 1]!.min - 1}`).join(', ');
   // A minimum of 59.01 means "above 59" (Andy's table, 2026-10-24).
   const above = (n: number) => Math.round(n * 100) % 100 === 1 && n % 1 !== 0;
   const show = (n: number) => String(Math.round(n * 100) / 100);

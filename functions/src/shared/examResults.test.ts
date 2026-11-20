@@ -24,9 +24,9 @@ const students = [
 ];
 
 describe('semester results', () => {
-  it('grades on ADIA bands: 79 Distinction, above 59 Credit, 39 to 59 Pass', () => {
+  it('grades on ADIA bands: A 79, B 69, C 59, D 39 (passes), E below', () => {
     const g = (n: number) => gradeFor(n, DEFAULT_EXAM_SETTINGS).grade;
-    expect([g(79), g(78.99), g(59.01), g(59), g(39), g(38.99)]).toEqual(['Distinction', 'Credit', 'Credit', 'Pass', 'Pass', 'Fail']);
+    expect([g(79), g(78.99), g(69), g(59), g(58.99), g(39), g(38.99)]).toEqual(['A', 'B', 'B', 'C', 'D', 'D', 'E']);
   });
 
   it('reads Upload_Clean and held rows, skips Upload_All, and keeps printed figures', () => {
@@ -54,7 +54,7 @@ describe('semester results', () => {
   });
 
   it('averages the two semesters, and is incomplete without both', () => {
-    expect(finalResult(54.8, 61.1, DEFAULT_EXAM_SETTINGS)).toMatchObject({ final: 57.95, grade: 'Pass', complete: true });
+    expect(finalResult(54.8, 61.1, DEFAULT_EXAM_SETTINGS)).toMatchObject({ final: 57.95, grade: 'Pass', letter: 'D', complete: true });
     expect(finalResult(70, null, DEFAULT_EXAM_SETTINGS)).toMatchObject({ final: null, grade: 'Incomplete' });
     expect(printedDiffers({ points: 60.2, grade: 'CREDIT' }, 57.95, DEFAULT_EXAM_SETTINGS)).toBe(true);
     expect(printedDiffers({ points: 50, grade: 'PASS' }, 57.95, DEFAULT_EXAM_SETTINGS)).toBe(false);

@@ -4,7 +4,7 @@ import {
 } from './examRegister';
 import type { CourseLine } from './examResults';
 
-const course = (courseName: string, total: number | null): CourseLine => ({ sheetId: courseName, courseName, teacherName: '', total, partial: total, complete: total != null, approved: true, resitUsed: false });
+const course = (courseName: string, total: number | null): CourseLine => ({ sheetId: courseName, courseName, teacherName: '', total, partial: total, complete: total != null, approved: true, resitUsed: false, code: '', credit: null });
 
 describe('exam register', () => {
   it('names sittings and orders them newest first', () => {

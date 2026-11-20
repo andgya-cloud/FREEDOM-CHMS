@@ -13,7 +13,7 @@ import { TOTAL_ONLY_WEIGHTS } from '../../functions/src/shared/pastRecords';
 const sheetRef = (orgId: string, id: string) => doc(db, 'organizations', orgId, 'examSheets', id);
 
 /** The principal sets up a course for a cohort and gives it to a trainer (Andy, 2026-10-24). */
-export function createExamSheet(orgId: string, input: { cohort: string; courseId: string | null; courseName: string; teacherName: string; weights: ExamWeights; ownerUid: string; ownerName: string; semester: 1 | 2 | null }) {
+export function createExamSheet(orgId: string, input: { cohort: string; courseId: string | null; courseName: string; teacherName: string; weights: ExamWeights; ownerUid: string; ownerName: string; semester: 1 | 2 | null; unitCode?: string | null }) {
   return createRecord(collection(db, 'organizations', orgId, 'examSheets'), { orgId, ...input, status: 'draft', submittedAt: null, marks: {} });
 }
 
@@ -23,7 +23,7 @@ export function saveExamMark(orgId: string, sheetId: string, studentId: string, 
   return updateRecord(sheetRef(orgId, sheetId), { [`${MARK_FIELDS[field]}.${studentId}`]: value });
 }
 
-export function saveExamSheetDetails(orgId: string, sheetId: string, changes: { courseName?: string; teacherName?: string; ownerUid?: string; ownerName?: string; weights?: ExamWeights; semester?: 1 | 2 | null }) {
+export function saveExamSheetDetails(orgId: string, sheetId: string, changes: { courseName?: string; teacherName?: string; ownerUid?: string; ownerName?: string; weights?: ExamWeights; semester?: 1 | 2 | null; unitCode?: string | null }) {
   return updateRecord(sheetRef(orgId, sheetId), changes);
 }
 
@@ -115,6 +115,11 @@ export async function confirmPassword(password: string) {
 }
 
 /** ADIA's course list: every programme's courses, which a new cohort gets in one step. */
+/** ADIA's units, which units-list department each app department is, and hours per semester (Andy, 2026-11-20). */
+export function saveExamUnits(orgId: string, exists: boolean, settings: ExamSettings, changes: Pick<ExamSettings, 'units' | 'unitDepartments' | 'semesterHours'>) {
+  return saveExamSettings(orgId, exists, { ...settings, ...changes });
+}
+
 export function saveExamCourseList(orgId: string, exists: boolean, settings: ExamSettings, courseList: CourseListItem[]) {
   return saveExamSettings(orgId, exists, { ...settings, courseList: courseList.slice(0, 400) });
 }

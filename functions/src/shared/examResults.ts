@@ -4,7 +4,8 @@
  * marks sheets (the plain average of the student's course totals). The final result is the average
  * of Semester 1 and Semester 2, graded on ADIA's bands; a missing semester makes it Incomplete.
  */
-import { gradeFor, parseMark, unitTotal, type ExamSettings, type ExamSheet, type MarkValue, type StudentMarks } from './exams.js';
+import { gradeFor, honoursFor, parseMark, unitTotal, type ExamSettings, type ExamSheet, type MarkValue, type StudentMarks } from './exams.js';
+import { creditPoints, type UnitContext } from './units.js';
 
 export type Cell = string | number | Date | boolean | null | undefined;
 export const SEMESTERS = [1, 2] as const;
@@ -189,13 +190,15 @@ export function planResultImport(parsed: ParsedResults, students: readonly Impor
   return { results: [...out.values()].sort((a, b) => a.admissionNo.localeCompare(b.admissionNo)), unmatched, held, semesterCount };
 }
 
-export interface FinalResult { sem1: number | null; sem2: number | null; final: number | null; grade: string; remark: string; complete: boolean }
+/** `grade` is the Honours (Distinction, Credit, Pass or Fail); `letter` the A to E grade of the same points. */
+export interface FinalResult { sem1: number | null; sem2: number | null; final: number | null; grade: string; letter: string; remark: string; complete: boolean }
 
-/** Average of Semester 1 and Semester 2 to 2 decimals; Incomplete until both are in. */
+/** Average of Semester 1 and Semester 2 to 2 decimals, with its Honours (Andy, 2026-11-20, 5A); Incomplete until both are in. */
 export function finalResult(sem1: number | null, sem2: number | null, settings: Pick<ExamSettings, 'bands'>): FinalResult {
-  if (sem1 == null || sem2 == null) return { sem1, sem2, final: null, grade: 'Incomplete', remark: 'A semester result is missing', complete: false };
+  if (sem1 == null || sem2 == null) return { sem1, sem2, final: null, grade: 'Incomplete', letter: '', remark: 'A semester result is missing', complete: false };
   const final = round2((sem1 + sem2) / 2);
-  return { sem1, sem2, final, ...gradeFor(final, settings), complete: true };
+  const g = gradeFor(final, settings);
+  return { sem1, sem2, final, grade: honoursFor(final), letter: g.grade, remark: g.remark, complete: true };
 }
 
 /**
@@ -204,35 +207,51 @@ export function finalResult(sem1: number | null, sem2: number | null, settings: 
  */
 export function printedDiffers(printed: SemesterScore | null | undefined, final: number | null, settings: Pick<ExamSettings, 'bands'>) {
   if (!printed || final == null) return false;
-  if (printed.grade) return printed.grade.trim().toLowerCase() !== gradeFor(final, settings).grade.toLowerCase();
+  if (printed.grade) {
+    const p = printed.grade.trim().toLowerCase();
+    // A printed letter is compared with the letter, a printed Distinction / Credit / Pass with the Honours.
+    return p !== honoursFor(final).toLowerCase() && p !== gradeFor(final, settings).grade.toLowerCase();
+  }
   return Math.abs(printed.points - final) > 0.05;
 }
 
-export interface CourseLine { sheetId: string; courseName: string; teacherName: string; total: number | null; partial: number | null; complete: boolean; approved: boolean; resitUsed: boolean }
-export interface SemesterFromSheets { courses: CourseLine[]; points: number | null; partial: number | null; complete: boolean; approved: boolean }
+export interface CourseLine { sheetId: string; courseName: string; teacherName: string; total: number | null; partial: number | null; complete: boolean; approved: boolean; resitUsed: boolean; code: string; credit: number | null }
+export interface SemesterFromSheets {
+  courses: CourseLine[]; points: number | null; partial: number | null; complete: boolean; approved: boolean;
+  /** Weighted by credit (true), or the plain average while `missingCredits` units have no credit. */
+  weighted: boolean; missingCredits: number;
+}
 
 /**
- * A student's semester worked out from the marks sheets set to that semester: the plain average of
- * their course totals. `partial` grows as each CAT comes in; `points` is set once every course is complete.
+ * A student's semester worked out from the marks sheets set to that semester: each unit's total weighted
+ * by its credit (Andy, 2026-11-20, 4A), or the plain average while a unit has no credit. With the units
+ * list (ctx), a common unit the student's department does not take is left out (SBM 101 is Hospitality's).
+ * `partial` grows as each CAT comes in; `points` is set once every course is complete.
  */
-export type SemesterSheet = Pick<ExamSheet, 'id' | 'courseId' | 'courseName' | 'teacherName' | 'weights' | 'marks'> & { semester?: number | null; status?: string };
-export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { id: string; courseId: string }, semester: Semester, passMark?: number): SemesterFromSheets {
-  const mine = sheets.filter((s) => s.semester === semester && (s.courseId == null || s.courseId === student.courseId));
+export type SemesterSheet = Pick<ExamSheet, 'id' | 'courseId' | 'courseName' | 'teacherName' | 'weights' | 'marks'> & { semester?: number | null; status?: string; unitCode?: string | null };
+export function semesterFromSheets(sheets: readonly SemesterSheet[], student: { id: string; courseId: string }, semester: Semester, passMark?: number, ctx?: UnitContext): SemesterFromSheets {
+  const mine = sheets.filter((s) => s.semester === semester && (s.courseId == null || s.courseId === student.courseId) && (!ctx || ctx.counts(s, student.courseId)));
   const courses: CourseLine[] = [];
   for (const s of mine) {
     const u = unitTotal(s.weights, (s.marks?.[student.id] ?? null) as StudentMarks | null, passMark);
     // A course the student is exempt from is left out of their semester.
     if (u.exempt) continue;
-    courses.push({ sheetId: s.id, courseName: s.courseName, teacherName: s.teacherName, total: u.total, partial: u.partial, complete: u.complete, approved: s.status == null || s.status === 'approved', resitUsed: u.resitUsed });
+    const unit = ctx?.unitOf(s, student.courseId) ?? null;
+    courses.push({
+      sheetId: s.id, courseName: s.courseName, teacherName: s.teacherName, total: u.total, partial: u.partial, complete: u.complete,
+      approved: s.status == null || s.status === 'approved', resitUsed: u.resitUsed, code: unit?.code ?? '', credit: unit?.credit ?? null,
+    });
   }
-  const parts = courses.map((c) => c.partial).filter((p): p is number => p != null);
   const complete = courses.length > 0 && courses.every((c) => c.complete);
+  const partial = creditPoints(courses.filter((c) => c.partial != null).map((c) => ({ value: c.partial!, credit: c.credit })));
+  const all = creditPoints(courses.map((c) => ({ value: c.total ?? 0, credit: c.credit })));
   return {
     courses,
-    partial: parts.length ? round2(parts.reduce((a, b) => a + b, 0) / parts.length) : null,
-    points: complete ? round2(courses.reduce((a, c) => a + (c.total ?? 0), 0) / courses.length) : null,
+    partial: partial.points,
+    points: complete ? all.points : null,
     complete,
     approved: courses.length > 0 && courses.every((c) => c.approved),
+    weighted: all.weighted, missingCredits: all.missing,
   };
 }
 

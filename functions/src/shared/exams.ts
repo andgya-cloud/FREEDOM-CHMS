@@ -5,6 +5,7 @@
  * common courses, edits remarks and attendance, and prints result slips.
  */
 import type { CourseListItem } from './examCohorts.js';
+import type { UnitItem } from './units.js';
 
 export const EXAM_COMPONENTS = ['cat1', 'cat2', 'cat3', 'final'] as const;
 export type ExamComponent = (typeof EXAM_COMPONENTS)[number];
@@ -54,6 +55,8 @@ export interface ExamSheet {
   marks: Record<string, StudentMarks>;
   /** Which semester the course belongs to; its totals make up that semester's points. */
   semester?: 1 | 2 | null;
+  /** The unit on ADIA's units list this sheet is (Andy, 2026-11-20), when the principal picked it. */
+  unitCode?: string | null;
   /** Why the principal sent it back, shown to the trainer. */
   returnNote?: string | null;
   approvedByName?: string | null;
@@ -103,14 +106,40 @@ export interface ExamSettings {
   minAttendance?: number | null;
   /** ADIA's common courses and their tutors (Andy, 2026-10-29), edited on the Common courses card. Absent until first saved. */
   commonCourses?: { name: string; tutorUid: string; tutorName: string }[];
+  /** ADIA's units (Andy, 2026-11-20): code, name, Theory or Practical, credit and hours. Absent: the units from the documents. */
+  units?: UnitItem[];
+  /** Which units-list department each app department is (course id → it, fashion, hospitality, cosmetology or none). */
+  unitDepartments?: Record<string, string>;
+  /** Each department's hours per semester, as the transcripts print them. */
+  semesterHours?: Record<string, { 1: number | null; 2: number | null }>;
 }
-/** ADIA's grade bands (Andy, 2026-10-24): Distinction 79 and above, Credit above 59, Pass 39 to 59, Fail below 39. */
+/**
+ * ADIA's grading from the transcripts (Andy, 2026-11-20, 2A 3A): A 79-100, B 69-78, C 59-68, D 39-58,
+ * E 0-38. D and above passes. Before this ADIA graded Distinction / Credit / Pass / Fail; those are now
+ * the Honours at the end (honoursFor).
+ */
 export const ADIA_BANDS: GradeBand[] = [
-  { min: 79, grade: 'Distinction', remark: 'Outstanding performance' },
-  { min: 59.01, grade: 'Credit', remark: 'Very good performance' },
-  { min: 39, grade: 'Pass', remark: 'Satisfactory performance' },
-  { min: 0, grade: 'Fail', remark: 'Below pass mark; resit required' },
+  { min: 79, grade: 'A', remark: 'Excellent' },
+  { min: 69, grade: 'B', remark: 'Very good' },
+  { min: 59, grade: 'C', remark: 'Good' },
+  { min: 39, grade: 'D', remark: 'Pass' },
+  { min: 0, grade: 'E', remark: 'Fail; resit required' },
 ];
+/** The bands ADIA used until 2026-11-20; saved settings that still hold them get the A to E grades. */
+const OLD_BAND_NAMES = 'credit|distinction|fail|pass';
+const isOldBands = (bands: GradeBand[]) => bands.map((b) => String(b.grade).trim().toLowerCase()).sort().join('|') === OLD_BAND_NAMES;
+
+/** Honours on the final result (Andy, 5A): from the cumulative points, Distinction (A), Credit (B or C), Pass (D). */
+export const HONOURS = [
+  { min: 79, honours: 'Distinction' },
+  { min: 59, honours: 'Credit' },
+  { min: 39, honours: 'Pass' },
+  { min: 0, honours: 'Fail' },
+] as const;
+export function honoursFor(points: number | null | undefined): string {
+  if (points == null || Number.isNaN(points)) return '';
+  return HONOURS.find((h) => points >= h.min)?.honours ?? '';
+}
 export const DEFAULT_EXAM_SETTINGS: ExamSettings = {
   passMark: 39,
   bands: ADIA_BANDS,
@@ -123,7 +152,7 @@ export const DEFAULT_EXAM_SETTINGS: ExamSettings = {
 
 export function examSettingsWithDefaults(raw: Partial<ExamSettings> | null | undefined): ExamSettings {
   const s = { ...DEFAULT_EXAM_SETTINGS, ...(raw ?? {}) };
-  const bands = Array.isArray(s.bands) && s.bands.length ? [...s.bands].sort((a, b) => b.min - a.min) : DEFAULT_EXAM_SETTINGS.bands;
+  const bands = Array.isArray(s.bands) && s.bands.length && !isOldBands(s.bands) ? [...s.bands].sort((a, b) => b.min - a.min) : DEFAULT_EXAM_SETTINGS.bands;
   const weights = s.weights && EXAM_COMPONENTS.every((c) => s.weights[c] && typeof s.weights[c].max === 'number') ? s.weights : DEFAULT_EXAM_WEIGHTS;
   return { ...s, bands, weights };
 }
@@ -233,6 +262,21 @@ export interface ExamReport { units: ReportUnit[]; rows: ReportRow[] }
 
 export interface ReportMeta { remarks?: Record<string, Record<string, string>>; attendance?: Record<string, number | null> }
 
+/** The units list, when known (see units.ts unitContext): each sheet's credit, and whether it counts for a student's department. */
+export interface CreditContext {
+  creditOf(sheet: ExamSheet, studentCourseId: string): number | null;
+  counts(sheet: ExamSheet, studentCourseId: string): boolean;
+}
+/** Credit-weighted average while every course has a credit (Andy, 4A); the plain average until then. */
+function creditAverage(lines: { v: number; c: number | null }[]): number | null {
+  if (!lines.length) return null;
+  if (lines.every((l) => typeof l.c === 'number' && l.c > 0)) {
+    const sum = lines.reduce((a, l) => a + l.c!, 0);
+    return round1(lines.reduce((a, l) => a + l.v * l.c!, 0) / sum);
+  }
+  return round1(lines.reduce((a, l) => a + l.v, 0) / lines.length);
+}
+
 /** Where a report's remarks are kept: the programme's id, or "common". */
 export const scopeKey = (courseId: string | null) => courseId ?? 'common';
 
@@ -240,7 +284,7 @@ export const scopeKey = (courseId: string | null) => courseId ?? 'common';
  * The compiled report for one programme (its own courses and then the common courses, for the
  * students of that programme) or, with courseId null, the common courses for every student.
  */
-export function buildExamReport(courseId: string | null, sheets: readonly ExamSheet[], students: readonly ExamStudent[], settings: ExamSettings, meta: ReportMeta = {}): ExamReport {
+export function buildExamReport(courseId: string | null, sheets: readonly ExamSheet[], students: readonly ExamStudent[], settings: ExamSettings, meta: ReportMeta = {}, ctx?: CreditContext): ExamReport {
   const live = sheets.filter((s) => !s.deletedAt);
   const own = courseId == null ? [] : live.filter((s) => s.courseId === courseId);
   const common = live.filter((s) => s.courseId == null);
@@ -251,16 +295,17 @@ export function buildExamReport(courseId: string | null, sheets: readonly ExamSh
   const rows: ReportRow[] = roster.map((st) => {
     const cells: Record<string, ReportCell> = {};
     const totals: number[] = [];
+    const lines: { v: number; c: number | null }[] = [];
     let missing = 0;
     for (const sh of all) {
       const m = sh.marks?.[st.id] ?? null;
       const u = unitTotal(sh.weights, m, settings.passMark);
       cells[sh.id] = { ...(m ?? {}), total: u.total, partial: u.partial, complete: u.complete, grade: u.total == null ? '' : gradeFor(u.total, settings).grade, exempt: u.exempt, resitUsed: u.resitUsed };
-      if (u.exempt) continue;
-      if (u.total == null) missing++; else totals.push(u.total);
+      if (u.exempt || (ctx && !ctx.counts(sh, st.courseId))) continue;
+      if (u.total == null) missing++; else { totals.push(u.total); lines.push({ v: u.total, c: ctx ? ctx.creditOf(sh, st.courseId) : null }); }
     }
     const sum = totals.reduce((a, b) => a + b, 0);
-    const average = totals.length ? round1(sum / totals.length) : null;
+    const average = creditAverage(lines);
     const g = gradeFor(average, settings);
     const auto = average == null ? '' : missing ? `${g.remark}. ${missing} ${missing === 1 ? 'unit' : 'units'} not yet marked` : g.remark;
     const edited = typeof remarks[st.id] === 'string' && remarks[st.id] !== '';
@@ -313,24 +358,24 @@ export interface DepartmentSummary { rows: DepartmentRow[]; classAverage: number
  * courses (the programme's and the common ones, both semesters). A course whose papers are not all in
  * counts on the papers marked so far, so the figure moves as each CAT is keyed in.
  */
-export function departmentSummary(courseId: string, sheets: readonly ExamSheet[], students: readonly ExamStudent[], settings: ExamSettings): DepartmentSummary {
+export function departmentSummary(courseId: string, sheets: readonly ExamSheet[], students: readonly ExamStudent[], settings: ExamSettings, ctx?: CreditContext): DepartmentSummary {
   const all = sheets.filter((s) => !s.deletedAt && (s.courseId === courseId || s.courseId == null));
   const roster = students.filter((s) => s.courseId === courseId).sort((a, b) => a.name.localeCompare(b.name));
   const byGrade: Record<string, number> = Object.fromEntries(settings.bands.map((b) => [b.grade, 0]));
   let anyPartial = false;
   const rows: DepartmentRow[] = roster.map((st) => {
-    const values: number[] = [];
+    const values: { v: number; c: number | null }[] = [];
     let courses = 0, complete = true;
     for (const sh of all) {
       const u = unitTotal(sh.weights, sh.marks?.[st.id] ?? null, settings.passMark);
-      if (u.exempt) continue;
+      if (u.exempt || (ctx && !ctx.counts(sh, st.courseId))) continue;
       courses++;
       const v = u.total ?? markedSoFar(sh.weights, sh.marks?.[st.id]);
       if (u.total == null) complete = false;
-      if (v != null) values.push(v);
+      if (v != null) values.push({ v, c: ctx ? ctx.creditOf(sh, st.courseId) : null });
     }
     if (!complete) anyPartial = true;
-    const soFar = values.length ? round1(values.reduce((a, b) => a + b, 0) / values.length) : null;
+    const soFar = creditAverage(values);
     const grade = gradeFor(soFar, settings).grade;
     if (grade) byGrade[grade] = (byGrade[grade] ?? 0) + 1;
     return { studentId: st.id, name: st.name, admissionNo: st.admissionNo, marked: values.length, courses, soFar, grade, position: null, complete: complete && courses > 0 };

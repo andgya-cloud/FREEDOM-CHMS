@@ -25,8 +25,8 @@ describe('industrial attachment', () => {
     expect(markProblem('64.5')).toBeNull();
     expect(markProblem('101')).not.toBeNull();
     expect(markProblem('abc')).not.toBeNull();
-    expect(attachmentLine({ assessed: true, mark: 78 }, { bands: ADIA_BANDS })).toBe('78 · Credit');
-    expect(attachmentLine({ assessed: true, mark: 82 }, { bands: ADIA_BANDS })).toBe('82 · Distinction');
+    expect(attachmentLine({ assessed: true, mark: 78 }, { bands: ADIA_BANDS })).toBe('78 · B');
+    expect(attachmentLine({ assessed: true, mark: 82 }, { bands: ADIA_BANDS })).toBe('82 · A');
     expect(attachmentLine({ assessed: false, mark: 78 }, { bands: ADIA_BANDS })).toBe('');
     expect(attachmentLine({ assessed: true, mark: null }, { bands: ADIA_BANDS })).toBe('');
   });

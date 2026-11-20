@@ -16,6 +16,7 @@ import {
   admissionKey, finalResult, parseMarksFile, parseResultsWorkbook, planResultImport, printedDiffers, semesterFromSheets,
   type ExamResult, type ImportStudent, type ParsedResults, type Semester,
 } from '../../../functions/src/shared/examResults';
+import { settingsUnitContext } from '../../../functions/src/shared/units';
 import type { Organization } from '../../state/OrgContext';
 
 /**
@@ -73,7 +74,7 @@ export function ResultsAndTranscripts({ org, cohort, sheets, students, courseNam
                 </tbody>
               </table>
             </div>
-            <p className="muted small">Final points are the average of Semester 1 and Semester 2. A figure in brackets is a running total while CATs are still coming in. Semesters come from past results uploaded under Setup, or from that semester's courses; a semester with a course not yet approved is provisional.</p>
+            <p className="muted small">Semester points weight each unit's mark by its credit (Setup, Units); Grade is the Honours from the final points. Final points are the average of Semester 1 and Semester 2. A figure in brackets is a running total while CATs are still coming in. Semesters come from past results uploaded under Setup, or from that semester's courses; a semester with a course not yet approved is provisional.</p>
           </>
         )}
       </section>
@@ -86,6 +87,7 @@ export interface Row { key: string; name: string; admissionNo: string; programme
 
 export function buildRows(cohort: string, students: ExamStudent[], results: ExamResult[], sheets: ExamSheetRow[], settings: ExamSettings, courseName: (id: string) => string): Row[] {
   const byStudent = new Map(results.map((r) => [r.studentId, r]));
+  const ctx = settingsUnitContext(settings, courseName);
   const people: { id: string; name: string; admissionNo: string; courseId: string; programme: string }[] = students.map((s) => ({ id: s.id, name: s.name, admissionNo: s.admissionNo, courseId: s.courseId, programme: s.courseName }));
   for (const r of results) if (!people.some((p) => p.id === r.studentId)) people.push({ id: r.studentId, name: r.studentName, admissionNo: r.admissionNo, courseId: r.courseId ?? '', programme: courseName(r.courseId ?? '') });
   return people.map((p) => {
@@ -93,7 +95,7 @@ export function buildRows(cohort: string, students: ExamStudent[], results: Exam
     const sem = (n: Semester): RowSem => {
       const saved = res?.semesters[String(n) as '1' | '2'];
       if (saved) return { label: `Semester ${n}`, points: saved.points, partial: null, grade: gradeFor(saved.points, settings).grade, source: 'Past results', courses: [], provisional: false };
-      const fromSheets = semesterFromSheets(sheets, { id: p.id, courseId: p.courseId }, n, settings.passMark);
+      const fromSheets = semesterFromSheets(sheets, { id: p.id, courseId: p.courseId }, n, settings.passMark, ctx);
       const provisional = fromSheets.courses.length > 0 && !fromSheets.approved;
       return {
         label: `Semester ${n}`, points: fromSheets.points, partial: fromSheets.partial, grade: fromSheets.points == null ? '' : gradeFor(fromSheets.points, settings).grade,

@@ -101,9 +101,9 @@ describe('exam records', () => {
     ];
     const d = departmentSummary('ict', sheets, students, DEFAULT_EXAM_SETTINGS);
     expect(d.rows.map((r) => [r.name, r.soFar, r.marked, r.courses, r.position, r.grade])).toEqual([
-      ['Amina', 70, 2, 2, 1, 'Credit'], ['Brian', 30, 1, 2, 2, 'Fail'],
+      ['Amina', 70, 2, 2, 1, 'B'], ['Brian', 30, 1, 2, 2, 'E'],
     ]);
     expect(d).toMatchObject({ classAverage: 50, passed: 1, graded: 2, courses: 2, provisional: true });
-    expect(d.byGrade).toMatchObject({ Credit: 1, Fail: 1, Distinction: 0 });
+    expect(d.byGrade).toMatchObject({ B: 1, E: 1, A: 0 });
   });
 });

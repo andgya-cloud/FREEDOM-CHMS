@@ -2170,8 +2170,9 @@ service cloud.firestore {
       function examSheetFields(d) {
         return d.keys().hasOnly(['orgId', 'cohort', 'courseId', 'ownerUid', 'ownerName', 'courseName', 'teacherName', 'weights', 'status',
                'submittedAt', 'marks', 'semester', 'approvedAt', 'approvedByName', 'returnNote',
-               'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest', 'notified',
+               'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest', 'notified', 'unitCode',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('unitCode' in d) || d.unitCode == null || shortText(d.unitCode, 12))
           && markMap(d, 'cat1Marks') && markMap(d, 'cat2Marks') && markMap(d, 'cat3Marks') && markMap(d, 'finalMarks') && markMap(d, 'resitMarks')
           && (!('locked' in d) || (d.locked is map && d.locked.keys().hasOnly(['cat1', 'cat2', 'cat3', 'final'])))
           && (!('changeRequest' in d) || d.changeRequest == null
@@ -2195,7 +2196,7 @@ service cloud.firestore {
           && weightValues(request.resource.data.weights) && ex('exams.manage') && !cohortClosed(request.resource.data.cohort);
         allow update: if examSheetFields(request.resource.data) && stampedUpdate() && validSoftDelete() && !cohortClosed(resource.data.cohort)
           && (ex('exams.manage')
-              ? request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'ownerUid', 'ownerName', 'weights', 'marks', 'semester', 'status',
+              ? request.resource.data.diff(resource.data).affectedKeys().hasOnly(['courseName', 'teacherName', 'ownerUid', 'ownerName', 'weights', 'marks', 'semester', 'unitCode', 'status',
                    'submittedAt', 'approvedAt', 'approvedByName', 'returnNote', 'cat1Marks', 'cat2Marks', 'cat3Marks', 'finalMarks', 'resitMarks', 'locked', 'changeRequest',
                    'deletedAt', 'deletedBy', 'updatedAt', 'updatedBy'])
                 && (request.resource.data.status == resource.data.status
@@ -2283,7 +2284,11 @@ service cloud.firestore {
         allow read: if ex('exams.manage') || ex('exams.mark');
         allow create, update: if ex('exams.manage') && settingId == 'main'
           && request.resource.data.keys().hasOnly(['orgId', 'passMark', 'bands', 'principalName', 'principalTitle', 'directorName', 'directorTitle', 'weights', 'courseList', 'minAttendance', 'commonCourses',
+               'units', 'unitDepartments', 'semesterHours',
                'deletedAt', 'deletedBy', 'createdAt', 'createdBy', 'updatedAt', 'updatedBy'])
+          && (!('units' in request.resource.data) || listOf(request.resource.data.units, 300))
+          && (!('unitDepartments' in request.resource.data) || (request.resource.data.unitDepartments is map && request.resource.data.unitDepartments.size() <= 40))
+          && (!('semesterHours' in request.resource.data) || (request.resource.data.semesterHours is map && request.resource.data.semesterHours.size() <= 10))
           && (!('commonCourses' in request.resource.data) || (request.resource.data.commonCourses is list && request.resource.data.commonCourses.size() <= 40))
           && (!('minAttendance' in request.resource.data) || request.resource.data.minAttendance == null
               || (request.resource.data.minAttendance is number && request.resource.data.minAttendance >= 0 && request.resource.data.minAttendance <= 100))

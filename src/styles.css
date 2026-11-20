@@ -3144,3 +3144,11 @@ button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
   .exam-sem-row { flex-direction: column; align-items: stretch; }
   .exam-sem-row .exam-list-side { flex-direction: row; justify-content: space-between; align-items: center; }
 }
+
+/* Setup › Units (Andy, 2026-11-20): the A to E key and the units tables. */
+.unit-grades { display: flex; flex-wrap: wrap; gap: 6px; }
+.unit-grades span { padding: 4px 10px; border: 1px solid var(--border); border-radius: 999px; font-size: 0.9em; }
+.unit-fill { margin-left: 6px; }
+.unit-table td { vertical-align: middle; }
+.unit-total td { font-weight: 600; border-top: 2px solid var(--border); }
+.unit-links { margin-top: 8px; max-width: 420px; }

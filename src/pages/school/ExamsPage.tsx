@@ -29,6 +29,8 @@ import {
 import { examNoticeText, type ExamNoticeKind } from '../../../functions/src/shared/examNotices';
 import { bandsText, marksSheetPdf, resultSlipsPdf } from '../../lib/examPdf';
 import { MarksUpload, ResultsAndTranscripts, ResultsUpload } from './ExamResults';
+import { UnitsSetup } from './UnitsSetup';
+import { settingsUnitContext, unitDeptOf, unitLabel, unitsMissing, unitsWithDefaults, unitKey, type UnitItem } from '../../../functions/src/shared/units';
 import { ExamRegisterView, TranscriptsView } from './ExamRegister';
 import { NitaBoard } from './NitaResults';
 import { TIMETABLE_COMMON_COURSES, commonCourseOf, commonDeptId, commonDeptName } from '../../../functions/src/shared/timetable';
@@ -133,7 +135,7 @@ function Exams({ org }: { org: Organization }) {
   const { sheets } = useExamSheets(org.id, a.canManage ? cohort : '');
   const students = useMemo(() => studentsOf(cohort), [cohort, s.students, s.intakes, s.peopleLoading]); // eslint-disable-line react-hooks/exhaustive-deps
   const courses = useMemo(() => s.courses.map((c) => ({ id: c.id, name: c.name })), [s.courses]);
-  const courseList = useCourseList(org.id, cohorts);
+  const courseList = useCourseList(org.id, cohorts, courses);
   const choice = [...order.current, ...order.past].find((c) => c.name === cohort);
   const closed = !!choice?.closed;
   // "Cohort 1 · Class of 2025" on printouts, slips and transcripts, so each graduating class is dated.
@@ -255,8 +257,9 @@ function StudentRecord({ org, studentId, s, studentsOf, info, attendance, minAtt
   const classmates = studentsOf(cohort);
   const me: ExamStudent = classmates.find((x) => x.id === st.id) ?? { id: st.id, name: s.nameOf(st.id), admissionNo: st.admissionNo ?? '', courseId: st.courseId, courseName: s.courseName(st.courseId) };
   const mine = sortCourseList(sheets.filter((sh) => sh.courseId == null || sh.courseId === st.courseId).map((sh) => ({ sh, name: sh.courseName, courseId: sh.courseId, semester: sh.semester ?? null })));
-  const standing = departmentSummary(st.courseId, sheets, classmates, settings).rows.find((r) => r.studentId === st.id);
-  const out = departmentSummary(st.courseId, sheets, classmates, settings).rows.filter((r) => r.position != null).length;
+  const summary = departmentSummary(st.courseId, sheets, classmates, settings, settingsUnitContext(settings, s.courseName));
+  const standing = summary.rows.find((r) => r.studentId === st.id);
+  const out = summary.rows.filter((r) => r.position != null).length;
   const grad = info[cohort]?.graduationDate;
   const label = grad ? `${cohort} · ${classOf(grad)}` : cohort;
   const att = attendance[st.id] ?? null;
@@ -348,12 +351,24 @@ function ReopenCohort({ org, cohort, onDone }: { org: Organization; cohort: stri
  * ADIA's course list (Andy, 2026-10-25, 3A): each department's courses, set once. Until the principal saves
  * one, it is every course the cohorts so far have had.
  */
-function useCourseList(orgId: string, newestFirst: string[]) {
+function useCourseList(orgId: string, newestFirst: string[], courses: { id: string; name: string }[]) {
   const { settings, exists } = useExamSettings(orgId);
   const { sheets } = useAllExamSheets(orgId);
   const list = useMemo(() => (settings.courseList ? sortCourseList(settings.courseList) : courseListFromSheets(sheets, newestFirst)), [settings.courseList, sheets, newestFirst]);
   const last = useMemo(() => lastTrainers(sheets, newestFirst), [sheets, newestFirst]);
-  return { list, saved: !!settings.courseList, last, save: (next: CourseListItem[]) => saveExamCourseList(orgId, exists, settings, sortCourseList(next)) };
+  // Who marked each unit most recently (Andy, 2026-11-20): a new cohort's unit starts with that trainer.
+  const lastByUnit = useMemo(() => {
+    const ctx = settingsUnitContext(settings, (id) => courses.find((c) => c.id === id)?.name ?? '');
+    const rank = (c: string) => { const i = newestFirst.indexOf(c); return i < 0 ? newestFirst.length : i; };
+    const out = new Map<string, { uid: string; name: string }>();
+    for (const sh of [...sheets].sort((x, y) => rank(x.cohort) - rank(y.cohort))) {
+      const u = ctx.unitOf(sh, sh.courseId ?? '');
+      const k = u ? `${sh.courseId ?? 'common'}|${unitKey(u)}` : '';
+      if (k && !out.has(k) && sh.ownerUid) out.set(k, { uid: sh.ownerUid, name: sh.teacherName || sh.ownerName || '' });
+    }
+    return out;
+  }, [sheets, newestFirst, settings, courses]);
+  return { list, saved: !!settings.courseList, last, lastByUnit, save: (next: CourseListItem[]) => saveExamCourseList(orgId, exists, settings, sortCourseList(next)) };
 }
 type CourseList = ReturnType<typeof useCourseList>;
 
@@ -657,6 +672,20 @@ function Home({ org, cohort, closed, dept, sheets, students, courses, courseList
  * A new cohort gets the courses on the course list in one step (Andy, 2026-10-25, 3A): each starts with the
  * trainer who marked it last; the principal checks the trainers and creates them.
  */
+type NewItem = CourseListItem & { unit?: UnitItem };
+/**
+ * What a cohort still needs (Andy, 2026-11-20, 1A): each department on the units list gets its units and the
+ * common units; a department not on the list yet (Cosmetology) keeps its courses from the course list.
+ */
+function newCohortItems(settings: ExamSettings, courses: { id: string; name: string }[], courseList: CourseList, sheets: ExamSheetRow[]): NewItem[] {
+  const units = unitsWithDefaults(settings.units);
+  const depts = courses.map((c) => ({ id: c.id, dept: unitDeptOf(c.id, c.name, settings.unitDepartments) })).filter((d) => d.dept && units.some((u) => u.dept === d.dept));
+  if (!depts.length) return missingCourses(courseList.list, sheets);
+  const onUnits = new Set(depts.map((d) => d.id));
+  const fromUnits: NewItem[] = unitsMissing(sheets, units, depts).map((m) => ({ name: unitLabel(m.unit), courseId: m.courseId, semester: m.unit.semester, unit: m.unit }));
+  return [...fromUnits, ...missingCourses(courseList.list, sheets).filter((c) => c.courseId != null && !onUnits.has(c.courseId))];
+}
+
 function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onSetup }: {
   org: Organization; cohort: string; sheets: ExamSheetRow[]; courses: { id: string; name: string }[]; courseList: CourseList; first?: boolean; onSetup?: () => void;
 }) {
@@ -665,11 +694,11 @@ function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onS
   const { settings } = useExamSettings(org.id);
   const { trainers, loading } = useExamTrainers(org.id);
   const [picks, setPicks] = useState<Record<string, string>>({});
-  const missing = missingCourses(courseList.list, sheets);
-  const trainerFor = (c: CourseListItem) => {
+  const missing = newCohortItems(settings, courses, courseList, sheets);
+  const trainerFor = (c: NewItem) => {
     const k = courseListKey(c);
     if (k in picks) return picks[k]!;
-    const t = courseList.last.get(k);
+    const t = c.unit ? courseList.lastByUnit.get(`${c.courseId ?? 'common'}|${unitKey(c.unit)}`) : courseList.last.get(k);
     return t && trainers.some((x) => x.uid === t.uid) ? t.uid : '';
   };
   if (!missing.length) {
@@ -688,26 +717,26 @@ function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onS
     try {
       for (const c of ready) {
         const t = trainers.find((x) => x.uid === trainerFor(c))!;
-        createExamSheet(org.id, { cohort, courseId: c.courseId, courseName: c.name, teacherName: t.name.slice(0, 120), weights: settings.weights, ownerUid: t.uid, ownerName: t.name.slice(0, 120), semester: c.semester })
+        createExamSheet(org.id, { cohort, courseId: c.courseId, courseName: c.name, teacherName: t.name.slice(0, 120), weights: settings.weights, ownerUid: t.uid, ownerName: t.name.slice(0, 120), semester: c.semester, ...(c.unit ? { unitCode: c.unit.code } : {}) })
           .synced.catch((err) => toast.show(friendlyError(err)));
       }
-      void logExam(org.id, { action: 'setup', cohort, sheetId: null, detail: `Created ${ready.length} courses from the course list`, byName: a.myName });
+      void logExam(org.id, { action: 'setup', cohort, sheetId: null, detail: `Created ${ready.length} courses from the units list`, byName: a.myName });
       toast.show(`${ready.length} courses created for ${cohort}.`);
     } catch (err) { toast.show(friendlyError(err)); }
   }
   return (
     <section className="card stack">
-      <h2>{first ? `Set up ${cohort}` : 'From the course list'}</h2>
+      <h2>{first ? `Set up ${cohort}` : 'From the units list'}</h2>
       <p className="muted small">{first
-        ? `${cohort} gets these ${missing.length} courses from the course list. Check each trainer, then create them.`
-        : `${missing.length} ${missing.length === 1 ? 'course' : 'courses'} on the course list ${missing.length === 1 ? 'is' : 'are'} not in ${cohort} yet.`}</p>
+        ? `${cohort} gets these ${missing.length} units from the units list. Check each trainer, then create them.`
+        : `${missing.length} ${missing.length === 1 ? 'unit' : 'units'} on the units list ${missing.length === 1 ? 'is' : 'are'} not in ${cohort} yet. Pick a trainer only for those ${cohort} takes.`}</p>
       {departmentsOf(missing, courses).map((g) => (
         <div key={g.id ?? COMMON} className="stack">
           <strong className="small">{g.name}</strong>
           <ul className="exam-pick-list">
             {g.items.map((c) => (
               <li key={courseListKey(c)}>
-                <span>{c.name}<span className="muted small"> · {semesterText(c.semester)}</span></span>
+                <span>{c.unit ? `${c.unit.code} · ` : ''}{c.name}<span className="muted small"> · {semesterText(c.semester)}</span></span>
                 <select value={trainerFor(c)} aria-label={`Trainer for ${c.name}`} onChange={(e) => setPicks({ ...picks, [courseListKey(c)]: e.target.value })}>
                   <option value="">{loading ? 'Loading…' : 'Leave out'}</option>
                   {trainersFor(trainers, c.courseId).map((t) => <option key={t.uid} value={t.uid}>{t.name}</option>)}
@@ -732,7 +761,8 @@ function NewCohortCourses({ org, cohort, sheets, courses, courseList, first, onS
  */
 function Departments({ org, cohort, sheets, students, courses }: { org: Organization; cohort: string; sheets: ExamSheetRow[]; students: ExamStudent[]; courses: { id: string; name: string }[] }) {
   const { settings } = useExamSettings(org.id);
-  const depts = courses.map((c) => ({ c, d: departmentSummary(c.id, sheets, students, settings) })).filter(({ d }) => d.rows.length > 0);
+  const ctx = settingsUnitContext(settings, (id) => courses.find((c) => c.id === id)?.name ?? '');
+  const depts = courses.map((c) => ({ c, d: departmentSummary(c.id, sheets, students, settings, ctx) })).filter(({ d }) => d.rows.length > 0);
   const grades = settings.bands.map((b) => b.grade);
   if (!depts.length) return <p className="muted">No students in {cohort} yet.</p>;
   const csv = () => toCsv(['Department', 'Position', 'Name', 'Admission No', 'Courses marked', 'So far (%)', 'Grade'],
@@ -826,7 +856,8 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
   const courseId = scope === COMMON ? null : scope;
   const title = `${courseId == null ? 'Common courses' : courses.find((c) => c.id === courseId)?.name ?? 'Department'} · ${period}`;
   const finder = useStudentFinder();
-  const report = useMemo(() => buildExamReport(courseId, sheets, students, settings, { remarks: meta.remarks, attendance }), [courseId, sheets, students, settings, meta, attendance]);
+  const report = useMemo(() => buildExamReport(courseId, sheets, students, settings, { remarks: meta.remarks, attendance }, settingsUnitContext(settings, (id) => courses.find((c) => c.id === id)?.name ?? '')),
+    [courseId, sheets, students, settings, meta, attendance, courses]);
   const graded = report.rows.filter((r) => r.average != null);
   const passed = graded.filter((r) => r.average! >= settings.passMark).length;
   const classAvg = graded.length ? Math.round((graded.reduce((t, r) => t + r.average!, 0) / graded.length) * 10) / 10 : null;
@@ -967,7 +998,7 @@ function Reports({ org, cohort, label, period, sheets, students, courses, attend
 
 /* ---------- Setup ---------- */
 
-type Section = 'courses' | 'graduation' | 'deadlines' | 'list' | 'cohort' | 'starts' | 'percentages' | 'grading' | 'upload' | 'log';
+type Section = 'courses' | 'units' | 'graduation' | 'deadlines' | 'list' | 'cohort' | 'starts' | 'percentages' | 'grading' | 'upload' | 'log';
 
 /**
  * Each cohort's start month (Andy, 2026-11-20, 5A): Cohort 1 began in August 2025. Changing a month moves the
@@ -1012,8 +1043,8 @@ function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, co
 }) {
   const { can } = useAuth();
   const sections: [Section, string][] = [
-    ['courses', `Courses and trainers · ${cohort}`], ['graduation', `Graduation date · ${cohort}`], ['deadlines', `Deadlines and attendance · ${cohort}`],
-    ['list', 'Course list and departments'], ['starts', 'Cohort start dates'], ...(canStart ? [['cohort', `Start a new cohort (next: ${nextCohortName(cohorts)})`] as [Section, string]] : []),
+    ['courses', `Courses and trainers · ${cohort}`], ['units', 'Units, credits and grades'], ['graduation', `Graduation date · ${cohort}`], ['deadlines', `Deadlines and attendance · ${cohort}`],
+    ['list', 'Other courses and departments'], ['starts', 'Cohort start dates'], ...(canStart ? [['cohort', `Start a new cohort (next: ${nextCohortName(cohorts)})`] as [Section, string]] : []),
     ['percentages', 'Starting percentages'], ['grading', 'Grading and signatures'], ['upload', 'Upload past results'], ['log', 'Change log'],
   ];
   const pick: Section = sections.some(([k]) => k === section) ? (section as Section) : 'courses';
@@ -1029,6 +1060,7 @@ function Setup({ org, cohort, cohorts, order, closed, info, sheets, students, co
       {pick === 'graduation' && (closed
         ? <p className="notice">{cohort} has graduated and is closed. Reopen it at the top of the page to change its date.</p>
         : <Graduation org={org} cohort={cohort} info={info[cohort]} sheets={sheets} today={today} />)}
+      {pick === 'units' && <UnitsSetup org={org} cohort={cohort} closed={closed} sheets={sheets} courses={courses} />}
       {pick === 'deadlines' && <Deadlines org={org} cohort={cohort} info={info[cohort]} closed={closed} />}
       {pick === 'list' && <CourseListEditor org={org} courses={courses} courseList={courseList} canAddDepartment={can('settings.manage') || can('school.manage')} current={order.current} />}
       {pick === 'starts' && <CohortStarts org={org} order={order} intakes={intakes} />}
@@ -1444,10 +1476,10 @@ function Grading({ org }: { org: Organization }) {
           ))}
         </tbody>
       </table>
-      <p className="small muted">Grades now: {bandsText(v)}. A minimum of 59.01 means "above 59".</p>
+      <p className="small muted">Grades now: {bandsText(v)}. D and above passes; the final result also shows Honours (Distinction, Credit or Pass).</p>
       <div className="row-actions">
         <button type="button" className="btn btn-quiet" onClick={() => setF({ ...v, bands: [...v.bands, { min: 0, grade: '', remark: '' }] })}>Add a grade</button>
-        {bandsText(v) !== bandsText({ bands: ADIA_BANDS }) && <button type="button" className="btn btn-quiet" onClick={() => setF({ ...v, passMark: 39, bands: ADIA_BANDS })}>Use ADIA's bands (79 / above 59 / 39)</button>}
+        {bandsText(v) !== bandsText({ bands: ADIA_BANDS }) && <button type="button" className="btn btn-quiet" onClick={() => setF({ ...v, passMark: 39, bands: ADIA_BANDS })}>Use ADIA's grades (A to E)</button>}
       </div>
       <div className="form-grid">
         <label className="field"><span>Principal's name</span><input value={v.principalName} onChange={(e) => setF({ ...v, principalName: e.target.value })} /></label>
