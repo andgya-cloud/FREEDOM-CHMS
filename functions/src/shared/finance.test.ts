@@ -316,7 +316,22 @@ describe('bankMoney', () => {
       { account: 'M-Pesa', accountKind: 'mpesa' as const, from: '2026-11-01', lines: [{ d: '2026-11-07', t: '', r: '', i: 0, o: 0, b: 9, c: '', s: true }] },
     ];
     const m = bankMoney(st, [{ day: '2026-11-05', cents: 1 }, { day: '2026-11-06', cents: 30_000 }]);
-    expect(m).toEqual({ bankCents: 80_000, asOf: '2026-11-05', paidSinceCents: 30_000, paidSince: 1, availableCents: 50_000 });
+    expect(m).toMatchObject({ bankCents: 80_000, asOf: '2026-11-05', paidSinceCents: 30_000, paidSince: 1, availableCents: 50_000, futureLines: 0 });
+    expect(m.sources).toEqual([{ account: 'Family Bank', asOf: '2026-11-05', cents: 80_000, fileName: '' }]);
     expect(bankMoney([], [{ day: '2026-11-06', cents: 5 }]).asOf).toBe('');
+  });
+  it('leaves out lines dated after today, so a misread date cannot hold the balance', () => {
+    const line = (d: string, b: number) => ({ d, t: '', r: '', i: 0, o: 0, b, c: '', s: true });
+    const st = [
+      { account: 'Family Bank', accountKind: 'bank' as const, from: '2026-11-01', lines: [line('2026-11-01', 100), line('2026-12-11', 5)] },
+      { account: 'Family Bank', accountKind: 'bank' as const, from: '2026-11-10', fileName: 'new.pdf', lines: [line('2026-11-19', 700)] },
+    ];
+    const m = bankMoney(st, [], '2026-11-20');
+    expect(m).toMatchObject({ bankCents: 700, asOf: '2026-11-19', futureLines: 1 });
+    expect(m.sources[0]!.fileName).toBe('new.pdf');
+  });
+  it('counts an account saved as M-Pesa only because its name says Paybill', () => {
+    const st = [{ account: 'Family Bank Paybill 222118', accountKind: 'mpesa' as const, from: '2026-11-01', lines: [{ d: '2026-11-02', t: '', r: '', i: 0, o: 0, b: 50, c: '', s: true }] }];
+    expect(bankMoney(st, []).bankCents).toBe(50);
   });
 });

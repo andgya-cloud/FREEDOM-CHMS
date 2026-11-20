@@ -7,6 +7,10 @@ import { paymentCodeOf } from '../../../functions/src/shared/pettyCash';
 import { matchPayments, readPayments, type BankPayment } from '../../../functions/src/shared/bankMatch';
 import { money } from './common';
 import { PettySignBox } from './PettySignBox';
+import { useDaily, useFinance } from '../../state/useFinance';
+import { useBankMoney } from '../finance/BankMoney';
+import { accountKindOf, looksLikeFullStatement, planUpload, savePlan, uploadNote } from '../finance/statementUpload';
+import { FIN_ACCOUNT_SUGGESTIONS } from '../../../functions/src/shared/finance';
 
 const nairobiDay = (ms: number) => new Date(ms + 3 * 3_600_000).toISOString().slice(0, 10);
 const showDay = (day: string) => new Date(`${day}T12:00:00`).toLocaleDateString('en-KE', { day: 'numeric', month: 'short', year: 'numeric' });
@@ -72,15 +76,37 @@ export function BankMatchCard({ org }: { org: Organization }) {
   const changes = matches.filter((m) => m.cents !== m.reqCents).length;
   const whoLabel = payees.find((x) => x.key === who)?.label ?? '';
 
+  const fin = useFinance(org);
+  const daily = useDaily(org);
+  const bank = useBankMoney(org);
+  const [bankNote, setBankNote] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
+  /** Saves the file to the bank account when it is a whole statement; true when it was one. */
+  async function saveIfStatement(file: File): Promise<boolean> {
+    if (!fin.allowed) return false;
+    const { readBankStatement } = await import('../../lib/bankStatementFile');
+    const read = await readBankStatement(file);
+    if (!looksLikeFullStatement(read)) return false;
+    const latest = [...bank.sources].sort((a, b) => b.asOf.localeCompare(a.asOf))[0]?.account;
+    const account = latest ?? fin.statements.find((x) => accountKindOf(x.account) === 'bank')?.account ?? FIN_ACCOUNT_SUGGESTIONS[0]!;
+    const plan = planUpload(read, account, { statements: fin.statements, learned: fin.learned, orgType: org.type, daily: daily.entries, months: fin.months });
+    const fmt = (c: number) => money(org, c);
+    if (!plan.lines.length) { setBankNote(uploadNote(fmt, account, read, bank, null)); return true; }
+    const after = await savePlan(org.id, account, file.name, plan, fin.statements, bank.approved);
+    setBankNote(uploadNote(fmt, account, read, bank, after));
+    return true;
+  }
+
   async function choose(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    setReading(true); setError(''); setDone(''); setPayee('');
+    setReading(true); setError(''); setDone(''); setPayee(''); setBankNote(null);
+    // A whole bank statement uploaded here updates Money in the bank too (Andy, 2026-11-20, 3A).
+    const saved = await saveIfStatement(file).catch(() => false);
     try {
       const { payments: list } = readPayments((await fileRows(file)) as never);
-      if (!list.length) throw new Error('No payments were found in this file. It needs a date, a bank reference and an amount on each line.');
-      setPayments(list); setFileName(file.name);
+      if (!list.length) { if (!saved) throw new Error('No payments were found in this file. It needs a date, a bank reference and an amount on each line.'); }
+      else { setPayments(list); setFileName(file.name); }
     } catch (err) {
       setPayments(null); setError(friendlyError(err));
     }
@@ -96,6 +122,7 @@ export function BankMatchCard({ org }: { org: Organization }) {
         <input type="file" accept=".xlsx,.pdf,.csv" className="visually-hidden" onChange={(e) => void choose(e)} disabled={reading} />
       </label>
       {error && <p className="danger-text small">{error}</p>}
+      {bankNote && <p className={bankNote.tone === 'ok' ? 'petty-ok small' : 'petty-warn small'}>{bankNote.text}</p>}
       {done && <p className="small">{done}</p>}
       {payments && (
         <>

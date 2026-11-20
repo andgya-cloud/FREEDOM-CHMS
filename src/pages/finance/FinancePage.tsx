@@ -11,22 +11,22 @@ import { money } from '../school/common';
 import { KpiCard, KpiRow } from '../../components/charts';
 import { millis, usePettyCash } from '../../state/usePettyCash';
 import { approvedAfter, useBankMoney } from './BankMoney';
+import { planUpload, savePlan, uploadNote } from './statementUpload';
 import { reopenPettyMonth } from '../../lib/pettyPin';
 import { useLedgerMonths } from '../../state/useGiving';
-import { isLocked, orgKind, useDaily, useFinance, type FinMonthRow, type StatementRow } from '../../state/useFinance';
-import { approveFinMonth, prepareFinMonth, removeStatement, reopenFinMonth, saveFinBook, saveLines, saveStatement } from '../../lib/financeWrites';
+import { isLocked, useDaily, useFinance, type FinMonthRow, type StatementRow } from '../../state/useFinance';
+import { approveFinMonth, prepareFinMonth, removeStatement, reopenFinMonth, saveFinBook, saveLines } from '../../lib/financeWrites';
 import { REPORT_APPROVERS, REPORT_PREPARED_BY } from '../../../functions/src/shared/pettyReport';
 import type { FinSigned } from '../../lib/financePdf';
 import { ADIA_TOPUP_NAMES, parseAmountCents } from '../../../functions/src/shared/pettyCash';
 import {
-  autoCategory, categoriesFor, freeToSpend, potBalances, potLabel, potFor, potNames, readyMonth, spentInMonth, typedCategory, type FinReport, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey, lineKey,
+  categoriesFor, freeToSpend, potBalances, potLabel, potFor, potNames, readyMonth, spentInMonth, type FinReport, FIN_ACCOUNT_SUGGESTIONS, FIN_CATEGORIES, financialReport, finLabel, finPeriodName, finPeriods, learnKey,
   OWE_KINDS, OWN_KINDS, type BankLine, type FinInput, type OwnedItem, type ParsedStatement,
 } from '../../../functions/src/shared/finance';
 
 const num = (c: number) => { const t = (Math.abs(c) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); return c < 0 ? `(${t})` : t; };
 const FIN_TYPES = ['church_campus', 'college', 'ministry'];
 const day = (d: string) => d.split('-').reverse().join('/');
-const isMpesa = (name: string) => /m-?pesa|paybill|till/i.test(name);
 
 /**
  * Financial statements (Andy, 2026-11-08, 1A-8A): upload Family Bank or M-Pesa statements (PDF, Excel or
@@ -106,30 +106,23 @@ function UploadCard({ org, statements, learned, months }: { org: Organization; s
     const fl = e.target.files?.[0];
     e.target.value = '';
     if (!fl) return;
-    setFile(fl); setRead(null); setPassword(''); setLocked(false);
+    setFile(fl); setRead(null); setPassword(''); setLocked(false); setNote(null);
     void open(fl);
   }
 
-  // Lines already saved for this account are left out, so the same statement can be uploaded twice safely.
-  const plan = useMemo(() => {
-    if (!read || !name) return null;
-    const have = new Set(statements.filter((s) => s.account === name).flatMap((s) => s.lines.map((l) => lineKey(name, l))));
-    // Lines in a month already closed stay out too: that month was approved as it was (5A).
-    const fresh = read.lines.filter((l) => !have.has(lineKey(name, l)) && !isLocked(months, l.d));
-    const closed = read.lines.filter((l) => !have.has(lineKey(name, l)) && isLocked(months, l.d)).length;
-    // A line that matches bank money typed on the day takes the category typed then (Andy, 2026-11-09).
-    const taken = new Set<string>();
-    const lines: BankLine[] = fresh.map((l) => { const c = typedCategory(l, name, daily.entries, taken); return { ...l, ...(c ? { c, s: true } : autoCategory(l, learned, orgKind(org.type))) }; });
-    return { lines, skipped: read.lines.length - fresh.length - closed, closed, sure: lines.filter((l) => l.s).length };
-  }, [read, name, statements, learned, org.type, daily.entries, months]);
+  const plan = useMemo(() => (read && name ? planUpload(read, name, { statements, learned, orgType: org.type, daily: daily.entries, months }) : null),
+    [read, name, statements, learned, org.type, daily.entries, months]);
+  const bank = useBankMoney(org);
+  const [note, setNote] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
 
   async function save() {
     if (!read || !plan || !file || !name) return;
-    if (!plan.lines.length) { toast.show('Every line of this statement is already in.'); return; }
+    // Every upload says what it did to the money in the bank (Andy, 2026-11-20, 4A 5A).
+    if (!plan.lines.length) { setNote(uploadNote((c) => money(org, c), name, read, bank, null)); setFile(null); setRead(null); return; }
     setBusy(true);
     try {
-      await saveStatement(org.id, { account: name, accountKind: isMpesa(name) ? 'mpesa' : 'bank', fileName: file.name, from: plan.lines[0]!.d, to: plan.lines[plan.lines.length - 1]!.d,
-        openingCents: plan.lines[0]!.b - plan.lines[0]!.i + plan.lines[0]!.o, closingCents: plan.lines[plan.lines.length - 1]!.b, lines: plan.lines });
+      const after = await savePlan(org.id, name, file.name, plan, statements, bank.approved);
+      setNote(uploadNote((c) => money(org, c), name, read, bank, after));
       toast.show(`Saved ${plan.lines.length} lines from ${file.name}, month by month.`);
       setFile(null); setRead(null); setAccount(name);
     } catch (err) {
@@ -157,6 +150,7 @@ function UploadCard({ org, statements, learned, months }: { org: Organization; s
         {busy ? 'Reading…' : file ? 'Choose another file' : 'Choose the statement (PDF, Excel or CSV)'}
         <input type="file" accept=".pdf,.xlsx,.csv,application/pdf" hidden onChange={choose} disabled={busy} />
       </label>
+      {note && <p className={note.tone === 'ok' ? 'petty-ok small' : 'petty-warn small'}>{note.text}</p>}
       {locked && file && (
         <form className="field-row" onSubmit={(e) => { e.preventDefault(); void open(file, password); }}>
           <label className="field"><span>Statement password</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoFocus /></label>

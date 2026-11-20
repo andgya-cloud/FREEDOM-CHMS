@@ -976,28 +976,43 @@ export interface BankMoney {
   paidSinceCents: number; paidSince: number;
   /** What can still be approved. */
   availableCents: number;
+  /** Where the balance comes from: each bank account, its last day, balance and file (Andy, 2026-11-20, 4A). */
+  sources: { account: string; asOf: string; cents: number; fileName: string }[];
+  /** Lines dated after today, left out: a misread date must not hold the balance on an old line. */
+  futureLines: number;
 }
+
+/** Whether an account is M-Pesa (its money is not the bank's). */
+export const isMpesaAccount = (name: string) => /m-?pesa|\btill\b/i.test(name);
 
 /**
  * The money petty cash requisitions can use: the bank balance from the latest uploaded statement, less the
  * requisitions approved after the statement's last day. No separate cash box and no typed amounts.
+ * Lines dated after `today` (YYYY-MM-DD) are left out (Andy, 2026-11-20).
  */
 export function bankMoney(
-  statements: readonly Pick<BankStatement, 'account' | 'accountKind' | 'from' | 'lines'>[],
+  statements: readonly (Pick<BankStatement, 'account' | 'accountKind' | 'from' | 'lines'> & { fileName?: string })[],
   approved: readonly { day: string; cents: number }[],
+  today = '9999-12-31',
 ): BankMoney {
-  const bank = statements.filter((s) => s.accountKind === 'bank');
+  // An account saved as M-Pesa only because its name said "Paybill" is still the bank (Andy, 2026-11-20).
+  const bank = statements.filter((s) => s.accountKind === 'bank' || !isMpesaAccount(s.account));
   let bankCents = 0;
   let asOf = '';
+  let futureLines = 0;
+  const sources: BankMoney['sources'] = [];
   for (const account of new Set(bank.map((s) => s.account))) {
-    const ls = bank.filter((s) => s.account === account).flatMap((s) => s.lines.map((l, n) => ({ ...l, from: s.from, n })))
+    const all = bank.filter((s) => s.account === account).flatMap((s) => s.lines.map((l, n) => ({ ...l, from: s.from, n, fileName: s.fileName ?? '' })));
+    const ls = all.filter((l) => l.d <= today)
       .sort((a, b) => a.d.localeCompare(b.d) || a.from.localeCompare(b.from) || a.n - b.n);
+    futureLines += all.length - ls.length;
     const last = ls[ls.length - 1];
     if (!last) continue;
     bankCents += last.b;
+    sources.push({ account, asOf: last.d, cents: last.b, fileName: last.fileName });
     if (last.d > asOf) asOf = last.d;
   }
   const since = asOf ? approved.filter((a) => a.day > asOf) : [];
   const paidSinceCents = since.reduce((n, a) => n + a.cents, 0);
-  return { bankCents, asOf, paidSinceCents, paidSince: since.length, availableCents: bankCents - paidSinceCents };
+  return { bankCents, asOf, paidSinceCents, paidSince: since.length, availableCents: bankCents - paidSinceCents, sources, futureLines };
 }
