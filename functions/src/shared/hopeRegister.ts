@@ -20,6 +20,8 @@ export interface KidEntry {
   t?: string | null;
   /** The reason, for Excused (and the note for Departing or Departed). */
   r?: string | null;
+  /** Who marked it, first name only, so Diana sees which teacher did (Andy, 2026-11-22, 4A). */
+  b?: string | null;
 }
 export interface HopeDay { id?: string; date: string; marks: Record<string, KidEntry>; deletedAt?: unknown }
 

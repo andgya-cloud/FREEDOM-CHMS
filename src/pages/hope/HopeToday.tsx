@@ -5,7 +5,8 @@ import { useToast } from '../../state/ToastContext';
 import { useChampions, useClubs, useHelperDay, useHopeDays } from '../../state/useHope';
 import { friendlyError } from '../../lib/errors';
 import { markHelperArrived } from '../../lib/hopeWrites';
-import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { HELPER_ROLE_ID, TEACHER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { ClassesMarkedCard, TeacherHome } from './TeacherPages';
 import { HelperGuide } from './HelperGuide';
 import { useChatSummary } from './HopeChatsPage';
 import { HeroCheckin, LiveBoard, NeedsUs } from './HopeTodayBoard';
@@ -30,6 +31,7 @@ import { ComingUpCard } from '../../components/ComingUpCard';
  */
 export function HopeToday({ org }: { org: Organization }) {
   const { profile } = useAuth();
+  if (profile?.roleId === TEACHER_ROLE_ID) return <TeacherHome org={org} />;
   return profile?.roleId === HELPER_ROLE_ID ? <HelperHome org={org} /> : <LeaderToday org={org} />;
 }
 
@@ -115,6 +117,8 @@ function LeaderToday({ org }: { org: Organization }) {
       </section>
 
       {openDay && <LiveBoard org={org} h={h} days={days} helpers={helpers} meals={meals} clubsToday={clubsToday} clubDays={clubs.days} marker={marker} />}
+      {/* Each class teacher's marks, live (Andy, 2026-11-22, 4A). */}
+      {openDay && can('people.read') && <ClassesMarkedCard org={org} />}
 
       {(can('people.read') || isChampionManager(profile, org.id)) && <NeedsUs org={org} h={h} days={days} unread={chats?.unread} />}
       <ComingUpCard org={org} />

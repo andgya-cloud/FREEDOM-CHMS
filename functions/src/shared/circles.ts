@@ -146,17 +146,26 @@ export function circleRole(p: Profile, orgId: string, type: CircleType): string 
 }
 
 /** The report types (2A): the same four as Hope, with ADIA's exams and the church's pastoral care. */
-export type CircleKind = 'win' | 'activity' | 'exams' | 'care' | 'incident' | 'other';
+export type CircleKind = 'win' | 'activity' | 'exams' | 'care' | 'incident' | 'other' | RequestKind;
+/**
+ * The Teachers' room at Hope (Andy, 2026-11-22, 7A): every request a class teacher makes is a conversation of its
+ * own, with a type, and is Open until Diana marks it Done.
+ */
+export const REQUEST_KINDS = ['supplies', 'markfix', 'move', 'absence'] as const;
+export type RequestKind = (typeof REQUEST_KINDS)[number];
+export const isRequestKind = (kind: unknown): kind is RequestKind => typeof kind === 'string' && (REQUEST_KINDS as readonly string[]).includes(kind);
+/** What a class teacher picks from: the four requests and Other. */
+export const TEACHER_KINDS: CircleKind[] = [...REQUEST_KINDS, 'other'];
 export const KINDS_OF: Record<CircleType, CircleKind[]> = {
-  ministry: ['win', 'activity', 'incident', 'other'],
+  ministry: ['win', 'activity', 'incident', 'other', ...REQUEST_KINDS],
   college: ['win', 'activity', 'exams', 'incident', 'other'],
   church_campus: ['win', 'activity', 'care', 'incident', 'other'],
 };
 const KIND_LABELS: Record<CircleType, Partial<Record<CircleKind, string>>> = {
-  ministry: { win: 'Good news', activity: 'Activity or event', incident: 'Incident', other: 'Other' },
+  ministry: { win: 'Good news', activity: 'Activity or event', incident: 'Incident', other: 'Other', supplies: 'Supplies', markfix: 'Change a mark', move: 'Move a child', absence: 'Absent teacher' },
   college: { win: 'Good news', activity: 'Class activity', exams: 'Exams and results', incident: 'Incident', other: 'Other' },
   church_campus: { win: 'Testimony', activity: 'Event or service', care: 'Pastoral care', incident: 'Incident', other: 'Other' },
 };
-export const KIND_EMOJI: Record<CircleKind, string> = { win: '🌟', activity: '📅', exams: '📊', care: '🤝', incident: '⚠️', other: '📝' };
+export const KIND_EMOJI: Record<CircleKind, string> = { win: '🌟', activity: '📅', exams: '📊', care: '🤝', incident: '⚠️', other: '📝', supplies: '📦', markfix: '✏️', move: '🔀', absence: '🙋' };
 export const kindLabel = (kind: string, type: CircleType = 'ministry') => KIND_LABELS[type][kind as CircleKind] ?? KIND_LABELS.ministry[kind as CircleKind] ?? 'Report';
 export const isKindOf = (kind: unknown, type: CircleType): kind is CircleKind => typeof kind === 'string' && (KINDS_OF[type] as string[]).includes(kind);

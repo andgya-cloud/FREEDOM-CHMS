@@ -16,7 +16,7 @@ import { HopeGate, useHopePage } from './common';
 import { Avatar, nowTime, PctBadge, tick, TrendCard } from './registerParts';
 import { DoorScan } from './DoorScan';
 import { RemoveDialog } from '../../components/CleanupDialog';
-import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { isHopeHelperRole } from '../../../functions/src/shared/permissions';
 import { classOf, hasAllergy } from '../../../functions/src/shared/hopeClasses';
 import {
   cameOf, chipTitle, classChips, countMarks, Empty, Field, Frame, longDate, MoreMenu, PhotoTile, RegRow, RgIcon, SessionStrip, sessionDays, shown,
@@ -96,7 +96,7 @@ export function ClubRegisterBody({ org, club, days, h, start, ptabs, subtabs, pi
   const [resetting, setResetting] = useState(false);
   const canReset = useCanReset(org.id);
   const marker = can('attendance.write');
-  const helper = profile?.roleId === HELPER_ROLE_ID;
+  const helper = isHopeHelperRole(profile?.roleId);
   const fail = (err: unknown) => toast.show(friendlyError(err));
   const day = days.find((d) => d.date === date);
   const marks = day?.marks ?? {};

@@ -28,6 +28,7 @@ beforeEach(async () => {
     await setDoc(doc(db, 'users/hopeAdmin'), user('admin', PERMS));
     await setDoc(doc(db, 'users/hopeStaff'), user('staff', PERMS));
     await setDoc(doc(db, 'users/hopeHelper'), user('helper', ['people.read', 'attendance.write']));
+    await setDoc(doc(db, 'users/hopeTeacher'), { ...user('teacher', ['people.read', 'attendance.write']), hopeClassIds: ['topaz'] });
     await setDoc(doc(db, 'organizations/hope'), { name: 'Freedom Hope Center', type: 'ministry', parentId: null, timeZone: 'Africa/Nairobi', currency: 'KES', receiptPrefix: 'FHC', active: true, ...stamps });
     for (const id of ['c1', 'c2']) await setDoc(doc(db, `${O}/people/${id}`), { orgId: 'hope', fullName: id, firstName: id, status: 'child', whatsappConsent: {}, ...stamps });
     await setDoc(doc(db, `${O}/children/c1`), child());
@@ -91,6 +92,18 @@ describe('the weekly registers', () => {
     await assertFails(setDoc(doc(as('hopeStaff'), `${O}/championDays/2026-10-31`), day('hopeStaff', '2026-10-31', { p1: { s: 'absent' } }), { merge: true }));
     await assertSucceeds(getDoc(doc(as('hopeStaff'), `${O}/championDays/2026-10-31`)));
     await assertSucceeds(getDoc(doc(as('pastor'), `${O}/champions/p1`)));
+  });
+});
+
+describe('class teachers (Andy, 2026-11-22, 3A)', () => {
+  it('mark one child at a time, on the day only, and never the clubs', async () => {
+    const t = new Date(Date.now() + 3 * 3600_000).toISOString().slice(0, 10); // today in Nairobi
+    await assertSucceeds(setDoc(doc(as('hopeTeacher'), `${O}/hopeDays/${t}`), day('hopeTeacher', t, { c1: { s: 'present', t: '08:40', r: null, b: 'Grace' } }), { merge: true }));
+    await assertSucceeds(setDoc(doc(as('hopeTeacher'), `${O}/hopeDays/${t}`), day('hopeTeacher', t, { c1: { s: 'late', t: '08:40', r: null, b: 'Grace' } }), { merge: true }));
+    await assertFails(setDoc(doc(as('hopeTeacher'), `${O}/hopeDays/${t}`), day('hopeTeacher', t, { c1: { s: 'absent' }, c2: { s: 'absent' } }), { merge: true }));
+    await assertFails(setDoc(doc(as('hopeTeacher'), `${O}/hopeDays/2026-11-07`), day('hopeTeacher', '2026-11-07', { c2: { s: 'present' } }), { merge: true }));
+    // Diana (staff here) still fixes any day.
+    await assertSucceeds(setDoc(doc(as('hopeStaff'), `${O}/hopeDays/2026-11-07`), day('hopeStaff', '2026-11-07', { c2: { s: 'present' } }), { merge: true }));
   });
 });
 

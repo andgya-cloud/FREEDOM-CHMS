@@ -5,7 +5,7 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
 import {
-  approveStory, removeStoryFile, restoreStoryFile, setFace, setFollowUp, setStoryStatus, storyChildren,
+  approveStory, loadFaces, removeStoryFile, restoreStoryFile, setFace, setFollowUp, setStoryStatus, storyChildren,
   deletePhotoReport, editStoryMessage, emailStoryPdf, isPhotoFile, isStoryFile, isVideoFile, listPhotoReports, loadBoard, markDecision, openStory,
   photoFile, restorePhotoReport, saveStorySummary, sayInStory, startStory, STORY_ACCEPT, storyPeople, unsayStoryMessage,
   type BoardPerson, type PhotoList, type StoredPhotoReport, type StoryOpen,
@@ -26,7 +26,8 @@ import type { Organization } from '../../state/OrgContext';
 import { HopeGate, useHopePage } from './common';
 import { CircleGate, circlePageFor, isOneItem, type CirclePage } from '../../components/CircleGate';
 import { useOrg } from '../../state/OrgContext';
-import { circleOf, isCircleType, KINDS_OF, kindLabel, type Circle, type CircleType } from '../../../functions/src/shared/circles';
+import { circleOf, isCircleType, isRequestKind, KINDS_OF, kindLabel, TEACHER_KINDS, type Circle, type CircleType } from '../../../functions/src/shared/circles';
+import { TEACHER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { useClubs } from '../../state/useHope';
 import { WIN_KIND_LABELS } from '../../../functions/src/shared/hopeClubs';
 
@@ -70,6 +71,27 @@ const waNumber = (phone: string) => phone.replace(/\D/g, '').replace(/^0/, '254'
  * sender's first message with photos; the Director, the sender, the board, Andy and Doreen reply in frosted-glass
  * bubbles, each person in their own colour. "Package for the board" makes the PDF report, emailed or sent on WhatsApp.
  */
+/** A teacher's request is Open, then Done (Andy, 2026-11-22, 7A). */
+const REQUEST_STEPS: StoryStatus[] = ['open', 'resolved'];
+const statusWord = (kind: string, st: StoryStatus) => (isRequestKind(kind) ? (st === 'open' || st === 'review' ? 'Open' : 'Done') : STORY_STATUS_LABELS[st]);
+
+/** The teacher's own signature photo (Andy, 2026-11-22, 8A): added once from their phone, shown on every message. */
+function MySignature({ org, name }: { org: Organization; name: string }) {
+  const toast = useToast();
+  const [faces, setFaces] = useState<Record<string, string> | null>(null);
+  const load = useCallback(() => { loadFaces(org.id).then(setFaces).catch(() => setFaces({})); }, [org.id]);
+  useEffect(() => { load(); }, [load]);
+  if (!faces || !name) return null;
+  const photo = faces[faceKey(name)] || builtInFace(name);
+  const pick = (f: File) => void setFace(org.id, f).then(load).then(() => toast.show('Your photo is saved. It shows on every message you write.')).catch((err) => toast.show(friendlyError(err)));
+  return (
+    <div className="card tc-sign">
+      <Face name={name} photo={photo || undefined} onPick={pick} />
+      <span><b>{photo ? 'Your signature photo' : 'Add your signature photo'}</b><span className="small muted">{photo ? 'Tap it to change it.' : 'Tap the circle and take a selfie. It shows beside your name on every message.'}</span></span>
+    </div>
+  );
+}
+
 function Photos({ org }: { org: Organization }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -78,13 +100,16 @@ function Photos({ org }: { org: Organization }) {
   const { list, error, reload } = usePhotoReports(org.id);
   const circle = circleFor(org);
   const hope = circle.type === 'ministry';
-  const kinds = KINDS_OF[circle.type];
+  // The Teachers' room (Andy, 2026-11-22, 6A 7A): a class teacher writes notes and requests here and sees only their own.
+  const teacher = hope && profile?.roleId === TEACHER_ROLE_ID;
+  const kinds = teacher ? TEACHER_KINDS : hope ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
   const openId = params.get('report') ?? '';
   const making = params.get('new') === '1';
   const forReport = params.get('for') ?? '';
   const forLabel = params.get('label') ?? '';
-  const [kind, setKind] = useState<PhotoReportKind | 'all'>('all');
-  const shown = (list?.reports ?? []).filter((r) => kind === 'all' || r.kind === kind)
+  const [kind, setKind] = useState<PhotoReportKind | 'all' | 'requests'>('all');
+  const hasRequests = hope && !teacher && (list?.reports ?? []).some((r) => isRequestKind(r.kind));
+  const shown = (list?.reports ?? []).filter((r) => kind === 'all' || r.kind === kind || (kind === 'requests' && isRequestKind(r.kind)))
     .sort((a, b) => (b.lastAt ?? b.day).localeCompare(a.lastAt ?? a.day));
 
   if (openId) {
@@ -99,19 +124,22 @@ function Photos({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <div className="page-head">
-        <h1>📷 Photos and wins</h1>
+        <h1>{teacher ? "💬 Teachers' room" : '📷 Photos and wins'}</h1>
         <div className="btn-line">
           {!hope && <Link to={circle.vaultPath} className="btn btn-quiet">🔒 Private conversations</Link>}
-          {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>📷 New report</button>}
+          {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>{teacher ? '✍️ New note or request' : '📷 New report'}</button>}
         </div>
       </div>
       <p className="small muted">
-        {list?.reviews ? 'As a reviewer you can read every report and win here. Look only: replies and changes stay with the team.' : list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
+        {teacher ? 'Ask for anything here: supplies, a mark to change, a child to move, or a day you cannot come. Diana, Andy and Doreen read and answer. You see your own notes only.'
+          : list?.reviews ? 'As a reviewer you can read every report and win here. Look only: replies and changes stay with the team.' : list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
       </p>
       {error && <p className="notice notice-warn small">{error}</p>}
 
+      {teacher && !making && <MySignature org={org} name={profile?.displayName ?? ''} />}
+
       {making && (
-        <NewReport org={org} forReport={forReport} forLabel={forLabel}
+        <NewReport org={org} teacher={teacher} forReport={forReport} forLabel={forLabel}
           onCancel={() => (forReport ? navigate(`/hope/reports?report=${forReport}`) : setParams({}))}
           onSent={(id, emailed) => { reload(); if (forReport) navigate(`/hope/reports?report=${forReport}`); else setParams({ report: id, told: '1', emailed: String(emailed) }); }} />
       )}
@@ -120,14 +148,14 @@ function Photos({ org }: { org: Organization }) {
         <>
           {list.reports.length > 0 && (
             <div className="chips" role="radiogroup" aria-label="Show">
-              {(['all', ...kinds] as const).map((k) => (
+              {(['all', ...(hasRequests ? ['requests' as const] : []), ...kinds] as const).map((k) => (
                 <button key={k} type="button" role="radio" aria-checked={kind === k} className={`chip${kind === k ? ' chip-on' : ''}`} onClick={() => setKind(k)}>
-                  {k === 'all' ? 'All' : `${PHOTO_REPORT_EMOJI[k]} ${kindLabel(k, circle.type)}`}
+                  {k === 'all' ? 'All' : k === 'requests' ? "🧑‍🏫 Teachers' room" : `${PHOTO_REPORT_EMOJI[k]} ${kindLabel(k, circle.type)}`}
                 </button>
               ))}
             </div>
           )}
-          {shown.length === 0 ? <div className="card"><p>{list.reports.length ? 'None of this kind yet.' : 'No photo reports yet.'}</p></div> : (
+          {shown.length === 0 ? <div className="card"><p>{list.reports.length ? 'None of this kind yet.' : teacher ? 'No notes or requests yet.' : 'No photo reports yet.'}</p></div> : (
             <ul className="st-list">
               {shown.map((r) => (
                 <li key={r.id}>
@@ -138,7 +166,7 @@ function Photos({ org }: { org: Organization }) {
                       <span className="st-item-last">{r.lastByName ? <b>{r.lastByName.split(' ')[0]}: </b> : null}{r.lastText || r.text || `${r.files.length} files`}</span>
                       <span className="st-item-meta">
                         {formatDateKey(r.day)} · {r.senderName} · {(r.replies ?? 0) + 1} {(r.replies ?? 0) === 0 ? 'message' : 'messages'}
-                        {r.status && r.status !== 'open' ? ` · ${STORY_STATUS_LABELS[r.status]}` : ''}{r.ref ? ` · ${r.ref}` : ''}{r.reportLabel ? ` · for ${r.reportLabel}` : ''}
+                        {isRequestKind(r.kind) ? ` · ${statusWord(r.kind, r.status ?? 'open')}` : r.status && r.status !== 'open' ? ` · ${STORY_STATUS_LABELS[r.status]}` : ''}{r.ref ? ` · ${r.ref}` : ''}{r.reportLabel ? ` · for ${r.reportLabel}` : ''}
                       </span>
                     </span>
                   </Link>
@@ -148,7 +176,7 @@ function Photos({ org }: { org: Organization }) {
           )}
         </>
       )}
-      {!making && hope && <ClubWins org={org} />}
+      {!making && hope && !teacher && <ClubWins org={org} />}
       {!making && !hope && list && list.deleted.length > 0 && (
         <details className="card hr-fold">
           <summary><h2>🗑 Deleted reports</h2><span className="small muted">{list.deleted.length}</span></summary>
@@ -275,10 +303,10 @@ function IncidentFields({ value, onChange, circle }: { value: IncidentDetails; o
   );
 }
 
-function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organization; forReport: string; forLabel: string; onCancel: () => void; onSent: (id: string, emailed: number) => void }) {
+function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false }: { org: Organization; forReport: string; forLabel: string; onCancel: () => void; onSent: (id: string, emailed: number) => void; teacher?: boolean }) {
   const toast = useToast();
   const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
-  const [kind, setKind] = useState<PhotoReportKind>(forReport ? 'activity' : 'win');
+  const [kind, setKind] = useState<PhotoReportKind>(forReport ? 'activity' : teacher ? 'supplies' : 'win');
   const [title, setTitle] = useState(forReport ? `Photos for ${forLabel}`.slice(0, PHOTO_TITLE_MAX) : '');
   const [day, setDay] = useState(today);
   const [text, setText] = useState('');
@@ -287,12 +315,13 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
   const [progress, setProgress] = useState<[number, number] | null>(null);
   const picker = useChildPicker(org.id, text, setText, org.type);
   const circle = circleFor(org);
-  const kinds = KINDS_OF[circle.type];
+  const kinds = teacher ? TEACHER_KINDS : circle.type === 'ministry' ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
   const sample: Partial<Record<PhotoReportKind, string>> = circle.type === 'college'
     ? { win: 'Grace passed her trade test', activity: 'Catering practical day', exams: 'Cohort 3 CAT results', incident: 'A student was hurt in the workshop' }
     : circle.type === 'church_campus'
       ? { win: 'Healed after prayer', activity: 'Youth Sunday', care: 'Hospital visit to Mary', incident: 'A child got lost after the service' }
-      : { win: 'Amani read a whole book', activity: 'Sports day', incident: 'A child fell in the playground' };
+      : { win: 'Amani read a whole book', activity: 'Sports day', incident: 'A child fell in the playground',
+        supplies: '20 exercise books for Topaz', markfix: 'Amani was present, not absent, on Saturday', move: 'Brian belongs in Sapphire', absence: 'I cannot come on Saturday 5th', other: 'A note for Diana' };
 
   async function send() {
     if (!title.trim()) { toast.show('Please give it a title.'); return; }
@@ -307,8 +336,8 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
 
   return (
     <section className="card stack">
-      <h2>{forReport ? `Add photos to ${forLabel || 'the report'}` : 'Start a report'}</h2>
-      <p className="small muted">{forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
+      <h2>{forReport ? `Add photos to ${forLabel || 'the report'}` : teacher ? 'A note or a request' : 'Start a report'}</h2>
+      <p className="small muted">{teacher ? 'Diana gets an email and answers you here. It stays Open until she marks it Done.' : forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
       <div className="ph-kinds" role="radiogroup" aria-label="Kind of report">
         {kinds.map((k) => (
           <button key={k} type="button" role="radio" aria-checked={kind === k} className={`ph-kind${kind === k ? ' on' : ''}${k === 'incident' ? ' incident' : ''}`} onClick={() => setKind(k)}>
@@ -320,7 +349,7 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent }: { org: Organi
       <label className="field"><span>Title</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={sample[kind] ?? ''} /></label>
       <label className="field"><span>Date</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>
       {kind === 'incident' && <IncidentFields value={incident} onChange={setIncident} circle={circle} />}
-      <label className="field"><span>What happened (a few lines)</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder={`Type @ and a name to add a ${circle.person}'s card`} /></label>
+      <label className="field"><span>{teacher ? 'Your note (a few lines)' : 'What happened (a few lines)'}</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder={`Type @ and a name to add a ${circle.person}'s card`} /></label>
       <div className="st-light">
         {picker.panel}
         {picker.chips}
@@ -786,12 +815,12 @@ function Story({ org, id, told, onBack, onChanged }: { org: Organization; id: st
         </header>
         <div className="st-status">
           <ol className="st-steps" aria-label="Status">
-            {STORY_STATUSES.map((st, i) => <li key={st} className={STORY_STATUSES.indexOf(status) >= i ? 'on' : ''}>{STORY_STATUS_LABELS[st]}</li>)}
+            {(isRequestKind(r.kind) ? REQUEST_STEPS : STORY_STATUSES).map((st, i, all) => <li key={st} className={all.indexOf(status) >= i ? 'on' : ''}>{statusWord(r.kind, st)}</li>)}
           </ol>
           {story.packages && !r.deleted && status !== 'sent' && (
             <div className="st-menu">
-              {(['open', 'review', 'resolved'] as StoryStatus[]).filter((st) => st !== status).map((st) => (
-                <button key={st} type="button" className="st-chip" onClick={() => void guard(() => setStoryStatus(org.id, id, st))().catch(() => undefined)}>Mark {STORY_STATUS_LABELS[st]}</button>
+              {(isRequestKind(r.kind) ? REQUEST_STEPS : ['open', 'review', 'resolved'] as StoryStatus[]).filter((st) => st !== status).map((st) => (
+                <button key={st} type="button" className="st-chip" onClick={() => void guard(() => setStoryStatus(org.id, id, st))().catch(() => undefined)}>{isRequestKind(r.kind) && st === 'open' ? 'Reopen' : `Mark ${statusWord(r.kind, st)}`}</button>
               ))}
             </div>
           )}

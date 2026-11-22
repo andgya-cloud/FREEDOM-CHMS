@@ -15,7 +15,7 @@ import { QuickSearch } from './QuickSearch';
 import { AdiaIcon } from './icons';
 import { useAuth } from '../state/AuthContext';
 import { PETTY_CASH_ORG_TYPES, pettyCashBase } from '../../functions/src/shared/pettyCash';
-import { FINANCE_ROLE_ID, HELPER_ROLE_ID, isDirectorProfile, isReviewer, isInventoryManager, isLibraryManager, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { FINANCE_ROLE_ID, isHopeHelperRole, TEACHER_ROLE_ID, isDirectorProfile, isReviewer, isInventoryManager, isLibraryManager, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, SIGNATORY_ROLE_ID, TRAINER_ROLE_ID, USHER_ROLE_ID } from '../../functions/src/shared/permissions';
 import { InventoryDueBanner } from '../pages/inventory/InventoryBanner';
 import { AiDot } from './Ai';
 import { roleRedirect } from '../lib/roleAccess';
@@ -71,7 +71,9 @@ export function AppShell({ children }: { children: ReactNode }) {
   // A trainer with register classes also marks those classes' registers (Andy, 2026-10-26).
   const trainerRegister = trainer && (profile?.registerClasses?.length ?? 0) > 0;
   // A Hope helper sees only Today (their "I'm here" button), the registers and the clubs (Andy, 2026-11-04, 2A).
-  const helper = profile?.roleId === HELPER_ROLE_ID;
+  const helper = isHopeHelperRole(profile?.roleId);
+  // A class teacher's menu (Andy, 2026-11-22, 10A): Today, Register, Birthdays and the Teachers' room.
+  const teacher = profile?.roleId === TEACHER_ROLE_ID;
   const sendTo = roleRedirect(profile, location.pathname);
   if (sendTo) return <Navigate to={sendTo} replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
@@ -137,6 +139,18 @@ export function AppShell({ children }: { children: ReactNode }) {
         <NavLink to="/hope/register" className={({ isActive }) => `tab${isActive || /^\/(hope\/champions|hope\/clubs|attendance)(\/|$)/.test(location.pathname) ? ' active' : ''}`}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4" /></svg>
           <TabLabel full="Registers" short="Register" />
+        </NavLink>
+      )}
+      {teacher && (
+        <NavLink to="/hope/birthdays" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21h16M5 21v-7h14v7M12 14v-3M12 8a1.5 1.5 0 0 1-1.5-1.5C10.5 5 12 3 12 3s1.5 2 1.5 3.5A1.5 1.5 0 0 1 12 8ZM5 17c2 0 2-1.5 3.5-1.5S10 17 12 17s2-1.5 3.5-1.5S17 17 19 17" /></svg>
+          Birthdays
+        </NavLink>
+      )}
+      {teacher && (
+        <NavLink to="/hope/photos" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z" /></svg>
+          <TabLabel full="Teachers' room" short="Room" />
         </NavLink>
       )}
  {can('people.read') && !helper && (

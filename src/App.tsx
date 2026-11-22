@@ -117,6 +117,7 @@ const HopeAttendanceDayPage = lazy(() => import('./pages/hope/HopeAttendancePage
 const HopeRecordsPage = lazy(() => import('./pages/hope/HopeRecordsPage').then((m) => ({ default: m.HopeRecordsPage })));
 const HopeBinPage = lazy(() => import('./pages/hope/HopeBinPage').then((m) => ({ default: m.HopeBinPage })));
 const HopeMorePage = lazy(() => import('./pages/hope/HopeMorePage').then((m) => ({ default: m.HopeMorePage })));
+const HopeBirthdaysPage = lazy(() => import('./pages/hope/TeacherPages').then((m) => ({ default: m.HopeBirthdaysPage })));
 const HopePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.HopePhotosPage })));
 const CirclePhotosPage = lazy(() => import('./pages/hope/HopePhotosPage').then((m) => ({ default: m.CirclePhotosPage })));
 const CircleVaultPage = lazy(() => import('./pages/hope/HopeChatsPage').then((m) => ({ default: m.CircleVaultPage })));
@@ -313,6 +314,7 @@ function AppRoutes() {
         <Route path="/hope/children/:childId" element={<RequirePermission permission="people.read"><ChildPage /></RequirePermission>} />
         {/* Who sees which photo report is checked by the server (Andy, 2026-11-04, 3A): board members without Hope work open it from the email link. */}
         <Route path="/hope/photos" element={<HopePhotosPage />} />
+        <Route path="/hope/birthdays" element={<HopeBirthdaysPage />} />
         <Route path="/hope/chats" element={<Navigate to="/hope/records?show=chats" replace />} />
         <Route path="/hope/chats/:id" element={<HopeChatPage />} />
         {/* The same conversations at ADIA and Freedom Church (Andy, 2026-11-07); the server checks who reads what. */}

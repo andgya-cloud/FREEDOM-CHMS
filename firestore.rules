@@ -1349,12 +1349,21 @@ service cloud.firestore {
       }
       // A class volunteer (Hope helper) marks one child at a time: no bulk "mark absent" and no resets (Registers brief, 2026-11-06).
       function helperOneAtATime() {
-        return me().roleId != 'helper'
+        return !(me().roleId in ['helper', 'teacher'])
           || request.resource.data.marks.diff(resource == null ? {} : resource.data.marks).affectedKeys().size() <= 1;
+      }
+      // Today in Nairobi, "2026-11-22".
+      function nairobiToday() {
+        let t = request.time + duration.value(3, 'h');
+        return string(t.year()) + '-' + (t.month() < 10 ? '0' : '') + string(t.month()) + '-' + (t.day() < 10 ? '0' : '') + string(t.day());
+      }
+      // A class teacher marks, and fixes, their class's register on the day only; after that only Diana (Andy, 2026-11-22, 3A).
+      function teacherOnTheDay(day) {
+        return me().roleId != 'teacher' || day == nairobiToday();
       }
       match /hopeDays/{day} {
         allow read: if hopeRead();
-        allow create, update: if canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day) && helperOneAtATime();
+        allow create, update: if canAccessOrg(orgId) && has('attendance.write') && hopeDayWrite(day) && helperOneAtATime() && teacherOnTheDay(day);
         allow delete: if false;
       }
       match /champions/{championId} {
@@ -1440,7 +1449,7 @@ service cloud.firestore {
           && isDate(request.resource.data.date) && request.resource.data.clubId is string
           && dayId == request.resource.data.clubId + '_' + request.resource.data.date
           && existsInOrg('clubs', request.resource.data.clubId)
-          && helperOneAtATime()
+          && helperOneAtATime() && me().roleId != 'teacher'
           && request.resource.data.marks is map && request.resource.data.marks.size() <= 1000
           && request.resource.data.updatedBy == request.auth.uid && request.resource.data.updatedAt == request.time;
         allow delete: if false;

@@ -7,6 +7,7 @@
  * child can still raise it; it starts a conversation they cannot read further. Everything is kept in the vault
  * (Reports → Conversations). Reached only through the hopeChats Cloud Function.
  */
+import { teacherLabel } from './hopeClasses.js';
 import {
   canDeletePhotoReport, canRemoveFiles, canSeeAllPhotoReports, isHopeBoardName, isHopeDirector,
   type Approval, type ApprovalSlot, type PhotoFile, type RemovedFile, type Severity, type StoryChild,
@@ -126,6 +127,8 @@ export function chatRole(p: Profile, orgId: string, type: CircleType = 'ministry
   if (isHopeDirector(p, orgId)) return 'Director';
   if (isHopeBoardName(p?.displayName)) return 'Board member';
   if (can(p, 'users.manage')) return 'Administrator';
+  // "Class teacher · Topaz" (Andy, 2026-11-22, 1A).
+  if (p?.roleId === 'teacher') return teacherLabel((p as { hopeClassIds?: string[] }).hopeClassIds);
   return p?.roleId === 'helper' ? 'Helper' : 'Staff';
 }
 

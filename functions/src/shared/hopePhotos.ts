@@ -16,7 +16,7 @@ export { HOPE_BOARD_NAMES };
 /** Hope's four kinds; ADIA adds "Exams and results" and the church "Pastoral care" (circles.ts). */
 export type PhotoReportKind = CircleKind;
 export const PHOTO_REPORT_KINDS: PhotoReportKind[] = ['win', 'activity', 'incident', 'other'];
-export const PHOTO_REPORT_LABELS: Record<PhotoReportKind, string> = { win: 'Good news', activity: 'Activity or event', exams: 'Exams and results', care: 'Pastoral care', incident: 'Incident', other: 'Other' };
+export const PHOTO_REPORT_LABELS: Record<PhotoReportKind, string> = { win: 'Good news', activity: 'Activity or event', exams: 'Exams and results', care: 'Pastoral care', incident: 'Incident', other: 'Other', supplies: 'Supplies', markfix: 'Change a mark', move: 'Move a child', absence: 'Absent teacher' };
 export const PHOTO_REPORT_EMOJI: Record<PhotoReportKind, string> = KIND_EMOJI;
 export const isPhotoReportKind = (v: unknown, type: CircleType = 'ministry'): v is PhotoReportKind => isKindOf(v, type);
 

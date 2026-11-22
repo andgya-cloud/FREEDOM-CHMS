@@ -12,7 +12,7 @@ import { ChampionsPanel } from './ChampionsPage';
 import { ClubRegisterBody } from './ClubPage';
 import { isCurrentChild, normalizeCode } from '../../../functions/src/shared/hope';
 import { birthdayThisWeek, dayTrend, kidRate, streak, saturdayOnOrBefore, type HopeDay, type KidEntry } from '../../../functions/src/shared/hopeRegister';
-import { HELPER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { isHopeHelperRole, TEACHER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { RemoveDialog } from '../../components/CleanupDialog';
 import { HopeGate, useHopePage } from './common';
 import { classOf, hasAllergy, HOPE_CLASSES } from '../../../functions/src/shared/hopeClasses';
@@ -36,7 +36,7 @@ type Which = 'children' | 'champions' | 'club';
 function Registers({ org }: { org: Organization }) {
   const [params, setParams] = useSearchParams();
   const { profile } = useAuth();
-  const helper = profile?.roleId === HELPER_ROLE_ID;
+  const helper = isHopeHelperRole(profile?.roleId);
   // A class volunteer (a Hope helper with a class) sees only their own class register (brief).
   const volunteer = helper && (profile?.hopeClassIds?.length ?? 0) > 0;
   const opts: [Which, string][] = volunteer ? [['children', 'Children']] : helper ? [['children', 'Children'], ['club', 'Clubs']] : [['children', 'Children'], ['champions', 'Champions'], ['club', 'Clubs']];
@@ -101,19 +101,22 @@ function KidsRegister({ org, ptabs }: { org: Organization; ptabs: ReactNode }) {
   const photos = useChildPhotos(org.id);
   const champs = useChampions(org.id);
   const [params] = useSearchParams();
-  const helper = profile?.roleId === HELPER_ROLE_ID;
+  const helper = isHopeHelperRole(profile?.roleId);
   const myClasses = helper ? profile?.hopeClassIds ?? [] : [];
   const volunteer = myClasses.length > 0;
+  // A class teacher marks their class on the day itself, and can fix it until the day ends (Andy, 2026-11-22, 3A).
+  const teacher = profile?.roleId === TEACHER_ROLE_ID;
+  const firstName = (profile?.displayName ?? '').trim().split(/\s+/)[0]?.slice(0, 40) || null;
   // "Check in" opens today, any day of the week (Andy, 2026-11-05, 1A); a day from Reports → Attendance opens that day.
   const asked = params.get('d');
-  const [date, setDate] = useState(() => (asked === 'today' ? h.today : asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= h.today ? asked : saturdayOnOrBefore(h.today)));
+  const [date, setDate] = useState(() => (teacher || asked === 'today' ? h.today : asked && /^\d{4}-\d{2}-\d{2}$/.test(asked) && asked <= h.today ? asked : saturdayOnOrBefore(h.today)));
   const [q, setQ] = useState('');
   const [only, setOnly] = useState(false);
   const [view, setView] = useState<View>(savedView);
   const [chip, setChip] = useState('all');
   const [scan, setScan] = useState(false);
   const [resetting, setResetting] = useState(false);
-  const canMark = can('attendance.write');
+  const canMark = can('attendance.write') && (!teacher || date === h.today);
   const canReset = useCanReset(org.id);
   const navigate = useNavigate();
   const fail = (err: unknown) => toast.show(friendlyError(err));
@@ -151,7 +154,8 @@ function KidsRegister({ org, ptabs }: { org: Organization; ptabs: ReactNode }) {
     const there = s === 'present' || s === 'late';
     if (s === 'present' && !shown(old?.s)) tick();
     // Time in fills in only when marking on the day itself (brief: it used to fill a time that did not match the day).
-    const entry: KidEntry = { s, t: there ? (old?.t ?? (date === h.today ? nowTime() : null)) : null, r: old?.r ?? null, ...extra };
+    // Who marked it goes with the mark, so Diana sees which teacher did (Andy, 2026-11-22, 4A).
+    const entry: KidEntry = { s, t: there ? (old?.t ?? (date === h.today ? nowTime() : null)) : null, r: old?.r ?? null, b: firstName, ...extra };
     markKid(org.id, date, childId, entry).catch(fail);
   }
   /** A card read at the door (12A): checks the child in, and says who. */
@@ -192,7 +196,8 @@ function KidsRegister({ org, ptabs }: { org: Organization; ptabs: ReactNode }) {
     </>
   );
   const title = volunteer && myClasses.length === 1 ? chipTitle(myClasses[0]!, '') : chipTitle(group, 'All children');
-  const note = volunteer ? `You are marking attendance for ${myClasses.map((id) => HOPE_CLASSES.find((k) => k.id === id)?.name ?? id).join(' and ')} only.`
+  const note = teacher ? `${myClasses.map((id) => HOPE_CLASSES.find((k) => k.id === id)?.name ?? id).join(' and ')} register for today. You can fix a mark until the end of the day; after that, ask Diana in the Teachers' room.`
+    : volunteer ? `You are marking attendance for ${myClasses.map((id) => HOPE_CLASSES.find((k) => k.id === id)?.name ?? id).join(' and ')} only.`
     : !canMark ? 'Your role can see this register but not change it.' : undefined;
 
   return (
@@ -227,7 +232,7 @@ function KidsRegister({ org, ptabs }: { org: Organization; ptabs: ReactNode }) {
             const s = shown(e?.s);
             const age = h.ageOf(c);
             const pct = helper ? null : kidRate(c.id, days as HopeDay[]).pct;
-            const sub = [cls?.name, age != null ? `${age} yrs` : null, pct != null ? `${pct}%` : null, s && e?.t ? `in ${e.t}` : null].filter(Boolean).join(' · ');
+            const sub = [cls?.name, age != null ? `${age} yrs` : null, pct != null ? `${pct}%` : null, s && e?.t ? `in ${e.t}` : null, !helper && s && e?.b ? `by ${e.b}` : null].filter(Boolean).join(' · ');
             return (
               <RegRow key={c.id} name={name} sub={sub} photo={c.photoConsent?.given ? photos.get(c.id) : null} allergy={hasAllergy(c.allergies) ? c.allergies : null}
                 to={!helper && can('people.read') ? `/hope/children/${c.id}` : undefined} status={s} disabled={!canMark} onMark={(x) => mark(c.id, x)}

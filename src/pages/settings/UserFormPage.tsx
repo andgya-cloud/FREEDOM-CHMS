@@ -15,7 +15,7 @@ import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
-import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -49,6 +49,7 @@ const ROLE_HINTS: Record<string, string> = {
   labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
   librarian: ': runs the ADIA library (lends and returns books), and sees nothing else',
   reviewer: ': an outsider who reviews the app. Sees every area of the places you tick, changes nothing, and writes reviews in My reviews for you to answer. Never sees pastoral notes, private conversations, staff accounts or the full download',
+  teacher: ': Freedom Hope Centre only: marks their own class\'s register, sees the children\'s birthdays and writes in the Teachers\' room. Nothing else',
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 
@@ -125,6 +126,7 @@ export function UserFormPage() {
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
     if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : form.roleId === LABTECH_ROLE_ID ? 'lab technician' : form.roleId === LIBRARIAN_ROLE_ID ? 'librarian' : 'principal'} works at ADIA only. Untick the other organizations.`);
     if (form.roleId === LABTECH_ROLE_ID && form.inventory.length === 0) return setError('Tick the department whose inventory they count.');
+    if (form.roleId === TEACHER_ROLE_ID && !teamOnly && form.hopeClasses.length === 0) return setError('Tick the class this teacher marks, for example Topaz.');
     if (form.roleId === TRAINER_ROLE_ID && !teamOnly && form.departments.length === 0) return setError('Tick the department this trainer teaches.');
     if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
     setBusy(true);
@@ -133,12 +135,12 @@ export function UserFormPage() {
         ? { displayName: form.displayName.trim(), orgIds: form.orgIds, phone: form.phone.trim() }
         : {
           displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
-          extraPermissions: role?.isOwner || signatory || principal ? [] : form.extraPermissions,
+          extraPermissions: role?.isOwner || signatory || principal || form.roleId === TEACHER_ROLE_ID ? [] : form.extraPermissions,
           pettyTitle: showTitle ? form.pettyTitle : '',
           phone: form.phone.trim(),
           departments: form.roleId === TRAINER_ROLE_ID ? form.departments : [],
           inventoryDepartments: counts ? form.inventory : [],
-          hopeClasses: form.roleId === HELPER_ROLE_ID ? form.hopeClasses : [],
+          hopeClasses: form.roleId === HELPER_ROLE_ID || form.roleId === TEACHER_ROLE_ID ? form.hopeClasses : [],
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -239,7 +241,7 @@ export function UserFormPage() {
                 </label>
               ))}
             </fieldset>
-            {!teamOnly && !signatory && !principal && <fieldset className="field">
+            {!teamOnly && !signatory && !principal && form.roleId !== TEACHER_ROLE_ID && <fieldset className="field">
               <legend>Also allow</legend>
               <p className="hint">Off by default for admins.</p>
               {GRANTABLE_PERMISSIONS.map((p) => (
@@ -273,7 +275,7 @@ export function UserFormPage() {
           </fieldset>
         )}
 
-        {form.roleId === HELPER_ROLE_ID && !teamOnly && (
+        {(form.roleId === HELPER_ROLE_ID || form.roleId === TEACHER_ROLE_ID) && !teamOnly && (
           <fieldset className="field">
             <legend>Class register (Hope Centre)</legend>
             {HOPE_CLASSES.map((c) => (
@@ -283,7 +285,8 @@ export function UserFormPage() {
                 {classLabel(c)}
               </label>
             ))}
-            <small className="hint">A class volunteer sees only this class on the Registers page and marks Present, Late, Absent or Excused one child at a time. Leave empty to let them mark every child.</small>
+            {form.roleId === TEACHER_ROLE_ID ? <small className="hint">The class teacher marks this class's register on the day (and can fix it until the day ends), sees every child's birthday, and writes in the Teachers' room. Nothing else.</small>
+              : <small className="hint">A class volunteer sees only this class on the Registers page and marks Present, Late, Absent or Excused one child at a time. Leave empty to let them mark every child.</small>}
           </fieldset>
         )}
 

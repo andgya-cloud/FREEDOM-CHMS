@@ -3187,3 +3187,15 @@ button.tt-slot:hover, .tt-slot.tt-on { border-color: var(--gold, #c99a3c); }
 .tt-school td { vertical-align: top; }
 .tt-school td .tt-slot + .tt-slot { margin-top: 4px; }
 .tt-school .tt-common { border-color: var(--gold, #d2a74b); }
+
+/* Hope class teachers (Andy, 2026-11-22): role line, signature photo, birthdays and Diana's classes card. */
+.tc-role { display: flex; align-items: center; gap: .45rem; margin: 0 0 1rem; color: var(--muted, #6b7280); font-weight: 600; }
+.tc-sign { display: flex; align-items: center; gap: .9rem; margin-bottom: 1rem; }
+.tc-sign > span:last-child { display: flex; flex-direction: column; gap: .15rem; }
+.tc-sign .st-face { width: 52px; height: 52px; flex: none; }
+.tc-progress .row { display: flex; align-items: center; gap: .7rem; }
+.bd-row { display: flex; align-items: center; gap: .8rem; }
+.bd-face { width: 44px; height: 44px; flex: none; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: #fdf0dc; font-size: 1.3rem; }
+.bd-face img { width: 100%; height: 100%; object-fit: cover; }
+.bd-class { display: inline-flex; align-items: center; gap: .3rem; font-size: .85rem; color: var(--muted, #6b7280); white-space: nowrap; }
+.bd-past { opacity: .6; }

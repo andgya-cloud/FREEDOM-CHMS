@@ -163,7 +163,7 @@ const REVIEWER_SEES: Permission[] = ['people.read', 'people.write', 'attendance.
   'payroll.manage', 'payroll.approve', 'exams.mark', 'exams.manage', 'school.manage', 'fees.balances'];
 export const isReviewer = (profile: { roleId?: string } | null | undefined) => profile?.roleId === REVIEWER_ROLE_ID;
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'reviewer', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'teacher' | 'reviewer', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -195,12 +195,18 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   // Freedom Hope Centre (Andy, 2026-11-04, 2A): a helper sees only the registers and clubs, with big buttons, and
   // records the time they arrive.
   helper: { name: 'Hope helper', permissions: ['people.read', 'attendance.write'] },
+  // A Hope class teacher (Andy, 2026-11-22, 1A-10A): marks their own class's register (Jasper, Rubies, Sapphire,
+  // Emerald or Topaz) on the day, sees every child's birthday, and writes in the Teachers' room. Nothing else.
+  teacher: { name: 'Class teacher', permissions: ['people.read', 'attendance.write'] },
   reviewer: { name: 'Reviewer', permissions: REVIEWER_SEES },
 };
 
 export const USHER_ROLE_ID = 'usher';
 export const FINANCE_ROLE_ID = 'finance';
 export const HELPER_ROLE_ID = 'helper';
+export const TEACHER_ROLE_ID = 'teacher';
+/** A Hope helper or a Hope class teacher: both see only the few Hope pages that are theirs. */
+export const isHopeHelperRole = (roleId: string | undefined | null) => roleId === HELPER_ROLE_ID || roleId === TEACHER_ROLE_ID;
 
 export function isDefaultRoleId(id: string): id is keyof typeof DEFAULT_ROLES {
   return Object.prototype.hasOwnProperty.call(DEFAULT_ROLES, id);

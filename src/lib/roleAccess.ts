@@ -1,4 +1,4 @@
-import { HELPER_ROLE_ID, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { HELPER_ROLE_ID, TEACHER_ROLE_ID, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
 
 export interface RoleProfile { roleId?: string; registerClasses?: unknown[]; inventoryCourseIds?: unknown[] }
 
@@ -19,6 +19,8 @@ export function roleRedirect(profile: RoleProfile | null | undefined, path: stri
   if (profile.roleId === LABTECH_ROLE_ID) return path === '/' || /^\/(inventory|school\/timetable|settings|manual|calendar)(\/|$)/.test(path) ? null : '/';
   // A Librarian sees only the ADIA library (Andy, 2026-11-18, 2A).
   if (profile.roleId === LIBRARIAN_ROLE_ID) return path === '/' || /^\/(library|school\/timetable|settings|manual|calendar)(\/|$)/.test(path) ? null : '/';
+  // A class teacher (Andy, 2026-11-22, 10A): Today, their register, the birthdays and the Teachers' room.
+  if (profile.roleId === TEACHER_ROLE_ID) return /^\/($|hope\/register|hope\/birthdays|hope\/photos|hope\/more|settings|manual|help)/.test(path) ? null : '/';
   if (profile.roleId === HELPER_ROLE_ID) return /^\/($|hope\/register|hope\/gate|hope\/clubs|hope\/photos|hope\/more|settings|manual|calendar|help)/.test(path) ? null : '/';
   return null;
 }

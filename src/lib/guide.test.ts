@@ -90,3 +90,13 @@ describe('Reviewer role (Andy, 2026-11-11)', () => {
     expect(isReviewer({ roleId: 'staff' })).toBe(false);
   });
 });
+
+describe('class teacher pages (2026-11-22, 10A)', () => {
+  it('keeps a teacher on Today, the register, birthdays and the Teachers\' room', () => {
+    expect(roleRedirect({ roleId: 'teacher' }, '/hope/register')).toBeNull();
+    expect(roleRedirect({ roleId: 'teacher' }, '/hope/birthdays')).toBeNull();
+    expect(roleRedirect({ roleId: 'teacher' }, '/hope/photos')).toBeNull();
+    expect(roleRedirect({ roleId: 'teacher' }, '/hope/clubs')).toBe('/');
+    expect(roleRedirect({ roleId: 'teacher' }, '/hope/children')).toBe('/');
+  });
+});

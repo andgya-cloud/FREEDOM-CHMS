@@ -206,3 +206,7 @@ export const calendarTest = onCall({ invoker: 'public', secrets: SECRETS }, asyn
   const emails = await email(org, recipients, m);
   return { devices, emails, deviceCount: recipients[0]?.tokens.length ?? 0, email: recipients[0]?.email ?? '' };
 });
+
+// Shared with the class teachers' 10 AM reminder (Andy, 2026-11-22, 9A).
+export { loadPeople, push as pushTo, email as emailTo, SECRETS as REMINDER_SECRETS };
+export type { OrgInfo, Recipient, Message as ReminderMessage };

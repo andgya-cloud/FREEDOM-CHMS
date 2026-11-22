@@ -9,7 +9,7 @@ import { db, FieldValue, requireCaller, requireString, requireStringArray, write
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import { chatRole } from './shared/hopeChats.js';
 import { appUrl, CIRCLE_SECRETS, circleContacts, circleEveryone, circleLeadEmails, circleMailer, circlePeopleOf, EMAIL, keepTestMail, nextNumber } from './circleKit.js';
-import { circleOf, isCircleType, kindLabel, type CircleType } from './shared/circles.js';
+import { circleOf, isCircleType, isRequestKind, kindLabel, type CircleType } from './shared/circles.js';
 import { sendChatReminders } from './hopeChats.js';
 import { plainName } from './pettyContacts.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
@@ -127,7 +127,12 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
       const m = circleMailer(type);
       if (!m) logger.warn(`${circle.orgName} photo reports: email is not set up.`);
       else {
-        for (const p of (await boardOf()).filter((x) => plainName(x.name) !== plainName(myName) && EMAIL.test(x.email))) {
+        // A teacher's note or request (Andy, 2026-11-22, 7A) goes to Diana alone; Andy and Doreen read it in the app.
+        const board = await boardOf();
+        const to = isRequestKind(data.kind)
+          ? (await circleLeadEmails(type, orgId)).to.map((email) => ({ email, name: board.find((x) => x.email.toLowerCase() === email.toLowerCase())?.name ?? 'Director' }))
+          : board;
+        for (const p of to.filter((x) => plainName(x.name) !== plainName(myName) && EMAIL.test(x.email))) {
           const { subject, text: body } = storyStartEmail(doc, p.name.split(' ')[0] ?? p.name, linkTo(ref.id), formatDateKey, type, String(org.name || circle.orgName));
           try {
             const info = await m.transport.sendMail({ from: `"${String(org.name || m.name).replace(/"/g, '')}" <${m.from}>`, replyTo: m.from, to: `"${p.name.replace(/"/g, '')}" <${p.email}>`, subject, text: body, ...(data.kind === 'incident' ? { priority: 'high' as const } : {}) });

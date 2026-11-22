@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, HELPER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -12,9 +12,12 @@ import { HOPE_CLASSES } from './shared/hopeClasses.js';
 
 /** A Hope class volunteer's classes (Registers brief, 2026-11-06): stone ids, helpers only. */
 function hopeClassesFrom(roleId: string, value: unknown): string[] {
-  if (roleId !== HELPER_ROLE_ID) return [];
+  if (roleId !== HELPER_ROLE_ID && roleId !== TEACHER_ROLE_ID) return [];
   const known = HOPE_CLASSES.map((c) => c.id as string);
-  return [...new Set(requireStringArray(value ?? [], 'the classes'))].filter((id) => known.includes(id));
+  const ids = [...new Set(requireStringArray(value ?? [], 'the classes'))].filter((id) => known.includes(id));
+  // A class teacher always has a class (Andy, 2026-11-22, 1A).
+  if (roleId === TEACHER_ROLE_ID && !ids.length) throw new HttpsError('invalid-argument', 'Please tick the class this teacher marks.');
+  return ids;
 }
 
 // The browser calls these directly, so anyone may reach them; each one checks
@@ -277,7 +280,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     inventoryCourseIds,
     // A Hope class volunteer's classes; kept when the form does not send them.
     hopeClassIds: data.hopeClasses !== undefined ? hopeClassesFrom(merged.roleId, data.hopeClasses)
-      : merged.roleId === HELPER_ROLE_ID ? (current as { hopeClassIds?: string[] }).hopeClassIds ?? [] : [],
+      : (merged.roleId === HELPER_ROLE_ID || merged.roleId === TEACHER_ROLE_ID) ? (current as { hopeClassIds?: string[] }).hopeClassIds ?? [] : [],
     permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,

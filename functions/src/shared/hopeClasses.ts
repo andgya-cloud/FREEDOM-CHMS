@@ -34,3 +34,33 @@ export function hasAllergy(allergies: string | null | undefined): boolean {
   const a = (allergies ?? '').trim();
   return !!a && a.toLowerCase() !== NO_ALLERGIES.toLowerCase() && !/^(none|no|nil|n\/a)\.?$/i.test(a);
 }
+
+/** The class names for a list of ids, in the classes' own order: "Topaz", "Jasper and Rubies". */
+export function classNamesOf(ids: readonly string[] | null | undefined): string {
+  const names = HOPE_CLASSES.filter((c) => (ids ?? []).includes(c.id)).map((c) => c.name);
+  return names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** "Class teacher · Topaz" (Andy, 2026-11-22, 1A: show the class name with the role). */
+export function teacherLabel(ids: readonly string[] | null | undefined): string {
+  const names = classNamesOf(ids);
+  return names ? `Class teacher · ${names}` : 'Class teacher';
+}
+
+/**
+ * How far each class's register is for a day (Andy, 2026-11-22, 4A): who is in the class that day (by age), how
+ * many are marked, and who marked them. Children with no class (no birth date) are left out.
+ */
+export interface ClassProgress { id: HopeClassId; name: string; total: number; marked: number; by: string[] }
+export function classProgress(
+  children: readonly { id: string; dateOfBirth?: string | null }[],
+  marks: Record<string, { s?: string | null; b?: string | null } | undefined>,
+  date: string,
+): ClassProgress[] {
+  return HOPE_CLASSES.map((c) => {
+    const kids = children.filter((k) => classOf(k.dateOfBirth, date)?.id === c.id);
+    const done = kids.filter((k) => !!marks[k.id]?.s);
+    const by = [...new Set(done.map((k) => marks[k.id]?.b).filter((x): x is string => !!x))];
+    return { id: c.id, name: c.name, total: kids.length, marked: done.length, by };
+  }).filter((p) => p.total > 0);
+}
