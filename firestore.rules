@@ -357,6 +357,15 @@ service cloud.firestore {
         allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
         allow write: if false;
       }
+      // Sunday school classes (Andy, 2026-11-23, 2A): read by everyone at the church, written by the server.
+      match /sundaySchool/{doc} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
+      // The Sunday school room's reports, reached only through hopePhotoReports with room 'sundayschool'.
+      match /ssReports/{id} {
+        allow read, write: if false;
+      }
       match /counterJobs/{job} {
         allow read, write: if false;
       }

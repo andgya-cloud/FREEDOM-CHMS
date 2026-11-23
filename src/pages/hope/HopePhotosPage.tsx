@@ -9,6 +9,7 @@ import {
   deletePhotoReport, editStoryMessage, emailStoryPdf, isPhotoFile, isStoryFile, isVideoFile, listPhotoReports, loadBoard, markDecision, openStory,
   photoFile, restorePhotoReport, saveStorySummary, sayInStory, startStory, STORY_ACCEPT, storyPeople, unsayStoryMessage,
   type BoardPerson, type PhotoList, type StoredPhotoReport, type StoryOpen,
+  setPhotoRoom,
 } from '../../lib/hopePhotos';
 import { hopeStoryPdf } from '../../lib/hopeStoryPdf';
 import { formatDateKey, localDateKey } from '../../../functions/src/shared/datetime';
@@ -26,7 +27,8 @@ import type { Organization } from '../../state/OrgContext';
 import { HopeGate, useHopePage } from './common';
 import { CircleGate, circlePageFor, isOneItem, type CirclePage } from '../../components/CircleGate';
 import { useOrg } from '../../state/OrgContext';
-import { circleOf, isCircleType, isRequestKind, KINDS_OF, kindLabel, TEACHER_KINDS, type Circle, type CircleType } from '../../../functions/src/shared/circles';
+import { circleOf, isCircleType, isRequestKind, KINDS_OF, kindLabel, SS_KINDS, TEACHER_KINDS, type Circle, type CircleType } from '../../../functions/src/shared/circles';
+import { ssClassLabel, type SsClass } from '../../../functions/src/shared/sundaySchool';
 import { TEACHER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { useClubs } from '../../state/useHope';
 import { WIN_KIND_LABELS } from '../../../functions/src/shared/hopeClubs';
@@ -48,6 +50,14 @@ export function CirclePhotosPage({ type }: { type: Exclude<CircleType, 'ministry
   return <CircleGate type={type} title="Photos and wins" page="photos">{(org) => <Photos org={org} />}</CircleGate>;
 }
 const circleFor = (org: Organization): Circle => circleOf(org.type);
+
+/** The Sunday school room's own facts (Andy, 2026-11-23): the classes, the teacher's own class and today's count. */
+export interface SsRoom { classes: SsClass[]; mine: SsClass | null; leads: boolean; myCount: number }
+/** The Sunday school room: the same window on the church, with type 'sunday_school' and room 'sundayschool'. */
+export function SundaySchoolRoom({ org, ss }: { org: Organization; ss: SsRoom }) {
+  useEffect(() => () => setPhotoRoom(null), []);
+  return <Photos org={{ ...org, type: 'sunday_school' as Organization['type'] }} ss={ss} />;
+}
 
 /** Loads the photo reports this person may see; reportId narrows it to one weekly or monthly report. */
 export function usePhotoReports(orgId: string, reportId?: string) {
@@ -92,23 +102,27 @@ function MySignature({ org, name }: { org: Organization; name: string }) {
   );
 }
 
-function Photos({ org }: { org: Organization }) {
+function Photos({ org, ss }: { org: Organization; ss?: SsRoom }) {
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
   const { profile } = useAuth();
   const uid = profile?.uid ?? '';
-  const { list, error, reload } = usePhotoReports(org.id);
   const circle = circleFor(org);
+  // Every call from this window goes to the Sunday school room while it shows (set before the list loads).
+  const ssRoom = circle.type === 'sunday_school';
+  setPhotoRoom(ssRoom ? 'sundayschool' : null);
+  const { list, error, reload } = usePhotoReports(org.id);
   const hope = circle.type === 'ministry';
+  const ssTeacher = ssRoom && !!ss?.mine;
   // The Teachers' room (Andy, 2026-11-22, 6A 7A): a class teacher writes notes and requests here and sees only their own.
   const teacher = hope && profile?.roleId === TEACHER_ROLE_ID;
-  const kinds = teacher ? TEACHER_KINDS : hope ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
+  const kinds = ssRoom ? SS_KINDS : teacher ? TEACHER_KINDS : hope ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
   const openId = params.get('report') ?? '';
   const making = params.get('new') === '1';
   const forReport = params.get('for') ?? '';
   const forLabel = params.get('label') ?? '';
   const [kind, setKind] = useState<PhotoReportKind | 'all' | 'requests'>('all');
-  const hasRequests = hope && !teacher && (list?.reports ?? []).some((r) => isRequestKind(r.kind));
+  const hasRequests = (hope || ssRoom) && !teacher && !ssTeacher && (list?.reports ?? []).some((r) => isRequestKind(r.kind));
   const shown = (list?.reports ?? []).filter((r) => kind === 'all' || r.kind === kind || (kind === 'requests' && isRequestKind(r.kind)))
     .sort((a, b) => (b.lastAt ?? b.day).localeCompare(a.lastAt ?? a.day));
 
@@ -124,22 +138,23 @@ function Photos({ org }: { org: Organization }) {
   return (
     <div className="page narrow">
       <div className="page-head">
-        <h1>{teacher ? "💬 Teachers' room" : '📷 Photos and wins'}</h1>
+        {ssRoom ? <h2>💬 Sunday school room</h2> : <h1>{teacher ? "💬 Teachers' room" : '📷 Photos and wins'}</h1>}
         <div className="btn-line">
-          {!hope && <Link to={circle.vaultPath} className="btn btn-quiet">🔒 Private conversations</Link>}
-          {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>{teacher ? '✍️ New note or request' : '📷 New report'}</button>}
+          {!hope && !ssRoom && <Link to={circle.vaultPath} className="btn btn-quiet">🔒 Private conversations</Link>}
+          {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>{ssRoom ? '✍️ New post' : teacher ? '✍️ New note or request' : '📷 New report'}</button>}
         </div>
       </div>
       <p className="small muted">
-        {teacher ? 'Ask for anything here: supplies, a mark to change, a child to move, or a day you cannot come. Diana, Andy and Doreen read and answer. You see your own notes only.'
+        {ssRoom ? (ssTeacher ? 'Post a win, your class report or a request, or start a conversation. Dorothy, Andy and Doreen read and answer. You see your own posts.' : 'Every post from the Sunday school teachers is here. Open one to reply; mark requests Done when they are handled.')
+          : teacher ? 'Ask for anything here: supplies, a mark to change, a child to move, or a day you cannot come. Diana, Andy and Doreen read and answer. You see your own notes only.'
           : list?.reviews ? 'As a reviewer you can read every report and win here. Look only: replies and changes stay with the team.' : list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
       </p>
       {error && <p className="notice notice-warn small">{error}</p>}
 
-      {teacher && !making && <MySignature org={org} name={profile?.displayName ?? ''} />}
+      {(teacher || ssTeacher) && !making && <MySignature org={org} name={profile?.displayName ?? ''} />}
 
       {making && (
-        <NewReport org={org} teacher={teacher} forReport={forReport} forLabel={forLabel}
+        <NewReport org={org} teacher={teacher} ss={ss} forReport={forReport} forLabel={forLabel}
           onCancel={() => (forReport ? navigate(`/hope/reports?report=${forReport}`) : setParams({}))}
           onSent={(id, emailed) => { reload(); if (forReport) navigate(`/hope/reports?report=${forReport}`); else setParams({ report: id, told: '1', emailed: String(emailed) }); }} />
       )}
@@ -150,7 +165,7 @@ function Photos({ org }: { org: Organization }) {
             <div className="chips" role="radiogroup" aria-label="Show">
               {(['all', ...(hasRequests ? ['requests' as const] : []), ...kinds] as const).map((k) => (
                 <button key={k} type="button" role="radio" aria-checked={kind === k} className={`chip${kind === k ? ' chip-on' : ''}`} onClick={() => setKind(k)}>
-                  {k === 'all' ? 'All' : k === 'requests' ? "🧑‍🏫 Teachers' room" : `${PHOTO_REPORT_EMOJI[k]} ${kindLabel(k, circle.type)}`}
+                  {k === 'all' ? 'All' : k === 'requests' ? (ssRoom ? '🙋 Requests' : "🧑‍🏫 Teachers' room") : `${PHOTO_REPORT_EMOJI[k]} ${kindLabel(k, circle.type)}`}
                 </button>
               ))}
             </div>
@@ -303,10 +318,13 @@ function IncidentFields({ value, onChange, circle }: { value: IncidentDetails; o
   );
 }
 
-function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false }: { org: Organization; forReport: string; forLabel: string; onCancel: () => void; onSent: (id: string, emailed: number) => void; teacher?: boolean }) {
+function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false, ss }: { org: Organization; forReport: string; forLabel: string; onCancel: () => void; onSent: (id: string, emailed: number) => void; teacher?: boolean; ss?: SsRoom }) {
   const toast = useToast();
   const today = localDateKey(new Date(), org.timeZone || 'Africa/Nairobi');
-  const [kind, setKind] = useState<PhotoReportKind>(forReport ? 'activity' : teacher ? 'supplies' : 'win');
+  const [kind, setKind] = useState<PhotoReportKind>(forReport ? 'activity' : ss?.mine ? 'ssreport' : teacher ? 'supplies' : 'win');
+  // The class report form (Andy, 2026-11-23, 8A).
+  const [classId, setClassId] = useState(ss?.mine?.id ?? ss?.classes[0]?.id ?? '');
+  const [cr, setCr] = useState({ present: String(ss?.myCount || ''), lesson: '', win: '', need: '' });
   const [title, setTitle] = useState(forReport ? `Photos for ${forLabel}`.slice(0, PHOTO_TITLE_MAX) : '');
   const [day, setDay] = useState(today);
   const [text, setText] = useState('');
@@ -315,20 +333,28 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
   const [progress, setProgress] = useState<[number, number] | null>(null);
   const picker = useChildPicker(org.id, text, setText, org.type);
   const circle = circleFor(org);
-  const kinds = teacher ? TEACHER_KINDS : circle.type === 'ministry' ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
+  const ssRoom = circle.type === 'sunday_school';
+  const kinds = ssRoom ? SS_KINDS : teacher ? TEACHER_KINDS : circle.type === 'ministry' ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
+  const report = ssRoom && kind === 'ssreport';
+  const cls = ss?.classes.find((c) => c.id === classId);
   const sample: Partial<Record<PhotoReportKind, string>> = circle.type === 'college'
     ? { win: 'Grace passed her trade test', activity: 'Catering practical day', exams: 'Cohort 3 CAT results', incident: 'A student was hurt in the workshop' }
+    : ssRoom
+      ? { win: 'Two children prayed for their friends', ssreport: `${cls?.name ?? 'Juniors'} class report`, supplies: 'Crayons and 20 Bibles', absence: 'I cannot come on Sunday 7th', help: 'A second teacher for the Beginners', other: 'Ideas for the Christmas play' }
     : circle.type === 'church_campus'
       ? { win: 'Healed after prayer', activity: 'Youth Sunday', care: 'Hospital visit to Mary', incident: 'A child got lost after the service' }
       : { win: 'Amani read a whole book', activity: 'Sports day', incident: 'A child fell in the playground',
         supplies: '20 exercise books for Topaz', markfix: 'Amani was present, not absent, on Saturday', move: 'Brian belongs in Sapphire', absence: 'I cannot come on Saturday 5th', other: 'A note for Diana' };
 
   async function send() {
-    if (!title.trim()) { toast.show('Please give it a title.'); return; }
-    if (!files.length && !text.trim()) { toast.show('Add a few words or at least one photo.'); return; }
+    const heading = title.trim() || (report && cls ? `${cls.name} class report` : '');
+    if (!heading) { toast.show('Please give it a title.'); return; }
+    if (report && !cls) { toast.show('Please pick the class.'); return; }
+    if (report && !(Number(cr.present) >= 0 && cr.present.trim())) { toast.show('Please type how many children were present.'); return; }
+    if (!report && !files.length && !text.trim()) { toast.show('Add a few words or at least one photo.'); return; }
     setProgress([0, files.length]);
     try {
-      const { id, emailed, failed } = await startStory(org.id, { kind, title: title.trim(), day, text, reportId: forReport || null, incident: kind === 'incident' ? incident : null, childIds: picker.picked.map((c) => c.id) }, files, (d, of) => setProgress([d, of]));
+      const { id, emailed, failed } = await startStory(org.id, { kind, title: heading, day, text, reportId: forReport || null, incident: kind === 'incident' ? incident : null, childIds: picker.picked.map((c) => c.id), ...(report ? { classId, classReport: { ...cr, present: Number(cr.present) || 0 } } : {}) }, files, (d, of) => setProgress([d, of]));
       if (failed.length) toast.show(`Sent, but ${failed.length} ${failed.length === 1 ? 'file' : 'files'} did not go: ${failed.join(', ')}. Add them again in the conversation.`);
       onSent(id, emailed.length);
     } catch (err) { toast.show(friendlyError(err)); } finally { setProgress(null); }
@@ -336,8 +362,8 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
 
   return (
     <section className="card stack">
-      <h2>{forReport ? `Add photos to ${forLabel || 'the report'}` : teacher ? 'A note or a request' : 'Start a report'}</h2>
-      <p className="small muted">{teacher ? 'Diana gets an email and answers you here. It stays Open until she marks it Done.' : forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
+      <h2>{forReport ? `Add photos to ${forLabel || 'the report'}` : ssRoom ? 'A new post' : teacher ? 'A note or a request' : 'Start a report'}</h2>
+      <p className="small muted">{ssRoom ? (isRequestKind(kind) || report ? 'Dorothy gets an email and answers you here. A request stays Open until she marks it Done.' : 'Dorothy, Andy and Doreen read it and can reply here.') : teacher ? 'Diana gets an email and answers you here. It stays Open until she marks it Done.' : forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
       <div className="ph-kinds" role="radiogroup" aria-label="Kind of report">
         {kinds.map((k) => (
           <button key={k} type="button" role="radio" aria-checked={kind === k} className={`ph-kind${kind === k ? ' on' : ''}${k === 'incident' ? ' incident' : ''}`} onClick={() => setKind(k)}>
@@ -346,10 +372,24 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
         ))}
       </div>
       {kind === 'incident' && <p className="notice notice-warn small">An incident is seen only by {circle.readers}.</p>}
-      <label className="field"><span>Title</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={sample[kind] ?? ''} /></label>
+      {report && (
+        <fieldset className="field stack">
+          {ss && ss.leads && !ss.mine && (
+            <label className="field"><span>Class</span>
+              <select value={classId} onChange={(e) => setClassId(e.target.value)}>{ss.classes.map((c) => <option key={c.id} value={c.id}>{ssClassLabel(c)}</option>)}</select>
+            </label>
+          )}
+          {ss?.mine && <p className="small muted" style={{ margin: 0 }}>Class: <b>{ssClassLabel(ss.mine)}</b></p>}
+          <label className="field"><span>Children present</span><input type="number" inputMode="numeric" min={0} value={cr.present} onChange={(e) => setCr({ ...cr, present: e.target.value })} /></label>
+          <label className="field"><span>Lesson taught</span><input value={cr.lesson} maxLength={300} placeholder="Noah's ark" onChange={(e) => setCr({ ...cr, lesson: e.target.value })} /></label>
+          <label className="field"><span>A win</span><textarea rows={2} value={cr.win} maxLength={600} placeholder="Something good that happened" onChange={(e) => setCr({ ...cr, win: e.target.value })} /></label>
+          <label className="field"><span>A need</span><textarea rows={2} value={cr.need} maxLength={600} placeholder="Anything the class needs" onChange={(e) => setCr({ ...cr, need: e.target.value })} /></label>
+        </fieldset>
+      )}
+      <label className="field"><span>Title{report ? ' (optional)' : ''}</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={sample[kind] ?? ''} /></label>
       <label className="field"><span>Date</span><input type="date" value={day} max={today} onChange={(e) => setDay(e.target.value)} /></label>
       {kind === 'incident' && <IncidentFields value={incident} onChange={setIncident} circle={circle} />}
-      <label className="field"><span>{teacher ? 'Your note (a few lines)' : 'What happened (a few lines)'}</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder={`Type @ and a name to add a ${circle.person}'s card`} /></label>
+      <label className="field"><span>{report ? 'Anything else (optional)' : teacher || ssRoom ? 'Your note (a few lines)' : 'What happened (a few lines)'}</span><textarea rows={4} value={text} maxLength={PHOTO_TEXT_MAX} onChange={(e) => setText(e.target.value)} placeholder={`Type @ and a name to add a ${circle.person}'s card`} /></label>
       <div className="st-light">
         {picker.panel}
         {picker.chips}

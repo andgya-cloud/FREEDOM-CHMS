@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
-import { doc, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../firebase';
 import { useAuth, type Profile } from '../../state/AuthContext';
@@ -15,6 +15,7 @@ import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
+import { cleanClasses, ssClassLabel, type SsClass } from '../../../functions/src/shared/sundaySchool';
 import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
@@ -37,6 +38,8 @@ interface FormState {
   legacyClasses: string[];
   inventory: string[];
   hopeClasses: string[];
+  /** A Sunday school teacher's class (Andy, 2026-11-23, 9A). */
+  ssClass: string;
 }
 
 const ROLE_HINTS: Record<string, string> = {
@@ -49,11 +52,12 @@ const ROLE_HINTS: Record<string, string> = {
   labtech: ': counts their ADIA department\'s inventory, and sees nothing else',
   librarian: ': runs the ADIA library (lends and returns books), and sees nothing else',
   reviewer: ': an outsider who reviews the app. Sees every area of the places you tick, changes nothing, and writes reviews in My reviews for you to answer. Never sees pastoral notes, private conversations, staff accounts or the full download',
+  ssteacher: ': Freedom Church only: counts their own Sunday school class (it adds into Children) and writes in the Sunday school room. Nothing else',
   teacher: ': Freedom Hope Centre only: marks their own class\'s register, sees the children\'s birthdays and writes in the Teachers\' room. Nothing else',
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [], hopeClasses: [] };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [], hopeClasses: [], ssClass: '' };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -64,6 +68,14 @@ export function UserFormPage() {
   const teamOnly = !can('users.manage');
   const myOrgs = teamOnly ? organizations.filter((o) => me?.orgIds?.includes(o.id)) : organizations;
   const roles = useRoles();
+  // The Sunday school classes of the churches here (Andy, 2026-11-23, 2A 9A).
+  const [ssClasses, setSsClasses] = useState<SsClass[]>([]);
+  const churchIds = organizations.filter((o) => o.type === 'church_campus').map((o) => o.id).join(',');
+  useEffect(() => {
+    if (!churchIds) return;
+    Promise.all(churchIds.split(',').map((id) => getDoc(doc(db, `organizations/${id}/sundaySchool/settings`)).then((d) => cleanClasses(d.get('classes'))).catch(() => [] as SsClass[])))
+      .then((lists) => setSsClasses(lists.flat()));
+  }, [churchIds]);
   const toast = useToast();
   const navigate = useNavigate();
   const [form, setForm] = useState<FormState>(() => ({
@@ -86,7 +98,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [], hopeClasses: u.hopeClassIds ?? [],
+          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [], hopeClasses: u.hopeClassIds ?? [], ssClass: u.ssClassId ?? '',
         });
       }
       setLoaded(true);
@@ -126,6 +138,7 @@ export function UserFormPage() {
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
     if (principal && (form.allOrgs || form.orgIds.some((id) => !colleges.includes(id)))) return setError(`The ${form.roleId === TRAINER_ROLE_ID ? 'trainer' : form.roleId === LABTECH_ROLE_ID ? 'lab technician' : form.roleId === LIBRARIAN_ROLE_ID ? 'librarian' : 'principal'} works at ADIA only. Untick the other organizations.`);
     if (form.roleId === LABTECH_ROLE_ID && form.inventory.length === 0) return setError('Tick the department whose inventory they count.');
+    if (form.roleId === 'ssteacher' && !form.ssClass) return setError('Pick the Sunday school class this teacher counts.');
     if (form.roleId === TEACHER_ROLE_ID && !teamOnly && form.hopeClasses.length === 0) return setError('Tick the class this teacher marks, for example Topaz.');
     if (form.roleId === TRAINER_ROLE_ID && !teamOnly && form.departments.length === 0) return setError('Tick the department this trainer teaches.');
     if (form.phone.trim() && !normalizePhone(form.phone)) return setError('Check the WhatsApp number, e.g. 0712 345 678.');
@@ -135,12 +148,13 @@ export function UserFormPage() {
         ? { displayName: form.displayName.trim(), orgIds: form.orgIds, phone: form.phone.trim() }
         : {
           displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
-          extraPermissions: role?.isOwner || signatory || principal || form.roleId === TEACHER_ROLE_ID ? [] : form.extraPermissions,
+          extraPermissions: role?.isOwner || signatory || principal || form.roleId === TEACHER_ROLE_ID || form.roleId === 'ssteacher' ? [] : form.extraPermissions,
           pettyTitle: showTitle ? form.pettyTitle : '',
           phone: form.phone.trim(),
           departments: form.roleId === TRAINER_ROLE_ID ? form.departments : [],
           inventoryDepartments: counts ? form.inventory : [],
           hopeClasses: form.roleId === HELPER_ROLE_ID || form.roleId === TEACHER_ROLE_ID ? form.hopeClasses : [],
+          ...(form.roleId === 'ssteacher' ? { ssClass: form.ssClass } : {}),
         };
       if (isNew) {
         await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
@@ -241,7 +255,7 @@ export function UserFormPage() {
                 </label>
               ))}
             </fieldset>
-            {!teamOnly && !signatory && !principal && form.roleId !== TEACHER_ROLE_ID && <fieldset className="field">
+            {!teamOnly && !signatory && !principal && form.roleId !== TEACHER_ROLE_ID && form.roleId !== 'ssteacher' && <fieldset className="field">
               <legend>Also allow</legend>
               <p className="hint">Off by default for admins.</p>
               {GRANTABLE_PERMISSIONS.map((p) => (
@@ -275,6 +289,16 @@ export function UserFormPage() {
           </fieldset>
         )}
 
+        {form.roleId === 'ssteacher' && (
+          <label className="field">
+            <span>Sunday school class</span>
+            <select value={form.ssClass} onChange={(e) => set('ssClass', e.target.value)}>
+              <option value="">Pick the class…</option>
+              {ssClasses.map((c) => <option key={c.id} value={c.id}>{ssClassLabel(c)}</option>)}
+            </select>
+            <small className="hint">{ssClasses.length ? 'The teacher counts this class on Sunday and writes in the Sunday school room. Tick Freedom Church above.' : 'No classes yet: Dorothy adds them on the Sunday school page (More, then Sunday school).'}</small>
+          </label>
+        )}
         {(form.roleId === HELPER_ROLE_ID || form.roleId === TEACHER_ROLE_ID) && !teamOnly && (
           <fieldset className="field">
             <legend>Class register (Hope Centre)</legend>

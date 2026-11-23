@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, HELPER_ROLE_ID, TEACHER_ROLE_ID, SS_TEACHER_ROLE, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -9,6 +9,20 @@ import { giveDepartmentCourses } from './examAssign.js';
 import { refreshCommonAccess } from './commonCourses.js';
 import { COMMON_DEPARTMENT } from './shared/commonCourses.js';
 import { HOPE_CLASSES } from './shared/hopeClasses.js';
+
+/** A Sunday school teacher's class (Andy, 2026-11-23, 9A), from the classes Dorothy keeps; required for that role. */
+async function ssClassFrom(roleId: string, value: unknown, orgIds: string[], allOrgs: boolean): Promise<{ ssClassId: string; ssClassName: string; ssOrgId: string }> {
+  const none = { ssClassId: '', ssClassName: '', ssOrgId: '' };
+  if (roleId !== SS_TEACHER_ROLE) return none;
+  const id = typeof value === 'string' ? value : '';
+  const churches = allOrgs ? (await db.collection('organizations').where('type', '==', 'church_campus').get()).docs.map((d) => d.id) : orgIds;
+  for (const orgId of churches) {
+    const classes = ((await db.doc(`organizations/${orgId}/sundaySchool/settings`).get()).get('classes') ?? []) as { id: string; name: string }[];
+    const c = classes.find((x) => x.id === id);
+    if (c) return { ssClassId: c.id, ssClassName: c.name, ssOrgId: orgId };
+  }
+  throw new HttpsError('invalid-argument', 'Please pick the Sunday school class this teacher counts. Dorothy adds the classes on the Sunday school page.');
+}
 
 /** A Hope class volunteer's classes (Registers brief, 2026-11-06): stone ids, helpers only. */
 function hopeClassesFrom(roleId: string, value: unknown): string[] {
@@ -192,6 +206,7 @@ export const createUser = onCall(PASSWORDS, async (request) => {
     ...dept,
     inventoryCourseIds: await inventoryDepartments(data.inventoryDepartments, orgIds, allOrgs),
     hopeClassIds: hopeClassesFrom(roleId, data.hopeClasses),
+    ...(await ssClassFrom(roleId, data.ssClass, orgIds, allOrgs)),
     permissions: accountPermissions(roleId, role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -281,6 +296,9 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     // A Hope class volunteer's classes; kept when the form does not send them.
     hopeClassIds: data.hopeClasses !== undefined ? hopeClassesFrom(merged.roleId, data.hopeClasses)
       : (merged.roleId === HELPER_ROLE_ID || merged.roleId === TEACHER_ROLE_ID) ? (current as { hopeClassIds?: string[] }).hopeClassIds ?? [] : [],
+    ...(data.ssClass !== undefined || merged.roleId !== SS_TEACHER_ROLE
+      ? await ssClassFrom(merged.roleId, data.ssClass, merged.orgIds, merged.allOrgs)
+      : {}),
     permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,

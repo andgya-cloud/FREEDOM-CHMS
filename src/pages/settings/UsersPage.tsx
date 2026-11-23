@@ -1,3 +1,4 @@
+import { ssTeacherLabel } from '../../../functions/src/shared/circles';
 import { teacherLabel } from '../../../functions/src/shared/hopeClasses';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -47,7 +48,7 @@ export function UsersPage() {
               <Link to={`/settings/users/${u.uid}`} className="row-main">
                 <span className="row-title">{u.displayName}{!u.active && <span className="badge badge-muted">Off</span>}</span>
                 <span className="row-detail">
-                  {u.roleId === 'teacher' ? teacherLabel(u.hopeClassIds) : roleName(u.roleId)}{u.pettyTitle ? ` (${u.pettyTitle})` : ''} · {u.email}
+                  {u.roleId === 'teacher' ? teacherLabel(u.hopeClassIds) : u.roleId === 'ssteacher' ? ssTeacherLabel(u.ssClassName) : roleName(u.roleId)}{u.pettyTitle ? ` (${u.pettyTitle})` : ''} · {u.email}
                   {u.lastSignInAt ? ` · Last in ${formatDateTime(u.lastSignInAt.toDate())}` : ' · Never signed in'}
                 </span>
               </Link>

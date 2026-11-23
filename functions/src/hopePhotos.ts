@@ -9,8 +9,10 @@ import { db, FieldValue, requireCaller, requireString, requireStringArray, write
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import { chatRole } from './shared/hopeChats.js';
 import { appUrl, CIRCLE_SECRETS, circleContacts, circleEveryone, circleLeadEmails, circleMailer, circlePeopleOf, EMAIL, keepTestMail, nextNumber } from './circleKit.js';
-import { circleOf, isCircleType, isRequestKind, kindLabel, type CircleType } from './shared/circles.js';
+import { circleOf, isCircleType, isLeadKind, kindLabel, type CircleType } from './shared/circles.js';
 import { sendChatReminders } from './hopeChats.js';
+import { loadChurch, loadSsClasses, setClassCount } from './serviceCounters.js';
+import { classReportText, cleanClassReport } from './shared/sundaySchool.js';
 import { plainName } from './pettyContacts.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
 import {
@@ -49,7 +51,7 @@ const shownMessage = (id: string, m: StoryMessage) => (m.deleted
  */
 /** The next report number for this year, "FHC-2026-014", "ADIA-2026-003", "FCN-2026-001" (v193 4A; 2026-11-07 7A). */
 async function nextRef(orgId: string, type: CircleType): Promise<string> {
-  const { year, n } = await nextNumber(orgId, 'hopePhotoReports');
+  const { year, n } = await nextNumber(orgId, type === 'sunday_school' ? 'ssReports' : 'hopePhotoReports');
   return storyRef(year, n, type);
 }
 
@@ -66,12 +68,13 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   if (!canAccessOrg(me, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this organization.');
   const org = (await db.doc(`organizations/${orgId}`).get()).data();
   if (!isCircleType(org?.type)) throw new HttpsError('failed-precondition', 'Photo reports are not set up for this organization.');
-  const type: CircleType = org.type;
+  // The Sunday school room inside the church (Andy, 2026-11-23, 4A): its own readers and its own collection.
+  const type: CircleType = org.type === 'church_campus' && data.room === 'sundayschool' ? 'sunday_school' : org.type;
   const circle = circleOf(type);
   const boardOf = () => circleContacts(type, orgId);
   const linkTo = (id: string) => `${appUrl()}${circle.photosPath}?report=${id}`;
   const role = chatRole(me, orgId, type);
-  const col = db.collection(`organizations/${orgId}/hopePhotoReports`);
+  const col = db.collection(`organizations/${orgId}/${type === 'sunday_school' ? 'ssReports' : 'hopePhotoReports'}`);
   const action = String(data.action ?? '');
   const myName = me.displayName || me.email;
   const all = canSeeAllPhotoReports(me, orgId, type);
@@ -100,7 +103,20 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
     const title = requireString(data.title, 'the title', { max: PHOTO_TITLE_MAX });
     const day = typeof data.day === 'string' && DAY.test(data.day) ? data.day : '';
     if (!day || day > localDateKey()) throw new HttpsError('invalid-argument', 'Please check the date.');
-    const text = typeof data.text === 'string' ? data.text.trim().slice(0, PHOTO_TEXT_MAX) : '';
+    let text = typeof data.text === 'string' ? data.text.trim().slice(0, PHOTO_TEXT_MAX) : '';
+    // A Sunday school class report (Andy, 2026-11-23, 8A): the form's answers lead the message, and the number of
+    // children present becomes the class's count on today's service (1A).
+    let classReport: Record<string, unknown> | null = null;
+    if (type === 'sunday_school' && data.kind === 'ssreport') {
+      const r = cleanClassReport(data.classReport);
+      const meSs = me as UserProfile & { ssClassId?: string };
+      const classes = await loadSsClasses(orgId);
+      const cls = classes.find((c) => c.id === (all && typeof data.classId === 'string' ? data.classId : meSs.ssClassId));
+      if (!cls) throw new HttpsError('invalid-argument', 'Please pick the class.');
+      classReport = { ...r, classId: cls.id, className: cls.name };
+      text = [classReportText(r), text].filter(Boolean).join('\n\n').slice(0, PHOTO_TEXT_MAX);
+      if (r.present > 0 && day === localDateKey()) await setClassCount(await loadChurch(orgId), cls, myName, { set: r.present }).catch((err) => logger.warn('Class count not set', err));
+    }
     let reportId: string | null = null; let reportLabel: string | null = null;
     if (type === 'ministry' && typeof data.reportId === 'string' && data.reportId) {
       const rep = (await db.doc(`organizations/${orgId}/hopeReports/${data.reportId.slice(0, 120)}`).get());
@@ -118,6 +134,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
       senderUid: caller.uid, senderName: myName, deleted: false,
       startedAt: at, senderRole: role, lastAt: at, lastText: preview(text, 0) || title, lastByName: myName, replies: 0, seen: { [caller.uid]: at }, status: 'open',
       ...(incident ? { incident } : {}),
+      ...(classReport ? { classReport } : {}),
       createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid,
     };
     await ref.set(doc);
@@ -129,7 +146,7 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
       else {
         // A teacher's note or request (Andy, 2026-11-22, 7A) goes to Diana alone; Andy and Doreen read it in the app.
         const board = await boardOf();
-        const to = isRequestKind(data.kind)
+        const to = isLeadKind(data.kind)
           ? (await circleLeadEmails(type, orgId)).to.map((email) => ({ email, name: board.find((x) => x.email.toLowerCase() === email.toLowerCase())?.name ?? 'Director' }))
           : board;
         for (const p of to.filter((x) => plainName(x.name) !== plainName(myName) && EMAIL.test(x.email))) {

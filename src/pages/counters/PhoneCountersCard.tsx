@@ -7,7 +7,7 @@ import { COUNTER_INFO, counterInvite, waPhone, type CounterJob } from '../../../
 import './counters.css';
 
 type Job = { job: CounterJob; person: string; phone: string; active: boolean; link: string };
-const call = (data: Record<string, unknown>) => httpsCallable<typeof data, { jobs: Job[]; church: string }>(functions, 'serviceCounters', { timeout: 60_000 })(data).then((r) => r.data);
+const call = (data: Record<string, unknown>) => httpsCallable<typeof data, { jobs: Job[]; church: string; childrenFromClasses?: boolean }>(functions, 'serviceCounters', { timeout: 60_000 })(data).then((r) => r.data);
 
 /**
  * Who counts what on their phone (Andy, 2026-11-23, 1A 3A 5A): one person per number. Type their name and phone,
@@ -18,12 +18,13 @@ export function PhoneCountersCard({ orgId }: { orgId: string }) {
   const [open, setOpen] = useState(false);
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [church, setChurch] = useState('Freedom Church');
+  const [fromClasses, setFromClasses] = useState(false);
   const [draft, setDraft] = useState<Partial<Record<CounterJob, { person: string; phone: string }>>>({});
   const [busy, setBusy] = useState<CounterJob | null>(null);
 
   useEffect(() => {
     if (!open || jobs) return;
-    call({ orgId, action: 'jobs' }).then((r) => { setJobs(r.jobs); setChurch(r.church); }).catch((e) => toast.show(friendlyError(e)));
+    call({ orgId, action: 'jobs' }).then((r) => { setJobs(r.jobs); setChurch(r.church); setFromClasses(!!r.childrenFromClasses); }).catch((e) => toast.show(friendlyError(e)));
   }, [open, jobs, orgId, toast]);
 
   async function act(job: CounterJob, data: Record<string, unknown>, done: string) {
@@ -46,7 +47,8 @@ export function PhoneCountersCard({ orgId }: { orgId: string }) {
       <p className="muted small">One person counts each number on their own phone, with no password. Their numbers show here live.</p>
       {!jobs ? <p className="muted">Loading…</p> : (
         <ul className="ctr-jobs">
-          {jobs.map((j) => {
+          {fromClasses && <li className="small muted">🧒 Children come from the Sunday school teachers, class by class.</li>}
+          {jobs.filter((j) => !(fromClasses && j.job === 'children')).map((j) => {
             const info = COUNTER_INFO[j.job];
             const d = draft[j.job] ?? { person: j.person, phone: j.phone };
             const changed = d.person !== j.person || d.phone !== j.phone;

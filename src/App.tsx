@@ -132,6 +132,7 @@ const VerifyTranscriptPage = lazy(() => import('./pages/verify/VerifyTranscriptP
 const SponsorPublicPage = lazy(() => import('./pages/hope/SponsorPublicPage').then((m) => ({ default: m.SponsorPublicPage })));
 const SponsorshipPage = lazy(() => import('./pages/hope/SponsorshipPage').then((m) => ({ default: m.SponsorshipPage })));
 const SponsorListPage = lazy(() => import('./pages/hope/SponsorListPage').then((m) => ({ default: m.SponsorListPage })));
+const SundaySchoolPage = lazy(() => import('./pages/counters/SundaySchoolPage').then((m) => ({ default: m.SundaySchoolPage })));
 const CounterPage = lazy(() => import('./pages/counters/CounterPage').then((m) => ({ default: m.CounterPage })));
 const PhotoUploadPage = lazy(() => import('./pages/hope/PhotoUploadPage').then((m) => ({ default: m.PhotoUploadPage })));
 const GatePage = lazy(() => import('./pages/hope/GatePage').then((m) => ({ default: m.GatePage })));
@@ -376,6 +377,7 @@ function AppRoutes() {
         <Route path="/settings/data" element={<RequirePermission permission="data.export"><DataPage /></RequirePermission>} />
         <Route path="/help" element={<OpenGuide />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/sunday-school" element={<SundaySchoolPage />} />
         <Route path="/service-hosts" element={<ServiceHostsPage />} />
         <Route path="/prayer-schedule" element={<ServiceHostsPage key="prayer" team="prayer" />} />
         <Route path="/manual" element={<ManualPage />} />

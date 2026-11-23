@@ -9,6 +9,8 @@ import { cleanCount, eventIdFor, isOtherServiceName, isSundayService, type Headc
 import { addDays, occurrences, type CalendarEvent } from './shared/calendar.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { poweredByHtml } from './shared/poweredBy.js';
+import { circleReader, SS_TEACHER_ROLE_ID } from './shared/circles.js';
+import { classesTotal, cleanClasses, type ClassCounts, type SsClass } from './shared/sundaySchool.js';
 import {
   allFinished, cleanPerson, COUNTER_INFO, COUNTER_JOBS, counterServices, countLines, isCounterJob,
   type CounterJob, type CounterJobDoc, type ServiceCountDoc,
@@ -28,9 +30,13 @@ const by = (job: CounterJob) => `counter:${job}`;
 const jobsCol = (orgId: string) => db.collection(`organizations/${orgId}/counterJobs`);
 const countRef = (orgId: string, eventId: string) => db.doc(`organizations/${orgId}/serviceCounts/${eventId}`);
 const eventRef = (orgId: string, eventId: string) => db.doc(`organizations/${orgId}/events/${eventId}`);
+const ssSettingsRef = (orgId: string) => db.doc(`organizations/${orgId}/sundaySchool/settings`);
+export async function loadSsClasses(orgId: string): Promise<SsClass[]> {
+  return cleanClasses((await ssSettingsRef(orgId).get()).get('classes'));
+}
 
-interface Church { id: string; name: string; tz: string; otherServices: string[] }
-async function loadChurch(orgId: string): Promise<Church> {
+export interface Church { id: string; name: string; tz: string; otherServices: string[] }
+export async function loadChurch(orgId: string): Promise<Church> {
   if (!ORG.test(orgId)) throw new HttpsError('not-found', 'This link is not right.');
   const o = await db.doc(`organizations/${orgId}`).get();
   if (!o.exists || o.get('deletedAt') != null || o.get('type') !== 'church_campus') throw new HttpsError('not-found', 'This link is not right.');
@@ -72,6 +78,38 @@ async function counterFor(orgId: string, token: unknown): Promise<CounterJobDoc>
   return job;
 }
 
+/**
+ * A Sunday school teacher's count for their class (Andy, 2026-11-23, 1A): kept per class on the service, and the
+ * classes added up are the service's Children. Today's first service (the Sunday service on a Sunday).
+ */
+export async function setClassCount(church: Church, cls: { id: string; name: string }, teacher: string, change: { add: number } | { set: number }): Promise<{ count: number; service: string }> {
+  const today = localDateKey(new Date(), church.tz);
+  const s = (await todaysServices(church, today))[0];
+  if (!s) throw new HttpsError('failed-precondition', 'There is no service today. On Sunday, or on the day of a special service in the calendar, you can count here.');
+  const ref = eventRef(church.id, s.id);
+  const cref = countRef(church.id, s.id);
+  const count = await db.runTransaction(async (tx) => {
+    const [ev, c] = await Promise.all([tx.get(ref), tx.get(cref)]);
+    if (ev.exists && ev.get('deletedAt') != null) throw new HttpsError('failed-precondition', 'This service was removed. Please ask the church office.');
+    const classes: ClassCounts = { ...((c.get('classes') ?? {}) as ClassCounts) };
+    const now = Number(classes[cls.id]?.count) || 0;
+    const next = 'set' in change ? cleanCount(change.set) : Math.max(0, now + change.add);
+    classes[cls.id] = { name: cls.name, count: next, teacher };
+    const children = classesTotal(classes);
+    const stamps = { updatedAt: FieldValue.serverTimestamp(), updatedBy: `sundayschool:${cls.id}` };
+    if (!ev.exists) {
+      tx.set(ref, {
+        orgId: church.id, date: today, type: 'service', name: s.name.slice(0, 120), activity: null, headcounts: { children }, notes: '',
+        serviceKind: isOtherServiceName(church.otherServices, s.name) ? 'other' : null,
+        deletedAt: null, deletedBy: null, createdAt: FieldValue.serverTimestamp(), createdBy: `sundayschool:${cls.id}`, ...stamps,
+      });
+    } else tx.update(ref, { 'headcounts.children': children, ...stamps });
+    tx.set(cref, { eventId: s.id, date: today, name: s.name, classes: { [cls.id]: classes[cls.id] } }, { merge: true });
+    return next;
+  });
+  return { count, service: s.name };
+}
+
 async function emailAndy(church: Church, eventId: string, name: string, date: string) {
   const mail = circleMailer('church_campus');
   const to = contactEmail('Andrew Guya');
@@ -106,6 +144,42 @@ export const serviceCounters = onCall({ invoker: 'public', memory: '512MiB', tim
   const church = await loadChurch(orgId);
   const today = localDateKey(new Date(), church.tz);
 
+  /* ---------- Sunday school (Andy, 2026-11-23): the classes, and each teacher counting their class ---------- */
+  if (['ssInfo', 'ssClasses', 'classCount'].includes(action)) {
+    const caller = await requireCaller(request, undefined, { reviewerOk: action === 'ssInfo' });
+    const me = caller.profile as typeof caller.profile & { ssClassId?: string; ssClassName?: string; ssOrgId?: string };
+    if (!canAccessOrg(me, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this church.');
+    const leads = circleReader(me, orgId, 'sunday_school');
+    const teacher = me.roleId === SS_TEACHER_ROLE_ID;
+    let classes = await loadSsClasses(orgId);
+    if (action === 'ssClasses') {
+      if (!leads) throw new HttpsError('permission-denied', 'Only Dorothy, Andy and Doreen change the classes.');
+      const next = cleanClasses(data.classes);
+      classes = next;
+      await ssSettingsRef(orgId).set({ classes: next, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid }, { merge: true });
+      await writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: 'update', path: ssSettingsRef(orgId).path, collection: 'sundaySchool', docId: 'settings', orgId, changedFields: ['classes'] });
+    }
+    const mine = teacher ? classes.find((c) => c.id === me.ssClassId) ?? null : null;
+    if (action === 'classCount') {
+      const id = leads && typeof data.classId === 'string' ? data.classId : mine?.id;
+      const cls = classes.find((c) => c.id === id);
+      if (!cls) throw new HttpsError('failed-precondition', teacher ? 'Your class is not on the list any more. Please ask Dorothy.' : 'Please pick the class.');
+      const add = Math.floor(Number(data.add));
+      const change = data.set !== undefined ? { set: cleanCount(data.set) } : add >= -500 && add <= 500 && add !== 0 ? { add } : null;
+      if (!change) throw new HttpsError('invalid-argument', 'Please tap + or type the number.');
+      await setClassCount(church, cls, me.displayName || me.email, change);
+    }
+    if (!leads && !teacher) throw new HttpsError('permission-denied', 'The Sunday school page is for its teachers, Dorothy, Andy and Doreen.');
+    const services = await todaysServices(church, today);
+    const s = services[0];
+    const counts = s ? (((await countRef(orgId, s.id).get()).get('classes') ?? {}) as ClassCounts) : {};
+    return {
+      classes, mine, leads, today, service: s?.name ?? '',
+      counts: leads ? counts : mine && counts[mine.id] ? { [mine.id]: counts[mine.id] } : {},
+      total: leads ? classesTotal(counts) : null,
+    };
+  }
+
   /* ---------- The leaders: who counts what (Andy and those with rota.manage) ---------- */
   if (['jobs', 'saveJob', 'newLink', 'switch'].includes(action)) {
     const caller = await requireCaller(request);
@@ -135,6 +209,8 @@ export const serviceCounters = onCall({ invoker: 'public', memory: '512MiB', tim
         return { job: k, person: j?.person ?? '', phone: j?.phone ?? '', active: j ? j.active : false, link: j?.token ? linkOf(orgId, j.token) : '' };
       }),
       church: church.name,
+      // Once Sunday school has classes, Children comes from the teachers (1A).
+      childrenFromClasses: (await loadSsClasses(orgId)).length > 0,
     };
   }
 
@@ -156,6 +232,9 @@ export const serviceCounters = onCall({ invoker: 'public', memory: '512MiB', tim
     const add = Math.floor(Number(data.add));
     const set = data.set !== undefined ? cleanCount(data.set) : null;
     if (action === 'count') {
+      if (job.job === 'children' && (await loadSsClasses(orgId)).length) {
+        throw new HttpsError('failed-precondition', 'Children are now counted by the Sunday school teachers, class by class. Thank you!');
+      }
       if (set === null && !(add >= 1 && add <= 500)) throw new HttpsError('invalid-argument', 'Please tap + or type the number.');
       await db.runTransaction(async (tx) => {
         const ev = await tx.get(ref);

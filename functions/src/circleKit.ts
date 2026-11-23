@@ -28,7 +28,7 @@ export interface CircleMailer { transport: Transporter; from: string; name: stri
 export function circleMailer(type: CircleType): CircleMailer | null {
   const lh = letterheadFor({ type, name: '' });
   const test = process.env.PETTY_MAIL_TEST_DIR;
-  const secret = type === 'college' ? PETTY_EMAIL_APP_PASSWORD : type === 'church_campus' ? CHURCH_EMAIL_APP_PASSWORD : HOPE_EMAIL_APP_PASSWORD;
+  const secret = type === 'college' ? PETTY_EMAIL_APP_PASSWORD : (type === 'church_campus' || type === 'sunday_school') ? CHURCH_EMAIL_APP_PASSWORD : HOPE_EMAIL_APP_PASSWORD;
   let pass = 'test';
   if (!test) { try { pass = secret.value().replace(/\s+/g, ''); } catch { pass = ''; } }
   if (!lh.email || !pass) return null;
@@ -57,7 +57,8 @@ export async function circleContacts(type: CircleType, orgId: string): Promise<C
   if (type === 'college') return [...contactsFor('college').map((c) => ({ name: c.name, email: c.email, phone: c.phone })), FLAVIER];
   const base = contactsFor('church_campus').filter((c) => ['andrewguya', 'doreenmayaka'].includes(plainName(c.name))).map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
   const users = (await db.collection('users').where('active', '==', true).get()).docs.map((d) => d.data() as UserProfile & { phone?: string });
-  const leaders = users.filter((u) => !u.allOrgs && isCircleLead(u, orgId, type) && u.displayName);
+  // The Sunday school leader is found by name, whatever places her account reaches (Andy, 2026-11-23, 3A).
+  const leaders = users.filter((u) => (type === 'sunday_school' || !u.allOrgs) && isCircleLead(u, orgId, type) && u.displayName);
   const have = new Set(base.map((c) => plainName(c.name)));
   for (const u of leaders) {
     if (have.has(plainName(u.displayName))) continue;
@@ -72,7 +73,7 @@ export async function circleLeadEmails(type: CircleType, orgId: string): Promise
   const contacts = await circleContacts(type, orgId);
   const emailOf = (name: string, fallback: string) => contacts.find((c) => plainName(c.name) === plainName(name))?.email || fallback;
   const users = (await db.collection('users').where('active', '==', true).get()).docs.map((d) => d.data() as UserProfile);
-  const to = [...new Set(users.filter((u) => !u.allOrgs && isCircleLead(u, orgId, type)).map((u) => emailOf(u.displayName, u.email)).filter((e) => EMAIL.test(e)))];
+  const to = [...new Set(users.filter((u) => (type === 'sunday_school' || !u.allOrgs) && isCircleLead(u, orgId, type)).map((u) => emailOf(u.displayName, u.email)).filter((e) => EMAIL.test(e)))];
   const cc = [...new Set(contacts.filter((c) => ['andrewguya', 'doreenmayaka'].includes(plainName(c.name))).map((c) => c.email).filter((e) => EMAIL.test(e) && !to.includes(e)))];
   return { to: to.length ? to : cc, cc: to.length ? cc : [] };
 }

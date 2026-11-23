@@ -163,7 +163,7 @@ const REVIEWER_SEES: Permission[] = ['people.read', 'people.write', 'attendance.
   'payroll.manage', 'payroll.approve', 'exams.mark', 'exams.manage', 'school.manage', 'fees.balances'];
 export const isReviewer = (profile: { roleId?: string } | null | undefined) => profile?.roleId === REVIEWER_ROLE_ID;
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'teacher' | 'reviewer', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'teacher' | 'ssteacher' | 'reviewer', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -198,6 +198,9 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   // A Hope class teacher (Andy, 2026-11-22, 1A-10A): marks their own class's register (Jasper, Rubies, Sapphire,
   // Emerald or Topaz) on the day, sees every child's birthday, and writes in the Teachers' room. Nothing else.
   teacher: { name: 'Class teacher', permissions: ['people.read', 'attendance.write'] },
+  // A Freedom Church Sunday school teacher (Andy, 2026-11-23, 9A): counts their own class and writes in the Sunday
+  // school room. Their class is on their account (ssClassId); everything goes through the server, so no permissions.
+  ssteacher: { name: 'Sunday school teacher', permissions: [] },
   reviewer: { name: 'Reviewer', permissions: REVIEWER_SEES },
 };
 
@@ -205,6 +208,7 @@ export const USHER_ROLE_ID = 'usher';
 export const FINANCE_ROLE_ID = 'finance';
 export const HELPER_ROLE_ID = 'helper';
 export const TEACHER_ROLE_ID = 'teacher';
+export const SS_TEACHER_ROLE = 'ssteacher';
 /** A Hope helper or a Hope class teacher: both see only the few Hope pages that are theirs. */
 export const isHopeHelperRole = (roleId: string | undefined | null) => roleId === HELPER_ROLE_ID || roleId === TEACHER_ROLE_ID;
 

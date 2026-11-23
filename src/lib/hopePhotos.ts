@@ -8,8 +8,15 @@ import {
 export type StoredPhotoReport = PhotoReport & { id: string };
 export type StoredStoryMessage = StoryMessage & { id: string };
 type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'board' | 'email' | 'people' | 'messages' | 'uploadPart' | 'uploadDone' | 'say' | 'edit' | 'unsay' | 'decision' | 'package' | 'faces' | 'setFace' | 'children' | 'removeFile' | 'restoreFile' | 'status' | 'followUp' | 'approve';
+/**
+ * The Sunday school room (Andy, 2026-11-23, 4A) uses the same conversations with room 'sundayschool'. The room page
+ * sets it while it shows, so every call from the window (lists, files, replies) goes to that room.
+ */
+let room: 'sundayschool' | null = null;
+export const setPhotoRoom = (r: 'sundayschool' | null) => { room = r; };
+const withRoom = <T extends Record<string, unknown>>(data: T) => (room ? { ...data, room } : data);
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: Action }) =>
-  httpsCallable<typeof data, R>(functions, 'hopePhotoReports', { timeout: 120_000 })(data).then((r) => r.data);
+  httpsCallable<typeof data, R>(functions, 'hopePhotoReports', { timeout: 120_000 })(withRoom(data)).then((r) => r.data);
 
 export interface PhotoList { reports: StoredPhotoReport[]; deleted: StoredPhotoReport[]; seesAll: boolean; reviews?: boolean; deletes: boolean; sends: boolean }
 export const listPhotoReports = (orgId: string, reportId?: string) => call<PhotoList>({ orgId, action: 'list', ...(reportId ? { reportId } : {}) });
@@ -59,7 +66,7 @@ export async function shrinkForUpload(f: File): Promise<Blob> {
   return f;
 }
 
-export interface NewPhotoReport { kind: PhotoReportKind; title: string; day: string; text: string; reportId?: string | null; incident?: IncidentDetails | null; childIds?: string[] }
+export interface NewPhotoReport { kind: PhotoReportKind; title: string; day: string; text: string; reportId?: string | null; incident?: IncidentDetails | null; childIds?: string[]; classId?: string; classReport?: { present: number; lesson: string; win: string; need: string } }
 
 /** Photos, videos and documents for a conversation (3A): JPG, PNG, HEIC, WebP, MP4, MOV, PDF, Word, Excel, PowerPoint. */
 export const isVideoFile = (f: File) => f.type.startsWith('video/') || /\.(mp4|m4v|mov|webm|3gp)$/i.test(f.name);
@@ -86,7 +93,7 @@ async function uploadStoryFile(orgId: string, id: string, f: File, onPart?: (fra
 
 /** The same upload for the photo conversations and the conversations about a child (v197). */
 export async function uploadInParts(fn: 'hopePhotoReports' | 'hopeChats', orgId: string, id: string, f: File, onPart?: (frac: number) => void): Promise<PhotoFile> {
-  const call = <R,>(data: Record<string, unknown>) => httpsCallable<typeof data, R>(functions, fn, { timeout: 120_000 })(data).then((r) => r.data);
+  const call = <R,>(data: Record<string, unknown>) => httpsCallable<typeof data, R>(functions, fn, { timeout: 120_000 })(fn === 'hopePhotoReports' ? withRoom(data) : data).then((r) => r.data);
   const blob = await prepareStoryFile(f);
   const parts = Math.max(1, Math.ceil(blob.size / STORY_PART_BYTES));
   let upload: string | undefined;

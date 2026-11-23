@@ -21,6 +21,8 @@ export function roleRedirect(profile: RoleProfile | null | undefined, path: stri
   if (profile.roleId === LIBRARIAN_ROLE_ID) return path === '/' || /^\/(library|school\/timetable|settings|manual|calendar)(\/|$)/.test(path) ? null : '/';
   // A class teacher (Andy, 2026-11-22, 10A): Today, their register, the birthdays and the Teachers' room.
   if (profile.roleId === TEACHER_ROLE_ID) return /^\/($|hope\/register|hope\/birthdays|hope\/photos|hope\/more|settings|manual|help)/.test(path) ? null : '/';
+  // A Sunday school teacher (Andy, 2026-11-23, 9A): the Sunday school page (their class count and the room).
+  if (profile.roleId === 'ssteacher') return /^\/(sunday-school|settings|manual|help)(\/|$)/.test(path) ? null : '/sunday-school';
   if (profile.roleId === HELPER_ROLE_ID) return /^\/($|hope\/register|hope\/gate|hope\/clubs|hope\/photos|hope\/more|settings|manual|calendar|help)/.test(path) ? null : '/';
   return null;
 }

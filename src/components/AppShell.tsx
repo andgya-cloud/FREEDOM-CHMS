@@ -179,7 +179,20 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   ) : null;
-  const tabs = churchTabs ?? hopeTabs ?? (
+  // A Sunday school teacher's menu (Andy, 2026-11-23): Sunday school and their own settings.
+  const ssTabs = profile?.roleId === 'ssteacher' ? (
+    <nav className="tabbar" aria-label="Main">
+      <NavLink to="/sunday-school" className="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0 0 .01M6 21v-6a6 6 0 0 1 12 0v6M9 21v-4h6v4" /></svg>
+        <TabLabel full="Sunday school" short="Class" />
+      </NavLink>
+      <NavLink to="/settings" className="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z" /></svg>
+        Settings
+      </NavLink>
+    </nav>
+  ) : null;
+  const tabs = ssTabs ?? churchTabs ?? hopeTabs ?? (
     <nav className={`tabbar${phoneMore ? ' has-more' : ''}${moreOpen ? ' more-open' : ''}`} aria-label="Main">
       {!full && current?.type === 'college' && (
         <NavLink to="/" end className="tab"><AdiaIcon name="today" />Today</NavLink>

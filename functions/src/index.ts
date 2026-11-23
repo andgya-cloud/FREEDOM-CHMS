@@ -51,3 +51,4 @@ export { teacherRegisterReminder } from './hopeTeachers.js';
 export { serviceHosts, serviceHostReminders, serviceHostSummary } from './serviceHosts.js';
 export { hopeSponsor } from './hopeSponsor.js';
 export { serviceCounters } from './serviceCounters.js';
+export { sundaySchoolSummary } from './sundaySchool.js';

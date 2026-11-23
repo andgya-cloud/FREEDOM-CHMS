@@ -30,6 +30,9 @@ export interface Profile {
   commonRosters?: string[];
   /** A Hope class volunteer's classes (stone ids, src hopeClasses.ts): they see only these on the Registers page. */
   hopeClassIds?: string[];
+  /** A Sunday school teacher's class (Andy, 2026-11-23, 9A). */
+  ssClassId?: string;
+  ssClassName?: string;
   /** The ADIA departments (programme ids) whose inventory they count (Andy, 2026-10-29). */
   inventoryCourseIds?: string[];
   lastSignInAt?: Timestamp;
