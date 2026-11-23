@@ -362,6 +362,11 @@ service cloud.firestore {
         allow read: if canAccessOrg(orgId);
         allow write: if false;
       }
+      // The Sunday school timetable (Andy, 2026-11-24): every teacher reads it; only the server writes (Dorothy, Andy, Doreen).
+      match /ssTimetable/{date} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
       // The Sunday school room's reports, reached only through hopePhotoReports with room 'sundayschool'.
       match /ssReports/{id} {
         allow read, write: if false;

@@ -9,7 +9,8 @@ import { cleanCount, eventIdFor, isOtherServiceName, isSundayService, type Headc
 import { addDays, occurrences, type CalendarEvent } from './shared/calendar.js';
 import { localDateKey, DEFAULT_TIME_ZONE } from './shared/datetime.js';
 import { poweredByHtml } from './shared/poweredBy.js';
-import { circleReader, SS_TEACHER_ROLE_ID } from './shared/circles.js';
+import { circleReader, ssEditor, SS_TEACHER_ROLE_ID } from './shared/circles.js';
+import { SS_DRIVE_FOLDER } from './shared/ssTimetable.js';
 import { classesTotal, classHeadcounts, cleanClasses, DEFAULT_SS_CLASSES, isTeensClass, type ClassCounts, type SsClass } from './shared/sundaySchool.js';
 import {
   allFinished, cleanPerson, COUNTER_INFO, COUNTER_JOBS, counterServices, countLines, isCounterJob,
@@ -177,8 +178,9 @@ export const serviceCounters = onCall({ invoker: 'public', memory: '512MiB', tim
     const services = await todaysServices(church, today);
     const s = services[0];
     const counts = s ? (((await countRef(orgId, s.id).get()).get('classes') ?? {}) as ClassCounts) : {};
+    const driveFolder = String((await ssSettingsRef(orgId).get()).get('driveFolder') || SS_DRIVE_FOLDER);
     return {
-      classes, mine, leads, today, service: s?.name ?? '',
+      classes, mine, leads, today, service: s?.name ?? '', edits: ssEditor(me, orgId), driveFolder,
       counts: leads ? counts : mine && counts[mine.id] ? { [mine.id]: counts[mine.id] } : {},
       total: leads ? classesTotal(counts) : null,
     };

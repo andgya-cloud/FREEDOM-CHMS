@@ -35,3 +35,40 @@
 .ctr-jobbuttons { display: flex; flex-wrap: wrap; gap: 6px; }
 .ctr-wa { background: #25d366; color: #fff; border-color: transparent; }
 .ctr-off { opacity: 0.6; }
+/* Sunday school teaching timetable (Andy, 2026-11-24) */
+.tt-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tt-head h2 { margin: 0; }
+.tt-this .tt-theme { font-size: 1.35rem; font-weight: 800; color: #1f4b33; margin: 8px 0 4px; }
+.tt-tag, .tt-tagtxt { color: #a8741a; }
+.tt-tag { margin: 6px 0 0; font-weight: 700; }
+.tt-off { background: #fff4e5; border-radius: 12px; padding: 10px 12px; font-weight: 700; }
+.tt-special { margin: 8px 0 0; background: #fbf6e8; border-left: 4px solid #c99a3c; border-radius: 8px; padding: 8px 10px; }
+.tt-lesson { border-top: 1px solid var(--border); padding: 8px 0; }
+.tt-lesson summary { cursor: pointer; list-style-position: inside; }
+.tt-dl { margin: 8px 0 0; display: grid; gap: 6px; }
+.tt-dl div { display: grid; grid-template-columns: 130px 1fr; gap: 8px; }
+.tt-dl dt { color: var(--muted); font-size: 0.85rem; }
+.tt-dl dd { margin: 0; }
+.tt-files { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.tt-tools { margin: 10px 0 4px; }
+.tt-tool, .tt-edit { background: #f4f8f4; border-radius: 14px; padding: 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; }
+.tt-month h3 { margin: 18px 0 6px; font-size: 0.95rem; color: #2f6e4a; text-transform: uppercase; letter-spacing: 0.04em; }
+.tt-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tt-row { border-top: 1px solid var(--border); }
+.tt-row.tt-past { opacity: 0.6; }
+.tt-row.tt-next { background: #eef7f1; border-radius: 10px; }
+.tt-row-special .tt-rowbtn { background: #fbf6e8; }
+.tt-rowbtn { all: unset; box-sizing: border-box; width: 100%; display: grid; grid-template-columns: 96px 1fr; gap: 10px; padding: 10px 6px; cursor: pointer; }
+.tt-rowbtn:focus-visible { outline: 2px solid #2e8b57; border-radius: 8px; }
+.tt-date { font-weight: 700; color: #1f4b33; }
+.tt-what { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.tt-offtxt { color: #8a5a00; }
+.tt-open { padding: 0 6px 12px 6px; display: flex; flex-direction: column; gap: 6px; }
+.tt-class { border: 1px solid var(--border); border-radius: 12px; padding: 10px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
+.tt-class legend { font-weight: 700; padding: 0 6px; }
+.tt-themebox input { font-size: 1.15rem; font-weight: 700; }
+.tt-msg { white-space: pre-wrap; background: #f4f8f4; border-radius: 12px; padding: 10px; font: inherit; font-size: 0.9rem; margin: 6px 0; }
+@media (max-width: 560px) {
+  .tt-rowbtn { grid-template-columns: 1fr; gap: 2px; }
+  .tt-dl div { grid-template-columns: 1fr; gap: 0; }
+}

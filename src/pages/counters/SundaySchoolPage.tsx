@@ -11,9 +11,10 @@ import { ssClassLabel, ssClassWithLeader, type ClassCounts, type SsClass } from 
 import { SceneVideo } from '../../components/SceneVideo';
 import { firstNameOf, timeGreeting } from '../../components/Greeting';
 import { PlusMinus, ResetButton } from './CounterPage';
+import { SsRemindersCard, ThisSunday, Timetable, useSsDays } from './SsTimetable';
 import './counters.css';
 
-type Info = { classes: SsClass[]; mine: SsClass | null; leads: boolean; today: string; service: string; counts: ClassCounts; total: number | null };
+type Info = { classes: SsClass[]; mine: SsClass | null; leads: boolean; edits: boolean; driveFolder: string; today: string; service: string; counts: ClassCounts; total: number | null };
 const call = (data: Record<string, unknown>) => httpsCallable<typeof data, Info>(functions, 'serviceCounters', { timeout: 60_000 })(data).then((r) => r.data);
 
 /**
@@ -42,7 +43,7 @@ export function SundaySchoolPage() {
       <SsWelcome org={church} info={info} name={profile?.displayName} />
       {info.mine && <ClassCounter orgId={church.id} info={info} onSaved={setInfo} />}
       {!info.mine && !info.leads && profile?.roleId === 'ssteacher' && <p className="notice notice-warn">Your class is not on the list. Please ask Dorothy to add it.</p>}
-      {info.leads && <TodayClasses info={info} />}
+      <TimetableParts org={church} info={info} />
       {info.leads && <ClassesEditor orgId={church.id} classes={info.classes} onSaved={(i) => { setInfo(i); toast.show('Classes saved.'); }} />}
       <SundaySchoolRoom org={church} ss={{ classes: info.classes, mine: info.mine, leads: info.leads, myCount: info.mine ? info.counts[info.mine.id]?.count ?? 0 : 0 }} />
     </div>
@@ -124,6 +125,20 @@ function ClassCounter({ orgId, info, onSaved }: { orgId: string; info: Info; onS
       {shown > 0 && <ResetButton onReset={() => { clearTimeout(timer.current); pending.current = 0; setAdds(0); void send({ set: 0 }); }} />}
       <p className="ctr-status muted">{busy || adds ? 'Saving…' : 'Saved ✓ It adds into the service numbers.'}</p>
     </section>
+  );
+}
+
+/** This Sunday, today's classes for Dorothy, the WhatsApp reminders and the year's timetable (Andy, 2026-11-24). */
+function TimetableParts({ org, info }: { org: { id: string; name: string; type?: string }; info: Info }) {
+  const days = useSsDays(org.id);
+  const props = { org, classes: info.classes, mine: info.mine, edits: info.edits, today: info.today, driveFolder: info.driveFolder };
+  return (
+    <>
+      {days && <ThisSunday {...props} days={days} />}
+      {info.leads && info.service && <TodayClasses info={info} />}
+      {info.edits && <SsRemindersCard orgId={org.id} today={info.today} />}
+      {days ? <Timetable {...props} days={days} /> : <p className="muted">Loading the timetable…</p>}
+    </>
   );
 }
 

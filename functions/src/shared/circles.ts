@@ -182,6 +182,8 @@ export function circleRole(p: Profile, orgId: string, type: CircleType): string 
 export type CircleKind = 'win' | 'activity' | 'exams' | 'care' | 'incident' | 'other' | 'ssreport' | RequestKind;
 /** "Sunday school teacher · Juniors" (Andy, 2026-11-23, 9A). */
 export const ssTeacherLabel = (className: string | undefined) => (className === 'Head of Sunday school' ? className : `Sunday school teacher${className ? ` · ${className}` : ''}`);
+/** Changes the Sunday school timetable: only Dorothy, Andy and Doreen (Andy, 2026-11-24). */
+export const ssEditor = (p: Profile, orgId: string) => canAccessOrg(p, orgId) && (isBoardName('sunday_school', p?.displayName) || isSsHead(p));
 /** The head of Sunday school: a Sunday school account given "Head of Sunday school (all classes)" (Andy, 2026-11-23). */
 export const isSsHead = (p: Profile) => p?.roleId === SS_TEACHER_ROLE_ID && (p as { ssClassId?: string }).ssClassId === 'all';
 /**
