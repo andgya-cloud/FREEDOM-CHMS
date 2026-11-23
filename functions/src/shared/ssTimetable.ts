@@ -26,8 +26,10 @@ export interface SsDay {
   noClass: boolean;
   theme: string;
   series: string;
-  /** What the special day is about: times, place, who comes. */
+  /** What the day is about: place, who comes. */
   note: string;
+  /** "9 AM to 1 PM" (Andy, 2026-11-24: events happen on any day, at their own time). */
+  time: string;
   link: string;
   lessons: Record<string, SsLesson>;
   files: SsFile[];
@@ -87,12 +89,12 @@ export function cleanDay(v: unknown, classIds: string[]): Omit<SsDay, 'files'> {
   }
   return {
     date, kind, title: clean(o.title, 80), noClass: kind === 'sunday' && o.noClass === true, theme: clean(o.theme, 120), series: clean(o.series, 80),
-    note: clean(o.note, 600), link: cleanLink(o.link), lessons,
+    note: clean(o.note, 600), time: clean(o.time, 40), link: cleanLink(o.link), lessons,
   };
 }
 
 /** Has anything been planned for this day? */
-export const dayPlanned = (d: Partial<SsDay> | undefined) => !!d && !!(d.title || d.noClass || d.theme || d.series || d.note || d.link || Object.keys(d.lessons ?? {}).length || d.files?.length);
+export const dayPlanned = (d: Partial<SsDay> | undefined) => !!d && !!(d.title || d.noClass || d.theme || d.series || d.note || d.time || d.link || Object.keys(d.lessons ?? {}).length || d.files?.length);
 
 /** Every Sunday from `from` to `to`, both included. */
 export function sundaysBetween(from: string, to: string): string[] {

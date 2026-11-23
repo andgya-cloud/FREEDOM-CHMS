@@ -12,7 +12,7 @@ import type { SsClass } from '../../functions/src/shared/sundaySchool';
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: string }) =>
   httpsCallable<typeof data, R>(functions, 'ssTimetable', { timeout: 180_000 })(data).then((r) => r.data);
 
-export const saveSsDay = (orgId: string, day: Partial<SsDay>) => call<{ date: string; removed?: boolean }>({ orgId, action: 'save', day });
+export const saveSsDay = (orgId: string, day: Partial<SsDay>, moveFrom?: string) => call<{ date: string; removed?: boolean }>({ orgId, action: 'save', day, ...(moveFrom ? { moveFrom } : {}) });
 export const removeSsDay = (orgId: string, date: string) => call({ orgId, action: 'remove', date });
 export const fillSsSeries = (orgId: string, start: string, series: string, weeks: number) => call<{ dates: string[] }>({ orgId, action: 'fill', start, series, weeks });
 export const copySsYear = (orgId: string, from: number) => call<{ copied: number }>({ orgId, action: 'copyYear', from });
@@ -73,7 +73,7 @@ type Row = { date: string; what: string; theme: string; lessons: string[] };
 function rowsOf(year: number, days: SsDay[], classes: SsClass[]): Row[] {
   return yearRows(year, days).map(({ date, day }) => ({
     date,
-    what: day?.kind === 'special' ? `★ ${day.title}` : day?.noClass ? `No Sunday school${day.title ? ` · ${day.title}` : ''}` : day?.title ?? '',
+    what: day?.kind === 'special' ? `★ ${day.title}${day.time ? ` · ${day.time}` : ''}` : day?.noClass ? `No Sunday school${day.title ? ` · ${day.title}` : ''}` : day?.title ?? '',
     theme: [day?.theme, day?.series && !day.theme?.startsWith(day.series) ? `(${day.series})` : ''].filter(Boolean).join(' '),
     lessons: classes.map((c) => {
       const l = day?.lessons[c.id];

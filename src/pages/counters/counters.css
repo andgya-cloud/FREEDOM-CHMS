@@ -72,3 +72,15 @@
   .tt-rowbtn { grid-template-columns: 1fr; gap: 2px; }
   .tt-dl div { grid-template-columns: 1fr; gap: 0; }
 }
+/* The calendar to pick any day (Andy, 2026-11-24) */
+.tt-cal { background: #fff; border: 1px solid var(--border); border-radius: 14px; padding: 10px; max-width: 360px; }
+.tt-calhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.tt-calgrid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; text-align: center; }
+.tt-calwd { font-size: 0.75rem; color: var(--muted); font-weight: 700; }
+.tt-calday { position: relative; border: 0; border-radius: 10px; background: #f4f8f4; padding: 9px 0; font: inherit; cursor: pointer; }
+.tt-calday:disabled { opacity: 0.3; cursor: default; }
+.tt-calsun { color: #1f6b43; font-weight: 800; }
+.tt-calmark::after { content: ''; position: absolute; left: 50%; bottom: 3px; width: 5px; height: 5px; margin-left: -2.5px; border-radius: 50%; background: #c99a3c; }
+.tt-calsel { background: #1f6b43; color: #fff; }
+.tt-fold summary { cursor: pointer; font-weight: 700; margin: 4px 0; }
+.tt-fold[open] { display: flex; flex-direction: column; gap: 8px; }

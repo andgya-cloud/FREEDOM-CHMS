@@ -12,7 +12,7 @@ import { phoneOfLogin } from './shared/phone.js';
 import { loadChurch, loadSsClasses } from './serviceCounters.js';
 import type { SsClass } from './shared/sundaySchool.js';
 import {
-  cleanDay, cleanLink, dayPlanned, groupReminderText, isDateKey, isSunday, nextYearDate, reminderText, seriesDates, ssFileType, sundayFrom,
+  cleanDay, cleanLink, dayPlanned, groupReminderText, isDateKey, isSunday, nextYearDate, reminderText, seriesDates, ssDayLabel, ssFileType, sundayFrom,
   SS_DRIVE_FOLDER, SS_FIRST_DAY, SS_MAX_FILES, type SsDay, type SsFile,
 } from './shared/ssTimetable.js';
 
@@ -113,8 +113,23 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
   if (action === 'save') {
     const day = cleanDay(data.day, ids);
     if (!day.date || day.date < SS_FIRST_DAY) throw new HttpsError('invalid-argument', 'Pick a date from December 2026 on.');
-    if (day.kind === 'special' && !day.title) throw new HttpsError('invalid-argument', 'Give the special day a name, e.g. Vacation Bible School.');
+    if (day.kind === 'special' && !day.title) throw new HttpsError('invalid-argument', 'Give the event a name, e.g. Vacation Bible School or Midweek class.');
     const ref = dayRef(orgId, day.date);
+    // A day moved to another date on the calendar (Andy, 2026-11-24): its files go with it.
+    const moveFrom = isDateKey(data.moveFrom) && data.moveFrom !== day.date ? data.moveFrom : '';
+    if (moveFrom) {
+      const old = await loadDay(orgId, moveFrom);
+      if (old) {
+        if (await loadDay(orgId, day.date)) throw new HttpsError('already-exists', `${ssDayLabel(day.date)} already has something on the timetable. Pick another date, or change that day.`);
+        const files = old.files ?? [];
+        await Promise.all(files.map((f) => bucket().file(filePath(orgId, moveFrom, f.id)).copy(bucket().file(filePath(orgId, day.date, f.id)))));
+        await ref.set({ ...day, files, orgId, ...stamp, createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid });
+        await dayRef(orgId, moveFrom).delete();
+        await Promise.all(files.map((f) => bucket().file(filePath(orgId, moveFrom, f.id)).delete({ ignoreNotFound: true })));
+        await audit('move', day.date, `from ${moveFrom}`);
+        return { date: day.date };
+      }
+    }
     const before = await loadDay(orgId, day.date);
     if (!dayPlanned({ ...day, files: before?.files ?? [] })) {
       if (before) await ref.delete();
@@ -152,7 +167,7 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
       const before = existing.get(date);
       const theme = before?.theme || `${series}: week ${i + 1}`;
       batch.set(dayRef(orgId, date), {
-        date, kind: 'sunday', title: before?.title ?? '', noClass: false, theme, series, note: before?.note ?? '', link: before?.link ?? '',
+        date, kind: 'sunday', title: before?.title ?? '', noClass: false, theme, series, note: before?.note ?? '', time: before?.time ?? '', link: before?.link ?? '',
         lessons: before?.lessons ?? {}, files: before?.files ?? [], orgId, ...stamp, ...(before ? {} : { createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid }),
       });
     });
