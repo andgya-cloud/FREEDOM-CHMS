@@ -1,6 +1,6 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
+import { formatPhone, isPhoneLogin, normalizePhone, phoneLoginEmail, phoneOfLogin } from '../../../functions/src/shared/phone';
 import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions } from '../../firebase';
@@ -15,7 +15,7 @@ import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
-import { cleanClasses, ssClassLabel, type SsClass } from '../../../functions/src/shared/sundaySchool';
+import { cleanClasses, DEFAULT_SS_CLASSES, ssClassWithLeader, type SsClass } from '../../../functions/src/shared/sundaySchool';
 import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
@@ -73,7 +73,7 @@ export function UserFormPage() {
   const churchIds = organizations.filter((o) => o.type === 'church_campus').map((o) => o.id).join(',');
   useEffect(() => {
     if (!churchIds) return;
-    Promise.all(churchIds.split(',').map((id) => getDoc(doc(db, `organizations/${id}/sundaySchool/settings`)).then((d) => cleanClasses(d.get('classes'))).catch(() => [] as SsClass[])))
+    Promise.all(churchIds.split(',').map((id) => getDoc(doc(db, `organizations/${id}/sundaySchool/settings`)).then((d) => (d.exists() && Array.isArray(d.get('classes')) ? cleanClasses(d.get('classes')) : DEFAULT_SS_CLASSES)).catch(() => DEFAULT_SS_CLASSES)))
       .then((lists) => setSsClasses(lists.flat()));
   }, [churchIds]);
   const toast = useToast();
@@ -132,7 +132,7 @@ export function UserFormPage() {
     e.preventDefault();
     setError('');
     if (form.displayName.trim().length < 2) return setError('Enter the person’s name.');
-    if (isNew && !/^\S+@\S+\.\S+$/.test(form.email)) return setError('Enter a valid email.');
+    if (isNew && !/^\S+@\S+\.\S+$/.test(form.email) && !normalizePhone(form.email)) return setError('Enter a valid email, or their WhatsApp number, e.g. 0712 345 678.');
     if (isNew && passwordProblems(form.password, form.email).length) return setError('The temporary password is not strong enough.');
     if (!role?.isOwner && !form.allOrgs && form.orgIds.length === 0) return setError('Choose at least one organization.');
     if (signatory && !form.pettyTitle) return setError('Choose the title printed under their signature.');
@@ -157,7 +157,16 @@ export function UserFormPage() {
           ...(form.roleId === 'ssteacher' ? { ssClass: form.ssClass } : {}),
         };
       if (isNew) {
-        await httpsCallable(functions, 'createUser')({ ...payload, email: form.email.trim(), password: form.password });
+        // No email? Their WhatsApp number becomes the sign-in (Andy, 2026-11-23); they sign in with the password alone.
+        const typed = form.email.trim();
+        const loginEmail = typed.includes('@') ? typed : phoneLoginEmail(typed || form.phone) ?? typed;
+        await httpsCallable(functions, 'createUser')({ ...payload, phone: form.phone.trim() || (typed.includes('@') ? '' : typed), email: loginEmail, password: form.password });
+        const wa = normalizePhone(form.phone.trim() || (typed.includes('@') ? '' : typed))?.replace(/\D/g, '');
+        if (wa && isPhoneLogin(loginEmail)) {
+          const first = form.displayName.trim().split(' ')[0];
+          const text = `Hello ${first}, welcome to Insight-IQ for Freedom Church.\nOpen ${location.origin} on your phone and type this password: ${form.password}\nYou will then choose your own password. Save the page to your home screen.`;
+          window.open(`https://wa.me/${wa}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+        }
         toast.show(`Account created. Give ${form.displayName.split(' ')[0]} the temporary password: ${form.password}`);
       } else {
         await httpsCallable(functions, 'updateUser')({ uid, ...payload });
@@ -221,8 +230,9 @@ export function UserFormPage() {
           <input value={form.displayName} onChange={(e) => set('displayName', e.target.value)} />
         </label>
         <label className="field">
-          <span>Email</span>
-          <input type="email" value={form.email} disabled={!isNew} onChange={(e) => set('email', e.target.value)} />
+          <span>Email or WhatsApp number</span>
+          <input type="text" inputMode="email" value={isPhoneLogin(form.email) ? `${formatPhone(phoneOfLogin(form.email))} (WhatsApp sign-in)` : form.email} disabled={!isNew} onChange={(e) => set('email', e.target.value)} />
+          {isNew && <small className="hint">No email? Type their WhatsApp number. They sign in with the password alone, and the password goes to them on WhatsApp.</small>}
         </label>
         {teamOnly ? (
           <p className="hint">Role: <strong>Staff</strong>. They can record people, attendance, programmes and follow-ups, and never see money.</p>
@@ -294,7 +304,7 @@ export function UserFormPage() {
             <span>Sunday school class</span>
             <select value={form.ssClass} onChange={(e) => set('ssClass', e.target.value)}>
               <option value="">Pick the class…</option>
-              {ssClasses.map((c) => <option key={c.id} value={c.id}>{ssClassLabel(c)}</option>)}
+              {ssClasses.map((c) => <option key={c.id} value={c.id}>{ssClassWithLeader(c)}</option>)}
             </select>
             <small className="hint">{ssClasses.length ? 'The teacher counts this class on Sunday and writes in the Sunday school room. Tick Freedom Church above.' : 'No classes yet: Dorothy adds them on the Sunday school page (More, then Sunday school).'}</small>
           </label>
