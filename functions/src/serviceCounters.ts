@@ -244,18 +244,20 @@ export const serviceCounters = onCall({ invoker: 'public', memory: '512MiB', tim
       if (job.job === 'teens' && ssClasses.some(isTeensClass)) {
         throw new HttpsError('failed-precondition', 'Teens are now counted by the Teens class leader. Thank you!');
       }
-      if (set === null && !(add >= 1 && add <= 500)) throw new HttpsError('invalid-argument', 'Please tap + or type the number.');
+      // + and − (Andy, 2026-11-24, 5A): a count never goes below 0; Reset sends set 0 (6A).
+      if (set === null && !(add >= -500 && add <= 500 && add !== 0)) throw new HttpsError('invalid-argument', 'Please tap + or − or type the number.');
       await db.runTransaction(async (tx) => {
         const ev = await tx.get(ref);
         if (ev.exists && ev.get('deletedAt') != null) throw new HttpsError('failed-precondition', 'This service was removed. Please ask the church office.');
         if (!ev.exists) {
           tx.set(ref, {
-            orgId, date: today, type: 'service', name: s.name.slice(0, 120), activity: null, headcounts: { [job.job]: set ?? add }, notes: '',
+            orgId, date: today, type: 'service', name: s.name.slice(0, 120), activity: null, headcounts: { [job.job]: set ?? Math.max(0, add) }, notes: '',
             serviceKind: isOtherServiceName(church.otherServices, s.name) ? 'other' : null,
             deletedAt: null, deletedBy: null, createdAt: FieldValue.serverTimestamp(), createdBy: by(job.job), ...stamps,
           });
         } else {
-          tx.update(ref, { [`headcounts.${job.job}`]: set ?? FieldValue.increment(add), ...stamps });
+          const now = Number((ev.get('headcounts') ?? {})[job.job]) || 0;
+          tx.update(ref, { [`headcounts.${job.job}`]: set ?? Math.max(0, now + add), ...stamps });
         }
         tx.set(countRef(orgId, s.id), { eventId: s.id, date: today, name: s.name, by: { [job.job]: { person: job.person, done: false } } }, { merge: true });
       });

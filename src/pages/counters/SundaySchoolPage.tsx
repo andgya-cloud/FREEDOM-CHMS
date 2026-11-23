@@ -8,6 +8,9 @@ import { friendlyError } from '../../lib/errors';
 import { SundaySchoolRoom } from '../hope/HopePhotosPage';
 import { ssTeacherLabel } from '../../../functions/src/shared/circles';
 import { ssClassLabel, ssClassWithLeader, type ClassCounts, type SsClass } from '../../../functions/src/shared/sundaySchool';
+import { SceneVideo } from '../../components/SceneVideo';
+import { firstNameOf, timeGreeting } from '../../components/Greeting';
+import { PlusMinus, ResetButton } from './CounterPage';
 import './counters.css';
 
 type Info = { classes: SsClass[]; mine: SsClass | null; leads: boolean; today: string; service: string; counts: ClassCounts; total: number | null };
@@ -36,16 +39,38 @@ export function SundaySchoolPage() {
 
   return (
     <div className="page narrow stack">
-      <div>
-        <h1>🧒 Sunday school</h1>
-        {info.mine && <p className="muted" style={{ margin: 0 }}>{ssTeacherLabel(info.mine.name)}</p>}
-      </div>
+      <SsWelcome org={church} info={info} name={profile?.displayName} />
       {info.mine && <ClassCounter orgId={church.id} info={info} onSaved={setInfo} />}
       {!info.mine && !info.leads && profile?.roleId === 'ssteacher' && <p className="notice notice-warn">Your class is not on the list. Please ask Dorothy to add it.</p>}
       {info.leads && <TodayClasses info={info} />}
       {info.leads && <ClassesEditor orgId={church.id} classes={info.classes} onSaved={(i) => { setInfo(i); toast.show('Classes saved.'); }} />}
       <SundaySchoolRoom org={church} ss={{ classes: info.classes, mine: info.mine, leads: info.leads, myCount: info.mine ? info.counts[info.mine.id]?.count ?? 0 : 0 }} />
     </div>
+  );
+}
+
+/**
+ * The welcome at the top, in the church's own look (Andy, 2026-11-24, 1A-4A): "Good morning, Christine", Freedom
+ * Church Sunday School, their class and one line for today, with the church's animated logo. Dorothy sees it as
+ * Head of Sunday school with today's total for all classes.
+ */
+function SsWelcome({ org, info, name }: { org: { timeZone?: string | null }; info: Info; name?: string | null }) {
+  const tz = org.timeZone || 'Africa/Nairobi';
+  const first = firstNameOf(name);
+  const who = info.mine ? `${ssClassLabel(info.mine)} class` : info.leads ? 'Head of Sunday school' : ssTeacherLabel(undefined);
+  const today = !info.service ? 'No service today. On Sunday, or on a special service day, you count here.'
+    : info.mine ? `${info.service}: tap + to count your class.`
+    : `${info.service}: ${info.total ?? 0} ${info.total === 1 ? 'child' : 'children'} counted so far in all classes.`;
+  return (
+    <section className="card lav-hero lav-hero-slim">
+      <div className="lav-hero-text">
+        <span className="lav-eyebrow"><i aria-hidden="true" />{new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: tz }).format(new Date())}</span>
+        <h1 className="lav-greet">{timeGreeting(tz)}{first ? `, ${first}` : ''}</h1>
+        <p className="lav-org"><em>Freedom Church Sunday School</em></p>
+        <p><b>🧒 {who}</b><br />{today}</p>
+      </div>
+      <div className="lav-scene lav-scene-slim"><SceneVideo name="church-scene" /></div>
+    </section>
   );
 }
 
@@ -65,15 +90,17 @@ function ClassCounter({ orgId, info, onSaved }: { orgId: string; info: Info; onS
     try { onSaved(await call({ orgId, action: 'classCount', ...body })); } catch (e) { toast.show(friendlyError(e)); } finally { setBusy(false); }
   }, [orgId, onSaved, toast]);
 
-  const plus = () => {
-    pending.current += 1;
+  const shown = Math.max(0, saved + adds);
+  const step = (d: number) => {
+    if (d < 0 && shown <= 0) return;
+    pending.current += d;
     setAdds(pending.current);
     if (navigator.vibrate) navigator.vibrate(15);
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       const n = pending.current;
       pending.current = 0;
-      void send({ add: n }).finally(() => setAdds(pending.current));
+      if (n) void send({ add: n }).finally(() => setAdds(pending.current));
     }, 600);
   };
 
@@ -82,10 +109,10 @@ function ClassCounter({ orgId, info, onSaved }: { orgId: string; info: Info; onS
     <section className="card ctr-card" style={{ margin: '0 auto', width: '100%' }}>
       <p className="muted" style={{ margin: 0 }}>{info.service}</p>
       <p className="ctr-job">🧒 {ssClassLabel(mine)}</p>
-      <div className="ctr-number" aria-live="polite">{saved + adds}</div>
-      <button type="button" className="ctr-plus" aria-label={`Add one child to ${mine.name}`} onClick={plus}>+</button>
+      <div className="ctr-number" aria-live="polite">{shown}</div>
+      <PlusMinus label={mine.name} onPlus={() => step(1)} onMinus={() => step(-1)} canMinus={shown > 0} />
       {typing === null ? (
-        <button type="button" className="btn" onClick={() => setTyping(String(saved + adds))}>Type the number</button>
+        <button type="button" className="btn" onClick={() => setTyping(String(shown))}>Type the number</button>
       ) : (
         <div className="ctr-type">
           <input type="number" inputMode="numeric" min={0} autoFocus value={typing} aria-label="Children in my class" onFocus={(e) => e.target.select()} onChange={(e) => setTyping(e.target.value)} />
@@ -93,6 +120,7 @@ function ClassCounter({ orgId, info, onSaved }: { orgId: string; info: Info; onS
           <button type="button" className="btn" onClick={() => setTyping(null)}>Cancel</button>
         </div>
       )}
+      {shown > 0 && <ResetButton onReset={() => { clearTimeout(timer.current); pending.current = 0; setAdds(0); void send({ set: 0 }); }} />}
       <p className="ctr-status muted">{busy || adds ? 'Saving…' : 'Saved ✓ It adds into the service numbers.'}</p>
     </section>
   );

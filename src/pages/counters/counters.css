@@ -9,6 +9,16 @@
 .ctr-plus:active { transform: scale(0.98); filter: brightness(1.1); }
 .ctr-plus:disabled { opacity: 0.5; }
 .ctr-row { display: flex; gap: 10px; }
+/* − beside the big + (Andy, 2026-11-24, 5A), and Reset to 0 asked on the page (6A) */
+.ctr-pm { display: flex; gap: 10px; align-items: stretch; }
+.ctr-pm .ctr-plus { flex: 1 1 auto; }
+.ctr-minus { flex: 0 0 26%; border: 2px solid #2e8b57; border-radius: 22px; background: #fff; color: #1f6b43; font-size: 3.4rem; font-weight: 800;
+  cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.ctr-minus:active { transform: scale(0.97); background: #eef7f1; }
+.ctr-minus:disabled { opacity: 0.35; cursor: default; }
+.ctr-reset { align-self: center; font-size: 0.9rem; }
+.ctr-ask { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: center; background: #fff4e5; border-radius: 12px; padding: 10px; }
+.ctr-ask span { flex: 1 1 100%; text-align: center; font-weight: 600; }
 .ctr-row > * { flex: 1 1 0; }
 .ctr-status { margin: 0; font-size: 0.9rem; min-height: 1.2em; }
 .ctr-status.ctr-wait { color: #8a5a00; }

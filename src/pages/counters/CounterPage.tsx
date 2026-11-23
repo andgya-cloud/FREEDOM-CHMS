@@ -53,7 +53,7 @@ export function CounterPage() {
   useEffect(() => { if (key) setPending(readPending(key)); setFinished(!!info?.services.find((s) => s.name === service)?.done); }, [key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const saved = info?.services.find((s) => s.name === service)?.count ?? 0;
-  const shown = (pending.set ?? saved) + pending.add;
+  const shown = Math.max(0, (pending.set ?? saved) + pending.add);
 
   // Send what is kept on the phone; on failure keep it and try again.
   const flush = useCallback(async () => {
@@ -62,11 +62,12 @@ export function CounterPage() {
     if (!p.add && p.set === null) { setWaiting(false); return; }
     sending.current = true;
     try {
-      const body = p.set !== null ? { set: p.set + p.add } : { add: Math.min(p.add, 500) };
+      const step = Math.max(-500, Math.min(p.add, 500));
+      const body = p.set !== null ? { set: Math.max(0, p.set + p.add) } : { add: step };
       const r = await call<{ count: number }>({ action: 'count', orgId, token, service, ...body });
-      const sent = p.set !== null ? p.add : Math.min(p.add, 500);
+      const sent = p.set !== null ? p.add : step;
       const now = readPending(key);
-      const left: Pending = { add: Math.max(0, now.add - sent), set: p.set !== null && now.set === p.set ? null : now.set };
+      const left: Pending = { add: now.add - sent, set: p.set !== null && now.set === p.set ? null : now.set };
       writePending(key, left);
       setPending(left);
       setInfo((i) => (i ? { ...i, services: i.services.map((s) => (s.name === service ? { ...s, count: r.count } : s)) } : i));
@@ -102,6 +103,13 @@ export function CounterPage() {
     if (navigator.vibrate) navigator.vibrate(15);
     change({ ...readPending(key), add: readPending(key).add + 1 });
   };
+  // − takes one away, never below 0 (Andy, 2026-11-24, 5A).
+  const minus = () => {
+    if (!key || shown <= 0) return;
+    if (navigator.vibrate) navigator.vibrate(15);
+    change({ ...readPending(key), add: readPending(key).add - 1 });
+  };
+  const reset = () => { if (key) change({ add: 0, set: 0 }); };
   const saveTyped = () => {
     if (typing === null || !key) return;
     change({ add: 0, set: cleanCount(typing) });
@@ -142,7 +150,7 @@ export function CounterPage() {
           <p className="ctr-job">{job.emoji} {job.label}</p>
           <p className="ctr-hint muted">{job.hint}</p>
           <div className="ctr-number" aria-live="polite">{shown}</div>
-          <button type="button" className="ctr-plus" aria-label={`Add one to ${job.label}`} onClick={plus}>+</button>
+          <PlusMinus label={job.label} onPlus={plus} onMinus={minus} canMinus={shown > 0} />
           {typing === null ? (
             <button type="button" className="btn" onClick={() => setTyping(String(shown))}>Type the number</button>
           ) : (
@@ -153,6 +161,7 @@ export function CounterPage() {
               <button type="button" className="btn" onClick={() => setTyping(null)}>Cancel</button>
             </div>
           )}
+          {shown > 0 && <ResetButton onReset={reset} />}
           <p className={`ctr-status${waiting ? ' ctr-wait' : ''}`} aria-live="polite">
             {waiting ? 'No internet just now. Your count is kept on this phone and goes as soon as it is back.'
               : pending.add || pending.set !== null ? 'Saving…' : 'Saved ✓'}
@@ -162,6 +171,29 @@ export function CounterPage() {
             : <button type="button" className="btn btn-primary" onClick={() => void finish()}>I've finished counting</button>}
         </>
       )}
+    </div>
+  );
+}
+
+/** The big + with a smaller − beside it (Andy, 2026-11-24, 5A). */
+export function PlusMinus({ label, onPlus, onMinus, canMinus }: { label: string; onPlus: () => void; onMinus: () => void; canMinus: boolean }) {
+  return (
+    <div className="ctr-pm">
+      <button type="button" className="ctr-minus" aria-label={`Take one away from ${label}`} onClick={onMinus} disabled={!canMinus}>−</button>
+      <button type="button" className="ctr-plus" aria-label={`Add one to ${label}`} onClick={onPlus}>+</button>
+    </div>
+  );
+}
+
+/** "Reset to 0", asked once on the page first (Andy, 2026-11-24, 6A). Only today's number. */
+export function ResetButton({ onReset }: { onReset: () => void }) {
+  const [asking, setAsking] = useState(false);
+  if (!asking) return <button type="button" className="btn btn-quiet ctr-reset" onClick={() => setAsking(true)}>Reset to 0</button>;
+  return (
+    <div className="ctr-ask" role="group" aria-label="Reset to 0">
+      <span>Are you sure? Today's number goes back to 0.</span>
+      <button type="button" className="btn btn-danger" onClick={() => { setAsking(false); onReset(); }}>Yes, reset</button>
+      <button type="button" className="btn" onClick={() => setAsking(false)}>No</button>
     </div>
   );
 }
