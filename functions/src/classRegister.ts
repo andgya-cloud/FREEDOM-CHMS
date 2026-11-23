@@ -6,7 +6,7 @@ import { firstName, tidyName } from './shared/people.js';
 import { normalizePhone } from './shared/phone.js';
 import { attendanceIdFor, attended } from './shared/attendance.js';
 import { can, canAccessOrg } from './shared/permissions.js';
-import { coverage, enrollmentIdFor, type CompletionRule, type PlanEntry, type SessionLike, type Topic } from './shared/programs.js';
+import { coverage, enrollmentIdFor, programSessionIdFor, type CompletionRule, type PlanEntry, type SessionLike, type Topic } from './shared/programs.js';
 import { codeWordFrom, CODE_WORD_INPUT, isWindowOpen, nextPlanned, ONLINE_LINK_INPUT, sameWord, percentOf, plannedOn, QR_SLOTS_GOOD, scanWindow, slotNow } from './shared/classRegister.js';
 
 /**
@@ -19,6 +19,7 @@ import { codeWordFrom, CODE_WORD_INPUT, isWindowOpen, nextPlanned, ONLINE_LINK_I
  *     { action: 'key', orgId, eventId }        → the class's secret, so the leader's screen can show a code that changes every minute (1A)
  *     { action: 'links', orgId, programId }    → each student's progress link, for the WhatsApp reminders (6A)
  *     { action: 'import', orgId, programId, rows } → adds and enrols a list of students
+ *     { action: 'markList', orgId, programId, date, rows: [{ personId } | { name }] } → marks a class from a list of names
  */
 const SELF = 'class-qr';
 const MAX_PER_CLASS = 400;
@@ -154,6 +155,13 @@ export const classRegister = onCall({ invoker: 'public', memory: '256MiB', timeo
   if (action === 'import') {
     if (!can(caller.profile, 'programs.write')) throw new HttpsError('permission-denied', 'You do not have permission to enrol students.');
     return importStudents(orgId, org.tz, text(d.programId, 60), d.rows, caller.uid);
+  }
+
+  if (action === 'markList') {
+    if (!can(caller.profile, 'attendance.write') || !can(caller.profile, 'programs.write')) {
+      throw new HttpsError('permission-denied', 'You do not have permission to mark this register.');
+    }
+    return markFromList(orgId, org.tz, text(d.programId, 60), text(d.date, 10), d.rows, caller.uid);
   }
   throw new HttpsError('invalid-argument', 'Unknown action.');
 });
@@ -342,6 +350,107 @@ async function importStudents(orgId: string, tz: string, programId: string, raw:
       result.enrolled++;
     } else {
       result.already++;
+    }
+    await batch.commit();
+  }
+  return result;
+}
+
+/**
+ * Marks a class from a list of names (Andy, 2026-11-23, 5A). The leader has already matched each name on the
+ * screen: a student on the register is marked present; a new name is added to People and the programme, marked
+ * present, and marked absent for the classes before it. Opens the class if nobody did on the night.
+ */
+async function markFromList(orgId: string, tz: string, programId: string, date: string, raw: unknown, uid: string) {
+  if (!ID.test(programId) || !/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new HttpsError('invalid-argument', 'Please choose the class.');
+  const base = `organizations/${orgId}`;
+  const program = await db.doc(`${base}/programs/${programId}`).get();
+  if (!program.exists || program.get('deletedAt') != null) throw new HttpsError('not-found', 'That programme was not found.');
+  if (date > localDateKey(new Date(), tz)) throw new HttpsError('invalid-argument', 'That class has not happened yet.');
+  if (!Array.isArray(raw) || raw.length === 0) throw new HttpsError('invalid-argument', 'The list is empty.');
+  if (raw.length > 300) throw new HttpsError('invalid-argument', 'Please mark at most 300 names at a time.');
+
+  const evRef = db.doc(`${base}/events/${programSessionIdFor(date, programId, null)}`);
+  let ev = await evRef.get();
+  if (!ev.exists || ev.get('deletedAt') != null) {
+    const plan = ((program.get('plan') as PlanEntry[] | undefined) ?? []).find((p) => p.date === date);
+    if (!plan) throw new HttpsError('failed-precondition', 'There is no class on that day. Please choose a class date.');
+    const topics = (program.get('topics') as Topic[] | undefined) ?? [];
+    const label = plan.label.replace(/^Semester (\d) · /, 'Sem $1 ');
+    const now = FieldValue.serverTimestamp();
+    await evRef.set({
+      orgId, date, type: 'class', name: `${program.get('name')} · ${label}: ${topics.find((t) => t.id === plan.topicId)?.name ?? ''}`.slice(0, 120),
+      activity: String(program.get('name') ?? ''), programId, cohortId: null, topicIds: [plan.topicId], mentor: null, mentorId: null,
+      headcounts: {}, notes: '', deletedAt: null, deletedBy: null, createdAt: now, createdBy: uid, updatedAt: now, updatedBy: uid,
+    });
+    ev = await evRef.get();
+  }
+  const earlier = (await db.collection(`${base}/events`).where('programId', '==', programId).get()).docs
+    .filter((e) => e.get('deletedAt') == null && String(e.get('date')) < date);
+
+  const today = localDateKey(new Date(), tz);
+  const result = { present: 0, already: 0, added: 0, absent: 0, problems: [] as string[] };
+  const done = new Set<string>();
+  const people = db.collection(`${base}/people`);
+  const stamp = () => ({ updatedAt: FieldValue.serverTimestamp(), updatedBy: uid });
+  const markOf = (e: Snap, personId: string, status: 'present' | 'absent') => {
+    const now = FieldValue.serverTimestamp();
+    return {
+      orgId, eventId: e.id, personId, date: e.get('date'), programId, status, method: 'register',
+      checkedInAt: status === 'present' ? now : null, deletedAt: null, deletedBy: null, createdAt: now, createdBy: uid, updatedAt: now, updatedBy: uid,
+    };
+  };
+
+  for (const r of raw) {
+    const o = (r ?? {}) as Record<string, unknown>;
+    const batch = db.batch();
+    let personId = text(o.personId, 60);
+    let isNew = false;
+    if (personId) {
+      if (!ID.test(personId)) continue;
+      const p = await people.doc(personId).get();
+      if (!p.exists || p.get('deletedAt') != null) { result.problems.push('One student on the list is no longer in People, so they were left out.'); continue; }
+    } else {
+      const fullName = tidyName(text(o.name, 120));
+      if (fullName.length < 2 || !/[a-z]/i.test(fullName)) continue;
+      const same = (await people.where('fullName', '==', fullName).limit(3).get()).docs.find((x) => x.get('deletedAt') == null);
+      if (same) personId = same.id;
+      else {
+        const ref = people.doc();
+        personId = ref.id;
+        batch.set(ref, newPerson(orgId, fullName, null, null, false, today, uid));
+        isNew = true;
+      }
+    }
+    if (done.has(personId)) continue;
+    done.add(personId);
+
+    const enrolRef = db.doc(`${base}/enrollments/${enrollmentIdFor(programId, personId)}`);
+    const enrolment = isNew ? null : await enrolRef.get();
+    const joining = !enrolment?.exists;
+    if (joining) batch.set(enrolRef, newEnrolment(orgId, programId, personId, today, uid, false, 'Added from a class list'));
+    else if (enrolment!.get('deletedAt') != null || enrolment!.get('status') === 'dropped') {
+      batch.update(enrolRef, { status: 'active', deletedAt: null, deletedBy: null, ...stamp() });
+    }
+
+    const markRef = db.doc(`${base}/attendance/${attendanceIdFor(ev.id, personId)}`);
+    const had = isNew ? null : await markRef.get();
+    if (had?.exists && had.get('deletedAt') == null && attended(had.get('status'))) result.already++;
+    else {
+      if (had?.exists) batch.update(markRef, { status: 'present', method: 'register', deletedAt: null, deletedBy: null, ...stamp() });
+      else batch.set(markRef, markOf(ev, personId, 'present'));
+      result.present++;
+    }
+
+    // Someone new to the register missed the classes before this one (Andy: absent for the first class).
+    if (joining) {
+      for (const e of earlier) {
+        const ref = db.doc(`${base}/attendance/${attendanceIdFor(e.id, personId)}`);
+        if (!isNew && (await ref.get()).exists) continue;
+        batch.set(ref, markOf(e, personId, 'absent'));
+        result.absent++;
+      }
+      result.added++;
     }
     await batch.commit();
   }

@@ -6,8 +6,8 @@ import { usePeople, type Person } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useEnrollments, useProgramMarks, usePrograms, useProgramSessions, type Enrollment, type Program } from '../../state/usePrograms';
 import {
-  APP_URL, blankStudentsExcel, importStudents, keepStudent, progressLinks, readStudentsFile, registerExcel, registerPdf, removeStudent, tickTopic,
-  type GridRow, type StudentImportRow,
+  APP_URL, blankStudentsExcel, importStudents, keepStudent, markFromList, progressLinks, readStudentsFile, registerExcel, registerPdf, removeStudent, tickTopic,
+  type GridRow, type ListPick, type StudentImportRow,
 } from '../../lib/classRegister';
 import { downloadFile } from '../../lib/givingPdf';
 import { friendlyError } from '../../lib/errors';
@@ -17,6 +17,7 @@ import { formatDateKey, localDateKey } from '../../../functions/src/shared/datet
 import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone';
 import { whatsappLink } from '../../../functions/src/shared/followups';
 import { coverage, type Coverage } from '../../../functions/src/shared/programs';
+import { matchList, type ListMatch } from '../../../functions/src/shared/classList';
 import {
   clockLabel, F252_GRADUATION, F252_ID, groupReminderText, missedText, nextPlanned, percentOf, progressPath, reminderText,
 } from '../../../functions/src/shared/classRegister';
@@ -192,6 +193,8 @@ function Register({ org, program }: { org: Organization; program: Program }) {
 
       <Reminders org={org} program={program} rows={rows} links={links} today={today} marks={marks} />
 
+      {canWrite && can('attendance.write') && <MarkFromList org={org} program={program} rows={rows} sessions={sessions} today={today} />}
+
       {canWrite && <AddStudents org={org} program={program} />}
 
       <ConfirmDialog
@@ -357,6 +360,141 @@ function AddStudents({ org, program }: { org: Organization; program: Program }) 
         {result && (
           <div className="notice">
             <p><strong>{result.enrolled} enrolled</strong> ({result.added} new in People){result.already ? `, ${result.already} were already enrolled` : ''}.</p>
+            {result.problems.map((p) => <p key={p} className="small">{p}</p>)}
+          </div>
+        )}
+      </details>
+    </section>
+  );
+}
+
+type Choice = '' | 'new' | 'skip' | string;
+
+/**
+ * Mark a class from a list of names (Andy, 2026-11-23, 5A): upload the attendance list (PDF, Excel or CSV), check
+ * how each name was matched, and save once. Sure names are matched on their own; a guess waits for the leader to
+ * pick; a new name is added to People and the programme, present at this class and absent for the ones before.
+ */
+function MarkFromList({ org, program, rows, sessions, today }: {
+  org: Organization; program: Program; rows: Row[]; sessions: { date: string; deletedAt?: unknown }[]; today: string;
+}) {
+  const toast = useToast();
+  const dates = useMemo(() => [...new Set([...(program.plan ?? []).map((p) => p.date), ...sessions.filter((s) => !s.deletedAt).map((s) => s.date)])]
+    .filter((d) => d <= today).sort().reverse(), [program.plan, sessions, today]);
+  const [date, setDate] = useState('');
+  const [list, setList] = useState<(ListMatch & { pick: Choice })[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ present: number; already: number; added: number; absent: number; problems: string[] } | null>(null);
+  const day = date || dates[0] || '';
+  const students = useMemo(() => rows.map((r) => ({ id: r.person.id, name: r.person.fullName })).sort((a, b) => a.name.localeCompare(b.name)), [rows]);
+  const nameOf = (id: string) => students.find((s) => s.id === id)?.name ?? '';
+  const topicOn = (d: string) => {
+    const p = program.plan?.find((x) => x.date === d);
+    return p ? program.topics.find((t) => t.id === p.topicId)?.name ?? '' : '';
+  };
+
+  async function pick(file: File | undefined) {
+    if (!file) return;
+    setResult(null);
+    setBusy(true);
+    try {
+      const found = (await readStudentsFile(file)).map((r) => r.name).filter(Boolean);
+      if (!found.length) throw new Error('No names found in this file.');
+      setList(matchList(found, students).map((m) => ({ ...m, pick: m.repeat ? 'skip' : m.status === 'found' ? m.personId! : m.status === 'new' ? 'new' : '' })));
+    } catch (err) { toast.show(friendlyError(err)); }
+    finally { setBusy(false); }
+  }
+  const choose = (i: number, pick: Choice) => setList((l) => l?.map((m, j) => (j === i ? { ...m, pick } : m)) ?? null);
+
+  const waiting = list?.filter((m) => m.pick === '').length ?? 0;
+  const picked = list?.filter((m) => m.pick && m.pick !== 'skip' && m.pick !== 'new').map((m) => m.pick) ?? [];
+  const present = new Set(picked).size;
+  const newOnes = list?.filter((m) => m.pick === 'new').length ?? 0;
+  const firstAt = (i: number) => list!.findIndex((m) => m.pick === list![i]!.pick) < i;
+
+  async function save() {
+    if (!list || waiting) return;
+    setBusy(true);
+    try {
+      const picks: ListPick[] = list.filter((m) => m.pick && m.pick !== 'skip').map((m) => (m.pick === 'new' ? { name: m.name } : { personId: m.pick }));
+      setResult(await markFromList(org.id, program.id, day, picks));
+      setList(null);
+    } catch (err) { toast.show(friendlyError(err)); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <section className="card">
+      <details className="fold" open={list || result ? true : undefined}>
+        <summary><strong>Mark a class from a list</strong> <span className="muted">· PDF or Excel of names</span></summary>
+        <p className="muted small">For a class marked on paper or from the Meet attendance. Names are matched to the register; you check them and save once. Someone new is added to the programme, present at this class and absent for the classes before it.</p>
+        {dates.length === 0 ? <p className="muted">No classes yet.</p> : (
+          <div className="stack">
+            <label className="field">
+              <span>Which class</span>
+              <select value={day} onChange={(e) => { setDate(e.target.value); setResult(null); }}>
+                {dates.map((d) => <option key={d} value={d}>{formatDateKey(d)}{topicOn(d) ? ` · ${topicOn(d)}` : ''}</option>)}
+              </select>
+            </label>
+            <div className="cleanup-head-actions class-actions">
+              <label className="btn btn-primary">
+                {busy && !list ? 'Reading…' : 'Choose the list'}
+                <input type="file" className="visually-hidden" accept=".xlsx,.csv,.pdf,application/pdf" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+              </label>
+            </div>
+          </div>
+        )}
+        {list && (
+          <div className="stack">
+            <p><strong>{list.length} names.</strong> {waiting ? `Please choose who ${waiting === 1 ? 'this one is' : `these ${waiting} are`} (marked “Please check”).` : 'All checked.'}</p>
+            <div className="reg-scroll">
+              <table className="reg-grid import-check">
+                <thead><tr><th className="reg-name">On the list</th><th>Who it is</th><th /></tr></thead>
+                <tbody>
+                  {list.map((m, i) => (
+                    <tr key={i} className={m.pick === 'skip' ? 'muted' : ''}>
+                      <td className="reg-name">{m.name}</td>
+                      <td>
+                        <select value={m.pick} aria-label={`Who ${m.name} is`} className={m.pick === '' ? 'input-bad' : ''} onChange={(e) => choose(i, e.target.value)}>
+                          <option value="" disabled>Choose…</option>
+                          {m.maybe.length > 0 && (
+                            <optgroup label="Likely">
+                              {m.maybe.map((id) => <option key={id} value={id}>{nameOf(id)}</option>)}
+                            </optgroup>
+                          )}
+                          <optgroup label="Not on the register">
+                            <option value="new">Add as a new student: {m.name}</option>
+                            <option value="skip">Leave out</option>
+                          </optgroup>
+                          <optgroup label="Everyone on the register">
+                            {students.filter((s) => !m.maybe.includes(s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          </optgroup>
+                        </select>
+                      </td>
+                      <td className="small">
+                        {m.pick === '' ? <span className="error">Please check</span>
+                          : m.repeat && m.pick === 'skip' ? <span className="muted">Same name as above</span>
+                            : m.pick !== 'new' && m.pick !== 'skip' && firstAt(i) ? <span className="muted">Same person as above, counted once</span>
+                              : m.pick === 'new' ? <span>New</span>
+                                : m.status === 'found' && m.pick === m.personId ? <span className="muted">✓ Found</span> : null}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="cleanup-head-actions">
+              <button type="button" className="btn btn-quiet" onClick={() => setList(null)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={busy || waiting > 0 || present + newOnes === 0} onClick={() => void save()}>
+                {busy ? 'Saving…' : `Save: ${present + newOnes} present on ${formatDateKey(day)}${newOnes ? ` (${newOnes} new)` : ''}`}
+              </button>
+            </div>
+          </div>
+        )}
+        {result && (
+          <div className="notice">
+            <p><strong>{result.present} marked present</strong> on {formatDateKey(day)}{result.already ? `, ${result.already} were already marked` : ''}.</p>
+            {result.added > 0 && <p className="small">{result.added} added to the programme{result.absent ? `, and marked absent for ${result.absent === result.added ? 'the class' : 'the classes'} before` : ''}.</p>}
             {result.problems.map((p) => <p key={p} className="small">{p}</p>)}
           </div>
         )}

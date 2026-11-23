@@ -65,6 +65,11 @@ export interface StudentImportRow { name: string; phone: string; email: string; 
 export const importStudents = (orgId: string, programId: string, rows: StudentImportRow[]) =>
   call<{ added: number; enrolled: number; already: number; problems: string[] }>({ action: 'import', orgId, programId, rows });
 
+/** One name on a class list, matched by the leader: a student on the register, or someone new (Andy, 2026-11-23, 5A). */
+export type ListPick = { personId: string } | { name: string };
+export const markFromList = (orgId: string, programId: string, date: string, rows: ListPick[]) =>
+  call<{ present: number; already: number; added: number; absent: number; problems: string[] }>({ action: 'markList', orgId, programId, date, rows });
+
 /** Reads a students list from Excel, CSV or PDF (Andy, 2026-11-09, 1A): a Name column, and if there Phone, Email, Preferred contact, Message. */
 export async function readStudentsFile(file: File): Promise<StudentImportRow[]> {
   let rows: StudentImportRow[];

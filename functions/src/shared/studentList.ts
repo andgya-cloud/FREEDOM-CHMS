@@ -47,8 +47,9 @@ export function studentsFromTable(table: readonly (readonly string[])[]): Studen
 
 /** PDF rows (cells with where they sit across the page) into students. */
 export function studentsFromPdf(rows: readonly (readonly StatementCell[])[]): StudentListRow[] {
-  const headRow = rows.find((r) => isHeaderRow(r.map((c) => c.text)));
-  if (!headRow) return studentsFromLoosePdf(rows);
+  const headAt = rows.findIndex((r) => isHeaderRow(r.map((c) => c.text)));
+  if (headAt < 0) return studentsFromLoosePdf(rows);
+  const headRow = rows[headAt]!;
   const cols = headRow.map((c) => ({ col: headerOf(c.text) ?? 'other', x: c.x0 })).sort((a, b) => a.x - b.x);
   const colAt = (x: number): Col => {
     let found: Col = cols[0]?.col ?? 'other';
@@ -56,7 +57,8 @@ export function studentsFromPdf(rows: readonly (readonly StatementCell[])[]): St
     return found;
   };
   const out: (StudentListRow & { contact: string })[] = [];
-  for (const row of rows) {
+  // A title above the headings ("Attendance Names List") is not a student.
+  for (const row of rows.slice(headAt + 1)) {
     if (!row.length || isHeaderRow(row.map((c) => c.text))) continue;
     const parts: Partial<Record<Col, string>> = {};
     for (const cell of row) {
