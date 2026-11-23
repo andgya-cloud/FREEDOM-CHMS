@@ -50,4 +50,12 @@ describe('conversation circles (Andy, 2026-11-07)', () => {
     expect(canSeeAllPhotoReports(p({ displayName: 'Dorothy Mohat' }), org)).toBe(true);
     expect(canSeeAllPhotoReports(p({ displayName: 'Dorothy Mohat' }), org, 'college')).toBe(false);
   });
+  it('the head of Sunday school reads every class; a class teacher only sends (Andy, 2026-11-23)', () => {
+    const head = p({ roleId: 'ssteacher', ssClassId: 'all', displayName: 'Mary Head' });
+    const teacher = p({ roleId: 'ssteacher', ssClassId: 'age-3-5', displayName: 'Christine' });
+    expect(circleReader(head, org, 'sunday_school')).toBe(true);
+    expect(circleRole(head, org, 'sunday_school')).toBe('Sunday school leader');
+    expect(circleReader(teacher, org, 'sunday_school')).toBe(false);
+    expect(circleSender(teacher, org, 'sunday_school')).toBe(true);
+  });
 });

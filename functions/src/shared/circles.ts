@@ -111,7 +111,7 @@ export const isPrincipal = (p: Profile, orgId: string) => canAccessOrg(p, orgId)
 export function isCircleLead(p: Profile, orgId: string, type: CircleType): boolean {
   if (!canAccessOrg(p, orgId)) return false;
   if (type === 'college') return isHead(p) || named(ADIA_HEAD_NAMES, p?.displayName) || isPrincipal(p, orgId);
-  if (type === 'sunday_school') return named(SS_LEAD_NAMES, p?.displayName);
+  if (type === 'sunday_school') return named(SS_LEAD_NAMES, p?.displayName) || isSsHead(p);
   return isHead(p);
 }
 
@@ -165,7 +165,7 @@ export function circleRole(p: Profile, orgId: string, type: CircleType): string 
     return p?.roleId === 'trainer' ? 'Trainer' : 'Staff';
   }
   if (type === 'sunday_school') {
-    if (named(SS_LEAD_NAMES, p?.displayName)) return 'Sunday school leader';
+    if (named(SS_LEAD_NAMES, p?.displayName) || isSsHead(p)) return 'Sunday school leader';
     if (p?.roleId === SS_TEACHER_ROLE_ID) return ssTeacherLabel((p as { ssClassName?: string }).ssClassName);
     if (canKeepAccounts(p)) return 'Pastor';
     return 'Staff';
@@ -181,7 +181,9 @@ export function circleRole(p: Profile, orgId: string, type: CircleType): string 
 /** The report types (2A): the same four as Hope, with ADIA's exams and the church's pastoral care. */
 export type CircleKind = 'win' | 'activity' | 'exams' | 'care' | 'incident' | 'other' | 'ssreport' | RequestKind;
 /** "Sunday school teacher · Juniors" (Andy, 2026-11-23, 9A). */
-export const ssTeacherLabel = (className: string | undefined) => `Sunday school teacher${className ? ` · ${className}` : ''}`;
+export const ssTeacherLabel = (className: string | undefined) => (className === 'Head of Sunday school' ? className : `Sunday school teacher${className ? ` · ${className}` : ''}`);
+/** The head of Sunday school: a Sunday school account given "Head of Sunday school (all classes)" (Andy, 2026-11-23). */
+export const isSsHead = (p: Profile) => p?.roleId === SS_TEACHER_ROLE_ID && (p as { ssClassId?: string }).ssClassId === 'all';
 /**
  * The Teachers' room at Hope (Andy, 2026-11-22, 7A): every request a class teacher makes is a conversation of its
  * own, with a type, and is Open until Diana marks it Done.

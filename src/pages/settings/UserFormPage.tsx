@@ -15,7 +15,7 @@ import { PasswordChecklist } from '../../components/PasswordChecklist';
 import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
-import { cleanClasses, DEFAULT_SS_CLASSES, ssClassWithLeader, type SsClass } from '../../../functions/src/shared/sundaySchool';
+import { cleanClasses, DEFAULT_SS_CLASSES, SS_HEAD_CLASS, SS_HEAD_LABEL, ssClassWithLeader, type SsClass } from '../../../functions/src/shared/sundaySchool';
 import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
@@ -304,9 +304,10 @@ export function UserFormPage() {
             <span>Sunday school class</span>
             <select value={form.ssClass} onChange={(e) => set('ssClass', e.target.value)}>
               <option value="">Pick the class…</option>
+              <option value={SS_HEAD_CLASS}>{SS_HEAD_LABEL} (Dorothy: sees every class)</option>
               {ssClasses.map((c) => <option key={c.id} value={c.id}>{ssClassWithLeader(c)}</option>)}
             </select>
-            <small className="hint">{ssClasses.length ? 'The teacher counts this class on Sunday and writes in the Sunday school room. Tick Freedom Church above.' : 'No classes yet: Dorothy adds them on the Sunday school page (More, then Sunday school).'}</small>
+            <small className="hint">{ssClasses.length ? 'The teacher counts this class on Sunday and writes in the Sunday school room. The head of Sunday school sees every class, every post and keeps the class list. Tick Freedom Church above.' : 'No classes yet: Dorothy adds them on the Sunday school page (More, then Sunday school).'}</small>
           </label>
         )}
         {(form.roleId === HELPER_ROLE_ID || form.roleId === TEACHER_ROLE_ID) && !teamOnly && (

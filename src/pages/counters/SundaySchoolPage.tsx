@@ -41,7 +41,7 @@ export function SundaySchoolPage() {
         {info.mine && <p className="muted" style={{ margin: 0 }}>{ssTeacherLabel(info.mine.name)}</p>}
       </div>
       {info.mine && <ClassCounter orgId={church.id} info={info} onSaved={setInfo} />}
-      {!info.mine && profile?.roleId === 'ssteacher' && <p className="notice notice-warn">Your class is not on the list. Please ask Dorothy to add it.</p>}
+      {!info.mine && !info.leads && profile?.roleId === 'ssteacher' && <p className="notice notice-warn">Your class is not on the list. Please ask Dorothy to add it.</p>}
       {info.leads && <TodayClasses info={info} />}
       {info.leads && <ClassesEditor orgId={church.id} classes={info.classes} onSaved={(i) => { setInfo(i); toast.show('Classes saved.'); }} />}
       <SundaySchoolRoom org={church} ss={{ classes: info.classes, mine: info.mine, leads: info.leads, myCount: info.mine ? info.counts[info.mine.id]?.count ?? 0 : 0 }} />

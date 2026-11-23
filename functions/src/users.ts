@@ -9,6 +9,8 @@ import { giveDepartmentCourses } from './examAssign.js';
 import { refreshCommonAccess } from './commonCourses.js';
 import { COMMON_DEPARTMENT } from './shared/commonCourses.js';
 import { HOPE_CLASSES } from './shared/hopeClasses.js';
+import { SS_HEAD_CLASS, SS_HEAD_LABEL } from './shared/sundaySchool.js';
+import { loadSsClasses } from './serviceCounters.js';
 
 /** A Sunday school teacher's class (Andy, 2026-11-23, 9A), from the classes Dorothy keeps; required for that role. */
 async function ssClassFrom(roleId: string, value: unknown, orgIds: string[], allOrgs: boolean): Promise<{ ssClassId: string; ssClassName: string; ssOrgId: string }> {
@@ -17,8 +19,12 @@ async function ssClassFrom(roleId: string, value: unknown, orgIds: string[], all
   const id = typeof value === 'string' ? value : '';
   const churches = allOrgs ? (await db.collection('organizations').where('type', '==', 'church_campus').get()).docs.map((d) => d.id) : orgIds;
   for (const orgId of churches) {
-    const classes = ((await db.doc(`organizations/${orgId}/sundaySchool/settings`).get()).get('classes') ?? []) as { id: string; name: string }[];
-    const c = classes.find((x) => x.id === id);
+    const o = await db.doc(`organizations/${orgId}`).get();
+    if (o.get('type') !== 'church_campus') continue;
+    // The head of Sunday school (Dorothy) sees every class (Andy, 2026-11-23).
+    if (id === SS_HEAD_CLASS) return { ssClassId: SS_HEAD_CLASS, ssClassName: SS_HEAD_LABEL, ssOrgId: orgId };
+    // Andy's five classes count until Dorothy saves her own list.
+    const c = (await loadSsClasses(orgId)).find((x) => x.id === id);
     if (c) return { ssClassId: c.id, ssClassName: c.name, ssOrgId: orgId };
   }
   throw new HttpsError('invalid-argument', 'Please pick the Sunday school class this teacher counts. Dorothy adds the classes on the Sunday school page.');

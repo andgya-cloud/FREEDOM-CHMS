@@ -6,6 +6,9 @@
 /** A class, its ages and its class leader (Andy, 2026-11-23). */
 export interface SsClass { id: string; name: string; ages: string; leader: string }
 export const SS_MAX_CLASSES = 20;
+/** Dorothy's place in the class dropdown: the head of Sunday school sees every class (Andy, 2026-11-23). */
+export const SS_HEAD_CLASS = 'all';
+export const SS_HEAD_LABEL = 'Head of Sunday school';
 
 /** Freedom Church's classes and leaders as Andy gave them (2026-11-23); used until Dorothy changes the list. */
 export const DEFAULT_SS_CLASSES: SsClass[] = [
