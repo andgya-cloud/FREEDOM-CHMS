@@ -14,7 +14,8 @@ describe('Sunday school timetable (Andy, 2026-11-24)', () => {
     expect(yearRows(2027, []).length).toBe(52);
     expect(openingYear('2026-11-24')).toBe(2026);
     expect(openingYear('2027-12-28')).toBe(2028);
-    expect(timetableYears('2026-11-24')).toEqual([2026, 2027]);
+    expect(timetableYears('2026-11-24')).toEqual([2026, 2027, 2028, 2029, 2030, 2031]);
+    expect(timetableYears('2029-03-01').at(-1)).toBe(2034);
   });
 
   it('keeps only what was typed, for classes on the list', () => {

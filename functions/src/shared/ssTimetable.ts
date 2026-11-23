@@ -101,9 +101,10 @@ export function sundaysBetween(from: string, to: string): string[] {
   return out;
 }
 
-/** The years to show: from December 2026 (2A) to next year. */
+/** The years to show: from December 2026 (2A), and five years ahead of this one (Andy, 2026-11-24: beyond 2027). */
+export const SS_YEARS_AHEAD = 5;
 export function timetableYears(today: string): number[] {
-  const last = Math.max(2027, Number(today.slice(0, 4)) + 1);
+  const last = Number(today.slice(0, 4)) + SS_YEARS_AHEAD;
   const out: number[] = [];
   for (let y = 2026; y <= last; y++) out.push(y);
   return out;
