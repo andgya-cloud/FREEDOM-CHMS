@@ -50,3 +50,4 @@ export { calendarReminders, calendarTest } from './calendar.js';
 export { teacherRegisterReminder } from './hopeTeachers.js';
 export { serviceHosts, serviceHostReminders, serviceHostSummary } from './serviceHosts.js';
 export { hopeSponsor } from './hopeSponsor.js';
+export { serviceCounters } from './serviceCounters.js';

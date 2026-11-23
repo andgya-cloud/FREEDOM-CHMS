@@ -1,0 +1,27 @@
+/* Phone counters (Andy, 2026-11-23): one big number, one big +, "Type the number". */
+.ctr-card { display: flex; flex-direction: column; gap: 12px; align-items: stretch; text-align: center; max-width: 420px; }
+.ctr-hello { margin: 0; font-size: 1rem; }
+.ctr-job { margin: 0; font-size: 1.05rem; letter-spacing: 0.06em; text-transform: uppercase; color: #0f3b25; font-weight: 800; }
+.ctr-hint { margin: -6px 0 0; font-size: 0.9rem; }
+.ctr-number { font-size: 5.2rem; line-height: 1; font-weight: 800; color: #0f3b25; font-variant-numeric: tabular-nums; margin: 4px 0; }
+.ctr-plus { width: 100%; min-height: 34vh; max-height: 260px; border: 0; border-radius: 22px; font-size: 5rem; font-weight: 800; color: #fff;
+  background: linear-gradient(160deg, #2e8b57, #0f3b25); box-shadow: 0 10px 24px rgb(15 59 37 / 0.35); cursor: pointer; touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+.ctr-plus:active { transform: scale(0.98); filter: brightness(1.1); }
+.ctr-plus:disabled { opacity: 0.5; }
+.ctr-row { display: flex; gap: 10px; }
+.ctr-row > * { flex: 1 1 0; }
+.ctr-status { margin: 0; font-size: 0.9rem; min-height: 1.2em; }
+.ctr-status.ctr-wait { color: #8a5a00; }
+.ctr-done { background: #dcf3e5; color: #1f7a4d; border-radius: 12px; padding: 10px; font-weight: 700; }
+.ctr-type { display: flex; gap: 8px; }
+.ctr-type input { flex: 1 1 auto; min-width: 0; font-size: 1.6rem; text-align: center; }
+/* The leaders' card on the Sunday page */
+.ctr-jobs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.ctr-jobrow { display: flex; flex-direction: column; gap: 8px; padding: 12px 0; border-top: 1px solid var(--border); }
+.ctr-jobrow:first-child { border-top: 0; }
+.ctr-jobhead { display: flex; justify-content: space-between; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ctr-jobfields { display: flex; flex-wrap: wrap; gap: 8px; }
+.ctr-jobfields input { flex: 1 1 160px; min-width: 0; }
+.ctr-jobbuttons { display: flex; flex-wrap: wrap; gap: 6px; }
+.ctr-wa { background: #25d366; color: #fff; border-color: transparent; }
+.ctr-off { opacity: 0.6; }

@@ -350,6 +350,17 @@ service cloud.firestore {
         allow delete: if false;
       }
 
+      // ---- Phone counters (Andy, 2026-11-23) ----------------------------------------------
+      // Who counted each number on a service, and whether they pressed Finished. Written only by the server
+      // (serviceCounters); the people who see the Sunday page may read it. counterJobs (the links) stays server-only.
+      match /serviceCounts/{eventId} {
+        allow read: if canAccessOrg(orgId) && (has('people.read') || has('attendance.write'));
+        allow write: if false;
+      }
+      match /counterJobs/{job} {
+        allow read, write: if false;
+      }
+
       // ---- Events calendar (Andy, 2026-11-14) -------------------------------------
       // Everyone at the place sees its calendar (2A); Andy and the leaders he ticks ("calendar.manage") add and
       // change events (3A). Someone invited may only answer Yes or No for themselves. Reminders are sent by the

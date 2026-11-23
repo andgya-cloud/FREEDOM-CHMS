@@ -6,6 +6,9 @@ import { saveServiceCount } from '../lib/attendanceWrites';
 import { friendlyError } from '../lib/errors';
 import { categoryTotal, cleanCount, headcountTotal, HEADCOUNT_LABELS, isOtherServiceName, serviceName, splitServiceName, type Headcounts } from '../../functions/src/shared/attendance';
 import { serviceSuggestions } from './ServiceInput';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../firebase';
+import type { ServiceCountDoc } from '../../functions/src/shared/counters';
 
 // Same six buttons, same order, as the usher app v1.8 (Andy, 2026-11-08). Whole Church, when counted, is the total.
 const KEYS = ['adults', 'teens', 'children', 'all', 'firstTimers', 'salvations'] as const;
@@ -38,6 +41,12 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
   const saved = running.find((e) => e.name === name) ?? null;
   const counts: Headcounts = saved?.headcounts ?? {};
   const categories = categoryTotal(counts, 'service');
+  // Who is counting each number on their phone (Andy, 2026-11-23), shown under the box.
+  const [phoneBy, setPhoneBy] = useState<ServiceCountDoc['by']>({});
+  useEffect(() => {
+    if (!saved) { setPhoneBy({}); return; }
+    return onSnapshot(doc(db, `organizations/${org.id}/serviceCounts/${saved.id}`), (s) => setPhoneBy(((s.data() as ServiceCountDoc | undefined)?.by) ?? {}), () => setPhoneBy({}));
+  }, [org.id, saved?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const total = headcountTotal(counts, 'service');
   const wholeChurch = (counts.all ?? 0) > 0;
 
@@ -106,6 +115,7 @@ export function ServiceDayCard({ org, date, time, setTime, todays, events, onChe
               <button type="button" className="count-tap count-plus" aria-label={`One more: ${HEADCOUNT_LABELS[k]}`} disabled={!name} onClick={() => tap(k, 1)}>+</button>
             </div>
             <small className="count-hint">{HINTS[k]}</small>
+            {phoneBy[k] && <small className="count-by">📱 {phoneBy[k]!.person}{phoneBy[k]!.done ? ' ✓' : ''}</small>}
           </div>
         ))}
         <div className="count-box count-total" aria-live="polite">

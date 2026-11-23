@@ -2001,6 +2001,7 @@ select.badge-select.badge-child, select.badge-select.badge-student { background-
 .count-tap.count-plus { background: #14532d; color: #ffffff; }
 .count-tap:disabled { opacity: 0.35; cursor: default; }
 .count-hint { color: #4b5d52; font-size: 0.78rem; }
+.count-by { color: #1f7a4d; font-size: 0.75rem; font-weight: 600; }
 .count-total { background: #14532d; justify-content: center; }
 .count-total .count-label, .count-total .count-hint { color: #e8f3ec; }
 .count-total b.count-number { font-size: 2.6rem; color: #ffffff; line-height: 1.1; }

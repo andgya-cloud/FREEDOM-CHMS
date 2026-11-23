@@ -132,6 +132,7 @@ const VerifyTranscriptPage = lazy(() => import('./pages/verify/VerifyTranscriptP
 const SponsorPublicPage = lazy(() => import('./pages/hope/SponsorPublicPage').then((m) => ({ default: m.SponsorPublicPage })));
 const SponsorshipPage = lazy(() => import('./pages/hope/SponsorshipPage').then((m) => ({ default: m.SponsorshipPage })));
 const SponsorListPage = lazy(() => import('./pages/hope/SponsorListPage').then((m) => ({ default: m.SponsorListPage })));
+const CounterPage = lazy(() => import('./pages/counters/CounterPage').then((m) => ({ default: m.CounterPage })));
 const PhotoUploadPage = lazy(() => import('./pages/hope/PhotoUploadPage').then((m) => ({ default: m.PhotoUploadPage })));
 const GatePage = lazy(() => import('./pages/hope/GatePage').then((m) => ({ default: m.GatePage })));
 const HopeUploadPage = lazy(() => import('./pages/hope/HopeUploadPage').then((m) => ({ default: m.HopeUploadPage })));
@@ -141,7 +142,7 @@ export function App() {
   const settings = useAppSettings();
   const path = useLocation().pathname;
   // The class check-in and a student's progress page are open to anyone too (Freedom 252, 2026-11-09).
-  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path.startsWith('/host/') || path.startsWith('/prayer/') || path === '/install';
+  const welcome = path.startsWith('/welcome/') || path.startsWith('/join/') || path.startsWith('/class/') || path.startsWith('/host/') || path.startsWith('/prayer/') || path.startsWith('/count/') || path === '/install';
   const onIdle = useCallback(() => { void signOut(); }, [signOut]);
   // Anyone who handles money signs out after 10 idle minutes on any device (Andy, 2026-10-24).
   const handlesMoney = (profile?.permissions ?? []).some((x) => x === 'users.manage' || x.startsWith('pettycash.'));
@@ -179,6 +180,7 @@ export function App() {
             <Route path="/install" element={<InstallPage />} />
             <Route path="/host/:orgId/:token" element={<HostAnswerPage />} />
             <Route path="/prayer/:orgId/:token" element={<HostAnswerPage team="prayer" />} />
+            <Route path="/count/:orgId/:token" element={<CounterPage />} />
           </Routes>
         </div>
       </Suspense>

@@ -5,6 +5,7 @@ import { commonClassName } from '../../../functions/src/shared/commonCourses';
 import { CommonCoursesPanel } from './CommonCourses';
 import { FirstTimersCard, SundayCard, weekdayName } from '../ChurchSunday';
 import { ServiceDayCard } from '../../components/ServiceDayCard';
+import { PhoneCountersCard } from '../counters/PhoneCountersCard';
 import type { ChurchEvent as AttendanceEvent } from '../../state/useAttendance';
 import { cohortStart } from '../../../functions/src/shared/pastRecords';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
@@ -304,6 +305,8 @@ function SundayPage({ org, date, setDate, today, todays, events, loading, canRec
 }) {
   const [time, setTime] = useState('');
   const [chosen, setChosen] = useState('');
+  const { profile } = useAuth();
+  const setsCounters = !!profile?.permissions?.some((x) => x === 'users.manage' || x === 'rota.manage');
   const pick = { day: date, service: todays.some((e) => e.name === chosen) ? chosen : '' };
   return (
     <div className="page narrow sunday-page fin-wide">
@@ -322,6 +325,7 @@ function SundayPage({ org, date, setDate, today, todays, events, loading, canRec
       {canRecord && (
         <ServiceDayCard org={org} date={date} time={time} setTime={setTime} todays={todays} events={events} onCheckIn={open} onName={setChosen} />
       )}
+      {setsCounters && <PhoneCountersCard orgId={org.id} />}
       <SundayCard org={org} onSundayPage pick={pick} />
       <FirstTimersCard org={org} />
       <details className="card fold">
