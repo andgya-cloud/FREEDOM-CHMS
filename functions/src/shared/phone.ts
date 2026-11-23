@@ -46,3 +46,16 @@ export function formatPhone(e164: string | null | undefined, countryCode = DEFAU
 export function phoneDigits(e164: string | null | undefined): string {
   return (e164 ?? '').replace(/\D/g, '');
 }
+
+/**
+ * A sign-in for someone with no email (Andy, 2026-11-23: Sunday school teachers use their WhatsApp number). The
+ * account's hidden email is made from the number; they sign in with their password alone (or the number and password).
+ */
+export const PHONE_LOGIN_DOMAIN = 'whatsapp.freedom-chms.web.app';
+export function phoneLoginEmail(phone: string): string | null {
+  const n = normalizePhone(phone);
+  return n ? `${n.replace(/\D/g, '')}@${PHONE_LOGIN_DOMAIN}` : null;
+}
+export const isPhoneLogin = (email: string | null | undefined) => !!email && email.toLowerCase().endsWith(`@${PHONE_LOGIN_DOMAIN}`);
+/** "+254727419223" from a phone sign-in's hidden email; '' otherwise. */
+export const phoneOfLogin = (email: string | null | undefined) => (isPhoneLogin(email) ? `+${email!.split('@')[0]}` : '');

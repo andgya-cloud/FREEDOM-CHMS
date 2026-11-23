@@ -7,7 +7,7 @@ import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import { SundaySchoolRoom } from '../hope/HopePhotosPage';
 import { ssTeacherLabel } from '../../../functions/src/shared/circles';
-import { ssClassLabel, type ClassCounts, type SsClass } from '../../../functions/src/shared/sundaySchool';
+import { ssClassLabel, ssClassWithLeader, type ClassCounts, type SsClass } from '../../../functions/src/shared/sundaySchool';
 import './counters.css';
 
 type Info = { classes: SsClass[]; mine: SsClass | null; leads: boolean; today: string; service: string; counts: ClassCounts; total: number | null };
@@ -93,7 +93,7 @@ function ClassCounter({ orgId, info, onSaved }: { orgId: string; info: Info; onS
           <button type="button" className="btn" onClick={() => setTyping(null)}>Cancel</button>
         </div>
       )}
-      <p className="ctr-status muted">{busy || adds ? 'Saving…' : 'Saved ✓ It adds into the Children number for the service.'}</p>
+      <p className="ctr-status muted">{busy || adds ? 'Saving…' : 'Saved ✓ It adds into the service numbers.'}</p>
     </section>
   );
 }
@@ -107,10 +107,10 @@ function TodayClasses({ info }: { info: Info }) {
       {!info.service ? <p className="muted">No service today.</p> : (
         <ul className="link-list">
           {info.classes.map((c) => (
-            <li key={c.id}><span className="link-title">{ssClassLabel(c)}</span>
+            <li key={c.id}><span className="link-title">{ssClassWithLeader(c)}</span>
               <span className="link-detail">{info.counts[c.id] ? `${info.counts[c.id]!.count} children · ${info.counts[c.id]!.teacher}` : 'Not counted yet'}</span></li>
           ))}
-          <li><b>Children: {info.total ?? 0}</b> <span className="small muted">goes into the service numbers</span></li>
+          <li><b>All classes: {info.total ?? 0}</b> <span className="small muted">children's classes go into Children, the Teens class into Teens</span></li>
         </ul>
       )}
     </section>
@@ -123,7 +123,7 @@ function ClassesEditor({ orgId, classes, onSaved }: { orgId: string; classes: Ss
   const [rows, setRows] = useState<SsClass[]>(classes);
   const [busy, setBusy] = useState(false);
   useEffect(() => { setRows(classes); }, [classes]);
-  const set = (i: number, k: 'name' | 'ages', v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
+  const set = (i: number, k: 'name' | 'ages' | 'leader', v: string) => setRows((r) => r.map((x, j) => (j === i ? { ...x, [k]: v } : x)));
   const changed = JSON.stringify(rows) !== JSON.stringify(classes);
   async function save() {
     setBusy(true);
@@ -132,20 +132,21 @@ function ClassesEditor({ orgId, classes, onSaved }: { orgId: string; classes: Ss
   return (
     <details className="card fold" open={classes.length === 0}>
       <summary>Classes and ages{classes.length ? ` (${classes.length})` : ''}</summary>
-      <p className="small muted">Each teacher is given one class on their account. The classes add up into Children on the Sunday page.</p>
+      <p className="small muted">Each class leader is given one class on their account. The children's classes add up into Children on the Sunday page, and the Teens class into Teens.</p>
       <ul className="ctr-jobs">
         {rows.map((c, i) => (
           <li key={c.id || i} className="ctr-jobrow">
             <div className="ctr-jobfields">
               <input value={c.name} maxLength={40} placeholder="Class name, e.g. Juniors" aria-label="Class name" onChange={(e) => set(i, 'name', e.target.value)} />
-              <input value={c.ages} maxLength={30} placeholder="Ages, e.g. 6-9" aria-label="Ages" onChange={(e) => set(i, 'ages', e.target.value)} />
+              <input value={c.ages} maxLength={30} placeholder="Ages, e.g. 6-8" aria-label="Ages" onChange={(e) => set(i, 'ages', e.target.value)} />
+              <input value={c.leader} maxLength={60} placeholder="Class leader" aria-label="Class leader" onChange={(e) => set(i, 'leader', e.target.value)} />
               <button type="button" className="btn btn-quiet" aria-label={`Remove ${c.name || 'this class'}`} onClick={() => setRows((r) => r.filter((_, j) => j !== i))}>✕</button>
             </div>
           </li>
         ))}
       </ul>
       <div className="btn-line">
-        <button type="button" className="btn" onClick={() => setRows((r) => [...r, { id: '', name: '', ages: '' }])}>+ Add a class</button>
+        <button type="button" className="btn" onClick={() => setRows((r) => [...r, { id: '', name: '', ages: '', leader: '' }])}>+ Add a class</button>
         {changed && <button type="button" className="btn btn-primary" disabled={busy} onClick={() => void save()}>Save classes</button>}
       </div>
     </details>

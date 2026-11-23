@@ -28,7 +28,7 @@ export async function sendSundaySchoolSummary(today = localDateKey()): Promise<n
     const { to } = await circleLeadEmails('sunday_school', o.id);
     if (!to.length) continue;
     const lines = ssSummaryLines(classes, counts, reps);
-    const subject = `Sunday school today: ${lines.at(-1)?.replace('Total children: ', '')} children`;
+    const subject = `Sunday school today: ${lines.at(-1)?.replace('Total in Sunday school: ', '')} in class`;
     const text = ['Dear Dorothy,', '', 'Here is Sunday school today:', '', ...lines, '', `Open the Sunday school room: ${appUrl()}/sunday-school`, '', 'Freedom Church', '', 'Powered by Insight-IQ'].join('\n');
     try {
       const info = await mail.transport.sendMail({ from: `"Freedom Church Sunday School" <${mail.from}>`, to: to.join(', '), subject, text });

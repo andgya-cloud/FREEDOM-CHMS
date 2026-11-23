@@ -6,6 +6,7 @@ import { PasswordInput } from '../components/PasswordInput';
 import { writePref } from '../lib/storage';
 import { httpsCallable } from 'firebase/functions';
 import { functions } from '../firebase';
+import { phoneLoginEmail } from '../../functions/src/shared/phone';
 
 export function SignInPage() {
   const { signIn } = useAuth();
@@ -25,7 +26,8 @@ export function SignInPage() {
     writePref('sharedDevice', shared ? 'true' : 'false');
     try {
       if (withEmail) {
-        await signIn(email, password);
+        // A WhatsApp number works in place of an email (Andy, 2026-11-23).
+        await signIn(email.includes('@') ? email : phoneLoginEmail(email) ?? email, password);
       } else {
         const found = await httpsCallable<{ password: string }, { email: string }>(functions, 'findPasswordAccount')({ password });
         await signIn(found.data.email, password);
@@ -47,8 +49,8 @@ export function SignInPage() {
       <form onSubmit={submit} className="form">
         {withEmail && (
           <label className="field">
-            <span>Email</span>
-            <input type="email" autoComplete="username" inputMode="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+            <span>Email or WhatsApp number</span>
+            <input type="text" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
           </label>
         )}
         <div className="field">

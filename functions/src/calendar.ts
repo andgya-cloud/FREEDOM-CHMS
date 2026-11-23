@@ -1,4 +1,5 @@
 import { logger } from 'firebase-functions';
+import { isPhoneLogin } from './shared/phone.js';
 import { defineSecret } from 'firebase-functions/params';
 import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { HttpsError, onCall } from 'firebase-functions/v2/https';
@@ -134,7 +135,7 @@ async function email(org: OrgInfo, recipients: Recipient[], m: Message): Promise
   if (!mail) return 0;
   let sent = 0;
   for (const r of recipients) {
-    if (!r.emailOn || !EMAIL.test(r.email)) continue;
+    if (!r.emailOn || !EMAIL.test(r.email) || isPhoneLogin(r.email)) continue;
     try {
       await mail.t.sendMail({ from: `"${mail.name} Calendar" <${mail.from}>`, to: `"${r.name}" <${r.email}>`, subject: m.subject, text: m.text, html: m.html });
       sent += 1;
