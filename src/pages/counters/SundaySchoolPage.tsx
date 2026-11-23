@@ -38,7 +38,7 @@ export function SundaySchoolPage() {
   if (!info) return <div className="page narrow"><h1>🧒 Sunday school</h1><p className="muted">Loading…</p></div>;
 
   return (
-    <div className="page narrow stack">
+    <div className="page lav-today ss-page">
       <SsWelcome org={church} info={info} name={profile?.displayName} />
       {info.mine && <ClassCounter orgId={church.id} info={info} onSaved={setInfo} />}
       {!info.mine && !info.leads && profile?.roleId === 'ssteacher' && <p className="notice notice-warn">Your class is not on the list. Please ask Dorothy to add it.</p>}
@@ -104,9 +104,10 @@ function ClassCounter({ orgId, info, onSaved }: { orgId: string; info: Info; onS
     }, 600);
   };
 
-  if (!info.service) return <section className="card"><h2>{mine.name}</h2><p className="muted">There is no service today. On Sunday, or on the day of a special service in the calendar, you count your class here.</p></section>;
+  // No service today: the welcome above already says so (Andy, 2026-11-24: no repeats).
+  if (!info.service) return null;
   return (
-    <section className="card ctr-card" style={{ margin: '0 auto', width: '100%' }}>
+    <section className="card ctr-card" style={{ margin: '0 auto', width: '100%', maxWidth: 560 }}>
       <p className="muted" style={{ margin: 0 }}>{info.service}</p>
       <p className="ctr-job">🧒 {ssClassLabel(mine)}</p>
       <div className="ctr-number" aria-live="polite">{shown}</div>
