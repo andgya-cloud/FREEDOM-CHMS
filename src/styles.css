@@ -2775,6 +2775,16 @@ a.fin-chip:hover { background: #fdecea; }
 .reg-cell.hand { background: rgb(176 137 52 / .14); border-color: transparent; }
 .reg-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; background: var(--green); vertical-align: middle; }
 .reg-hand { color: rgb(176 137 52); font-weight: 700; }
+/* Freedom 252 Meet times (2026-11-24) */
+.reg-cell.part { background: rgb(176 137 52 / .10); border-style: dashed; border-color: var(--gold); font-size: .62rem; color: var(--gold-ink); }
+.reg-cell.wait { background: rgb(176 137 52 / .18); border-color: var(--gold); color: var(--gold-ink); }
+.class-time { font-size: .8rem; color: var(--green); }
+.class-time.part { color: var(--gold-ink); }
+.class-words { display: grid; gap: 8px; text-align: left; margin-top: 12px; }
+.class-words .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.class-word-times { display: grid; gap: 10px; text-align: center; }
+.class-word-times .class-word.now { color: var(--green); }
+.class-word-due { font-weight: 700; color: var(--gold-ink); }
 .reg-pct { font-weight: 700; padding-left: 8px !important; white-space: nowrap; }
 .import-check td { text-align: left; padding: 3px 4px; vertical-align: top; }
 .import-check input:not([type='checkbox']) { min-width: 140px; padding: 6px 8px; min-height: 0; }

@@ -6,7 +6,8 @@ import { formatDateKey } from '../../../functions/src/shared/datetime';
 import { progressPath } from '../../../functions/src/shared/classRegister';
 
 type Info = { church: string; programme: string; date: string; topic: string; open: boolean; why: string; needWord?: boolean };
-type Done = { ok: boolean; already?: boolean; added?: boolean; firstName: string; topic?: string; done?: number; total?: number; percent?: number; token?: string; needName?: boolean };
+type Later = { token: string; words: { kind: string; label: string; got: boolean; over: boolean }[]; endLabel: string };
+type Done = { later?: Later | null; ok: boolean; already?: boolean; added?: boolean; firstName: string; topic?: string; done?: number; total?: number; percent?: number; token?: string; needName?: boolean };
 const SAVED = 'classCheckIn.me';
 
 const cleanMessage = (err: unknown) => {
@@ -14,6 +15,14 @@ const cleanMessage = (err: unknown) => {
   return e?.code?.startsWith('functions/') && e.message && e.code !== 'functions/internal'
     ? e.message.replace(/\s*\[\d+\]$/, '')
     : 'We could not check you in. Please check your internet and try again, or ask the class leader.';
+};
+/** This phone's own id, so one phone marks one person per class (Andy, 2026-11-24, 1A). */
+const deviceId = (): string => {
+  try {
+    let id = localStorage.getItem('classCheckIn.device');
+    if (!id) { id = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('classCheckIn.device', id); }
+    return id;
+  } catch { return ''; }
 };
 const remembered = (): { phone: string; name: string } | null => {
   try { const v = JSON.parse(localStorage.getItem(SAVED) ?? 'null'); return v?.phone ? v : null; } catch { return null; }
@@ -55,7 +64,7 @@ export function ClassCheckInPage() {
     setBusy(true);
     try {
       const r = await httpsCallable<Record<string, unknown>, Done>(functions, 'classRegister')({
-        action: 'checkin', orgId, eventId, k, phone, word, name: needName ? name : '', website,
+        action: 'checkin', orgId, eventId, k, phone, word, name: needName ? name : '', website, device: deviceId(),
       });
       if (r.data.needName) { setNeedName(true); return; }
       try { localStorage.setItem(SAVED, JSON.stringify({ phone, name: r.data.firstName })); } catch { /* private window */ }
@@ -84,7 +93,8 @@ export function ClassCheckInPage() {
           </>
         ) : null}
         {done.added && <p className="muted small">Welcome to {info.programme}! The class leader will check your details.</p>}
-        {done.token && <Link className="btn btn-primary btn-block" to={progressPath(orgId, done.token)}>See my progress</Link>}
+        {done.later && <LaterWords orgId={orgId} eventId={eventId} k={k} later={done.later} />}
+        {done.token && <Link className={done.later ? 'btn btn-block' : 'btn btn-primary btn-block'} to={progressPath(orgId, done.token)}>See my progress</Link>}
       </div>
     );
   }
@@ -119,6 +129,52 @@ export function ClassCheckInPage() {
           <button type="submit" className="btn btn-primary btn-block btn-lg" disabled={busy}>{busy ? 'Checking in…' : 'Mark me present'}</button>
         </form>
       )}
+    </div>
+  );
+}
+
+/**
+ * The later code words (Andy, 2026-11-24, 2A): the leader says a check word at a surprise minute and a last word
+ * near the end. The student keeps this page open and types each one when it is said.
+ */
+function LaterWords({ orgId, eventId, k, later }: { orgId: string; eventId: string; k: string; later: Later }) {
+  const [words, setWords] = useState(later.words);
+  const [word, setWord] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const waiting = words.filter((w) => !w.got);
+
+  async function send(e: FormEvent) {
+    e.preventDefault();
+    if (!word.trim()) return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await httpsCallable<Record<string, unknown>, { kind: string; got: string[] }>(functions, 'classRegister')({ action: 'word', orgId, eventId, k, token: later.token, word });
+      setWords((ws) => ws.map((w) => ({ ...w, got: r.data.got.includes(w.kind) })));
+      setMsg({ ok: true, text: `${words.find((w) => w.kind === r.data.kind)?.label ?? 'Word'} received. Thank you!` });
+      setWord('');
+    } catch (err) {
+      setMsg({ ok: false, text: cleanMessage(err) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="class-words card">
+      <strong>{waiting.length ? 'Keep this page open' : 'All words in. Thank you!'}</strong>
+      {waiting.length > 0 && <p className="small">The leader will say {waiting.length === 2 ? 'two more code words' : 'one more code word'} during the class (the last one at about {later.endLabel}). Type each one here when you hear it.</p>}
+      <div className="chip-row">
+        {words.map((w) => <span key={w.kind} className="chip">{w.got ? '✓' : '○'} {w.label}</span>)}
+      </div>
+      {waiting.length > 0 && (
+        <form className="form" onSubmit={send}>
+          <label className="field"><span>Code word</span><input value={word} maxLength={30} autoCapitalize="characters" autoComplete="off" onChange={(e) => setWord(e.target.value)} /></label>
+          <button type="submit" className="btn btn-primary btn-block" disabled={busy || !word.trim()}>{busy ? 'Sending…' : 'Send the word'}</button>
+        </form>
+      )}
+      {msg && <p className={msg.ok ? 'small' : 'error'} role={msg.ok ? 'status' : 'alert'}>{msg.text}</p>}
     </div>
   );
 }

@@ -136,3 +136,51 @@ export const CODE_WORDS = [
 /** The code word from the first hex digits of the class's secret sum. */
 export const codeWordFrom = (hex: string) => CODE_WORDS[parseInt(hex.slice(0, 8), 16) % CODE_WORDS.length]!;
 export const sameWord = (a: string, b: string) => a.trim().toUpperCase() === b.trim().toUpperCase();
+
+/**
+ * Making the online check-in hard to fake (Andy, 2026-11-24, 1A 2A, then 2A 3A 4A 5A 6A):
+ *   - three code words: the start word (any time in class), a check word said at a random minute between a quarter
+ *     past and twenty to the end, and a last word said 15 minutes before the end. Each later word only works in its
+ *     own ten or so minutes, so a friend at home must be fed each word live.
+ *   - one phone marks one person per class.
+ *   - after class the leader uploads the Google Meet attendance list: time in class is worked out from it, and a
+ *     topic counts at 75% of the class or more.
+ */
+export const CHECK_WORD_INPUT = 'word-check';
+export const END_WORD_INPUT = 'word-end';
+export type LaterWord = 'check' | 'end';
+export const LATER_WORDS: LaterWord[] = ['check', 'end'];
+export const LATER_WORD_LABEL: Record<LaterWord, string> = { check: 'Check word', end: 'Last word' };
+/** A topic counts when the student was in the Meet for at least this share of the class (3A). */
+export const MEET_PASS_PERCENT = 75;
+
+/** The three words of a class, never the same twice. */
+export function classWords(startHex: string, checkHex: string, endHex: string): { start: string; check: string; end: string } {
+  const n = CODE_WORDS.length;
+  const s = parseInt(startHex.slice(0, 8), 16) % n;
+  let c = parseInt(checkHex.slice(0, 8), 16) % n;
+  if (c === s) c = (c + 1) % n;
+  let e = parseInt(endHex.slice(0, 8), 16) % n;
+  while (e === s || e === c) e = (e + 1) % n;
+  return { start: CODE_WORDS[s]!, check: CODE_WORDS[c]!, end: CODE_WORDS[e]! };
+}
+
+/**
+ * When each later word is said and accepted (minutes since midnight). The check word's minute comes from the class's
+ * secret, so nobody knows it in advance; it is taken for 10 minutes. The last word from 15 minutes before the end
+ * until 5 minutes after.
+ */
+export function wordTimes(program: Pick<ProgramConfig, 'classStart' | 'classEnd'>, checkHex: string): Record<LaterWord, { say: number; from: number; to: number }> {
+  const start = minutesOf(program.classStart, 20 * 60);
+  const end = Math.max(minutesOf(program.classEnd, start + 60), start + 30);
+  const endSay = end - 15;
+  const first = start + 15, last = Math.max(first, endSay - 15);
+  const say = first + (parseInt(checkHex.slice(8, 16), 16) % (last - first + 1));
+  return { check: { say, from: say, to: say + 10 }, end: { say: endSay, from: endSay, to: end + 5 } };
+}
+
+export const minutesLabel = (m: number) => clockLabel(`${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}`);
+export const classMinutes = (program: Pick<ProgramConfig, 'classStart' | 'classEnd'>) => {
+  const start = minutesOf(program.classStart, 20 * 60);
+  return { start, end: Math.max(minutesOf(program.classEnd, start + 60), start + 30) };
+};

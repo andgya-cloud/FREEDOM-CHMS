@@ -24,3 +24,24 @@ describe('Freedom 252 calendar', () => {
     expect(percentOf(24, 24)).toBe(100);
   });
 });
+
+describe('three code words and when they are said (2026-11-24)', () => {
+  it('never gives the same word twice', async () => {
+    const { classWords } = await import('./classRegister.js');
+    for (let i = 0; i < 200; i++) {
+      const h = (n: number) => ((i * 2654435761 + n * 40503) >>> 0).toString(16).padStart(8, '0') + '00000000';
+      const w = classWords(h(1), h(1), h(1));
+      expect(new Set([w.start, w.check, w.end]).size).toBe(3);
+    }
+  });
+  it('puts the check word between 8:15 and 8:30 and the last word at 8:45 for an 8 to 9 class', async () => {
+    const { wordTimes } = await import('./classRegister.js');
+    for (const hex of ['0000000000000000', 'ffffffffffffffff', '12345678abcdef01']) {
+      const t = wordTimes({ classStart: '20:00', classEnd: '21:00' }, hex);
+      expect(t.check.say).toBeGreaterThanOrEqual(20 * 60 + 15);
+      expect(t.check.say).toBeLessThanOrEqual(20 * 60 + 30);
+      expect(t.check.to - t.check.from).toBe(10);
+      expect(t.end).toEqual({ say: 20 * 60 + 45, from: 20 * 60 + 45, to: 21 * 60 + 5 });
+    }
+  });
+});

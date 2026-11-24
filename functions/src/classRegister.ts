@@ -7,6 +7,11 @@ import { normalizePhone } from './shared/phone.js';
 import { attendanceIdFor, attended } from './shared/attendance.js';
 import { can, canAccessOrg } from './shared/permissions.js';
 import { coverage, enrollmentIdFor, programSessionIdFor, type CompletionRule, type PlanEntry, type SessionLike, type Topic } from './shared/programs.js';
+import { meetPercent } from './shared/meetList.js';
+import { nameWords } from './shared/classList.js';
+import {
+  CHECK_WORD_INPUT, classMinutes, classWords, END_WORD_INPUT, LATER_WORD_LABEL, LATER_WORDS, MEET_PASS_PERCENT, minutesLabel, wordTimes, type LaterWord,
+} from './shared/classRegister.js';
 import { codeWordFrom, CODE_WORD_INPUT, isWindowOpen, nextPlanned, ONLINE_LINK_INPUT, sameWord, percentOf, plannedOn, QR_SLOTS_GOOD, scanWindow, slotNow } from './shared/classRegister.js';
 
 /**
@@ -20,6 +25,11 @@ import { codeWordFrom, CODE_WORD_INPUT, isWindowOpen, nextPlanned, ONLINE_LINK_I
  *     { action: 'links', orgId, programId }    → each student's progress link, for the WhatsApp reminders (6A)
  *     { action: 'import', orgId, programId, rows } → adds and enrols a list of students
  *     { action: 'markList', orgId, programId, date, rows: [{ personId } | { name }] } → marks a class from a list of names
+ *     { action: 'meetNames', orgId }                          → Meet names already matched to students
+ *     { action: 'meet', orgId, eventId, rows }                → the Google Meet list: time in class for each student
+ *     { action: 'okMark', orgId, eventId, personId, ok }      → the leader keeps (or takes out) a check-in not seen in Meet
+ *   public, after checking in:
+ *     { action: 'word', orgId, eventId, k, token, word }      → the check word and the last word said later in class
  */
 const SELF = 'class-qr';
 const MAX_PER_CLASS = 400;
@@ -71,6 +81,9 @@ const tokenFor = (key: string, enrollmentId: string) => `${enrollmentId}.${hmac(
 /** The Meet chat link's code: one for the whole class (it still only works in class hours). */
 const isOnlineCode = (key: string, code: string) => same(hmac(key, ONLINE_LINK_INPUT).slice(0, 12), code);
 const codeWordOf = (key: string) => codeWordFrom(hmac(key, CODE_WORD_INPUT));
+const wordsOf = (key: string) => classWords(hmac(key, CODE_WORD_INPUT), hmac(key, CHECK_WORD_INPUT), hmac(key, END_WORD_INPUT));
+/** A student's own key to send the later words, given when they check in. */
+const markTokenFor = (key: string, eventId: string, personId: string) => `${personId}.${hmac(key, `mark|${eventId}|${personId}`).slice(0, 20)}`;
 
 function codeGood(key: string, code: string): boolean {
   if (isOnlineCode(key, code)) return true;
@@ -109,7 +122,7 @@ async function progressOf(orgId: string, programId: string, personId: string, pr
   const manual = (enrolment.get('manualTopics') as Record<string, string> | undefined) ?? null;
   const c = coverage(topics, rule, sessions.docs.map((d) => ({ id: d.id, ...d.data() }) as SessionLike),
     marks.docs.map((d) => ({ eventId: d.get('eventId'), status: d.get('status'), deletedAt: d.get('deletedAt') })), manual);
-  return { c, topics, manual: manual ?? {}, enrolment };
+  return { c, topics, manual: manual ?? {}, enrolment, sessions: sessions.docs, marks: marks.docs };
 }
 
 export const classRegister = onCall({ invoker: 'public', memory: '256MiB', timeoutSeconds: 30, maxInstances: 10 }, async (request) => {
@@ -132,6 +145,7 @@ export const classRegister = onCall({ invoker: 'public', memory: '256MiB', timeo
   }
 
   if (action === 'checkin') return checkIn(request, orgId, org, d);
+  if (action === 'word') return laterWord(request, orgId, org, d);
   if (action === 'progress') return progressPage(orgId, org, text(d.token, 200));
 
   // ---- staff ----
@@ -162,6 +176,30 @@ export const classRegister = onCall({ invoker: 'public', memory: '256MiB', timeo
       throw new HttpsError('permission-denied', 'You do not have permission to mark this register.');
     }
     return markFromList(orgId, org.tz, text(d.programId, 60), text(d.date, 10), d.rows, caller.uid);
+  }
+
+  if (action === 'meetNames') {
+    if (!can(caller.profile, 'people.read')) throw new HttpsError('permission-denied', 'You do not have permission to see students.');
+    const snap = await db.collection(`organizations/${orgId}/meetNames`).get();
+    return { names: Object.fromEntries(snap.docs.map((x) => [String(x.get('name')), String(x.get('personId'))])) };
+  }
+
+  if (action === 'meet') {
+    if (!can(caller.profile, 'attendance.write') || !can(caller.profile, 'programs.write')) {
+      throw new HttpsError('permission-denied', 'You do not have permission to mark this register.');
+    }
+    return meetList(orgId, org.tz, text(d.eventId, 120), d.rows, caller.uid);
+  }
+
+  if (action === 'okMark') {
+    if (!can(caller.profile, 'attendance.write')) throw new HttpsError('permission-denied', 'You do not have permission to mark this register.');
+    const eventId = text(d.eventId, 120), personId = text(d.personId, 60);
+    if (!ID.test(eventId) || !ID.test(personId)) throw new HttpsError('invalid-argument', 'That mark was not found.');
+    const ref = db.doc(`organizations/${orgId}/attendance/${attendanceIdFor(eventId, personId)}`);
+    if (!(await ref.get()).exists) throw new HttpsError('not-found', 'That mark was not found.');
+    const ok = d.ok === true;
+    await ref.update({ status: ok ? 'present' : 'absent', needsOk: false, okBy: ok ? caller.uid : null, updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid });
+    return { ok: true };
   }
   throw new HttpsError('invalid-argument', 'Unknown action.');
 });
@@ -223,21 +261,26 @@ async function checkIn(request: CallableRequest, orgId: string, org: { tz: strin
   }
 
   const person = await findByPhone(orgId, phone);
+  // One phone marks one person per class (Andy, 2026-11-24, 1A), and a few people at most from one internet connection.
+  // Claimed only once the check-in goes through, so a mistyped number does not lock the phone.
+  const claim = (who: string) => claimPhone(orgId, ev, text(d.device, 80), sender, phone, who);
   const batch = db.batch();
   let added = false;
   if (!person) {
     // Someone new (3A): they type their name and are added and enrolled; the leader sees them on "Check these".
     const fullName = tidyName(text(d.name, 120));
     if (fullName.length < 2 || !/[a-z]/i.test(fullName)) return { needName: true };
+    await claim(fullName);
     const ref = db.collection(`organizations/${orgId}/people`).doc();
     batch.set(ref, newPerson(orgId, fullName, phone, null, true, today, SELF));
     batch.set(db.doc(`organizations/${orgId}/enrollments/${enrollmentIdFor(programId, ref.id)}`), newEnrolment(orgId, programId, ref.id, today, SELF, true));
-    batch.set(db.doc(`organizations/${orgId}/attendance/${attendanceIdFor(ev.id, ref.id)}`), mark(orgId, ev, ref.id));
+    batch.set(db.doc(`organizations/${orgId}/attendance/${attendanceIdFor(ev.id, ref.id)}`), mark(orgId, ev, ref.id, needWord));
     await batch.commit();
-    return finish(orgId, programId, ref.id, fullName, program, ev, false, true);
+    return finish(orgId, programId, ref.id, fullName, program, ev, false, true, needWord ? key : null, org.tz);
   }
 
   const personId = person.id;
+  await claim(String(person.get('fullName') ?? ''));
   const enrolRef = db.doc(`organizations/${orgId}/enrollments/${enrollmentIdFor(programId, personId)}`);
   const enrolment = await enrolRef.get();
   if (!enrolment.exists) {
@@ -251,25 +294,222 @@ async function checkIn(request: CallableRequest, orgId: string, org: { tz: strin
   const had = await markRef.get();
   const already = had.exists && had.get('deletedAt') == null && attended(had.get('status'));
   if (!already) {
-    if (had.exists) batch.update(markRef, { status: 'present', method: 'self', deletedAt: null, deletedBy: null, updatedAt: FieldValue.serverTimestamp(), updatedBy: SELF });
-    else batch.set(markRef, mark(orgId, ev, personId));
+    if (had.exists) batch.update(markRef, { status: 'present', method: 'self', online: needWord, deletedAt: null, deletedBy: null, updatedAt: FieldValue.serverTimestamp(), updatedBy: SELF });
+    else batch.set(markRef, mark(orgId, ev, personId, needWord));
   }
   await batch.commit();
-  return finish(orgId, programId, personId, String(person.get('fullName') ?? ''), program, ev, already, added);
+  return finish(orgId, programId, personId, String(person.get('fullName') ?? ''), program, ev, already, added, needWord ? key : null, org.tz);
 }
 
-function mark(orgId: string, ev: Snap, personId: string) {
+const MAX_PEOPLE_PER_NETWORK = 3;
+
+/** Refuses a phone (or a network) that has already marked someone else in this class, and notes the try for the leader. */
+async function claimPhone(orgId: string, ev: Snap, device: string, sender: string, phone: string, who: string) {
+  const base = `organizations/${orgId}/welcomeDays/class_${ev.id}`;
+  const deviceRef = device ? db.doc(`${base}_d_${createHash('sha256').update(device).digest('hex').slice(0, 24)}`) : null;
+  const netRef = db.doc(`${base}_${sender}_people`);
+  const refused = await db.runTransaction(async (tx) => {
+    const [dev, net] = await Promise.all([deviceRef ? tx.get(deviceRef) : Promise.resolve(null), tx.get(netRef)]);
+    const owner = dev?.exists ? String(dev.get('phone')) : '';
+    if (owner && owner !== phone) return { by: String(dev!.get('who') || 'someone else'), kind: 'phone' as const };
+    const phones = (net.get('phones') as string[] | undefined) ?? [];
+    if (!phones.includes(phone) && phones.length >= MAX_PEOPLE_PER_NETWORK) return { by: '', kind: 'network' as const };
+    if (deviceRef && !owner) tx.set(deviceRef, { phone, who: who.slice(0, 80), at: FieldValue.serverTimestamp() });
+    if (!phones.includes(phone)) tx.set(netRef, { phones: FieldValue.arrayUnion(phone) }, { merge: true });
+    return null;
+  });
+  if (!refused) return;
+  const name = who || phone;
+  await ev.ref.update({
+    checkFlags: FieldValue.arrayUnion({
+      at: new Date().toISOString(),
+      text: refused.kind === 'phone' ? `The phone that marked ${refused.by} tried to mark ${name} too.` : `${name}: refused, more than ${MAX_PEOPLE_PER_NETWORK} people tried from one internet connection.`,
+    }),
+  }).catch(() => undefined);
+  throw new HttpsError('permission-denied', refused.kind === 'phone'
+    ? `This phone has already marked ${firstName(refused.by) || 'someone'} for this class. Each person checks in on their own phone.`
+    : 'Too many people have checked in from this internet connection. Each person checks in on their own phone and data, or the class leader marks you.');
+}
+
+/** The check word and the last word, typed on the student's page after checking in (2A). */
+async function laterWord(request: CallableRequest, orgId: string, org: { tz: string }, d: Record<string, unknown>) {
+  const { ev, program } = await loadClass(orgId, text(d.eventId, 120));
+  const key = await classKey(orgId, ev.id, false);
+  if (!key || !isOnlineCode(key, text(d.k, 20))) throw new HttpsError('failed-precondition', 'Please open the check-in link from the Meet chat again.');
+  const [personId, sig] = text(d.token, 80).split('.');
+  if (!personId || !sig || !ID.test(personId) || !same(markTokenFor(key, ev.id, personId), `${personId}.${sig}`)) {
+    throw new HttpsError('permission-denied', 'Please check in first.');
+  }
+  // Guessing is limited like check-ins.
+  const sender = createHash('sha256').update(`${ev.id}|${request.rawRequest?.ip ?? ''}`).digest('hex').slice(0, 24);
+  const triesRef = db.doc(`organizations/${orgId}/welcomeDays/class_${ev.id}_${sender}_words`);
+  const tries = await triesRef.get();
+  if ((tries.get('count') ?? 0) >= 20) throw new HttpsError('resource-exhausted', 'Too many tries. Please ask the class leader.');
+  await triesRef.set({ count: FieldValue.increment(1) }, { merge: true });
+
+  const today = localDateKey(new Date(), org.tz);
+  if (ev.get('date') !== today) throw new HttpsError('failed-precondition', 'This class is over.');
+  const p = zonedParts(new Date(), org.tz);
+  const now = p.hour * 60 + p.minute;
+  const words = wordsOf(key);
+  const times = wordTimes({ classStart: program.get('classStart'), classEnd: program.get('classEnd') }, hmac(key, CHECK_WORD_INPUT));
+  const typed = text(d.word, 30);
+  const kind = LATER_WORDS.find((w) => sameWord(typed, words[w]));
+  if (!kind) {
+    if (sameWord(typed, words.start)) throw new HttpsError('invalid-argument', 'That is the first word. Wait for the next word the leader says.');
+    throw new HttpsError('invalid-argument', 'That word is not right. Listen for the word the leader says.');
+  }
+  const t = times[kind];
+  if (now < t.from || now > t.to) throw new HttpsError('failed-precondition', `${LATER_WORD_LABEL[kind]}: this word is no longer taken.`);
+  const markRef = db.doc(`organizations/${orgId}/attendance/${attendanceIdFor(ev.id, personId)}`);
+  if (!(await markRef.get()).exists) throw new HttpsError('permission-denied', 'Please check in first.');
+  await markRef.update({ [`words.${kind}`]: FieldValue.serverTimestamp() });
+  const got = ((await markRef.get()).get('words') as Record<string, unknown> | undefined) ?? {};
+  return { ok: true, kind, got: LATER_WORDS.filter((w) => got[w]) };
+}
+
+/** Each Meet name to its student, remembered for the next class (4A). */
+const meetKey = (name: string) => nameWords(name).join('_').slice(0, 120) || createHash('sha256').update(name).digest('hex').slice(0, 24);
+
+interface MeetRow { name: string; personId: string; newName: boolean; skip: boolean; minutes: number; join: number | null; leave: number | null }
+
+/**
+ * The Google Meet list after class (Andy, 2026-11-24, 3A 4A 5A): the leader has matched each Meet name to a student
+ * on the screen. A student's time in class is their Meet time; on two devices (phone and laptop) the longer one
+ * counts. 75% of the class or more marks them present; less is "Part" and the topic stays open for a make-up.
+ * Someone who checked in but is not on the Meet list is not counted until the leader says OK.
+ */
+async function meetList(orgId: string, tz: string, eventId: string, raw: unknown, uid: string) {
+  if (!ID.test(eventId)) throw new HttpsError('invalid-argument', 'Please choose the class.');
+  const base = `organizations/${orgId}`;
+  const ev = await db.doc(`${base}/events/${eventId}`).get();
+  if (!ev.exists || ev.get('deletedAt') != null || !ev.get('programId')) throw new HttpsError('not-found', 'That class was not found.');
+  const programId = String(ev.get('programId'));
+  const program = await db.doc(`${base}/programs/${programId}`).get();
+  if (!Array.isArray(raw) || raw.length === 0) throw new HttpsError('invalid-argument', 'The list is empty.');
+  if (raw.length > 400) throw new HttpsError('invalid-argument', 'The list is too long.');
+  const { start, end } = classMinutes({ classStart: program.get('classStart'), classEnd: program.get('classEnd') });
+  const num = (v: unknown, lo: number, hi: number) => (typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, Math.round(v))) : null);
+  const rows: MeetRow[] = raw.map((r) => {
+    const o = (r ?? {}) as Record<string, unknown>;
+    return {
+      name: tidyName(text(o.name, 120)), personId: text(o.personId, 60), newName: o.newName === true, skip: o.skip === true,
+      minutes: num(o.minutes, 0, end - start) ?? 0, join: num(o.join, 0, 1440), leave: num(o.leave, 0, 1440),
+    };
+  }).filter((r) => r.name.length >= 2);
+
+  const today = localDateKey(new Date(), tz);
+  const people = db.collection(`${base}/people`);
+  const earlier = (await db.collection(`${base}/events`).where('programId', '==', programId).get()).docs
+    .filter((e) => e.get('deletedAt') == null && String(e.get('date')) < String(ev.get('date')));
+  // One student can be on the list under two names (phone and laptop): their best one counts.
+  const best = new Map<string, { minutes: number; join: number | null; leave: number | null; names: string[] }>();
+  const result = { present: 0, part: 0, added: 0, waiting: 0, names: 0 };
+
+  for (const r of rows) {
+    let personId = r.personId;
+    if (personId && !ID.test(personId)) continue;
+    if (r.skip) {
+      // Not a student (the leader, a guest): remembered so it is not asked again.
+      await db.doc(`${base}/meetNames/${meetKey(r.name)}`).set({ name: r.name, personId: 'skip', updatedAt: FieldValue.serverTimestamp(), updatedBy: uid });
+      continue;
+    }
+    if (!personId && r.newName) {
+      const fullName = r.name;
+      const same = (await people.where('fullName', '==', fullName).limit(3).get()).docs.find((x) => x.get('deletedAt') == null);
+      if (same) personId = same.id;
+      else {
+        const ref = people.doc();
+        await ref.set(newPerson(orgId, fullName, null, null, false, today, uid));
+        personId = ref.id;
+      }
+    }
+    if (!personId) continue;
+    // Remember the Meet name (4A).
+    await db.doc(`${base}/meetNames/${meetKey(r.name)}`).set({ name: r.name, personId, updatedAt: FieldValue.serverTimestamp(), updatedBy: uid });
+    result.names++;
+    const b = best.get(personId);
+    if (!b) best.set(personId, { minutes: r.minutes, join: r.join, leave: r.leave, names: [r.name] });
+    else {
+      b.minutes = Math.min(end - start, Math.max(b.minutes, r.minutes));
+      b.join = b.join == null ? r.join : r.join == null ? b.join : Math.min(b.join, r.join);
+      b.leave = b.leave == null ? r.leave : r.leave == null ? b.leave : Math.max(b.leave, r.leave);
+      b.names.push(r.name);
+    }
+  }
+
+  const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: uid };
+  for (const [personId, b] of best) {
+    const batch = db.batch();
+    const percent = meetPercent(b.minutes, start, end);
+    const pass = percent >= MEET_PASS_PERCENT;
+    const meet = { minutes: b.minutes, percent, join: b.join, leave: b.leave, names: b.names.slice(0, 5) };
+    const enrolRef = db.doc(`${base}/enrollments/${enrollmentIdFor(programId, personId)}`);
+    const enrolment = await enrolRef.get();
+    if (!enrolment.exists) {
+      batch.set(enrolRef, newEnrolment(orgId, programId, personId, today, uid, false, 'Added from the Google Meet list'));
+      for (const e of earlier) {
+        const ref = db.doc(`${base}/attendance/${attendanceIdFor(e.id, personId)}`);
+        if (!(await ref.get()).exists) batch.set(ref, registerMark(orgId, e, programId, personId, 'absent', uid));
+      }
+      result.added++;
+    } else if (enrolment.get('deletedAt') != null || enrolment.get('status') === 'dropped') {
+      batch.update(enrolRef, { status: 'active', deletedAt: null, deletedBy: null, ...stamp });
+    }
+    const markRef = db.doc(`${base}/attendance/${attendanceIdFor(ev.id, personId)}`);
+    const had = await markRef.get();
+    const fields = { status: pass ? 'present' : 'absent', part: !pass, meet, needsOk: false, deletedAt: null, deletedBy: null, ...stamp };
+    if (had.exists) batch.update(markRef, fields);
+    else batch.set(markRef, { ...registerMark(orgId, ev, programId, personId, pass ? 'present' : 'absent', uid), ...fields });
+    if (pass) result.present++; else result.part++;
+    await batch.commit();
+  }
+
+  // Checked in but never seen in Meet (5A): not counted until the leader says OK.
+  const marks = await db.collection(`${base}/attendance`).where('eventId', '==', ev.id).get();
+  for (const m of marks.docs) {
+    if (best.has(String(m.get('personId'))) || m.get('deletedAt') != null || !attended(m.get('status')) || m.get('okBy')) continue;
+    await m.ref.update({ status: 'absent', needsOk: true, meet: null, ...stamp });
+    result.waiting++;
+  }
+  await ev.ref.update({ meetList: { at: FieldValue.serverTimestamp(), by: uid, names: rows.length, classMinutes: end - start } });
+  return result;
+}
+
+function registerMark(orgId: string, e: Snap, programId: string, personId: string, status: 'present' | 'absent', uid: string) {
   const now = FieldValue.serverTimestamp();
   return {
-    orgId, eventId: ev.id, personId, date: ev.get('date'), programId: ev.get('programId'), status: 'present', method: 'self',
+    orgId, eventId: e.id, personId, date: e.get('date'), programId, status, method: 'register',
+    checkedInAt: status === 'present' ? now : null, deletedAt: null, deletedBy: null, createdAt: now, createdBy: uid, updatedAt: now, updatedBy: uid,
+  };
+}
+
+function mark(orgId: string, ev: Snap, personId: string, online = false) {
+  const now = FieldValue.serverTimestamp();
+  return {
+    orgId, eventId: ev.id, personId, date: ev.get('date'), programId: ev.get('programId'), status: 'present', method: 'self', online,
     checkedInAt: now, deletedAt: null, deletedBy: null, createdAt: now, createdBy: SELF, updatedAt: now, updatedBy: SELF,
   };
 }
 
-async function finish(orgId: string, programId: string, personId: string, fullName: string, program: Snap, ev: Snap, already: boolean, added: boolean) {
+async function finish(orgId: string, programId: string, personId: string, fullName: string, program: Snap, ev: Snap, already: boolean, added: boolean, classSecret: string | null = null, tz = DEFAULT_TIME_ZONE) {
   const { c } = await progressOf(orgId, programId, personId, program);
   const key = await linkKey();
+  // Online classes: the student's own key for the later words, and when they come (2A).
+  let later = null;
+  if (classSecret) {
+    const times = wordTimes({ classStart: program.get('classStart'), classEnd: program.get('classEnd') }, hmac(classSecret, CHECK_WORD_INPUT));
+    const got = ((await db.doc(`organizations/${orgId}/attendance/${attendanceIdFor(ev.id, personId)}`).get()).get('words') as Record<string, unknown> | undefined) ?? {};
+    const p = zonedParts(new Date(), tz);
+    const now = p.hour * 60 + p.minute;
+    later = {
+      token: markTokenFor(classSecret, ev.id, personId),
+      words: LATER_WORDS.map((w: LaterWord) => ({ kind: w, label: LATER_WORD_LABEL[w], got: !!got[w], over: now > times[w].to })),
+      endLabel: minutesLabel(times.end.say),
+    };
+  }
   return {
+    later,
     ok: true, already, added, firstName: firstName(fullName), topic: topicNames(program, (ev.get('topicIds') as string[] | undefined) ?? []),
     done: c.count, total: c.total, percent: percentOf(c.count, c.total), token: tokenFor(key, enrollmentIdFor(programId, personId)),
   };
@@ -288,7 +528,16 @@ async function progressPage(orgId: string, org: { name: string; tz: string }, to
     db.doc(`organizations/${orgId}/people/${personId}`).get(),
   ]);
   if (!program.exists || !person.exists) throw new HttpsError('not-found', 'This progress link is no longer in use.');
-  const { c, topics, manual } = await progressOf(orgId, programId, personId, program);
+  const { c, topics, manual, sessions, marks } = await progressOf(orgId, programId, personId, program);
+  // Time in class from the Google Meet list (6A): "8:04pm to 8:58pm · 90%", or "Part" under 75%.
+  const timeFor = (topicId: string) => {
+    const ids = new Set(sessions.filter((e) => ((e.get('topicIds') as string[] | undefined) ?? []).includes(topicId)).map((e) => e.id));
+    const m = marks.filter((x) => ids.has(String(x.get('eventId'))) && x.get('meet') && x.get('deletedAt') == null)
+      .sort((a, b) => Number(b.get('meet.percent') ?? 0) - Number(a.get('meet.percent') ?? 0))[0];
+    if (!m) return null;
+    const meet = m.get('meet') as { percent: number; join: number | null; leave: number | null };
+    return { percent: meet.percent, part: !!m.get('part'), from: meet.join != null ? minutesLabel(meet.join) : '', to: meet.leave != null ? minutesLabel(meet.leave) : '' };
+  };
   const plan = (program.get('plan') as PlanEntry[] | undefined) ?? [];
   const today = localDateKey(new Date(), org.tz);
   const next = nextPlanned(plan, today);
@@ -299,7 +548,7 @@ async function progressPage(orgId: string, org: { name: string; tz: string }, to
     next: next ? { date: next.date, topic: topics.find((t) => t.id === next.topicId)?.name ?? '' } : null,
     topics: topics.map((t) => {
       const p = plan.find((x) => x.topicId === t.id);
-      return { name: t.name, label: p?.label ?? '', planned: p?.date ?? null, done: c.covered.get(t.id) ?? null, byHand: !!manual[t.id] };
+      return { name: t.name, label: p?.label ?? '', planned: p?.date ?? null, done: c.covered.get(t.id) ?? null, byHand: !!manual[t.id], time: timeFor(t.id) };
     }),
   };
 }

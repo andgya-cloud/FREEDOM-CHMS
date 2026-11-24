@@ -8,7 +8,7 @@ import { clockLabel } from '../../../functions/src/shared/classRegister';
 type Progress = {
   church: string; programme: string; firstName: string; done: number; total: number; percent: number; graduated: boolean;
   classTime: string; next: { date: string; topic: string } | null;
-  topics: { name: string; label: string; planned: string | null; done: string | null; byHand: boolean }[];
+  topics: { name: string; label: string; planned: string | null; done: string | null; byHand: boolean; time?: { percent: number; part: boolean; from: string; to: string } | null }[];
 };
 
 /** A student's own progress (Andy, 2026-11-09, 5A): their %, what they have done and what is left. No sign-in. */
@@ -44,6 +44,11 @@ export function ClassProgressPage() {
             <span>
               <strong>{t.name}</strong>
               <small className="muted">{t.done ? `Done ${formatDateKey(t.done)}${t.byHand ? ' (caught up)' : ''}` : t.planned ? `${t.label} · ${formatDateKey(t.planned)}` : 'Still to do'}</small>
+              {t.time && (
+                <small className={t.time.part ? 'class-time part' : 'class-time'}>
+                  In class {t.time.from && t.time.to ? `${t.time.from} to ${t.time.to} · ` : ''}{t.time.percent}%{t.time.part ? ': part of the class, so this topic is still open. Ask about a make-up class.' : ''}
+                </small>
+              )}
             </span>
           </li>
         ))}

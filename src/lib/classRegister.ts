@@ -8,7 +8,7 @@ import { createEvent } from './attendanceWrites';
 import type { Organization } from '../state/OrgContext';
 import type { Program } from '../state/usePrograms';
 import { programSessionIdFor, type PlanEntry } from '../../functions/src/shared/programs';
-import { CODE_WORD_INPUT, codeWordFrom, ONLINE_LINK_INPUT, F252_ID, F252_SETUP, percentOf, QR_SLOT_SECONDS, slotNow } from '../../functions/src/shared/classRegister';
+import { CHECK_WORD_INPUT, classWords, END_WORD_INPUT, wordTimes, CODE_WORD_INPUT, codeWordFrom, ONLINE_LINK_INPUT, F252_ID, F252_SETUP, percentOf, QR_SLOT_SECONDS, slotNow } from '../../functions/src/shared/classRegister';
 import { formatDateKey } from '../../functions/src/shared/datetime';
 import { POWERED_BY, stampPoweredBy } from '../../functions/src/shared/poweredBy';
 import { studentsFromPdf, studentsFromTable } from '../../functions/src/shared/studentList';
@@ -55,6 +55,11 @@ export const codeFor = async (key: string, slot = slotNow()) => (await hmacHex(k
 /** The one link for the Google Meet chat, and the code word said in class. */
 export const onlineCodeFor = async (key: string) => (await hmacHex(key, ONLINE_LINK_INPUT)).slice(0, 12);
 export const codeWordFor = async (key: string) => codeWordFrom(await hmacHex(key, CODE_WORD_INPUT));
+/** All three words of a class and when the later two are said (Andy, 2026-11-24, 2A). */
+export async function classWordsFor(key: string, program: Pick<Program, 'classStart' | 'classEnd'>) {
+  const [a, b, c] = await Promise.all([hmacHex(key, CODE_WORD_INPUT), hmacHex(key, CHECK_WORD_INPUT), hmacHex(key, END_WORD_INPUT)]);
+  return { words: classWords(a, b, c), times: wordTimes(program, b) };
+}
 export const secondsLeft = () => QR_SLOT_SECONDS - (Math.floor(Date.now() / 1000) % QR_SLOT_SECONDS);
 
 /** Each student's progress link (5A, for the reminders). */
@@ -69,6 +74,44 @@ export const importStudents = (orgId: string, programId: string, rows: StudentIm
 export type ListPick = { personId: string } | { name: string };
 export const markFromList = (orgId: string, programId: string, date: string, rows: ListPick[]) =>
   call<{ present: number; already: number; added: number; absent: number; problems: string[] }>({ action: 'markList', orgId, programId, date, rows });
+
+/** The Google Meet list (Andy, 2026-11-24, 3A 4A 5A). */
+export const meetNames = (orgId: string) => call<{ names: Record<string, string> }>({ action: 'meetNames', orgId }).then((r) => r.names);
+export interface MeetSave { name: string; personId: string; newName: boolean; skip: boolean; minutes: number; join: number | null; leave: number | null }
+export const saveMeetList = (orgId: string, eventId: string, rows: MeetSave[]) =>
+  call<{ present: number; part: number; added: number; waiting: number; names: number }>({ action: 'meet', orgId, eventId, rows });
+export const okMark = (orgId: string, eventId: string, personId: string, ok: boolean) => call<{ ok: boolean }>({ action: 'okMark', orgId, eventId, personId, ok });
+
+/** A CSV line split on commas outside quotes. */
+function csvRows(text: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [], cell = '', quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quoted) {
+      if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') quoted = false; else cell += ch;
+    } else if (ch === '"') quoted = true;
+    else if (ch === ',' || ch === '\t') { row.push(cell.trim()); cell = ''; }
+    else if (ch === '\n' || ch === '\r') {
+      if (ch === '\r' && text[i + 1] === '\n') i++;
+      row.push(cell.trim()); rows.push(row); row = []; cell = '';
+    } else cell += ch;
+  }
+  if (cell || row.length) { row.push(cell.trim()); rows.push(row); }
+  return rows;
+}
+
+/** Any Excel or CSV file as rows of text. Times in Excel come back as clock text ("20:04:31"), not as dates. */
+export async function readTableFile(file: File): Promise<string[][]> {
+  if (/\.(csv|txt)$/i.test(file.name) || file.type === 'text/csv') return csvRows(await file.text());
+  const { default: readXlsxFile } = await import('read-excel-file');
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return (await readXlsxFile(file)).map((r) => r.map((c) => {
+    if (c == null) return '';
+    if (c instanceof Date) return `${c.getUTCFullYear()}-${pad(c.getUTCMonth() + 1)}-${pad(c.getUTCDate())} ${pad(c.getUTCHours())}:${pad(c.getUTCMinutes())}:${pad(c.getUTCSeconds())}`;
+    return String(c).trim();
+  }));
+}
 
 /** Reads a students list from Excel, CSV or PDF (Andy, 2026-11-09, 1A): a Name column, and if there Phone, Email, Preferred contact, Message. */
 export async function readStudentsFile(file: File): Promise<StudentImportRow[]> {

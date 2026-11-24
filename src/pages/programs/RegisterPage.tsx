@@ -6,7 +6,7 @@ import { usePeople, type Person } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useEnrollments, useProgramMarks, usePrograms, useProgramSessions, type Enrollment, type Program } from '../../state/usePrograms';
 import {
-  APP_URL, blankStudentsExcel, importStudents, keepStudent, markFromList, progressLinks, readStudentsFile, registerExcel, registerPdf, removeStudent, tickTopic,
+  APP_URL, blankStudentsExcel, importStudents, keepStudent, markFromList, meetNames, okMark, readTableFile, saveMeetList, progressLinks, readStudentsFile, registerExcel, registerPdf, removeStudent, tickTopic,
   type GridRow, type ListPick, type StudentImportRow,
 } from '../../lib/classRegister';
 import { downloadFile } from '../../lib/givingPdf';
@@ -18,11 +18,14 @@ import { formatPhone, normalizePhone } from '../../../functions/src/shared/phone
 import { whatsappLink } from '../../../functions/src/shared/followups';
 import { coverage, type Coverage } from '../../../functions/src/shared/programs';
 import { matchList, type ListMatch } from '../../../functions/src/shared/classList';
+import { meetPercent, readMeetList, type MeetPerson } from '../../../functions/src/shared/meetList';
+import type { AttendanceMark, ChurchEvent } from '../../state/useAttendance';
 import {
-  clockLabel, F252_GRADUATION, F252_ID, groupReminderText, missedText, nextPlanned, percentOf, progressPath, reminderText,
+  classMinutes, clockLabel, F252_GRADUATION, F252_ID, MEET_PASS_PERCENT, minutesLabel, groupReminderText, missedText, nextPlanned, percentOf, progressPath, reminderText,
 } from '../../../functions/src/shared/classRegister';
 
-interface Row { enrollment: Enrollment; person: Person; progress: Coverage; cells: ('class' | 'hand' | null)[] }
+type Cell = 'class' | 'hand' | 'part' | 'wait' | null;
+interface Row { enrollment: Enrollment; person: Person; progress: Coverage; cells: Cell[]; notes: string[]; parts: (number | null)[] }
 
 /**
  * The class register (Andy, 2026-11-09, 3A-7A): a row per student, a tick per topic, their %, who still needs
@@ -54,6 +57,12 @@ function Register({ org, program }: { org: Organization; program: Program }) {
 
   useEffect(() => { progressLinks(org.id, program.id).then(setLinks).catch(() => undefined); }, [org.id, program.id, enrollments.length]);
 
+  const topicEvents = useMemo(() => {
+    const map = new Map<string, Set<string>>();
+    for (const s of sessions) for (const t of s.topicIds ?? []) map.set(t, (map.get(t) ?? new Set()).add(s.id));
+    return map;
+  }, [sessions]);
+
   const rows: Row[] = useMemo(() => enrollments
     .filter((e) => e.status !== 'dropped')
     .map((e) => {
@@ -61,13 +70,27 @@ function Register({ org, program }: { org: Organization; program: Program }) {
       if (!person) return null;
       const progress = coverage(topics, program.completionRule, sessions, marks.filter((m) => m.personId === e.personId), e.manualTopics);
       const viaClass = coverage(topics, program.completionRule, sessions, marks.filter((m) => m.personId === e.personId));
-      const cells = topics.map((t) => (viaClass.covered.has(t.id) ? 'class' : progress.covered.has(t.id) ? 'hand' : null)) as Row['cells'];
-      return { enrollment: e, person, progress, cells };
+      const mine = marks.filter((m) => m.personId === e.personId && !m.deletedAt);
+      // Time in the Google Meet (2026-11-24): "Part" under 75%, "?" checked in but not seen in Meet.
+      const markFor = (topicId: string) => mine.find((m) => topicEvents.get(topicId)?.has(m.eventId) && (m.meet || m.needsOk));
+      const cells: Cell[] = topics.map((t) => {
+        if (viaClass.covered.has(t.id)) return 'class';
+        if (progress.covered.has(t.id)) return 'hand';
+        const m = markFor(t.id);
+        return m?.needsOk ? 'wait' : m?.part ? 'part' : null;
+      });
+      const notes = topics.map((t) => {
+        const m = markFor(t.id);
+        if (m?.needsOk) return 'checked in, but not seen in the Meet list';
+        return m?.meet ? `in class ${m.meet.join != null && m.meet.leave != null ? `${minutesLabel(m.meet.join)} to ${minutesLabel(m.meet.leave)}, ` : ''}${m.meet.percent}%` : '';
+      });
+      const parts = topics.map((t) => markFor(t.id)?.meet?.percent ?? null);
+      return { enrollment: e, person, progress, cells, notes, parts };
     })
     .filter((r): r is Row => r !== null)
-    .sort((a, b) => b.progress.count - a.progress.count || a.person.fullName.localeCompare(b.person.fullName)), [enrollments, byId, topics, program.completionRule, sessions, marks]);
+    .sort((a, b) => b.progress.count - a.progress.count || a.person.fullName.localeCompare(b.person.fullName)), [enrollments, byId, topics, program.completionRule, sessions, marks, topicEvents]);
 
-  const grid: GridRow[] = rows.map((r) => ({ name: r.person.fullName, phone: formatPhone(r.person.phone), cells: r.cells, done: r.progress.count }));
+  const grid: GridRow[] = rows.map((r) => ({ name: r.person.fullName, phone: formatPhone(r.person.phone), cells: r.cells.map((c) => (c === 'class' || c === 'hand' ? c : null)), done: r.progress.count }));
   const toCheck = rows.filter((r) => r.enrollment.selfAdded);
   const notDone = rows.filter((r) => r.progress.count < topics.length);
   const graduated = rows.length - notDone.length;
@@ -107,6 +130,8 @@ function Register({ org, program }: { org: Organization; program: Program }) {
         </div>
       </div>
 
+      {can('attendance.write') && <ClassChecks org={org} rows={rows} sessions={sessions} marks={marks} today={today} />}
+
       {toCheck.length > 0 && (
         <section className="card">
           <div className="card-head"><h2>Check these</h2><span className="muted small">Joined by scanning the QR code</span></div>
@@ -132,7 +157,7 @@ function Register({ org, program }: { org: Organization; program: Program }) {
       <section className="card">
         <div className="card-head">
           <h2>Register</h2>
-          <span className="muted small"><span className="reg-dot" /> at class · <span className="reg-hand">H</span> ticked by hand{canWrite ? ' · tap a box to tick' : ''}</span>
+          <span className="muted small"><span className="reg-dot" /> at class · <span className="reg-hand">H</span> ticked by hand · <span className="reg-hand">40</span> part of the class (%) · <span className="reg-hand">?</span> waiting for your OK{canWrite ? ' · tap a box to tick' : ''}</span>
         </div>
         {rows.length === 0 ? <p className="muted">No students yet.</p> : (
           <div className="reg-scroll">
@@ -151,10 +176,10 @@ function Register({ org, program }: { org: Organization; program: Program }) {
                     {r.cells.map((c, i) => (
                       <td key={topics[i]!.id}>
                         <button type="button" className={`reg-cell ${c ?? ''}`} disabled={!canWrite || c === 'class'}
-                          title={`${topics[i]!.name}${c === 'class' ? ': at class' : c === 'hand' ? ': ticked by hand' : ''}`}
-                          aria-label={`${r.person.fullName}, ${topics[i]!.name}: ${c === 'class' ? 'done at class' : c === 'hand' ? 'ticked by hand' : 'not yet'}`}
+                          title={`${topics[i]!.name}${c === 'class' ? ': at class' : c === 'hand' ? ': ticked by hand' : c === 'part' ? ': part of the class' : ''}${r.notes[i] ? ` (${r.notes[i]})` : ''}`}
+                          aria-label={`${r.person.fullName}, ${topics[i]!.name}: ${c === 'class' ? 'done at class' : c === 'hand' ? 'ticked by hand' : c === 'part' ? `part of the class, ${r.parts[i]}%` : c === 'wait' ? 'waiting for your OK' : 'not yet'}`}
                           onClick={() => setTick({ row: r, topicIndex: i })}>
-                          {c === 'class' ? <span className="reg-dot" /> : c === 'hand' ? 'H' : ''}
+                          {c === 'class' ? <span className="reg-dot" /> : c === 'hand' ? 'H' : c === 'part' ? `${r.parts[i] ?? ''}` : c === 'wait' ? '?' : ''}
                         </button>
                       </td>
                     ))}
@@ -192,6 +217,8 @@ function Register({ org, program }: { org: Organization; program: Program }) {
       )}
 
       <Reminders org={org} program={program} rows={rows} links={links} today={today} marks={marks} />
+
+      {canWrite && can('attendance.write') && <MeetUpload org={org} program={program} rows={rows} sessions={sessions} today={today} />}
 
       {canWrite && can('attendance.write') && <MarkFromList org={org} program={program} rows={rows} sessions={sessions} today={today} />}
 
@@ -496,6 +523,194 @@ function MarkFromList({ org, program, rows, sessions, today }: {
             <p><strong>{result.present} marked present</strong> on {formatDateKey(day)}{result.already ? `, ${result.already} were already marked` : ''}.</p>
             {result.added > 0 && <p className="small">{result.added} added to the programme{result.absent ? `, and marked absent for ${result.absent === result.added ? 'the class' : 'the classes'} before` : ''}.</p>}
             {result.problems.map((p) => <p key={p} className="small">{p}</p>)}
+          </div>
+        )}
+      </details>
+    </section>
+  );
+}
+
+/**
+ * Checks after an online class (Andy, 2026-11-24, 5A): check-ins not seen on the Google Meet list wait for the
+ * leader's OK, students who missed a later code word, and phones the check-in turned away.
+ */
+function ClassChecks({ org, rows, sessions, marks, today }: {
+  org: Organization; rows: Row[]; sessions: ChurchEvent[]; marks: (AttendanceMark & { id: string })[]; today: string;
+}) {
+  const toast = useToast();
+  const nameOf = (personId: string) => rows.find((r) => r.person.id === personId)?.person.fullName ?? 'Someone';
+  // The latest class with something to look at.
+  const recent = sessions.filter((s) => s.date <= today).slice(0, 3);
+  const items = recent.map((s) => {
+    const mine = marks.filter((m) => m.eventId === s.id && !m.deletedAt);
+    const waiting = mine.filter((m) => m.needsOk);
+    // Words are only asked on the online link, so only self check-ins are looked at.
+    const missed = mine.filter((m) => m.method === 'self' && m.online && attended(m.status) && (!m.words?.check || !m.words?.end) && !m.meet)
+      .map((m) => ({ m, what: [!m.words?.check && 'check word', !m.words?.end && 'last word'].filter(Boolean).join(' and ') }));
+    return { s, waiting, missed: s.date === today ? [] : missed, flags: s.checkFlags ?? [] };
+  }).filter((x) => x.waiting.length || x.missed.length || x.flags.length);
+  if (!items.length) return null;
+
+  const decide = (eventId: string, personId: string, ok: boolean) =>
+    okMark(org.id, eventId, personId, ok).then(() => toast.show(ok ? `${nameOf(personId)} counted` : `${nameOf(personId)} not counted`)).catch((err) => toast.show(friendlyError(err)));
+
+  return (
+    <section className="card">
+      <div className="card-head"><h2>Class checks</h2><span className="muted small">From the code words and the Google Meet list</span></div>
+      {items.map(({ s, waiting, missed, flags }) => (
+        <div key={s.id} className="stack">
+          <h3 className="small">{formatDateKey(s.date)}</h3>
+          {waiting.length > 0 && (
+            <>
+              <p className="small"><strong>Checked in, but not on the Meet list.</strong> Not counted until you say OK.</p>
+              <ul className="row-list">
+                {waiting.map((m) => (
+                  <li key={m.id} className="row">
+                    <span className="row-main"><span className="row-title">{nameOf(m.personId)}</span></span>
+                    <span className="cleanup-head-actions">
+                      <button type="button" className="btn btn-quiet" onClick={() => void decide(s.id, m.personId, false)}>Not counted</button>
+                      <button type="button" className="btn" onClick={() => void decide(s.id, m.personId, true)}>OK, count</button>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {missed.length > 0 && (
+            <p className="small"><strong>Missed a code word:</strong> {missed.map(({ m, what }) => `${nameOf(m.personId)} (${what})`).join(', ')}. Upload the Meet list to see their time in class.</p>
+          )}
+          {flags.length > 0 && (
+            <ul className="plain small">{flags.map((f) => <li key={f.at + f.text}>⚠️ {f.text}</li>)}</ul>
+          )}
+        </div>
+      ))}
+    </section>
+  );
+}
+
+type MeetChoice = '' | 'new' | 'skip' | string;
+
+/**
+ * The Google Meet list after class (Andy, 2026-11-24, 3A 4A 5A 6A): the Meet Attendance extension's Excel or CSV.
+ * Each Meet name is matched to a student (names matched before are remembered, so "Samsung A12" is Jidraph every
+ * week), the time in class is worked out, and Save marks the class: 75% or more counts the topic.
+ */
+function MeetUpload({ org, program, rows, sessions, today }: { org: Organization; program: Program; rows: Row[]; sessions: ChurchEvent[]; today: string }) {
+  const toast = useToast();
+  const classes = sessions.filter((s) => s.date <= today);
+  const [eventId, setEventId] = useState('');
+  const ev = classes.find((s) => s.id === eventId) ?? classes[0];
+  const [list, setList] = useState<(MeetPerson & { pick: MeetChoice; how: string; maybe: string[] })[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<{ present: number; part: number; added: number; waiting: number } | null>(null);
+  const { start, end } = classMinutes(program);
+  const students = useMemo(() => rows.map((r) => ({ id: r.person.id, name: r.person.fullName })).sort((a, b) => a.name.localeCompare(b.name)), [rows]);
+  const nameOf = (id: string) => students.find((s) => s.id === id)?.name ?? '';
+
+  async function pick(file: File | undefined) {
+    if (!file || !ev) return;
+    setResult(null);
+    setBusy(true);
+    try {
+      const people = readMeetList(await readTableFile(file), start, end);
+      if (!people.length) throw new Error('No names found in this file.');
+      const known = await meetNames(org.id).catch(() => ({} as Record<string, string>));
+      const knownByLower = new Map(Object.entries(known).map(([n, id]) => [n.toLowerCase(), id]));
+      const matched = matchList(people.map((p) => p.name), students);
+      setList(people.map((p, i) => {
+        const remembered = knownByLower.get(p.name.toLowerCase());
+        const m = matched[i]!;
+        if (remembered === 'skip') return { ...p, pick: 'skip', how: 'Not a student before', maybe: m.maybe };
+        if (remembered && students.some((s) => s.id === remembered)) return { ...p, pick: remembered, how: 'Remembered', maybe: m.maybe };
+        if (m.status === 'found') return { ...p, pick: m.personId!, how: 'Found', maybe: m.maybe };
+        return { ...p, pick: '', how: '', maybe: m.maybe };
+      }));
+    } catch (err) { toast.show(friendlyError(err)); }
+    finally { setBusy(false); }
+  }
+  const choose = (i: number, pick: MeetChoice) => setList((l) => l?.map((m, j) => (j === i ? { ...m, pick, how: '' } : m)) ?? null);
+  const waiting = list?.filter((m) => m.pick === '').length ?? 0;
+
+  async function save() {
+    if (!list || waiting || !ev) return;
+    setBusy(true);
+    try {
+      const r = await saveMeetList(org.id, ev.id, list.map((m) => ({
+        name: m.name, personId: m.pick === 'new' || m.pick === 'skip' ? '' : m.pick, newName: m.pick === 'new', skip: m.pick === 'skip',
+        minutes: m.minutes, join: m.join, leave: m.leave,
+      })));
+      setResult(r);
+      setList(null);
+    } catch (err) { toast.show(friendlyError(err)); }
+    finally { setBusy(false); }
+  }
+
+  if (!classes.length) return null;
+  return (
+    <section className="card">
+      <details className="fold" open={list || result ? true : undefined}>
+        <summary><strong>Google Meet list</strong> <span className="muted">· time in class from the Meet Attendance file</span></summary>
+        <p className="muted small">After class, save the list from the Meet Attendance extension and upload it here. Time between {minutesLabel(start)} and {minutesLabel(end)} counts; {MEET_PASS_PERCENT}% or more counts the topic. Names you match are remembered for next time.</p>
+        <div className="stack">
+          <label className="field">
+            <span>Which class</span>
+            <select value={ev?.id ?? ''} onChange={(e) => { setEventId(e.target.value); setResult(null); setList(null); }}>
+              {classes.map((s) => <option key={s.id} value={s.id}>{formatDateKey(s.date)} · {s.name}{s.meetList ? ' · list uploaded' : ''}</option>)}
+            </select>
+          </label>
+          <div className="cleanup-head-actions class-actions">
+            <label className="btn btn-primary">
+              {busy && !list ? 'Reading…' : 'Choose the Meet file'}
+              <input type="file" className="visually-hidden" accept=".xlsx,.csv,text/csv" onChange={(e) => { void pick(e.target.files?.[0]); e.target.value = ''; }} />
+            </label>
+          </div>
+        </div>
+        {list && (
+          <div className="stack">
+            <p><strong>{list.length} names on the Meet list.</strong> {waiting ? `Please choose who ${waiting === 1 ? 'this one is' : `these ${waiting} are`}: a student, a new student, or not a student (you, a guest).` : 'All matched.'}</p>
+            <div className="reg-scroll">
+              <table className="reg-grid import-check">
+                <thead><tr><th className="reg-name">In the Meet as</th><th>Time</th><th>Who it is</th><th /></tr></thead>
+                <tbody>
+                  {list.map((m, i) => {
+                    const pct = meetPercent(m.minutes, start, end);
+                    return (
+                      <tr key={i} className={m.pick === 'skip' ? 'muted' : ''}>
+                        <td className="reg-name">{m.name}</td>
+                        <td className={pct >= MEET_PASS_PERCENT ? 'small' : 'small reg-hand'}>
+                          {m.join != null && m.leave != null ? `${minutesLabel(m.join)} to ${minutesLabel(m.leave)} · ` : ''}{pct}%
+                        </td>
+                        <td>
+                          <select value={m.pick} aria-label={`Who ${m.name} is`} className={m.pick === '' ? 'input-bad' : ''} onChange={(e) => choose(i, e.target.value)}>
+                            <option value="" disabled>Choose…</option>
+                            {m.maybe.length > 0 && <optgroup label="Likely">{m.maybe.map((id) => <option key={id} value={id}>{nameOf(id)}</option>)}</optgroup>}
+                            <optgroup label="Not on the register">
+                              <option value="new">Add as a new student: {m.name}</option>
+                              <option value="skip">Not a student (me, a guest)</option>
+                            </optgroup>
+                            <optgroup label="Everyone on the register">
+                              {students.filter((s) => !m.maybe.includes(s.id)).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </optgroup>
+                          </select>
+                        </td>
+                        <td className="small">{m.pick === '' ? <span className="error">Please choose</span> : <span className="muted">{m.how}</span>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="cleanup-head-actions">
+              <button type="button" className="btn btn-quiet" onClick={() => setList(null)}>Cancel</button>
+              <button type="button" className="btn btn-primary" disabled={busy || waiting > 0} onClick={() => void save()}>{busy ? 'Saving…' : `Save the ${ev ? formatDateKey(ev.date) : ''} class`}</button>
+            </div>
+          </div>
+        )}
+        {result && (
+          <div className="notice">
+            <p><strong>{result.present} counted</strong> ({MEET_PASS_PERCENT}% or more of the class){result.part ? `, ${result.part} part of the class (topic still open)` : ''}.</p>
+            {result.added > 0 && <p className="small">{result.added} added to the programme.</p>}
+            {result.waiting > 0 && <p className="small">{result.waiting} checked in but are not on the Meet list: see Class checks at the top to OK them.</p>}
           </div>
         )}
       </details>

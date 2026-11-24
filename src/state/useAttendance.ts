@@ -25,6 +25,9 @@ export interface ChurchEvent {
   /** Set on a Freedom Group meeting. */
   groupId?: string | null;
   deletedAt: Timestamp | null;
+  /** Freedom 252 (2026-11-24): tries the check-in turned away, and when the Google Meet list was uploaded. */
+  checkFlags?: { at: string; text: string }[];
+  meetList?: { at?: Timestamp; names: number; classMinutes: number } | null;
 }
 
 export interface AttendanceMark {
@@ -39,6 +42,14 @@ export interface AttendanceMark {
   programId?: string;
   groupId?: string;
   deletedAt: Timestamp | null;
+  /** Freedom 252 online classes (2026-11-24): time in the Google Meet, the later code words, and a check-in waiting for the leader. */
+  meet?: { minutes: number; percent: number; join: number | null; leave: number | null; names?: string[] } | null;
+  part?: boolean;
+  needsOk?: boolean;
+  /** Checked in on the online link, so the later code words were asked. */
+  online?: boolean;
+  okBy?: string | null;
+  words?: { check?: Timestamp; end?: Timestamp };
 }
 
 /**

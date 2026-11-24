@@ -4,12 +4,12 @@ import { useOrg, type Organization } from '../../state/OrgContext';
 import { usePeople } from '../../state/PeopleContext';
 import { useToast } from '../../state/ToastContext';
 import { useProgramMarks, usePrograms, useProgramSessions, type Program } from '../../state/usePrograms';
-import { APP_URL, classKey, codeFor, codeWordFor, onlineCodeFor, openClass, secondsLeft } from '../../lib/classRegister';
+import { APP_URL, classKey, classWordsFor, codeFor, onlineCodeFor, openClass, secondsLeft } from '../../lib/classRegister';
 import { friendlyError } from '../../lib/errors';
 import { attended, doorName } from '../../../functions/src/shared/attendance';
 import { formatDateKey, localDateKey, zonedParts } from '../../../functions/src/shared/datetime';
 import { programSessionIdFor } from '../../../functions/src/shared/programs';
-import { checkInPath, isWindowOpen, plannedOn, scanWindow } from '../../../functions/src/shared/classRegister';
+import { checkInPath, isWindowOpen, minutesLabel, plannedOn, scanWindow, type LaterWord } from '../../../functions/src/shared/classRegister';
 
 /**
  * The class leader's screen (Andy, 2026-11-09, 1A): a big QR code that changes every minute, for a phone held up
@@ -44,22 +44,25 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
   const [code, setCode] = useState('');
   const [left, setLeft] = useState(secondsLeft());
   const [qr, setQr] = useState('');
-  const [online, setOnline] = useState<{ link: string; word: string } | null>(null);
+  const [online, setOnline] = useState<{ link: string; word: string; check: string; end: string; times: Record<LaterWord, { say: number; from: number; to: number }> } | null>(null);
   const [showQr, setShowQr] = useState(false);
 
   // Google Meet (Andy, 2026-11-09): one link for the Meet chat, and a code word to say in class.
   useEffect(() => {
     if (!key) return;
     let stop = false;
-    void Promise.all([onlineCodeFor(key), codeWordFor(key)]).then(([c, word]) => {
-      if (!stop) setOnline({ link: `${APP_URL}${checkInPath(org.id, eventId, c)}`, word });
+    void Promise.all([onlineCodeFor(key), classWordsFor(key, program)]).then(([c, w]) => {
+      if (!stop) setOnline({ link: `${APP_URL}${checkInPath(org.id, eventId, c)}`, word: w.words.start, check: w.words.check, end: w.words.end, times: w.times });
     });
     return () => { stop = true; };
-  }, [key, org.id, eventId]);
+  }, [key, org.id, eventId, program]);
+  // The clock, so the screen says when to say each word.
+  const [, setTick] = useState(0);
+  useEffect(() => { const t = window.setInterval(() => setTick((n) => n + 1), 20_000); return () => window.clearInterval(t); }, []);
 
   async function copyLink() {
     if (!online) return;
-    const text = `Check in for ${program.name} (${topic?.name ?? ''}): ${online.link}\nType your phone number and the code word I say in class.`;
+    const text = `Check in for ${program.name} (${topic?.name ?? ''}): ${online.link}\nType your phone number and the code word I say in class. Keep the page open: I will say two more words later.`;
     try { await navigator.clipboard.writeText(text); toast.show('Copied. Paste it in the Google Meet chat.'); }
     catch { window.prompt('Copy this and paste it in the Meet chat:', text); }
   }
@@ -106,6 +109,7 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
   }, [url]);
 
   const now = zonedParts(new Date(), org.timeZone);
+  const minuteNow = now.hour * 60 + now.minute;
   const window_ = scanWindow(program);
   const closed = !!planned && !isWindowOpen(program, now.hour * 60 + now.minute);
 
@@ -142,9 +146,22 @@ function QrScreen({ org, program }: { org: Organization; program: Program }) {
                 <h2>Online class (Google Meet)</h2>
                 <button type="button" className="btn btn-primary btn-lg" onClick={() => void copyLink()}>Copy check-in link</button>
                 <p className="small muted">Paste it in the Meet chat. Students tap it, type their phone number and the code word.</p>
-                <p className="class-word-label">Code word to say during the class</p>
-                <p className="class-word">{online.word}</p>
-                <p className="small muted">Say it partway through, so only people in the class can check in.</p>
+                <p className="small muted">Keep this screen to yourself. Say each word out loud; never type it in the chat.</p>
+                <div className="class-word-times">
+                  {([['First word', online.word, null], ['Check word', online.check, online.times.check], ['Last word', online.end, online.times.end]] as const).map(([label, w, t]) => {
+                    const nowOn = t ? minuteNow >= t.from && minuteNow <= t.to : false;
+                    return (
+                      <div key={label}>
+                        <p className="class-word-label">{label}</p>
+                        <p className={nowOn ? 'class-word now' : 'class-word'}>{w}</p>
+                        <p className={nowOn ? 'class-word-due' : 'small muted'}>
+                          {!t ? 'Say it once the class has started' : nowOn ? 'Say it now' : minuteNow > t.to ? 'Done' : `Say it at ${minutesLabel(t.say)}`}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="small muted">The check word comes at a surprise minute, so students at home cannot be told in advance. Each later word is only taken for about 10 minutes.</p>
               </div>
             )}
             {!showQr ? (
