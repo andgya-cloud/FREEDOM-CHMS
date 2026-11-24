@@ -33,7 +33,7 @@ export const ATTENDANCE_STATUS_LABELS: Record<AttendanceStatus, string> = {
 export const CHECK_IN_METHODS = ['staff', 'door', 'register', 'self'] as const;
 export type CheckInMethod = (typeof CHECK_IN_METHODS)[number];
 
-export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'] as const;
+export const HEADCOUNT_KEYS = ['adults', 'teens', 'children', 'youth', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'] as const;
 export type HeadcountKey = (typeof HEADCOUNT_KEYS)[number];
 export type Headcounts = Partial<Record<HeadcountKey, number>>;
 
@@ -41,6 +41,7 @@ export const HEADCOUNT_LABELS: Record<HeadcountKey, string> = {
   adults: 'Adults',
   teens: 'Teens',
   children: 'Children',
+  youth: 'Youth',
   new: 'New',
   returning: 'Returning',
   total: 'Total',
@@ -51,7 +52,8 @@ export const HEADCOUNT_LABELS: Record<HeadcountKey, string> = {
 
 /** Which counts each kind of gathering asks for. */
 export const HEADCOUNT_FIELDS: Record<EventType, HeadcountKey[]> = {
-  service: ['adults', 'teens', 'children'],
+  // The youth's own count on a Sunday adds into the Sunday total (Andy, 2026-11-24, 5A).
+  service: ['adults', 'teens', 'children', 'youth'],
   meal: ['new', 'returning'],
   session: ['total'],
   class: [],

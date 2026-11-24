@@ -27,7 +27,7 @@ import type { Organization } from '../../state/OrgContext';
 import { HopeGate, useHopePage } from './common';
 import { CircleGate, circlePageFor, isOneItem, type CirclePage } from '../../components/CircleGate';
 import { useOrg } from '../../state/OrgContext';
-import { circleOf, isCircleType, isRequestKind, KINDS_OF, kindLabel, SS_KINDS, TEACHER_KINDS, type Circle, type CircleType } from '../../../functions/src/shared/circles';
+import { circleOf, isChurchRoom, isCircleType, isRequestKind, KINDS_OF, kindLabel, SS_KINDS, TEACHER_KINDS, YOUTH_KINDS, type Circle, type CircleType } from '../../../functions/src/shared/circles';
 import { ssClassLabel, type SsClass } from '../../../functions/src/shared/sundaySchool';
 import { TEACHER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { useClubs } from '../../state/useHope';
@@ -58,6 +58,16 @@ export function SundaySchoolRoom({ org, ss }: { org: Organization; ss: SsRoom })
   useEffect(() => () => setPhotoRoom(null), []);
   return <Photos org={{ ...org, type: 'sunday_school' as Organization['type'] }} ss={ss} />;
 }
+
+/** The Youth room (Andy, 2026-11-24, 6A): the same window, with type 'youth' and room 'youth'. */
+export function YouthRoom({ org, ss }: { org: Organization; ss: SsRoom }) {
+  useEffect(() => () => setPhotoRoom(null), []);
+  return <Photos org={{ ...org, type: 'youth' as Organization['type'] }} ss={ss} />;
+}
+/** Each church room's own words: Sunday school (Dorothy) or the youth (Sheila). */
+const roomWords = (type: CircleType) => (type === 'youth'
+  ? { title: 'Youth room', lead: 'Sheila', readers: 'Sheila, Andy and Doreen', kinds: YOUTH_KINDS, room: 'youth' as const, who: 'Youth', posts: 'Every post about the youth is here.' }
+  : { title: 'Sunday school room', lead: 'Dorothy', readers: 'Dorothy, Andy and Doreen', kinds: SS_KINDS, room: 'sundayschool' as const, who: 'Children', posts: 'Every post from the Sunday school teachers is here.' });
 
 /** Loads the photo reports this person may see; reportId narrows it to one weekly or monthly report. */
 export function usePhotoReports(orgId: string, reportId?: string) {
@@ -109,14 +119,15 @@ function Photos({ org, ss }: { org: Organization; ss?: SsRoom }) {
   const uid = profile?.uid ?? '';
   const circle = circleFor(org);
   // Every call from this window goes to the Sunday school room while it shows (set before the list loads).
-  const ssRoom = circle.type === 'sunday_school';
-  setPhotoRoom(ssRoom ? 'sundayschool' : null);
+  const ssRoom = isChurchRoom(circle.type);
+  const words = roomWords(circle.type);
+  setPhotoRoom(ssRoom ? words.room : null);
   const { list, error, reload } = usePhotoReports(org.id);
   const hope = circle.type === 'ministry';
   const ssTeacher = ssRoom && !!ss?.mine;
   // The Teachers' room (Andy, 2026-11-22, 6A 7A): a class teacher writes notes and requests here and sees only their own.
   const teacher = hope && profile?.roleId === TEACHER_ROLE_ID;
-  const kinds = ssRoom ? SS_KINDS : teacher ? TEACHER_KINDS : hope ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
+  const kinds = ssRoom ? words.kinds : teacher ? TEACHER_KINDS : hope ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
   const openId = params.get('report') ?? '';
   const making = params.get('new') === '1';
   const forReport = params.get('for') ?? '';
@@ -138,14 +149,14 @@ function Photos({ org, ss }: { org: Organization; ss?: SsRoom }) {
   return (
     <div className="page narrow">
       <div className="page-head">
-        {ssRoom ? <h2>💬 Sunday school room</h2> : <h1>{teacher ? "💬 Teachers' room" : '📷 Photos and wins'}</h1>}
+        {ssRoom ? <h2>💬 {words.title}</h2> : <h1>{teacher ? "💬 Teachers' room" : '📷 Photos and wins'}</h1>}
         <div className="btn-line">
           {!hope && !ssRoom && <Link to={circle.vaultPath} className="btn btn-quiet">🔒 Private conversations</Link>}
           {list?.sends && !making && <button type="button" className="btn btn-primary" onClick={() => setParams({ new: '1' })}>{ssRoom ? '✍️ New post' : teacher ? '✍️ New note or request' : '📷 New report'}</button>}
         </div>
       </div>
       <p className="small muted">
-        {ssRoom ? (ssTeacher ? 'Post a win, your class report or a request, or start a conversation. Dorothy, Andy and Doreen read and answer. You see your own posts.' : 'Every post from the Sunday school teachers is here. Open one to reply; mark requests Done when they are handled.')
+        {ssRoom ? (ssTeacher && circle.type !== 'youth' ? `Post a win, your class report or a request, or start a conversation. ${words.readers} read and answer. You see your own posts.` : `${words.posts} Open one to reply; mark requests Done when they are handled.`)
           : teacher ? 'Ask for anything here: supplies, a mark to change, a child to move, or a day you cannot come. Diana, Andy and Doreen read and answer. You see your own notes only.'
           : list?.reviews ? 'As a reviewer you can read every report and win here. Look only: replies and changes stay with the team.' : list?.seesAll ? `Each report is a conversation: open it to reply, add photos, and package it for ${circle.board}.` : `Only ${circle.readers} see these reports. You see the ones you sent.`}
       </p>
@@ -333,12 +344,16 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
   const [progress, setProgress] = useState<[number, number] | null>(null);
   const picker = useChildPicker(org.id, text, setText, org.type);
   const circle = circleFor(org);
-  const ssRoom = circle.type === 'sunday_school';
-  const kinds = ssRoom ? SS_KINDS : teacher ? TEACHER_KINDS : circle.type === 'ministry' ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
+  const ssRoom = isChurchRoom(circle.type);
+  const words = roomWords(circle.type);
+  const youth = circle.type === 'youth';
+  const kinds = ssRoom ? words.kinds : teacher ? TEACHER_KINDS : circle.type === 'ministry' ? KINDS_OF.ministry.filter((k) => !isRequestKind(k)) : KINDS_OF[circle.type];
   const report = ssRoom && kind === 'ssreport';
   const cls = ss?.classes.find((c) => c.id === classId);
   const sample: Partial<Record<PhotoReportKind, string>> = circle.type === 'college'
     ? { win: 'Grace passed her trade test', activity: 'Catering practical day', exams: 'Cohort 3 CAT results', incident: 'A student was hurt in the workshop' }
+    : youth
+      ? { win: 'Three young people gave their lives to Jesus', ssreport: 'Youth meeting report', supplies: 'A speaker and 10 Bibles', help: 'A host for Friday', other: 'Ideas for the youth camp' }
     : ssRoom
       ? { win: 'Two children prayed for their friends', ssreport: `${cls?.name ?? 'Juniors'} class report`, supplies: 'Crayons and 20 Bibles', absence: 'I cannot come on Sunday 7th', help: 'A second teacher for the Beginners', other: 'Ideas for the Christmas play' }
     : circle.type === 'church_campus'
@@ -347,10 +362,10 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
         supplies: '20 exercise books for Topaz', markfix: 'Amani was present, not absent, on Saturday', move: 'Brian belongs in Sapphire', absence: 'I cannot come on Saturday 5th', other: 'A note for Diana' };
 
   async function send() {
-    const heading = title.trim() || (report && cls ? `${cls.name} class report` : '');
+    const heading = title.trim() || (report && cls ? (youth ? 'Youth meeting report' : `${cls.name} class report`) : '');
     if (!heading) { toast.show('Please give it a title.'); return; }
     if (report && !cls) { toast.show('Please pick the class.'); return; }
-    if (report && !(Number(cr.present) >= 0 && cr.present.trim())) { toast.show('Please type how many children were present.'); return; }
+    if (report && !(Number(cr.present) >= 0 && cr.present.trim())) { toast.show(`Please type how many ${youth ? 'young people' : 'children'} were present.`); return; }
     if (!report && !files.length && !text.trim()) { toast.show('Add a few words or at least one photo.'); return; }
     setProgress([0, files.length]);
     try {
@@ -363,7 +378,7 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
   return (
     <section className="card stack">
       <h2>{forReport ? `Add photos to ${forLabel || 'the report'}` : ssRoom ? 'A new post' : teacher ? 'A note or a request' : 'Start a report'}</h2>
-      <p className="small muted">{ssRoom ? (isRequestKind(kind) || report ? 'Dorothy gets an email and answers you here. A request stays Open until she marks it Done.' : 'Dorothy, Andy and Doreen read it and can reply here.') : teacher ? 'Diana gets an email and answers you here. It stays Open until she marks it Done.' : forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
+      <p className="small muted">{ssRoom ? (isRequestKind(kind) || report ? `${words.lead} gets an email and answers you here. A request stays Open until marked Done.` : `${words.readers} read it and can reply here.`) : teacher ? 'Diana gets an email and answers you here. It stays Open until she marks it Done.' : forReport ? "These photos will be printed at the end of the report's PDF." : `Your first message opens the conversation. ${circle.readers.replace(/^the /, 'The ')} get an email, and you can tell them on WhatsApp with one tap.`}</p>
       <div className="ph-kinds" role="radiogroup" aria-label="Kind of report">
         {kinds.map((k) => (
           <button key={k} type="button" role="radio" aria-checked={kind === k} className={`ph-kind${kind === k ? ' on' : ''}${k === 'incident' ? ' incident' : ''}`} onClick={() => setKind(k)}>
@@ -379,11 +394,11 @@ function NewReport({ org, forReport, forLabel, onCancel, onSent, teacher = false
               <select value={classId} onChange={(e) => setClassId(e.target.value)}>{ss.classes.map((c) => <option key={c.id} value={c.id}>{ssClassLabel(c)}</option>)}</select>
             </label>
           )}
-          {ss?.mine && <p className="small muted" style={{ margin: 0 }}>Class: <b>{ssClassLabel(ss.mine)}</b></p>}
-          <label className="field"><span>Children present</span><input type="number" inputMode="numeric" min={0} value={cr.present} onChange={(e) => setCr({ ...cr, present: e.target.value })} /></label>
-          <label className="field"><span>Lesson taught</span><input value={cr.lesson} maxLength={300} placeholder="Noah's ark" onChange={(e) => setCr({ ...cr, lesson: e.target.value })} /></label>
+          {ss?.mine && !youth && <p className="small muted" style={{ margin: 0 }}>Class: <b>{ssClassLabel(ss.mine)}</b></p>}
+          <label className="field"><span>{words.who} present</span><input type="number" inputMode="numeric" min={0} value={cr.present} onChange={(e) => setCr({ ...cr, present: e.target.value })} /></label>
+          <label className="field"><span>{youth ? 'Topic' : 'Lesson taught'}</span><input value={cr.lesson} maxLength={300} placeholder={youth ? 'Purity and purpose' : "Noah's ark"} onChange={(e) => setCr({ ...cr, lesson: e.target.value })} /></label>
           <label className="field"><span>A win</span><textarea rows={2} value={cr.win} maxLength={600} placeholder="Something good that happened" onChange={(e) => setCr({ ...cr, win: e.target.value })} /></label>
-          <label className="field"><span>A need</span><textarea rows={2} value={cr.need} maxLength={600} placeholder="Anything the class needs" onChange={(e) => setCr({ ...cr, need: e.target.value })} /></label>
+          <label className="field"><span>A need</span><textarea rows={2} value={cr.need} maxLength={600} placeholder={youth ? 'Anything the youth need' : 'Anything the class needs'} onChange={(e) => setCr({ ...cr, need: e.target.value })} /></label>
         </fieldset>
       )}
       <label className="field"><span>Title{report ? ' (optional)' : ''}</span><input value={title} maxLength={PHOTO_TITLE_MAX} onChange={(e) => setTitle(e.target.value)} placeholder={sample[kind] ?? ''} /></label>

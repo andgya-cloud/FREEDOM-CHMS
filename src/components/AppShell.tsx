@@ -180,12 +180,20 @@ export function AppShell({ children }: { children: ReactNode }) {
     </nav>
   ) : null;
   // A Sunday school teacher's menu (Andy, 2026-11-23): Sunday school and their own settings.
-  const ssTabs = profile?.roleId === 'ssteacher' ? (
+  // The youth leader's menu (Andy, 2026-11-24): Youth and their own settings.
+  const ssTabs = profile?.roleId === 'ssteacher' || profile?.roleId === 'youth' ? (
     <nav className="tabbar" aria-label="Main">
-      <NavLink to="/sunday-school" className="tab">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0 0 .01M6 21v-6a6 6 0 0 1 12 0v6M9 21v-4h6v4" /></svg>
-        <TabLabel full="Sunday school" short="Class" />
-      </NavLink>
+      {profile?.roleId === 'youth' ? (
+        <NavLink to="/youth" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3c1 3 4 4.5 4 8.5a4 4 0 0 1-8 0c0-1.6.7-2.8 1.6-3.8.2 1.3.9 2.1 1.9 2.3C11 8 11 5.5 12 3ZM7 17.5A6 6 0 0 0 12 21a6 6 0 0 0 5-3.5" /></svg>
+          Youth
+        </NavLink>
+      ) : (
+        <NavLink to="/sunday-school" className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5a3 3 0 1 0 0 .01M6 21v-6a6 6 0 0 1 12 0v6M9 21v-4h6v4" /></svg>
+          <TabLabel full="Sunday school" short="Class" />
+        </NavLink>
+      )}
       <NavLink to="/settings" className="tab">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6A7 7 0 0 0 5 12c0 .4 0 .8.1 1.2l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2Z" /></svg>
         Settings

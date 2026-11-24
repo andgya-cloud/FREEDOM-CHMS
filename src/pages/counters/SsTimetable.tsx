@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { collection, onSnapshot, orderBy, query } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useToast } from '../../state/ToastContext';
 import { friendlyError } from '../../lib/errors';
 import {
-  copySsYear, downloadSsFile, downloadSsTimetable, fillSsSeries, removeSsDay, removeSsFile, saveSsDay, saveSsDrive, ssReminders, uploadSsFile, waLink, waShare,
+  copySsYear, downloadSsFile, downloadSsTimetable, fillSsSeries, removeSsDay, removeSsFile, saveSsDay, saveSsDrive, setTtMinistry, ssReminders, uploadSsFile, waLink, waShare,
   type SsReminders,
 } from '../../lib/ssTimetable';
 import {
@@ -20,11 +20,67 @@ import type { SsClass } from '../../../functions/src/shared/sundaySchool';
  */
 export interface TtProps { org: { id: string; name: string; type?: string }; classes: SsClass[]; mine: SsClass | null; edits: boolean; today: string; driveFolder: string }
 
+/** The words of each timetable: Sunday school's, or the youth's (Andy, 2026-11-24, 7A: the same tool, kept apart). */
+const SS_WORDS = {
+  youth: false, col: 'ssTimetable', none: 'No Sunday school', yearTitle: '📅 Teaching timetable', folder: '📁 Lessons folder',
+  editNote: 'Tap a Sunday to plan it. Every teacher sees the timetable; only Dorothy, Andy and Doreen change it.', viewNote: 'Tap a Sunday to see its lessons and files.',
+  whole: 'The whole Sunday school', seen: 'Every teacher can see it.', theme: 'Theme for the whole Sunday school',
+  eventHint: "e.g. Vacation Bible School, Midweek class, Teachers' meeting", sundayHint: "e.g. Easter Sunday, Children's Sunday", whereHint: 'e.g. In the church hall. All teachers come. Bring Bibles and crayons.',
+  eventsText: "a midweek class, Vacation Bible School, a teachers' meeting, a camp", drive: 'Sunday school folder on Google Drive', driveWho: 'teachers',
+  email: 'Dorothy also gets these by email every Thursday at 6 PM.', group: "The teachers' group",
+  label: (_key: string, label: string) => label, hint: (_key: string, hint: string) => hint,
+};
+const YOUTH_LABELS: Record<string, [string, string]> = {
+  title: ['Topic', 'e.g. Purity and purpose'], point: ['Main point', 'One sentence the youth take home'],
+  activity: ['Activity or game', 'e.g. Small groups, then a quiz'], teacher: ['Speaker that day', 'Leave empty for Sheila'], link: ['Google Drive link', 'Paste the notes link'],
+};
+const YOUTH_WORDS: typeof SS_WORDS = {
+  ...SS_WORDS, youth: true, col: 'youthTimetable', none: 'No youth meeting', yearTitle: '📅 Youth timetable', folder: '📁 Youth folder',
+  editNote: 'Tap a day to plan it, or add a meeting on any day. Only Sheila, Andy and Doreen change it.', viewNote: 'Tap a day to see its topic and files.',
+  whole: 'The youth', seen: 'It is on the youth page.', theme: 'Theme',
+  eventHint: 'e.g. Youth night, Youth camp, Outreach', sundayHint: 'e.g. Youth Sunday', whereHint: 'e.g. In the church hall. Bring a friend.',
+  eventsText: 'a youth night, a Bible study, a camp, an outreach', drive: 'Youth folder on Google Drive', driveWho: 'the youth',
+  email: 'Sheila also gets this by email at 6 PM the evening before each meeting.', group: 'The youth group',
+  label: (key, label) => YOUTH_LABELS[key]?.[0] ?? label, hint: (key, hint) => YOUTH_LABELS[key]?.[1] ?? hint,
+};
+const Words = createContext(SS_WORDS);
+const useWords = () => useContext(Words);
+/** Wraps the youth page's timetable: every read and change goes to the youth's own timetable while it shows. */
+export function YouthTimetable({ children }: { children: ReactNode }) {
+  setTtMinistry('youth');
+  useEffect(() => { setTtMinistry('youth'); return () => setTtMinistry('ss'); }, []);
+  return <Words.Provider value={YOUTH_WORDS}>{children}</Words.Provider>;
+}
+
 export function useSsDays(orgId: string): SsDay[] | null {
+  const { col } = useWords();
   const [days, setDays] = useState<SsDay[] | null>(null);
-  useEffect(() => onSnapshot(query(collection(db, 'organizations', orgId, 'ssTimetable'), orderBy('date')),
-    (s) => setDays(s.docs.map((d) => d.data() as SsDay)), () => setDays([])), [orgId]);
+  useEffect(() => onSnapshot(query(collection(db, 'organizations', orgId, col), orderBy('date')),
+    (s) => setDays(s.docs.map((d) => d.data() as SsDay)), () => setDays([])), [orgId, col]);
   return days;
+}
+
+/** The youth's next meeting (Andy, 2026-11-24, 4A): the first planned day from today, with its topic and files. */
+export function NextMeeting({ org, classes, today, driveFolder, days }: TtProps & { days: SsDay[] }) {
+  const day = days.find((d) => d.date >= today && !d.noClass) ?? null;
+  return (
+    <section className="card tt-this">
+      <div className="tt-head">
+        <h2>🔥 {day ? `Next meeting · ${day.date === today ? 'Today' : ssDayLabel(day.date, false)}` : 'Next meeting'}</h2>
+        {driveFolder && <a className="btn" href={driveFolder} target="_blank" rel="noreferrer">📁 Youth folder</a>}
+      </div>
+      {!day ? <p className="muted">No meeting is on the youth timetable yet. Sundays count as youth meetings anyway.</p> : (
+        <>
+          {day.title && <p className="tt-tag">{day.title}{day.time ? ` · ${day.time}` : ''}</p>}
+          {!day.title && day.time && <p className="tt-tag">{day.time}</p>}
+          {day.theme && <p className="tt-theme">{day.theme}</p>}
+          {day.note && <p>{day.note}</p>}
+          {classes.map((c) => <LessonView key={c.id} c={c} day={day} orgId={org.id} open />)}
+          <DayFiles orgId={org.id} day={day} />
+        </>
+      )}
+    </section>
+  );
 }
 
 const kindOf = (date: string): SsDay['kind'] => (new Date(`${date}T12:00:00Z`).getUTCDay() === 0 ? 'sunday' : 'special');
@@ -58,16 +114,17 @@ export function ThisSunday({ org, classes, mine, today, driveFolder, days }: TtP
 }
 
 function LessonView({ c, day, orgId, open }: { c: SsClass; day: SsDay | null; orgId: string; open: boolean }) {
+  const w = useWords();
   const l = day?.lessons[c.id];
   const teacher = l?.teacher || c.leader;
   const rows = LESSON_FIELDS.filter((f) => f.key !== 'title' && f.key !== 'teacher' && f.key !== 'link' && l?.[f.key]);
   return (
     <details className="tt-lesson" open={open}>
-      <summary><b>{c.name}</b>{teacher ? ` · ${teacher}` : ''} <span className="muted">{l?.title ? `· ${l.title}` : '· lesson to come'}</span></summary>
+      <summary><b>{c.name}</b>{teacher ? ` · ${teacher}` : ''} <span className="muted">{l?.title ? `· ${l.title}` : w.youth ? '· topic to come' : '· lesson to come'}</span></summary>
       {l && (
         <dl className="tt-dl">
-          {rows.map((f) => <div key={f.key}><dt>{f.label}</dt><dd>{l[f.key]}</dd></div>)}
-          {l.link && <div><dt>Lesson file</dt><dd><a href={l.link} target="_blank" rel="noreferrer">Open on Google Drive</a></dd></div>}
+          {rows.map((f) => <div key={f.key}><dt>{w.label(f.key, f.label)}</dt><dd>{l[f.key]}</dd></div>)}
+          {l.link && <div><dt>{w.youth ? 'Notes' : 'Lesson file'}</dt><dd><a href={l.link} target="_blank" rel="noreferrer">Open on Google Drive</a></dd></div>}
         </dl>
       )}
       {day && <DayFiles orgId={orgId} day={day} classId={c.id} only />}
@@ -84,7 +141,7 @@ function DayFiles({ orgId, day, classId, only, onRemove }: { orgId: string; day:
   if (!files.length && !day?.link) return null;
   return (
     <ul className="tt-files">
-      {day?.link && !only && <li><a href={day.link} target="_blank" rel="noreferrer">📎 Lesson link for the day</a></li>}
+      {day?.link && !only && <li><a href={day.link} target="_blank" rel="noreferrer">📎 Link for the day</a></li>}
       {files.map((f) => (
         <li key={f.id}>
           <button type="button" className="btn btn-quiet" disabled={busy === f.id}
@@ -101,6 +158,7 @@ function DayFiles({ orgId, day, classId, only, onRemove }: { orgId: string; day:
 /** The year (1A, 2A): every Sunday and the special days, month by month. */
 export function Timetable(props: TtProps & { days: SsDay[] }) {
   const { org, classes, mine, edits, today, days } = props;
+  const w = useWords();
   const toast = useToast();
   const years = timetableYears(today);
   const [year, setYear] = useState(() => openingYear(today));
@@ -130,7 +188,7 @@ export function Timetable(props: TtProps & { days: SsDay[] }) {
   return (
     <section className="card tt-year" id="timetable">
       <div className="tt-head">
-        <h2>📅 Teaching timetable</h2>
+        <h2>{w.yearTitle}</h2>
         <div className="btn-line">
           <select value={year} onChange={(e) => { setYear(Number(e.target.value)); setOpenDate(''); setEditing(null); }} aria-label="Year">
             {years.map((y) => <option key={y} value={y}>{y === 2026 ? 'December 2026' : y}</option>)}
@@ -141,7 +199,7 @@ export function Timetable(props: TtProps & { days: SsDay[] }) {
       </div>
       {edits && (
         <div className="btn-line tt-tools">
-          <button type="button" className="btn btn-primary" onClick={() => setTool(tool === 'special' ? '' : 'special')}>📅 Add an event on any day</button>
+          <button type="button" className="btn btn-primary" onClick={() => setTool(tool === 'special' ? '' : 'special')}>📅 {w.youth ? 'Add a meeting on any day' : 'Add an event on any day'}</button>
           <button type="button" className="btn" onClick={() => setTool(tool === 'series' ? '' : 'series')}>Fill a series</button>
           {lastYear > 0 && thisYear < 4 && <button type="button" className="btn" onClick={() => void copyYear()}>Copy {year - 1} into {year}</button>}
           <button type="button" className="btn btn-quiet" onClick={() => setTool(tool === 'drive' ? '' : 'drive')}>Drive folder link</button>
@@ -150,7 +208,7 @@ export function Timetable(props: TtProps & { days: SsDay[] }) {
       {edits && tool === 'special' && <SpecialDayForm year={year} today={today} days={days} onPick={(date) => { setTool(''); openOn(date, days.find((d) => d.date === date) ?? emptyDay(date)); }} />}
       {edits && tool === 'series' && <SeriesForm orgId={org.id} year={year} today={today} onDone={() => setTool('')} />}
       {edits && tool === 'drive' && <DriveForm orgId={org.id} link={props.driveFolder} onDone={() => setTool('')} />}
-      <p className="small muted" style={{ margin: 0 }}>{edits ? 'Tap a Sunday to plan it. Every teacher sees the timetable; only Dorothy, Andy and Doreen change it.' : 'Tap a Sunday to see its lessons and files.'}</p>
+      <p className="small muted" style={{ margin: 0 }}>{edits ? w.editNote : w.viewNote}</p>
       {months.map(([m, list]) => (
         <div key={m} className="tt-month">
           <h3>{new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${m}-15T12:00:00Z`))}</h3>
@@ -164,10 +222,10 @@ export function Timetable(props: TtProps & { days: SsDay[] }) {
                   <button type="button" className="tt-rowbtn" aria-expanded={isOpen} onClick={() => { setOpenDate(isOpen ? '' : date); setEditing(null); }}>
                     <span className="tt-date">{ssDayLabel(date, false)}</span>
                     <span className="tt-what">
-                      {day?.kind === 'special' ? <b>📅 {day.title}{day.time ? <span className="muted"> · {day.time}</span> : null}</b> : day?.noClass ? <b className="tt-offtxt">No Sunday school{day.title ? ` · ${day.title}` : ''}</b>
+                      {day?.kind === 'special' ? <b>📅 {day.title}{day.time ? <span className="muted"> · {day.time}</span> : null}</b> : day?.noClass ? <b className="tt-offtxt">{w.none}{day.title ? ` · ${day.title}` : ''}</b>
                         : <>{day?.title && <b className="tt-tagtxt">{day.title} · </b>}{day?.theme ? <b>{day.theme}</b> : <span className="muted">Not planned yet</span>}</>}
                       {day?.kind === 'sunday' && !day.noClass && (
-                        <small className="muted">{mine ? lessonLine(day.lessons[mine.id]) || 'Your lesson is to come' : `${planned} of ${classes.length} classes planned`}{day.files?.length ? ` · ${day.files.length} file${day.files.length === 1 ? '' : 's'}` : ''}</small>
+                        <small className="muted">{w.youth ? lessonLine(day.lessons.youth) || 'Topic to come' : mine ? lessonLine(day.lessons[mine.id]) || 'Your lesson is to come' : `${planned} of ${classes.length} classes planned`}{day.files?.length ? ` · ${day.files.length} file${day.files.length === 1 ? '' : 's'}` : ''}</small>
                       )}
                     </span>
                   </button>
@@ -177,7 +235,7 @@ export function Timetable(props: TtProps & { days: SsDay[] }) {
                       {day?.time && <p><b>Time:</b> {day.time}</p>}
                       {day && !day.noClass && (day.kind === 'sunday' || Object.keys(day.lessons).length > 0) && classes.filter((c) => day.kind === 'sunday' || day.lessons[c.id]).map((c) => <LessonView key={c.id} c={c} day={day} orgId={org.id} open={mine?.id === c.id} />)}
                       <DayFiles orgId={org.id} day={day} />
-                      {edits && date >= SS_FIRST_DAY && <button type="button" className="btn btn-primary" onClick={() => setEditing(day ?? emptyDay(date))}>✏️ {day ? 'Change or move this day' : 'Plan this Sunday'}</button>}
+                      {edits && date >= SS_FIRST_DAY && <button type="button" className="btn btn-primary" onClick={() => setEditing(day ?? emptyDay(date))}>✏️ {day ? 'Change or move this day' : w.youth ? 'Plan this day' : 'Plan this Sunday'}</button>}
                       {!day && !edits && <p className="muted">Nothing planned yet.</p>}
                     </div>
                   )}
@@ -194,6 +252,7 @@ export function Timetable(props: TtProps & { days: SsDay[] }) {
 
 /** Plan one day (3A, 4A, 6A): the theme in its own box, then each class's lesson, then files (5A). */
 function DayEditor({ orgId, classes, day, days, onClose }: { orgId: string; classes: SsClass[]; day: SsDay; days: SsDay[]; onClose: (moved?: string) => void }) {
+  const w = useWords();
   const toast = useToast();
   const [d, setD] = useState<SsDay>({ ...day, time: day.time ?? '' });
   const [pickDate, setPickDate] = useState(false);
@@ -212,7 +271,7 @@ function DayEditor({ orgId, classes, day, days, onClose }: { orgId: string; clas
     try {
       await saveSsDay(orgId, { ...d, kind: kindOf(d.date) }, moving ? origin.current : undefined);
       origin.current = d.date;
-      if (close) { toast.show(moving ? `Moved to ${ssDayLabel(d.date)}. Every teacher can see it.` : 'Saved. Every teacher can see it.'); onClose(d.date); }
+      if (close) { toast.show(moving ? `Moved to ${ssDayLabel(d.date)}. ${w.seen}` : `Saved. ${w.seen}`); onClose(d.date); }
       return true;
     } catch (e) { toast.show(friendlyError(e)); return false; } finally { setBusy(false); }
   }
@@ -241,19 +300,19 @@ function DayEditor({ orgId, classes, day, days, onClose }: { orgId: string; clas
   const special = kindOf(d.date) === 'special';
   const lessonBoxes = classes.map((c) => (
     <fieldset key={c.id} className="tt-class">
-      <legend>{c.name}{c.leader ? ` · ${c.leader}` : ''}</legend>
+      <legend>{w.youth ? 'The meeting' : `${c.name}${c.leader ? ` · ${c.leader}` : ''}`}</legend>
       {LESSON_FIELDS.map((f) => (
-        <label key={f.key} className="field"><span>{f.label}</span>
+        <label key={f.key} className="field"><span>{w.label(f.key, f.label)}</span>
           {f.long
-            ? <textarea rows={2} value={d.lessons[c.id]?.[f.key] ?? ''} placeholder={f.key === 'teacher' && c.leader ? c.leader : f.hint} onChange={(e) => setLesson(c.id, f.key, e.target.value)} />
-            : <input value={d.lessons[c.id]?.[f.key] ?? ''} inputMode={f.key === 'link' ? 'url' : undefined} placeholder={f.key === 'teacher' && c.leader ? c.leader : f.hint} onChange={(e) => setLesson(c.id, f.key, e.target.value)} />}
+            ? <textarea rows={2} value={d.lessons[c.id]?.[f.key] ?? ''} placeholder={f.key === 'teacher' && c.leader ? c.leader : w.hint(f.key, f.hint)} onChange={(e) => setLesson(c.id, f.key, e.target.value)} />
+            : <input value={d.lessons[c.id]?.[f.key] ?? ''} inputMode={f.key === 'link' ? 'url' : undefined} placeholder={f.key === 'teacher' && c.leader ? c.leader : w.hint(f.key, f.hint)} onChange={(e) => setLesson(c.id, f.key, e.target.value)} />}
         </label>
       ))}
     </fieldset>
   ));
   return (
     <div className="tt-edit">
-      <h3>{special ? '📅 Event' : 'Sunday'} · {ssDayLabel(d.date)}</h3>
+      <h3>{special ? (w.youth ? '🔥 Meeting' : '📅 Event') : 'Sunday'} · {ssDayLabel(d.date)}</h3>
       {/* Any day of the week (Andy, 2026-11-24): pick it on the calendar, and the day moves there with its files. */}
       <div className="field"><span>Date</span>
         <div className="btn-line">
@@ -262,27 +321,29 @@ function DayEditor({ orgId, classes, day, days, onClose }: { orgId: string; clas
         </div>
         {pickDate && <MonthPicker value={d.date} min={SS_FIRST_DAY} marked={new Set(days.map((x) => x.date).filter((x) => x !== origin.current))} onPick={(date) => { set('date', date); setPickDate(false); }} />}
       </div>
-      <label className="field"><span>{special ? 'Name of the event' : 'Special Sunday (optional)'}</span>
-        <input value={d.title} maxLength={80} placeholder={special ? 'e.g. Vacation Bible School, Midweek class, Teachers\' meeting' : 'e.g. Easter Sunday, Children\'s Sunday'} onChange={(e) => set('title', e.target.value)} /></label>
+      <label className="field"><span>{special ? (w.youth ? 'Name of the meeting' : 'Name of the event') : 'Special Sunday (optional)'}</span>
+        <input value={d.title} maxLength={80} placeholder={special ? w.eventHint : w.sundayHint} onChange={(e) => set('title', e.target.value)} /></label>
       <label className="field"><span>Time (optional)</span>
         <input value={d.time} maxLength={40} placeholder={special ? 'e.g. 9 AM to 1 PM' : 'e.g. 10 AM to 11:30 AM'} onChange={(e) => set('time', e.target.value)} /></label>
       {special ? (
         <>
           <label className="field"><span>What and where</span>
-            <textarea rows={3} value={d.note} maxLength={600} placeholder="e.g. In the church hall. All teachers come. Bring Bibles and crayons." onChange={(e) => set('note', e.target.value)} /></label>
+            <textarea rows={3} value={d.note} maxLength={600} placeholder={w.whereHint} onChange={(e) => set('note', e.target.value)} /></label>
           <label className="field tt-themebox"><span>Theme (optional)</span>
             <input value={d.theme} maxLength={120} placeholder="e.g. Heroes of faith" onChange={(e) => set('theme', e.target.value)} /></label>
-          <details className="tt-fold" open={Object.keys(d.lessons).length > 0}>
-            <summary>Lessons for the classes on this day (optional)</summary>
-            {lessonBoxes}
-          </details>
+          {w.youth ? lessonBoxes : (
+            <details className="tt-fold" open={Object.keys(d.lessons).length > 0}>
+              <summary>Lessons for the classes on this day (optional)</summary>
+              {lessonBoxes}
+            </details>
+          )}
         </>
       ) : (
         <>
-          <label className="check"><input type="checkbox" checked={d.noClass} onChange={(e) => set('noClass', e.target.checked)} /> No Sunday school this Sunday</label>
+          <label className="check"><input type="checkbox" checked={d.noClass} onChange={(e) => set('noClass', e.target.checked)} /> {w.none} this Sunday</label>
           {!d.noClass && (
             <>
-              <label className="field tt-themebox"><span>Theme for the whole Sunday school</span>
+              <label className="field tt-themebox"><span>{w.theme}</span>
                 <input value={d.theme} maxLength={120} placeholder="e.g. Joseph forgives" onChange={(e) => set('theme', e.target.value)} /></label>
               <label className="field"><span>Series (optional)</span>
                 <input value={d.series} maxLength={80} placeholder="e.g. Life of Joseph" onChange={(e) => set('series', e.target.value)} /></label>
@@ -296,10 +357,10 @@ function DayEditor({ orgId, classes, day, days, onClose }: { orgId: string; clas
       <fieldset className="tt-class">
         <legend>Files ({d.files.length} of {SS_MAX_FILES})</legend>
         <DayFiles orgId={orgId} day={d} onRemove={(f) => void dropFile(f)} />
-        {!d.noClass && (
+        {!d.noClass && !w.youth && (
           <label className="field"><span>The file is for</span>
             <select value={fileClass} onChange={(e) => setFileClass(e.target.value)}>
-              <option value="">The whole Sunday school</option>
+              <option value="">{w.whole}</option>
               {classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select></label>
         )}
@@ -344,16 +405,18 @@ function MonthPicker({ value, min, max, marked, onPick }: { value: string; min: 
 }
 
 function SpecialDayForm({ year, today, days, onPick }: { year: number; today: string; days: SsDay[]; onPick: (date: string) => void }) {
+  const w = useWords();
   const min = year === 2026 ? (today > SS_FIRST_DAY ? today : SS_FIRST_DAY) : `${year}-01-01`;
   return (
     <div className="tt-tool">
-      <p style={{ margin: 0 }}><b>Tap the day of the event</b> on the calendar: a midweek class, Vacation Bible School, a teachers' meeting, a camp. Days with a dot already have something planned.</p>
+      <p style={{ margin: 0 }}><b>Tap the day of the {w.youth ? 'meeting' : 'event'}</b> on the calendar: {w.eventsText}. Days with a dot already have something planned.</p>
       <MonthPicker value="" min={min} marked={new Set(days.map((d) => d.date))} onPick={onPick} />
     </div>
   );
 }
 
 function SeriesForm({ orgId, year, today, onDone }: { orgId: string; year: number; today: string; onDone: () => void }) {
+  const w = useWords();
   const toast = useToast();
   const first = sundayFrom(year === 2026 || `${year}` === today.slice(0, 4) ? (today > SS_FIRST_DAY ? today : SS_FIRST_DAY) : `${year}-01-01`);
   const [series, setSeries] = useState('');
@@ -369,19 +432,20 @@ function SeriesForm({ orgId, year, today, onDone }: { orgId: string; year: numbe
       <label className="field"><span>Series name</span><input value={series} maxLength={80} placeholder="e.g. Life of Joseph" onChange={(e) => setSeries(e.target.value)} /></label>
       <label className="field"><span>First Sunday</span><input type="date" value={start} min={SS_FIRST_DAY} step={7} onChange={(e) => setStart(sundayFrom(e.target.value))} /></label>
       <label className="field"><span>How many Sundays</span><input type="number" inputMode="numeric" min={1} max={52} value={weeks} onChange={(e) => setWeeks(e.target.value)} /></label>
-      <p className="small muted">Sundays marked "No Sunday school" are skipped. Each Sunday gets "{series || 'Series'}: week 1, 2…" as its theme until you type its own; lessons already planned stay.</p>
+      <p className="small muted">Sundays marked "{w.none}" are skipped. Each Sunday gets "{series || 'Series'}: week 1, 2…" as its theme until you type its own; lessons already planned stay.</p>
       <button type="button" className="btn btn-primary" disabled={busy || !series.trim()} onClick={() => void go()}>Fill the Sundays</button>
     </div>
   );
 }
 
 function DriveForm({ orgId, link, onDone }: { orgId: string; link: string; onDone: () => void }) {
+  const w = useWords();
   const toast = useToast();
   const [v, setV] = useState(link);
   return (
     <div className="tt-tool">
-      <label className="field"><span>Sunday school folder on Google Drive</span><input value={v} inputMode="url" onChange={(e) => setV(e.target.value)} /></label>
-      <p className="small muted">In Google Drive, share the folder as "Anyone with the link: Viewer", so teachers without a Google account can open it.</p>
+      <label className="field"><span>{w.drive}</span><input value={v} inputMode="url" onChange={(e) => setV(e.target.value)} /></label>
+      <p className="small muted">In Google Drive, share the folder as "Anyone with the link: Viewer", so {w.driveWho} without a Google account can open it.</p>
       <button type="button" className="btn btn-primary" onClick={() => saveSsDrive(orgId, v).then(() => { toast.show('Saved. Reload the page to see it.'); onDone(); }).catch((e) => toast.show(friendlyError(e)))}>Save</button>
     </div>
   );
@@ -389,29 +453,31 @@ function DriveForm({ orgId, link, onDone }: { orgId: string; link: string; onDon
 
 /** Thursday's reminders for Sunday (8A), sent by hand on WhatsApp (9A): one message for the group, or one per teacher. */
 export function SsRemindersCard({ orgId, today }: { orgId: string; today: string }) {
+  const w = useWords();
   const toast = useToast();
   const [r, setR] = useState<SsReminders | null>(null);
   const [err, setErr] = useState('');
   const day = new Date(`${today}T12:00:00Z`).getUTCDay();
-  const due = day >= 4 || day === 0;
+  const due = w.youth || day >= 4 || day === 0;
   const load = () => ssReminders(orgId).then((x) => { setR(x); setErr(''); }).catch((e) => setErr(friendlyError(e)));
   useEffect(() => { if (due || window.location.hash === '#reminders') void load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [orgId]);
   const copy = async (t: string) => { try { await navigator.clipboard.writeText(t); toast.show('Copied. Paste it in WhatsApp.'); } catch { toast.show('Could not copy. Press and hold the message to copy it.'); } };
   return (
     <details className="card fold" id="reminders" open={due || window.location.hash === '#reminders'} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !r) void load(); }}>
-      <summary>📲 WhatsApp reminders for Sunday{r ? ` · ${ssDayLabel(r.date, false)}` : ''}</summary>
+      <summary>📲 {w.youth ? 'WhatsApp reminder for the next meeting' : 'WhatsApp reminders for Sunday'}{r?.date ? ` · ${ssDayLabel(r.date, false)}` : ''}</summary>
       {err && <p className="notice notice-warn">{err}</p>}
       {!r && !err && <p className="muted">Getting the reminders ready…</p>}
-      {r && (
+      {r && !r.group && <p className="muted">No meeting is on the youth timetable yet. Add one below and its reminder shows here.</p>}
+      {r?.group && (
         <>
-          <p className="small muted">Dorothy also gets these by email every Thursday at 6 PM. Press a green button to open WhatsApp with the message ready, then press Send.</p>
-          <h3>The teachers' group</h3>
+          <p className="small muted">{w.email} Press a green button to open WhatsApp with the message ready, then press Send.</p>
+          <h3>{w.group}</h3>
           <pre className="tt-msg">{r.group}</pre>
           <div className="btn-line">
             <a className="btn btn-primary" href={waShare(r.group)} target="_blank" rel="noreferrer">Send to the group on WhatsApp</a>
             <button type="button" className="btn" onClick={() => void copy(r.group)}>Copy</button>
           </div>
-          <h3>Each teacher</h3>
+          {r.list.length > 0 && <h3>Each teacher</h3>}
           <ul className="link-list">
             {r.list.map((t) => (
               <li key={t.classId}>

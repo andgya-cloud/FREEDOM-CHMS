@@ -36,7 +36,7 @@ export function HeadcountEditor({ event, canEdit }: { event: ChurchEvent; canEdi
   const counted = HEADCOUNT_FIELDS[event.type];
   // Services also take first-timers and salvations, which are not added to the total (Andy, 2026-11-02, 3A).
   // The same six boxes as the Sunday page and the usher app (Andy, 2026-11-08).
-  const fields: HeadcountKey[] = event.type === 'service' ? ['adults', 'teens', 'children', 'all', ...SERVICE_EXTRA_KEYS] : counted;
+  const fields: HeadcountKey[] = event.type === 'service' ? ['adults', 'teens', 'children', 'youth', 'all', ...SERVICE_EXTRA_KEYS] : counted;
   const [counts, setCounts] = useState<Headcounts>(event.headcounts ?? {});
   const [status, setStatus] = useState('');
   const dirty = useRef(false);

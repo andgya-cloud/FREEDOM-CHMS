@@ -9,10 +9,12 @@ import { db, FieldValue, requireCaller, requireString, requireStringArray, write
 import { canAccessOrg, canKeepAccounts } from './shared/permissions.js';
 import { chatRole } from './shared/hopeChats.js';
 import { appUrl, CIRCLE_SECRETS, circleContacts, circleEveryone, circleLeadEmails, circleMailer, circlePeopleOf, EMAIL, keepTestMail, nextNumber } from './circleKit.js';
-import { circleOf, isCircleType, isLeadKind, kindLabel, type CircleType } from './shared/circles.js';
+import { circleOf, isCircleType, isLeadKind, kindLabel, youthEditor, type CircleType } from './shared/circles.js';
 import { sendChatReminders } from './hopeChats.js';
 import { loadChurch, loadSsClasses, setClassCount } from './serviceCounters.js';
 import { classReportText, cleanClassReport } from './shared/sundaySchool.js';
+import { setYouthCount } from './youth.js';
+import { YOUTH_GROUP } from './shared/youth.js';
 import { plainName } from './pettyContacts.js';
 import { formatDateKey, localDateKey } from './shared/datetime.js';
 import {
@@ -50,8 +52,10 @@ const shownMessage = (id: string, m: StoryMessage) => (m.deleted
  * - "board": the names and numbers to send it to; "email": sends it to the chosen board members.
  */
 /** The next report number for this year, "FHC-2026-014", "ADIA-2026-003", "FCN-2026-001" (v193 4A; 2026-11-07 7A). */
+/** Each church room keeps its own reports: Sunday school ssReports, the youth youthReports (Andy, 2026-11-24, 6A). */
+const reportsCol = (type: CircleType) => (type === 'sunday_school' ? 'ssReports' : type === 'youth' ? 'youthReports' : 'hopePhotoReports');
 async function nextRef(orgId: string, type: CircleType): Promise<string> {
-  const { year, n } = await nextNumber(orgId, type === 'sunday_school' ? 'ssReports' : 'hopePhotoReports');
+  const { year, n } = await nextNumber(orgId, reportsCol(type));
   return storyRef(year, n, type);
 }
 
@@ -69,12 +73,12 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
   const org = (await db.doc(`organizations/${orgId}`).get()).data();
   if (!isCircleType(org?.type)) throw new HttpsError('failed-precondition', 'Photo reports are not set up for this organization.');
   // The Sunday school room inside the church (Andy, 2026-11-23, 4A): its own readers and its own collection.
-  const type: CircleType = org.type === 'church_campus' && data.room === 'sundayschool' ? 'sunday_school' : org.type;
+  const type: CircleType = org.type === 'church_campus' && data.room === 'sundayschool' ? 'sunday_school' : org.type === 'church_campus' && data.room === 'youth' ? 'youth' : org.type;
   const circle = circleOf(type);
   const boardOf = () => circleContacts(type, orgId);
   const linkTo = (id: string) => `${appUrl()}${circle.photosPath}?report=${id}`;
   const role = chatRole(me, orgId, type);
-  const col = db.collection(`organizations/${orgId}/${type === 'sunday_school' ? 'ssReports' : 'hopePhotoReports'}`);
+  const col = db.collection(`organizations/${orgId}/${reportsCol(type)}`);
   const action = String(data.action ?? '');
   const myName = me.displayName || me.email;
   const all = canSeeAllPhotoReports(me, orgId, type);
@@ -116,6 +120,13 @@ export const hopePhotoReports = onCall({ invoker: 'public', memory: '1GiB', time
       classReport = { ...r, classId: cls.id, className: cls.name };
       text = [classReportText(r), text].filter(Boolean).join('\n\n').slice(0, PHOTO_TEXT_MAX);
       if (r.present > 0 && day === localDateKey()) await setClassCount(await loadChurch(orgId), cls, myName, { set: r.present }).catch((err) => logger.warn('Class count not set', err));
+    }
+    // The youth meeting report (6A): the number present is the meeting's count today (5A).
+    if (type === 'youth' && data.kind === 'ssreport') {
+      const r = cleanClassReport(data.classReport);
+      classReport = { ...r, classId: YOUTH_GROUP.id, className: YOUTH_GROUP.name };
+      text = [classReportText(r, 'Youth'), text].filter(Boolean).join('\n\n').slice(0, PHOTO_TEXT_MAX);
+      if (r.present > 0 && day === localDateKey() && youthEditor(me, orgId)) await setYouthCount(await loadChurch(orgId), myName, { set: r.present }).catch((err) => logger.warn('Youth count not set', err));
     }
     let reportId: string | null = null; let reportLabel: string | null = null;
     if (type === 'ministry' && typeof data.reportId === 'string' && data.reportId) {

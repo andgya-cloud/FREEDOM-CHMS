@@ -32,7 +32,7 @@ export interface ServiceCountDoc {
   eventId: string;
   date: string;
   name: string;
-  by: Partial<Record<CounterJob, { person: string; done: boolean }>>;
+  by: Partial<Record<CounterJob | 'youth', { person: string; done: boolean }>>;
   emailed?: boolean;
 }
 

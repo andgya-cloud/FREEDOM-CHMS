@@ -54,7 +54,7 @@ export const HOPE_LETTERHEAD: Letterhead = {
 
 export function letterheadFor(org: { type?: string; name: string }): Letterhead {
   if (org.type === 'college') return ADIA_LETTERHEAD;
-  if (org.type === 'church_campus' || org.type === 'sunday_school') return { ...CHURCH_LETTERHEAD, name: org.name || CHURCH_LETTERHEAD.name };
+  if (org.type === 'church_campus' || org.type === 'sunday_school' || org.type === 'youth') return { ...CHURCH_LETTERHEAD, name: org.name || CHURCH_LETTERHEAD.name };
   if (org.type === 'ministry') return { ...HOPE_LETTERHEAD, name: org.name || HOPE_LETTERHEAD.name };
   return { name: org.name, lines: [], email: null, crest: null, band: NAVY, accent: GOLD };
 }

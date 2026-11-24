@@ -8,9 +8,15 @@ import { extOf, LESSON_CHUNK_BYTES, LESSON_MAX_BYTES } from '../../functions/src
 import { lessonLine, ssDayLabel, SS_TYPES, SS_TYPES_TEXT, yearRows, type SsDay, type SsFile } from '../../functions/src/shared/ssTimetable';
 import type { SsClass } from '../../functions/src/shared/sundaySchool';
 
-/** The Sunday school timetable's changes and files (Andy, 2026-11-24). Reading is straight from the database. */
+/**
+ * The Sunday school timetable's changes and files (Andy, 2026-11-24). Reading is straight from the database. The
+ * youth page uses the same timetable (Andy, 2026-11-24, 7A): it sets the ministry while it shows.
+ */
+export type TtMinistry = 'ss' | 'youth';
+let ministry: TtMinistry = 'ss';
+export const setTtMinistry = (m: TtMinistry) => { ministry = m; };
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: string }) =>
-  httpsCallable<typeof data, R>(functions, 'ssTimetable', { timeout: 180_000 })(data).then((r) => r.data);
+  httpsCallable<typeof data, R>(functions, 'ssTimetable', { timeout: 180_000 })(ministry === 'youth' ? { ...data, ministry } : data).then((r) => r.data);
 
 export const saveSsDay = (orgId: string, day: Partial<SsDay>, moveFrom?: string) => call<{ date: string; removed?: boolean }>({ orgId, action: 'save', day, ...(moveFrom ? { moveFrom } : {}) });
 export const removeSsDay = (orgId: string, date: string) => call({ orgId, action: 'remove', date });
@@ -73,7 +79,7 @@ type Row = { date: string; what: string; theme: string; lessons: string[] };
 function rowsOf(year: number, days: SsDay[], classes: SsClass[]): Row[] {
   return yearRows(year, days).map(({ date, day }) => ({
     date,
-    what: day?.kind === 'special' ? `★ ${day.title}${day.time ? ` · ${day.time}` : ''}` : day?.noClass ? `No Sunday school${day.title ? ` · ${day.title}` : ''}` : day?.title ?? '',
+    what: day?.kind === 'special' ? `★ ${day.title}${day.time ? ` · ${day.time}` : ''}` : day?.noClass ? `${ministry === 'youth' ? 'No youth meeting' : 'No Sunday school'}${day.title ? ` · ${day.title}` : ''}` : day?.title ?? '',
     theme: [day?.theme, day?.series && !day.theme?.startsWith(day.series) ? `(${day.series})` : ''].filter(Boolean).join(' '),
     lessons: classes.map((c) => {
       const l = day?.lessons[c.id];
@@ -82,7 +88,8 @@ function rowsOf(year: number, days: SsDay[], classes: SsClass[]): Row[] {
     }),
   }));
 }
-const fileName = (year: number, ext: string) => `Sunday-School-Timetable-${year}.${ext}`;
+const fileName = (year: number, ext: string) => `${ministry === 'youth' ? 'Youth' : 'Sunday-School'}-Timetable-${year}.${ext}`;
+const sheetTitle = (year: number) => (ministry === 'youth' ? `Youth Timetable ${year}` : `Sunday School Teaching Timetable ${year}`);
 
 export async function ssTimetablePdf(org: { name: string; type?: string }, year: number, days: SsDay[], classes: SsClass[]): Promise<File> {
   const rows = rowsOf(year, days, classes);
@@ -90,14 +97,14 @@ export async function ssTimetablePdf(org: { name: string; type?: string }, year:
   const w = pdf.internal.pageSize.getWidth();
   const bottom = pdf.internal.pageSize.getHeight() - 22;
   const lh = letterheadFor(org);
-  let y = drawLetterhead(pdf, lh, await logoImage(lh.crest), `Sunday School Teaching Timetable ${year}`, 'Freedom Church Sunday School');
+  let y = drawLetterhead(pdf, lh, await logoImage(lh.crest), sheetTitle(year), ministry === 'youth' ? 'Freedom Church Youth' : 'Freedom Church Sunday School');
   const dateW = 26; const themeW = 52;
   const classW = (w - 28 - dateW - themeW) / Math.max(1, classes.length);
   const xs = [14, 14 + dateW, 14 + dateW + themeW, ...classes.map((_, i) => 14 + dateW + themeW + classW * (i + 1))];
   const header = () => {
     pdf.setFillColor(31, 75, 51); pdf.rect(14, y, w - 28, 10, 'F');
     pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(255, 255, 255);
-    pdf.text('SUNDAY', xs[0]! + 2, y + 6.5); pdf.text('THEME', xs[1]! + 2, y + 6.5);
+    pdf.text(ministry === 'youth' ? 'DAY' : 'SUNDAY', xs[0]! + 2, y + 6.5); pdf.text('THEME', xs[1]! + 2, y + 6.5);
     classes.forEach((c, i) => pdf.text((pdf.splitTextToSize(`${c.name}${c.leader ? ` · ${c.leader}` : ''}`.toUpperCase(), classW - 3) as string[])[0]!, xs[2 + i]! + 2, y + 6.5));
     y += 12;
   };
@@ -127,9 +134,9 @@ export async function ssTimetableExcel(org: { name: string }, year: number, days
   const rows = rowsOf(year, days, classes);
   const band = (value: string) => ({ value, fontWeight: 'bold' as const, color: '#FFFFFF', backgroundColor: '#1F4B33', height: 24, wrap: true });
   const sheet = [
-    [{ value: `${org.name} · Sunday School Teaching Timetable ${year}`, fontWeight: 'bold' as const }],
+    [{ value: `${org.name} · ${sheetTitle(year)}`, fontWeight: 'bold' as const }],
     [],
-    [band('SUNDAY'), band('THEME'), ...classes.map((c) => band(`${c.name}${c.leader ? ` · ${c.leader}` : ''}`))],
+    [band(ministry === 'youth' ? 'DAY' : 'SUNDAY'), band('THEME'), ...classes.map((c) => band(`${c.name}${c.leader ? ` · ${c.leader}` : ''}`))],
     ...rows.map((r) => [
       { value: new Date(`${r.date}T12:00:00Z`), type: Date, format: 'ddd dd mmm yyyy' },
       { value: [r.what, r.theme].filter(Boolean).join('\n'), type: String, wrap: true },

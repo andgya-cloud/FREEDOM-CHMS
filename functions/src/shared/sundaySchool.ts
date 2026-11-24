@@ -67,8 +67,8 @@ export function cleanClassReport(v: unknown): ClassReport {
   const n = Math.floor(Number(o.present));
   return { present: Number.isFinite(n) && n > 0 ? Math.min(n, 2000) : 0, lesson: clean(o.lesson, 300), win: clean(o.win, 600), need: clean(o.need, 600) };
 }
-export function classReportText(r: ClassReport): string {
-  return [`Children present: ${r.present}`, r.lesson && `Lesson: ${r.lesson}`, r.win && `Win: ${r.win}`, r.need && `Need: ${r.need}`].filter(Boolean).join('\n');
+export function classReportText(r: ClassReport, who = 'Children'): string {
+  return [`${who} present: ${r.present}`, r.lesson && `${who === 'Children' ? 'Lesson' : 'Topic'}: ${r.lesson}`, r.win && `Win: ${r.win}`, r.need && `Need: ${r.need}`].filter(Boolean).join('\n');
 }
 
 /** The leader's Sunday summary (8A): one line per class, with the classes that have not reported. */

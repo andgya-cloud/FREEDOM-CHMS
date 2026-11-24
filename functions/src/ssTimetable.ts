@@ -6,7 +6,8 @@ import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProf
 import { appUrl } from './circleKit.js';
 import { canAccessOrg } from './shared/permissions.js';
 import { localDateKey } from './shared/datetime.js';
-import { ssEditor, SS_TEACHER_ROLE_ID } from './shared/circles.js';
+import { ssEditor, SS_TEACHER_ROLE_ID, youthEditor } from './shared/circles.js';
+import { YOUTH_GROUP, youthReminderText } from './shared/youth.js';
 import { cleanFileName, LESSON_CHUNK_BYTES, LESSON_MAX_BYTES, LESSON_MAX_PARTS } from './shared/lessonPlans.js';
 import { phoneOfLogin } from './shared/phone.js';
 import { loadChurch, loadSsClasses } from './serviceCounters.js';
@@ -23,17 +24,24 @@ import {
  */
 const UPLOAD_ID = /^[a-z0-9]{8,32}$/;
 const bucket = () => getStorage().bucket();
-const dayRef = (orgId: string, date: string) => db.doc(`organizations/${orgId}/ssTimetable/${date}`);
-const settingsRef = (orgId: string) => db.doc(`organizations/${orgId}/sundaySchool/settings`);
+/** Sunday school's timetable, or the youth's (Andy, 2026-11-24): the same tool, kept apart. */
+export type Ministry = 'ss' | 'youth';
+const COL: Record<Ministry, string> = { ss: 'ssTimetable', youth: 'youthTimetable' };
+const SETTINGS: Record<Ministry, string> = { ss: 'sundaySchool/settings', youth: 'youth/settings' };
+const FILES: Record<Ministry, string> = { ss: 'ssLessons', youth: 'youthLessons' };
+const dayRef = (m: Ministry, orgId: string, date: string) => db.doc(`organizations/${orgId}/${COL[m]}/${date}`);
+const settingsRef = (m: Ministry, orgId: string) => db.doc(`organizations/${orgId}/${SETTINGS[m]}`);
 const partPath = (orgId: string, uid: string, uploadId: string, n: number) => `ssParts/${orgId}/${uid}/${uploadId}/${n}`;
-const filePath = (orgId: string, date: string, id: string) => `ssLessons/${orgId}/${date}/${id}`;
+const filePath = (m: Ministry, orgId: string, date: string, id: string) => `${FILES[m]}/${orgId}/${date}/${id}`;
+/** Sunday school starts with Andy's folder; the youth have none until Sheila pastes one. */
+const DEFAULT_FOLDER: Record<Ministry, string> = { ss: SS_DRIVE_FOLDER, youth: '' };
 
-export async function driveFolderOf(orgId: string): Promise<string> {
-  return String((await settingsRef(orgId).get()).get('driveFolder') || SS_DRIVE_FOLDER);
+export async function driveFolderOf(m: Ministry, orgId: string): Promise<string> {
+  return String((await settingsRef(m, orgId).get()).get('driveFolder') || DEFAULT_FOLDER[m]);
 }
 
-async function loadDay(orgId: string, date: string): Promise<SsDay | null> {
-  const s = await dayRef(orgId, date).get();
+export async function loadDay(m: Ministry, orgId: string, date: string): Promise<SsDay | null> {
+  const s = await dayRef(m, orgId, date).get();
   return s.exists ? (s.data() as SsDay) : null;
 }
 
@@ -50,7 +58,7 @@ async function teachersOf(orgId: string): Promise<Teacher[]> {
 
 /** Who teaches each class on the day (6A) and their WhatsApp number, with the message ready (8A, 9A). */
 export async function remindersFor(orgId: string, date: string, classes: SsClass[], day: SsDay | null) {
-  const [teachers, drive] = await Promise.all([teachersOf(orgId), driveFolderOf(orgId)]);
+  const [teachers, drive] = await Promise.all([teachersOf(orgId), driveFolderOf('ss', orgId)]);
   const first = (n: string) => n.trim().split(/\s+/)[0]?.toLowerCase() ?? '';
   const app = appUrl();
   const list = classes.map((c) => {
@@ -66,71 +74,81 @@ export async function remindersFor(orgId: string, date: string, classes: SsClass
   return { date, list, group: groupReminderText({ day, date, classes, app, drive }) };
 }
 
+/** The youth's next meeting on the timetable, today or later (8A), with the message for the youth group. */
+export async function youthRemindersFor(orgId: string, today: string, onlyDate?: string) {
+  const q = await db.collection(`organizations/${orgId}/${COL.youth}`).where('date', '>=', onlyDate ?? today).orderBy('date').limit(12).get();
+  const day = q.docs.map((d) => d.data() as SsDay).find((d) => !d.noClass && (!onlyDate || d.date === onlyDate)) ?? null;
+  if (!day) return { date: '', list: [], group: '' };
+  return { date: day.date, list: [], group: youthReminderText({ day, app: appUrl(), drive: await driveFolderOf('youth', orgId) }) };
+}
+
 export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInstances: 10 }, async (request) => {
   const data = (request.data ?? {}) as Record<string, unknown>;
   const orgId = requireString(data.orgId, 'the church', { max: 60 });
   const action = String(data.action ?? '');
+  const m: Ministry = data.ministry === 'youth' ? 'youth' : 'ss';
   const church = await loadChurch(orgId);
   const caller = await requireCaller(request, undefined, { reviewerOk: action === 'download' });
   const me = caller.profile;
   if (!canAccessOrg(me, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this church.');
   const today = localDateKey(new Date(), church.tz);
-  const edits = ssEditor(me, orgId);
-  const editorOnly = () => { if (!edits) throw new HttpsError('permission-denied', 'Only Dorothy, Andy and Doreen change the timetable.'); };
-  const classes = await loadSsClasses(orgId);
+  const edits = m === 'youth' ? youthEditor(me, orgId) : ssEditor(me, orgId);
+  const editorOnly = () => { if (!edits) throw new HttpsError('permission-denied', m === 'youth' ? 'Only Sheila, Andy and Doreen change the youth timetable.' : 'Only Dorothy, Andy and Doreen change the timetable.'); };
+  const classes = m === 'youth' ? [YOUTH_GROUP] : await loadSsClasses(orgId);
   const ids = classes.map((c) => c.id);
 
   if (action === 'download') {
     const date = isDateKey(data.date) ? data.date : '';
-    const day = date ? await loadDay(orgId, date) : null;
+    const day = date ? await loadDay(m, orgId, date) : null;
     const item = day?.files?.find((f) => f.id === data.itemId);
     if (!item) throw new HttpsError('not-found', 'This file is no longer on the timetable.');
     const start = Math.max(0, Math.floor(Number(data.start) || 0));
     if (start >= item.size) return { name: item.name, contentType: item.contentType, size: item.size, data: '' };
     const end = Math.min(item.size, start + LESSON_CHUNK_BYTES) - 1;
-    const [bytes] = await bucket().file(filePath(orgId, date, item.id)).download({ start, end });
+    const [bytes] = await bucket().file(filePath(m, orgId, date, item.id)).download({ start, end });
     return { name: item.name, contentType: item.contentType, size: item.size, data: bytes.toString('base64') };
   }
 
   if (action === 'reminders') {
     editorOnly();
+    if (m === 'youth') return youthRemindersFor(orgId, today);
     const date = isDateKey(data.date) ? data.date : reminderSunday(today);
-    return remindersFor(orgId, date, classes, await loadDay(orgId, date));
+    return remindersFor(orgId, date, classes, await loadDay(m, orgId, date));
   }
 
   editorOnly();
   const stamp = { updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid, updatedByName: me.displayName || me.email };
-  const audit = (what: string, docId: string, note?: string) => writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: `ss_timetable_${what}`, path: `organizations/${orgId}/ssTimetable/${docId}`, collection: 'ssTimetable', docId, orgId, ...(note ? { note } : {}) });
+  const audit = (what: string, docId: string, note?: string) => writeAudit({ actorUid: caller.uid, actorEmail: caller.email, action: `${m}_timetable_${what}`, path: `organizations/${orgId}/${COL[m]}/${docId}`, collection: COL[m], docId, orgId, ...(note ? { note } : {}) });
 
   if (action === 'drive') {
     const link = cleanLink(data.link);
     if (data.link && !link) throw new HttpsError('invalid-argument', 'Paste the whole Google Drive link, starting with https://');
-    await settingsRef(orgId).set({ driveFolder: link || SS_DRIVE_FOLDER, ...stamp }, { merge: true });
+    await settingsRef(m, orgId).set({ driveFolder: link || DEFAULT_FOLDER[m], ...stamp }, { merge: true });
     await audit('drive', 'settings');
-    return { driveFolder: link || SS_DRIVE_FOLDER };
+    return { driveFolder: link || DEFAULT_FOLDER[m] };
   }
 
   if (action === 'save') {
     const day = cleanDay(data.day, ids);
     if (!day.date || day.date < SS_FIRST_DAY) throw new HttpsError('invalid-argument', 'Pick a date from December 2026 on.');
     if (day.kind === 'special' && !day.title) throw new HttpsError('invalid-argument', 'Give the event a name, e.g. Vacation Bible School or Midweek class.');
-    const ref = dayRef(orgId, day.date);
+    const ref = dayRef(m, orgId, day.date);
     // A day moved to another date on the calendar (Andy, 2026-11-24): its files go with it.
     const moveFrom = isDateKey(data.moveFrom) && data.moveFrom !== day.date ? data.moveFrom : '';
     if (moveFrom) {
-      const old = await loadDay(orgId, moveFrom);
+      const old = await loadDay(m, orgId, moveFrom);
       if (old) {
-        if (await loadDay(orgId, day.date)) throw new HttpsError('already-exists', `${ssDayLabel(day.date)} already has something on the timetable. Pick another date, or change that day.`);
+        if (await loadDay(m, orgId, day.date)) throw new HttpsError('already-exists', `${ssDayLabel(day.date)} already has something on the timetable. Pick another date, or change that day.`);
         const files = old.files ?? [];
-        await Promise.all(files.map((f) => bucket().file(filePath(orgId, moveFrom, f.id)).copy(bucket().file(filePath(orgId, day.date, f.id)))));
+        await Promise.all(files.map((f) => bucket().file(filePath(m, orgId, moveFrom, f.id)).copy(bucket().file(filePath(m, orgId, day.date, f.id)))));
         await ref.set({ ...day, files, orgId, ...stamp, createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid });
-        await dayRef(orgId, moveFrom).delete();
-        await Promise.all(files.map((f) => bucket().file(filePath(orgId, moveFrom, f.id)).delete({ ignoreNotFound: true })));
+        await dayRef(m, orgId, moveFrom).delete();
+        await Promise.all(files.map((f) => bucket().file(filePath(m, orgId, moveFrom, f.id)).delete({ ignoreNotFound: true })));
         await audit('move', day.date, `from ${moveFrom}`);
         return { date: day.date };
       }
     }
-    const before = await loadDay(orgId, day.date);
+    const before = await loadDay(m, orgId, day.date);
     if (!dayPlanned({ ...day, files: before?.files ?? [] })) {
       if (before) await ref.delete();
       await audit('clear', day.date);
@@ -143,10 +161,10 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
 
   if (action === 'remove') {
     const date = isDateKey(data.date) ? data.date : '';
-    const before = date ? await loadDay(orgId, date) : null;
+    const before = date ? await loadDay(m, orgId, date) : null;
     if (!before) return { ok: true };
-    await Promise.all((before.files ?? []).map((f) => bucket().file(filePath(orgId, date, f.id)).delete({ ignoreNotFound: true })));
-    await dayRef(orgId, date).delete();
+    await Promise.all((before.files ?? []).map((f) => bucket().file(filePath(m, orgId, date, f.id)).delete({ ignoreNotFound: true })));
+    await dayRef(m, orgId, date).delete();
     await audit('remove', date);
     return { ok: true };
   }
@@ -158,7 +176,7 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
     const series = String(data.series ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
     const weeks = Math.floor(Number(data.weeks));
     if (!start || start < SS_FIRST_DAY || !series || !(weeks >= 1 && weeks <= 52)) throw new HttpsError('invalid-argument', 'Type the series name, the first Sunday and how many Sundays.');
-    const span = await db.collection(`organizations/${orgId}/ssTimetable`).where('date', '>=', start).where('date', '<=', `${Number(start.slice(0, 4)) + 2}-01-01`).get();
+    const span = await db.collection(`organizations/${orgId}/${COL[m]}`).where('date', '>=', start).where('date', '<=', `${Number(start.slice(0, 4)) + 2}-01-01`).get();
     const existing = new Map(span.docs.map((d) => [d.id, d.data() as SsDay]));
     const noClass = new Set([...existing.values()].filter((d) => d.noClass).map((d) => d.date));
     const dates = seriesDates(start, weeks, noClass);
@@ -166,7 +184,7 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
     dates.forEach((date, i) => {
       const before = existing.get(date);
       const theme = before?.theme || `${series}: week ${i + 1}`;
-      batch.set(dayRef(orgId, date), {
+      batch.set(dayRef(m, orgId, date), {
         date, kind: 'sunday', title: before?.title ?? '', noClass: false, theme, series, note: before?.note ?? '', time: before?.time ?? '', link: before?.link ?? '',
         lessons: before?.lessons ?? {}, files: before?.files ?? [], orgId, ...stamp, ...(before ? {} : { createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid }),
       });
@@ -181,8 +199,8 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
   if (action === 'copyYear') {
     const from = Math.floor(Number(data.from));
     if (!(from >= 2026 && from <= 2100)) throw new HttpsError('invalid-argument', 'Pick the year to copy.');
-    const src = await db.collection(`organizations/${orgId}/ssTimetable`).where('date', '>=', `${from}-01-01`).where('date', '<=', `${from}-12-31`).get();
-    const dst = await db.collection(`organizations/${orgId}/ssTimetable`).where('date', '>=', `${from + 1}-01-01`).where('date', '<=', `${from + 1}-12-31`).get();
+    const src = await db.collection(`organizations/${orgId}/${COL[m]}`).where('date', '>=', `${from}-01-01`).where('date', '<=', `${from}-12-31`).get();
+    const dst = await db.collection(`organizations/${orgId}/${COL[m]}`).where('date', '>=', `${from + 1}-01-01`).where('date', '<=', `${from + 1}-12-31`).get();
     const taken = new Set(dst.docs.map((d) => d.id));
     const batch = db.batch();
     let copied = 0;
@@ -191,7 +209,7 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
       // Sundays move to the Sunday 52 weeks on; a special day keeps its calendar date if it stays in the next year.
       const date = day.kind === 'sunday' || isSunday(day.date) ? nextYearDate(day.date) : `${from + 1}${day.date.slice(4)}`;
       if (!date.startsWith(String(from + 1)) || taken.has(date) || !isDateKey(date)) continue;
-      batch.set(dayRef(orgId, date), { ...cleanDay({ ...day, date }, ids), files: [], orgId, ...stamp, createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid });
+      batch.set(dayRef(m, orgId, date), { ...cleanDay({ ...day, date }, ids), files: [], orgId, ...stamp, createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid });
       copied += 1;
     }
     if (copied) await batch.commit();
@@ -217,7 +235,7 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
     const name = cleanFileName(requireString(data.name, 'the file name', { max: 200 }));
     if (!date || date < SS_FIRST_DAY) throw new HttpsError('invalid-argument', 'Pick a day on the timetable first.');
     if (!UPLOAD_ID.test(uploadId) || !Number.isInteger(parts) || parts < 1 || parts > LESSON_MAX_PARTS) throw new HttpsError('invalid-argument', 'This upload is not valid.');
-    const before = await loadDay(orgId, date);
+    const before = await loadDay(m, orgId, date);
     if ((before?.files?.length ?? 0) >= SS_MAX_FILES) throw new HttpsError('failed-precondition', `A day holds up to ${SS_MAX_FILES} files. Remove one first, or put the rest in the Google Drive folder.`);
     const pieces = Array.from({ length: parts }, (_, n) => bucket().file(partPath(orgId, caller.uid, uploadId, n)));
     const cleanup = () => Promise.all(pieces.map((p) => p.delete({ ignoreNotFound: true }))).catch((err) => logger.warn('Timetable pieces not removed', err));
@@ -230,11 +248,11 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
       const type = ssFileType(name, /\.(txt|csv)$/i.test(name) ? whole : whole.subarray(0, 32));
       if (!type) throw new HttpsError('invalid-argument', 'This file is not a PDF, Word, PowerPoint, Excel, photo, video or song.');
       const id = randomBytes(8).toString('hex');
-      await bucket().file(filePath(orgId, date, id)).save(whole, { resumable: false, contentType: type.contentType });
+      await bucket().file(filePath(m, orgId, date, id)).save(whole, { resumable: false, contentType: type.contentType });
       const item: SsFile = { id, name, contentType: type.contentType, size, classId, uploadedOn: today };
-      if (before) await dayRef(orgId, date).update({ files: FieldValue.arrayUnion(item), ...stamp });
+      if (before) await dayRef(m, orgId, date).update({ files: FieldValue.arrayUnion(item), ...stamp });
       else {
-        await dayRef(orgId, date).set({
+        await dayRef(m, orgId, date).set({
           ...cleanDay({ date }, ids), files: [item], orgId, ...stamp, createdAt: FieldValue.serverTimestamp(), createdBy: caller.uid,
         });
       }
@@ -245,13 +263,13 @@ export const ssTimetable = onCall({ memory: '1GiB', timeoutSeconds: 120, maxInst
 
   if (action === 'removeFile') {
     const date = isDateKey(data.date) ? data.date : '';
-    const before = date ? await loadDay(orgId, date) : null;
+    const before = date ? await loadDay(m, orgId, date) : null;
     const item = before?.files?.find((f) => f.id === data.itemId);
     if (!before || !item) return { ok: true };
-    await bucket().file(filePath(orgId, date, item.id)).delete({ ignoreNotFound: true });
+    await bucket().file(filePath(m, orgId, date, item.id)).delete({ ignoreNotFound: true });
     const files = before.files.filter((f) => f.id !== item.id);
-    if (!dayPlanned({ ...before, files })) await dayRef(orgId, date).delete();
-    else await dayRef(orgId, date).update({ files, ...stamp });
+    if (!dayPlanned({ ...before, files })) await dayRef(m, orgId, date).delete();
+    else await dayRef(m, orgId, date).update({ files, ...stamp });
     await audit('file_remove', date, item.name);
     return { ok: true };
   }

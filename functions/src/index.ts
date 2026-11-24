@@ -53,3 +53,4 @@ export { hopeSponsor } from './hopeSponsor.js';
 export { serviceCounters } from './serviceCounters.js';
 export { sundaySchoolSummary, sundaySchoolReminders } from './sundaySchool.js';
 export { ssTimetable } from './ssTimetable.js';
+export { youth, youthReminders, youthSummary } from './youth.js';

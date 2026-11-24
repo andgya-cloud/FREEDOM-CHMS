@@ -163,7 +163,7 @@ const REVIEWER_SEES: Permission[] = ['people.read', 'people.write', 'attendance.
   'payroll.manage', 'payroll.approve', 'exams.mark', 'exams.manage', 'school.manage', 'fees.balances'];
 export const isReviewer = (profile: { roleId?: string } | null | undefined) => profile?.roleId === REVIEWER_ROLE_ID;
 
-export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'teacher' | 'ssteacher' | 'reviewer', RoleDefinition> = {
+export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'signatory' | 'principal' | 'trainer' | 'labtech' | 'librarian' | 'usher' | 'finance' | 'helper' | 'teacher' | 'ssteacher' | 'youth' | 'reviewer', RoleDefinition> = {
   pastor: { name: 'Pastor', isOwner: true, permissions: [...PERMISSIONS] },
   admin: {
     name: 'Admin',
@@ -201,6 +201,9 @@ export const DEFAULT_ROLES: Record<'pastor' | 'admin' | 'head' | 'staff' | 'sign
   // A Freedom Church Sunday school teacher (Andy, 2026-11-23, 9A): counts their own class and writes in the Sunday
   // school room. Their class is on their account (ssClassId); everything goes through the server, so no permissions.
   ssteacher: { name: 'Sunday school teacher', permissions: [] },
+  // The Freedom Church youth leader (Andy, 2026-11-24: Sheila): counts the youth meetings, keeps the youth timetable
+  // and writes in the Youth room. Everything goes through the server, so no permissions.
+  youth: { name: 'Youth leader', permissions: [] },
   reviewer: { name: 'Reviewer', permissions: REVIEWER_SEES },
 };
 
@@ -209,6 +212,7 @@ export const FINANCE_ROLE_ID = 'finance';
 export const HELPER_ROLE_ID = 'helper';
 export const TEACHER_ROLE_ID = 'teacher';
 export const SS_TEACHER_ROLE = 'ssteacher';
+export const YOUTH_LEADER_ROLE = 'youth';
 /** A Hope helper or a Hope class teacher: both see only the few Hope pages that are theirs. */
 export const isHopeHelperRole = (roleId: string | undefined | null) => roleId === HELPER_ROLE_ID || roleId === TEACHER_ROLE_ID;
 

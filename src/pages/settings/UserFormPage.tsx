@@ -53,6 +53,7 @@ const ROLE_HINTS: Record<string, string> = {
   librarian: ': runs the ADIA library (lends and returns books), and sees nothing else',
   reviewer: ': an outsider who reviews the app. Sees every area of the places you tick, changes nothing, and writes reviews in My reviews for you to answer. Never sees pastoral notes, private conversations, staff accounts or the full download',
   ssteacher: ': Freedom Church only: counts their own Sunday school class (it adds into Children) and writes in the Sunday school room. Nothing else',
+  youth: ': Freedom Church only: counts the youth meetings (a Sunday meeting adds into the Sunday total), keeps the youth timetable and writes in the Youth room. Nothing else',
   teacher: ': Freedom Hope Centre only: marks their own class\'s register, sees the children\'s birthdays and writes in the Teachers\' room. Nothing else',
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
@@ -148,7 +149,7 @@ export function UserFormPage() {
         ? { displayName: form.displayName.trim(), orgIds: form.orgIds, phone: form.phone.trim() }
         : {
           displayName: form.displayName.trim(), roleId: form.roleId, allOrgs: form.allOrgs, orgIds: form.orgIds,
-          extraPermissions: role?.isOwner || signatory || principal || form.roleId === TEACHER_ROLE_ID || form.roleId === 'ssteacher' ? [] : form.extraPermissions,
+          extraPermissions: role?.isOwner || signatory || principal || form.roleId === TEACHER_ROLE_ID || form.roleId === 'ssteacher' || form.roleId === 'youth' ? [] : form.extraPermissions,
           pettyTitle: showTitle ? form.pettyTitle : '',
           phone: form.phone.trim(),
           departments: form.roleId === TRAINER_ROLE_ID ? form.departments : [],
@@ -265,7 +266,7 @@ export function UserFormPage() {
                 </label>
               ))}
             </fieldset>
-            {!teamOnly && !signatory && !principal && form.roleId !== TEACHER_ROLE_ID && form.roleId !== 'ssteacher' && <fieldset className="field">
+            {!teamOnly && !signatory && !principal && form.roleId !== TEACHER_ROLE_ID && form.roleId !== 'ssteacher' && form.roleId !== 'youth' && <fieldset className="field">
               <legend>Also allow</legend>
               <p className="hint">Off by default for admins.</p>
               {GRANTABLE_PERMISSIONS.map((p) => (

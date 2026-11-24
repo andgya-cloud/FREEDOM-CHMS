@@ -11,9 +11,9 @@ import { db } from '../firebase';
 import type { ServiceCountDoc } from '../../functions/src/shared/counters';
 
 // Same six buttons, same order, as the usher app v1.8 (Andy, 2026-11-08). Whole Church, when counted, is the total.
-const KEYS = ['adults', 'teens', 'children', 'all', 'firstTimers', 'salvations'] as const;
+const KEYS = ['adults', 'teens', 'children', 'youth', 'all', 'firstTimers', 'salvations'] as const;
 type Key = (typeof KEYS)[number];
-const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', all: 'Everyone · this is the total', children: 'Under 13', firstTimers: 'Already counted above', salvations: 'Already counted above' };
+const HINTS: Record<Key, string> = { adults: '20 and over', teens: '13 to 19', all: 'Everyone · this is the total', children: 'Under 13', youth: 'Youth meeting · counted by the youth leader', firstTimers: 'Already counted above', salvations: 'Already counted above' };
 
 /**
  * The counting card on the Service page (Andy, 2026-11-03, 1A-6A): type the service, then tap – and + (or type a

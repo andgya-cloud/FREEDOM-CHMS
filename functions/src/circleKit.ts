@@ -5,10 +5,10 @@ import nodemailer, { type Transporter } from 'nodemailer';
 import { db, type UserProfile } from './common.js';
 import { contactsFor, hopeBoardContacts, plainName } from './pettyContacts.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
-import { circleOf, isCircleLead, type CircleType } from './shared/circles.js';
+import { circleOf, isChurchRoom, isCircleLead, type CircleType } from './shared/circles.js';
 import { classOf } from './shared/hopeClasses.js';
 import { localDateKey } from './shared/datetime.js';
-import { normalizePhone } from './shared/phone.js';
+import { isPhoneLogin, normalizePhone } from './shared/phone.js';
 import { STORY_CHILDREN_MAX, type StoryChild } from './shared/hopePhotos.js';
 
 /**
@@ -28,7 +28,7 @@ export interface CircleMailer { transport: Transporter; from: string; name: stri
 export function circleMailer(type: CircleType): CircleMailer | null {
   const lh = letterheadFor({ type, name: '' });
   const test = process.env.PETTY_MAIL_TEST_DIR;
-  const secret = type === 'college' ? PETTY_EMAIL_APP_PASSWORD : (type === 'church_campus' || type === 'sunday_school') ? CHURCH_EMAIL_APP_PASSWORD : HOPE_EMAIL_APP_PASSWORD;
+  const secret = type === 'college' ? PETTY_EMAIL_APP_PASSWORD : (type === 'church_campus' || isChurchRoom(type)) ? CHURCH_EMAIL_APP_PASSWORD : HOPE_EMAIL_APP_PASSWORD;
   let pass = 'test';
   if (!test) { try { pass = secret.value().replace(/\s+/g, ''); } catch { pass = ''; } }
   if (!lh.email || !pass) return null;
@@ -58,7 +58,7 @@ export async function circleContacts(type: CircleType, orgId: string): Promise<C
   const base = contactsFor('church_campus').filter((c) => ['andrewguya', 'doreenmayaka'].includes(plainName(c.name))).map((c) => ({ name: c.name, email: c.email, phone: c.phone }));
   const users = (await db.collection('users').where('active', '==', true).get()).docs.map((d) => d.data() as UserProfile & { phone?: string });
   // The Sunday school leader is found by name, whatever places her account reaches (Andy, 2026-11-23, 3A).
-  const leaders = users.filter((u) => (type === 'sunday_school' || !u.allOrgs) && isCircleLead(u, orgId, type) && u.displayName);
+  const leaders = users.filter((u) => (isChurchRoom(type) || !u.allOrgs) && isCircleLead(u, orgId, type) && u.displayName);
   const have = new Set(base.map((c) => plainName(c.name)));
   for (const u of leaders) {
     if (have.has(plainName(u.displayName))) continue;
@@ -73,7 +73,8 @@ export async function circleLeadEmails(type: CircleType, orgId: string): Promise
   const contacts = await circleContacts(type, orgId);
   const emailOf = (name: string, fallback: string) => contacts.find((c) => plainName(c.name) === plainName(name))?.email || fallback;
   const users = (await db.collection('users').where('active', '==', true).get()).docs.map((d) => d.data() as UserProfile);
-  const to = [...new Set(users.filter((u) => (type === 'sunday_school' || !u.allOrgs) && isCircleLead(u, orgId, type)).map((u) => emailOf(u.displayName, u.email)).filter((e) => EMAIL.test(e)))];
+  // A WhatsApp sign-in has no mailbox (Andy, 2026-11-23): those leaders' emails go to Andy and Doreen instead.
+  const to = [...new Set(users.filter((u) => (isChurchRoom(type) || !u.allOrgs) && isCircleLead(u, orgId, type)).map((u) => emailOf(u.displayName, u.email)).filter((e) => EMAIL.test(e) && !isPhoneLogin(e)))];
   const cc = [...new Set(contacts.filter((c) => ['andrewguya', 'doreenmayaka'].includes(plainName(c.name))).map((c) => c.email).filter((e) => EMAIL.test(e) && !to.includes(e)))];
   return { to: to.length ? to : cc, cc: to.length ? cc : [] };
 }

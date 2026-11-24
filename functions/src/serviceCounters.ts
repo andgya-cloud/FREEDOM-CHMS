@@ -55,7 +55,7 @@ const newToken = () => randomBytes(18).toString('base64url');
 const linkOf = (orgId: string, token: string) => `${appUrl()}/count/${encodeURIComponent(orgId)}/${token}`;
 
 /** Today's services a counter can pick (6A), with today's numbers. */
-async function todaysServices(church: Church, today: string) {
+export async function todaysServices(church: Church, today: string) {
   const sunday = new Date(`${today}T12:00:00Z`).getUTCDay() === 0;
   const recent = await db.collection(`organizations/${church.id}/events`).where('date', '>=', addDays(today, -42)).get();
   const services = recent.docs.map((d) => ({ id: d.id, ...(d.data() as { date: string; type: string; name: string; serviceKind?: string | null; programId?: string | null; groupId?: string | null; deletedAt?: unknown; headcounts?: Headcounts }) }))

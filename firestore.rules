@@ -293,10 +293,10 @@ service cloud.firestore {
           && (!('activity' in d) || d.activity == null || (d.activity is string && d.activity.size() <= 120))
           && (!('notes' in d) || (d.notes is string && d.notes.size() <= 2000))
           && h is map
-          && h.keys().hasOnly(['adults', 'teens', 'children', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'])
+          && h.keys().hasOnly(['adults', 'teens', 'children', 'youth', 'new', 'returning', 'total', 'firstTimers', 'salvations', 'all'])
           && validCount(h, 'firstTimers') && validCount(h, 'salvations') && validCount(h, 'all')
           && (!('serviceKind' in d) || d.serviceKind == null || d.serviceKind == 'other')
-          && validCount(h, 'adults') && validCount(h, 'teens') && validCount(h, 'children')
+          && validCount(h, 'adults') && validCount(h, 'teens') && validCount(h, 'children') && validCount(h, 'youth')
           && validCount(h, 'new') && validCount(h, 'returning') && validCount(h, 'total')
           && validProgramSession(eventId, d)
           && validGroupMeeting(eventId, d);
@@ -369,6 +369,23 @@ service cloud.firestore {
       }
       // The Sunday school room's reports, reached only through hopePhotoReports with room 'sundayschool'.
       match /ssReports/{id} {
+        allow read, write: if false;
+      }
+      // The youth (Andy, 2026-11-24): timetable and counts read by everyone at the church; only the server writes
+      // (Sheila, Andy, Doreen). The youth room's reports are reached only through hopePhotoReports with room 'youth'.
+      match /youth/{doc} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
+      match /youthTimetable/{date} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
+      match /youthCounts/{date} {
+        allow read: if canAccessOrg(orgId);
+        allow write: if false;
+      }
+      match /youthReports/{id} {
         allow read, write: if false;
       }
       match /counterJobs/{job} {

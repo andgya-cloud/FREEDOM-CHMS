@@ -11,10 +11,12 @@ import { can, canAccessOrg, canKeepAccounts, type AccessProfile } from './permis
  * collection (ssReports), with the church's Gmail and letterhead. No organization has that type; the app and server
  * reach it with room 'sundayschool' on a church.
  */
-export type CircleType = 'ministry' | 'college' | 'church_campus' | 'sunday_school';
-export const isCircleType = (t: unknown): t is CircleType => t === 'ministry' || t === 'college' || t === 'church_campus' || t === 'sunday_school';
+export type CircleType = 'ministry' | 'college' | 'church_campus' | 'sunday_school' | 'youth';
+export const isCircleType = (t: unknown): t is CircleType => t === 'ministry' || t === 'college' || t === 'church_campus' || t === 'sunday_school' || t === 'youth';
+/** The rooms inside Freedom Church: Sunday school, and the youth (Andy, 2026-11-24). */
+export const isChurchRoom = (t: unknown): t is 'sunday_school' | 'youth' => t === 'sunday_school' || t === 'youth';
 /** The organization type behind a circle: the Sunday school room is the church's. */
-export const orgTypeOf = (t: CircleType): 'ministry' | 'college' | 'church_campus' => (t === 'sunday_school' ? 'church_campus' : t);
+export const orgTypeOf = (t: CircleType): 'ministry' | 'college' | 'church_campus' => (isChurchRoom(t) ? 'church_campus' : t);
 
 type Profile = (AccessProfile & { displayName?: string; roleId?: string }) | null | undefined;
 const plain = (n: string) => (n || '').toLowerCase().replace(/[^a-z]/g, '');
@@ -76,6 +78,13 @@ export const CIRCLES: Record<CircleType, Circle> = {
     readers: 'Dorothy Mohart, Andy and Doreen', keepers: 'Dorothy, Andy or Doreen',
     firstApproval: 'Sunday school leader', secondApproval: 'Pastor or Doreen', board: 'the Sunday school leaders', lead: 'Sunday school leader',
   },
+  youth: {
+    type: 'youth', orgName: 'Freedom Church Youth', refPrefix: 'FCN-Y',
+    photosPath: '/youth', chatsPath: '/youth', vaultPath: '/youth', personPath: (id) => `/people/${id}`,
+    person: 'young person', people: 'young people', personEmoji: '🔥', codeLabel: '',
+    readers: 'Sheila, Andy and Doreen', keepers: 'Sheila, Andy or Doreen',
+    firstApproval: 'Youth leader', secondApproval: 'Pastor or Doreen', board: 'the youth leaders', lead: 'Youth leader',
+  },
 };
 export const circleOf = (type: unknown): Circle => CIRCLES[isCircleType(type) ? type : 'ministry'];
 
@@ -96,9 +105,11 @@ export const SS_LEAD_NAMES = ['Dorothy Mohart', 'Dorothy Mohat'] as const;
 export const SS_BOARD_NAMES = [...SS_LEAD_NAMES, ...CHURCH_BOARD_NAMES] as const;
 /** A Sunday school teacher's role id; their class is on their account (ssClassId, ssClassName). */
 export const SS_TEACHER_ROLE_ID = 'ssteacher';
+/** The youth leader's role (Andy, 2026-11-24: Sheila leads the youth; one group). */
+export const YOUTH_ROLE_ID = 'youth';
 
 const named = (list: readonly string[], name: string | undefined) => !!name && list.some((n) => plain(n) === plain(name));
-export const boardNamesOf = (type: CircleType): readonly string[] => (type === 'college' ? ADIA_BOARD_NAMES : type === 'church_campus' ? CHURCH_BOARD_NAMES : type === 'sunday_school' ? SS_BOARD_NAMES : HOPE_BOARD_NAMES);
+export const boardNamesOf = (type: CircleType): readonly string[] => (type === 'college' ? ADIA_BOARD_NAMES : type === 'church_campus' || type === 'youth' ? CHURCH_BOARD_NAMES : type === 'sunday_school' ? SS_BOARD_NAMES : HOPE_BOARD_NAMES);
 export const isBoardName = (type: CircleType, name: string | undefined) => named(boardNamesOf(type), name);
 
 const isHead = (p: Profile) => p?.roleId === 'head' || can(p, 'team.manage');
@@ -112,6 +123,7 @@ export function isCircleLead(p: Profile, orgId: string, type: CircleType): boole
   if (!canAccessOrg(p, orgId)) return false;
   if (type === 'college') return isHead(p) || named(ADIA_HEAD_NAMES, p?.displayName) || isPrincipal(p, orgId);
   if (type === 'sunday_school') return named(SS_LEAD_NAMES, p?.displayName) || isSsHead(p);
+  if (type === 'youth') return p?.roleId === YOUTH_ROLE_ID;
   return isHead(p);
 }
 
@@ -129,6 +141,7 @@ export function circleSender(p: Profile, orgId: string, type: CircleType): boole
   if (!canAccessOrg(p, orgId)) return false;
   // The Sunday school room: its teachers and its readers (6A).
   if (type === 'sunday_school') return p?.roleId === SS_TEACHER_ROLE_ID || circleReader(p, orgId, type);
+  if (type === 'youth') return circleReader(p, orgId, type);
   if (can(p, 'people.read') || can(p, 'attendance.write')) return true;
   if (type === 'college') return can(p, 'exams.mark') || can(p, 'exams.manage');
   if (type === 'church_campus') return can(p, 'gifts.write');
@@ -144,6 +157,10 @@ export function circleApprover(p: Profile, orgId: string, slot: 'director' | 'bo
   }
   if (type === 'sunday_school') {
     if (slot === 'director') return named(SS_LEAD_NAMES, p?.displayName);
+    return plain(p?.displayName ?? '') === 'andrewguya' || canKeepAccounts(p);
+  }
+  if (type === 'youth') {
+    if (slot === 'director') return p?.roleId === YOUTH_ROLE_ID;
     return plain(p?.displayName ?? '') === 'andrewguya' || canKeepAccounts(p);
   }
   if (type === 'church_campus') {
@@ -170,6 +187,11 @@ export function circleRole(p: Profile, orgId: string, type: CircleType): string 
     if (canKeepAccounts(p)) return 'Pastor';
     return 'Staff';
   }
+  if (type === 'youth') {
+    if (p?.roleId === YOUTH_ROLE_ID) return 'Youth leader';
+    if (canKeepAccounts(p)) return 'Pastor';
+    return 'Staff';
+  }
   if (type === 'church_campus') {
     if (isHead(p)) return 'Church leader';
     if (can(p, 'users.manage')) return 'Administrator';
@@ -184,6 +206,8 @@ export type CircleKind = 'win' | 'activity' | 'exams' | 'care' | 'incident' | 'o
 export const ssTeacherLabel = (className: string | undefined) => (className === 'Head of Sunday school' ? className : `Sunday school teacher${className ? ` · ${className}` : ''}`);
 /** Changes the Sunday school timetable: only Dorothy, Andy and Doreen (Andy, 2026-11-24). */
 export const ssEditor = (p: Profile, orgId: string) => canAccessOrg(p, orgId) && (isBoardName('sunday_school', p?.displayName) || isSsHead(p));
+/** Changes the youth timetable and counts: Sheila (the youth leader), Andy and Doreen (Andy, 2026-11-24, 7A). */
+export const youthEditor = (p: Profile, orgId: string) => canAccessOrg(p, orgId) && (isBoardName('youth', p?.displayName) || p?.roleId === YOUTH_ROLE_ID);
 /** The head of Sunday school: a Sunday school account given "Head of Sunday school (all classes)" (Andy, 2026-11-23). */
 export const isSsHead = (p: Profile) => p?.roleId === SS_TEACHER_ROLE_ID && (p as { ssClassId?: string }).ssClassId === 'all';
 /**
@@ -197,6 +221,8 @@ export const isRequestKind = (kind: unknown): kind is RequestKind => typeof kind
 export const TEACHER_KINDS: CircleKind[] = ['supplies', 'markfix', 'move', 'absence', 'other'];
 /** What a Sunday school teacher picks from (Andy, 2026-11-23, 5A): a win, the class report, three requests, a conversation. */
 export const SS_KINDS: CircleKind[] = ['win', 'ssreport', 'supplies', 'absence', 'help', 'other'];
+/** The youth room (Andy, 2026-11-24, 6A): a win, the meeting report, requests, a conversation. */
+export const YOUTH_KINDS: CircleKind[] = ['win', 'ssreport', 'supplies', 'help', 'other'];
 /** Goes to the room's lead alone by email (7A): requests and class reports. */
 export const isLeadKind = (kind: unknown) => isRequestKind(kind) || kind === 'ssreport';
 export const KINDS_OF: Record<CircleType, CircleKind[]> = {
@@ -204,12 +230,14 @@ export const KINDS_OF: Record<CircleType, CircleKind[]> = {
   college: ['win', 'activity', 'exams', 'incident', 'other'],
   church_campus: ['win', 'activity', 'care', 'incident', 'other'],
   sunday_school: SS_KINDS,
+  youth: YOUTH_KINDS,
 };
 const KIND_LABELS: Record<CircleType, Partial<Record<CircleKind, string>>> = {
   ministry: { win: 'Good news', activity: 'Activity or event', incident: 'Incident', other: 'Other', supplies: 'Supplies', markfix: 'Change a mark', move: 'Move a child', absence: 'Absent teacher' },
   college: { win: 'Good news', activity: 'Class activity', exams: 'Exams and results', incident: 'Incident', other: 'Other' },
   church_campus: { win: 'Testimony', activity: 'Event or service', care: 'Pastoral care', incident: 'Incident', other: 'Other' },
   sunday_school: { win: 'Win', ssreport: 'Class report', supplies: 'Supplies', absence: 'Absent teacher', help: 'Help needed', other: 'Conversation', incident: 'Incident' },
+  youth: { win: 'Win', ssreport: 'Meeting report', supplies: 'Supplies', help: 'Help needed', other: 'Conversation', incident: 'Incident' },
 };
 export const KIND_EMOJI: Record<CircleKind, string> = { win: '🌟', activity: '📅', exams: '📊', care: '🤝', incident: '⚠️', other: '📝', supplies: '📦', markfix: '✏️', move: '🔀', absence: '🙋', help: '🆘', ssreport: '📋' };
 export const kindLabel = (kind: string, type: CircleType = 'ministry') => KIND_LABELS[type][kind as CircleKind] ?? KIND_LABELS.ministry[kind as CircleKind] ?? 'Report';

@@ -12,8 +12,8 @@ type Action = 'list' | 'create' | 'addFile' | 'file' | 'delete' | 'restore' | 'b
  * The Sunday school room (Andy, 2026-11-23, 4A) uses the same conversations with room 'sundayschool'. The room page
  * sets it while it shows, so every call from the window (lists, files, replies) goes to that room.
  */
-let room: 'sundayschool' | null = null;
-export const setPhotoRoom = (r: 'sundayschool' | null) => { room = r; };
+let room: 'sundayschool' | 'youth' | null = null;
+export const setPhotoRoom = (r: 'sundayschool' | 'youth' | null) => { room = r; };
 const withRoom = <T extends Record<string, unknown>>(data: T) => (room ? { ...data, room } : data);
 const call = <R,>(data: Record<string, unknown> & { orgId: string; action: Action }) =>
   httpsCallable<typeof data, R>(functions, 'hopePhotoReports', { timeout: 120_000 })(withRoom(data)).then((r) => r.data);
