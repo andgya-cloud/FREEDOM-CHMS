@@ -65,6 +65,7 @@ const AiHelperPage = lazy(() => import('./pages/AiHelperPage').then((m) => ({ de
 const ReviewsPage = lazy(() => import('./pages/ReviewsPage').then((m) => ({ default: m.ReviewsPage })));
 const AskPage = lazy(() => import('./pages/AskPage').then((m) => ({ default: m.AskPage })));
 const NoticePage = lazy(() => import('./pages/NoticePage').then((m) => ({ default: m.NoticePage })));
+const SundayNumbersPage = lazy(() => import('./pages/serviceHosts/SundayNumbersPage').then((m) => ({ default: m.SundayNumbersPage })));
 const ServiceHostsPage = lazy(() => import('./pages/serviceHosts/ServiceHostsPage').then((m) => ({ default: m.ServiceHostsPage })));
 const HostAnswerPage = lazy(() => import('./pages/serviceHosts/HostAnswerPage').then((m) => ({ default: m.HostAnswerPage })));
 const CalendarPage = lazy(() => import('./pages/calendar/CalendarPage').then((m) => ({ default: m.CalendarPage })));
@@ -381,6 +382,7 @@ function AppRoutes() {
         <Route path="/sunday-school" element={<SundaySchoolPage />} />
         <Route path="/youth" element={<YouthPage />} />
         <Route path="/service-hosts" element={<ServiceHostsPage />} />
+        <Route path="/sunday-numbers" element={<SundayNumbersPage />} />
         <Route path="/prayer-schedule" element={<ServiceHostsPage key="prayer" team="prayer" />} />
         <Route path="/manual" element={<ManualPage />} />
         <Route path="/manual/:id" element={<ManualPage />} />

@@ -124,7 +124,7 @@ export function AdiaToday({ org }: { org: Organization }) {
     { to: '/school/payroll', icon: 'payroll', label: 'Payroll', sub: 'This month’s pay', show: payroll.any },
     { to: '/inventory', icon: 'inventory', label: 'Inventory', sub: 'Count your department’s items', show: inventory.counts },
     { to: '/library', icon: 'library', label: 'Library', sub: 'Lend and return books', show: library.manager },
-    { to: '/prayer-schedule', icon: 'clock', label: 'Sunday prayer', sub: 'Freedom Church prayer leaders and turns', show: (profile?.extraPermissions ?? []).includes('prayer.manage') },
+    { to: '/prayer-schedule', icon: 'clock', label: 'Sunday prayer', sub: 'Freedom Church prayer leaders and turns', show: (profile?.limitedCan ?? []).includes('prayer') && !!profile?.limitedOrgId },
   ];
   const attendanceChange = thisWeek != null && lastWeek != null ? Math.round(thisWeek - lastWeek) : null;
 

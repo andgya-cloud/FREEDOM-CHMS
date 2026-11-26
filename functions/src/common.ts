@@ -25,7 +25,8 @@ export interface UserProfile extends AccessProfile {
   /** WhatsApp number (+2547…) for petty cash notices; '' for none. */
   phone?: string;
   /** The church whose Sunday prayer schedule a "Sunday prayer schedule" tick reaches (Andy, 2026-11-26). */
-  prayerOrgId?: string | null;
+  limitedOrgId?: string | null;
+  limitedCan?: string[];
 }
 
 export interface Caller {

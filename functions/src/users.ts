@@ -1,6 +1,6 @@
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { db, auth, FieldValue, requireCaller, requireString, requireStringArray, writeAudit, type UserProfile } from './common.js';
-import { DEFAULT_ROLES, HELPER_ROLE_ID, TEACHER_ROLE_ID, SS_TEACHER_ROLE, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, type RoleDefinition } from './shared/permissions.js';
+import { DEFAULT_ROLES, HELPER_ROLE_ID, TEACHER_ROLE_ID, SS_TEACHER_ROLE, REVIEWER_ROLE_ID, isDirectorProfile, TEAM_ROLE_ID, TRAINER_ROLE_ID, can, canKeepAccounts, canManageTeamAccount, accountPermissions, isDefaultRoleId, isPettyTitle, LIMITED_TICKS, type LimitedTick, type RoleDefinition } from './shared/permissions.js';
 import { passwordProblems } from './shared/password.js';
 import { normalizePhone } from './shared/phone.js';
 import { passwordInUse, saveSigningPassword } from './pettyPins.js';
@@ -167,18 +167,21 @@ async function refreshRosters(orgIds: string[], courseIds: string[]) {
 }
 
 /**
- * The "Sunday prayer schedule" tick (Andy, 2026-11-26, 3A): only Andy or Doreen give or take it away. It reaches the
- * church's prayer schedule even when the church is not on the account, so it also records which church.
+ * "Freedom Church, limited" (Andy, 2026-11-26, 4A): only Andy or Doreen give or take these. They reach the church
+ * without the church on the account, so the person's other ticks stay where they are. Left as they were when the
+ * form does not send them.
  */
-async function prayerAccess(caller: UserProfile, before: readonly string[], after: readonly string[]): Promise<{ prayerOrgId: string | null }> {
-  const had = before.includes('prayer.manage'), has = after.includes('prayer.manage');
-  if (had !== has && !canKeepAccounts(caller)) {
-    throw new HttpsError('permission-denied', 'Only Mr Andrew or Doreen can give or take away the Sunday prayer schedule.');
+async function limitedAccess(caller: UserProfile, before: readonly string[], sent: unknown): Promise<{ limitedOrgId: string | null; limitedCan: LimitedTick[] }> {
+  const ticks = sent === undefined ? [...before] : requireStringArray(sent, 'the Freedom Church jobs');
+  const limited = LIMITED_TICKS.filter((t) => ticks.includes(t));
+  const same = limited.length === before.length && limited.every((t) => before.includes(t));
+  if (!same && !canKeepAccounts(caller)) {
+    throw new HttpsError('permission-denied', 'Only Mr Andrew or Doreen can give or take away Freedom Church jobs.');
   }
-  if (!has) return { prayerOrgId: null };
+  if (!limited.length) return { limitedOrgId: null, limitedCan: [] };
   const churches = await db.collection('organizations').where('type', '==', 'church_campus').get();
-  const church = churches.docs.find((o) => o.get('deletedAt') == null);
-  return { prayerOrgId: church?.id ?? null };
+  const church = churches.docs.find((o) => o.get('deletedAt') == null && o.get('training') !== true);
+  return { limitedOrgId: church?.id ?? null, limitedCan: church ? limited : [] };
 }
 
 /** Pastor (or an organization head, for their own Staff) creates an account with a temporary password. */
@@ -201,7 +204,7 @@ export const createUser = onCall(PASSWORDS, async (request) => {
     throw new HttpsError('permission-denied', OUTSIDE_TEAM);
   }
   if (!allOrgs && orgIds.length === 0) throw new HttpsError('invalid-argument', 'Choose at least one organization.');
-  const prayer = await prayerAccess(caller.profile, [], extraPermissions);
+  const limited = teamOnly ? { limitedOrgId: null, limitedCan: [] } : await limitedAccess(caller.profile, [], data.limitedCan);
 
   if (await passwordInUse(password, '')) throw new HttpsError('already-exists', 'Someone else already has this password. Please choose a different one.');
   let uid: string;
@@ -229,7 +232,7 @@ export const createUser = onCall(PASSWORDS, async (request) => {
     inventoryCourseIds: await inventoryDepartments(data.inventoryDepartments, orgIds, allOrgs),
     hopeClassIds: hopeClassesFrom(roleId, data.hopeClasses),
     ...(await ssClassFrom(roleId, data.ssClass, orgIds, allOrgs)),
-    ...prayer,
+    ...limited,
     permissions: accountPermissions(roleId, role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -276,7 +279,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
 
   const merged = { ...current, ...next };
   if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
-  const prayer = await prayerAccess(caller.profile, current.extraPermissions ?? [], merged.extraPermissions ?? []);
+  const limited = await limitedAccess(caller.profile, current.limitedCan ?? [], teamOnly ? undefined : data.limitedCan);
   if ((merged.roleId === REVIEWER_ROLE_ID || current.roleId === REVIEWER_ROLE_ID) && !isDirectorProfile(caller.profile)) throw new HttpsError('permission-denied', ONLY_ANDY_REVIEWERS);
   const role = await loadRole(merged.roleId, caller.uid);
   const currentRole = await loadRole(current.roleId);
@@ -323,7 +326,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     ...(data.ssClass !== undefined || merged.roleId !== SS_TEACHER_ROLE
       ? await ssClassFrom(merged.roleId, data.ssClass, merged.orgIds, merged.allOrgs)
       : {}),
-    ...prayer,
+    ...limited,
     permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,

@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { collection, doc, onSnapshot, type Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
-import { useAuth } from './AuthContext';
+import { NarrowAuth, useAuth } from './AuthContext';
 import { readPref, writePref } from '../lib/storage';
 import type { OrganizationType } from '../../functions/src/shared/organizations';
 import { ESTIMATE } from '../lib/firestoreOptions';
@@ -37,6 +37,12 @@ interface OrgValue {
   current: Organization | null;
   currentId: string;
   isCombined: boolean;
+  /** "Freedom Church, limited" (Andy, 2026-11-26): the church this person reaches for a few jobs only. */
+  limitedOrg: Organization | null;
+  /** The jobs there ('hosts', 'sunday', 'prayer'). */
+  limitedCan: string[];
+  /** True while that church is the one open. */
+  isLimited: boolean;
   select: (id: string) => void;
   loading: boolean;
 }
@@ -44,7 +50,7 @@ interface OrgValue {
 const OrgContext = createContext<OrgValue | null>(null);
 
 export function OrgProvider({ children }: { children: ReactNode }) {
-  const { profile } = useAuth();
+  const { profile, canAccessOrg } = useAuth();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<string>(() => readPref('org') ?? '');
@@ -78,19 +84,35 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     return () => unsubs.forEach((u) => u());
   }, [profile?.active, profile?.allOrgs, profile?.orgIds?.join(',')]);
 
+  // The limited church, when it is not already on the account.
+  const limitedId = profile?.active && profile.limitedOrgId && (profile.limitedCan ?? []).length && !canAccessOrg(profile.limitedOrgId) ? profile.limitedOrgId : '';
+  const [limitedOrg, setLimitedOrg] = useState<Organization | null>(null);
+  useEffect(() => {
+    if (!limitedId) { setLimitedOrg(null); return; }
+    return onSnapshot(doc(db, 'organizations', limitedId), (snap) => {
+      setLimitedOrg(snap.exists() && !snap.get('deletedAt') ? ({ id: limitedId, ...snap.data(ESTIMATE) } as Organization) : null);
+    }, () => setLimitedOrg(null));
+  }, [limitedId]);
+
   const value = useMemo<OrgValue>(() => {
     const live = orgs.filter((o) => !o.deletedAt).sort((a, b) => a.name.localeCompare(b.name));
+    const limitedCan = limitedOrg ? [...(profile?.limitedCan ?? [])] : [];
     const canCombine = !!profile?.allOrgs && live.length > 1;
     let currentId = selected;
     if (currentId === ALL_ORGS && !canCombine) currentId = '';
-    if (currentId !== ALL_ORGS && !live.some((o) => o.id === currentId)) {
+    const onLimited = !!limitedOrg && currentId === limitedOrg.id;
+    if (!onLimited && currentId !== ALL_ORGS && !live.some((o) => o.id === currentId)) {
       // Nothing chosen yet on this device: start on a church campus if there is one.
-      currentId = (live.find((o) => o.type === 'church_campus' && !o.training) ?? live[0])?.id ?? '';
+      currentId = (live.find((o) => o.type === 'church_campus' && !o.training) ?? live[0] ?? limitedOrg)?.id ?? '';
     }
+    const isLimited = !!limitedOrg && currentId === limitedOrg.id;
     return {
       organizations: live,
       allIncludingDeleted: orgs,
-      current: live.find((o) => o.id === currentId) ?? null,
+      limitedOrg,
+      limitedCan,
+      isLimited,
+      current: isLimited ? limitedOrg : live.find((o) => o.id === currentId) ?? null,
       currentId,
       isCombined: currentId === ALL_ORGS,
       loading,
@@ -99,7 +121,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
         writePref('org', id);
       },
     };
-  }, [orgs, selected, loading, profile?.allOrgs]);
+  }, [orgs, selected, loading, profile?.allOrgs, limitedOrg, profile?.limitedCan?.join(',')]);
 
   // Remember the effective choice, so adding another organization doesn't switch the view.
   useEffect(() => {
@@ -109,7 +131,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     }
   }, [value.currentId, selected]);
 
-  return <OrgContext.Provider value={value}>{children}</OrgContext.Provider>;
+  return <OrgContext.Provider value={value}><NarrowAuth orgId={value.isLimited ? value.currentId : null}>{children}</NarrowAuth></OrgContext.Provider>;
 }
 
 export function useOrg(): OrgValue {

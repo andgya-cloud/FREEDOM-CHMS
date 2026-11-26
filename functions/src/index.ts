@@ -48,7 +48,7 @@ export { classRegister } from './classRegister.js';
 export { aiWrite } from './ai.js';
 export { calendarReminders, calendarTest } from './calendar.js';
 export { teacherRegisterReminder } from './hopeTeachers.js';
-export { serviceHosts, serviceHostReminders, serviceHostSummary } from './serviceHosts.js';
+export { serviceHosts, serviceHostReminders, serviceHostSummary, sundayNumbers } from './serviceHosts.js';
 export { hopeSponsor } from './hopeSponsor.js';
 export { serviceCounters } from './serviceCounters.js';
 export { sundaySchoolSummary, sundaySchoolReminders } from './sundaySchool.js';

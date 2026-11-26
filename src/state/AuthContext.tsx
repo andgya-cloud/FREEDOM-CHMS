@@ -32,8 +32,9 @@ export interface Profile {
   hopeClassIds?: string[];
   /** A Sunday school teacher's class (Andy, 2026-11-23, 9A). */
   ssClassId?: string;
-  /** The church whose Sunday prayer schedule this account plans (Andy, 2026-11-26). */
-  prayerOrgId?: string | null;
+  /** "Freedom Church, limited" (Andy, 2026-11-26): the church and the few jobs there (hosts, sunday, prayer). */
+  limitedOrgId?: string | null;
+  limitedCan?: string[];
   ssClassName?: string;
   /** The ADIA departments (programme ids) whose inventory they count (Andy, 2026-10-29). */
   inventoryCourseIds?: string[];
@@ -112,4 +113,14 @@ export function useAuth(): AuthValue {
   const v = useContext(AuthContext);
   if (!v) throw new Error('useAuth outside AuthProvider');
   return v;
+}
+
+/**
+ * Inside a "Freedom Church, limited" view (Andy, 2026-11-26) the person's own ticks do not count, so no page
+ * reaches the church's people, giving or cash. Their few jobs there are checked from the profile instead.
+ */
+export function NarrowAuth({ orgId, children }: { orgId: string | null; children: ReactNode }) {
+  const outer = useAuth();
+  const value = useMemo<AuthValue>(() => (orgId ? { ...outer, can: () => false, canAccessOrg: (id) => id !== orgId && outer.canAccessOrg(id) } : outer), [outer, orgId]);
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

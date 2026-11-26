@@ -16,7 +16,7 @@ import { ConfirmDialog } from '../../components/ConfirmDialog';
 import { COMMON_DEPARTMENT } from '../../../functions/src/shared/commonCourses';
 import { HOPE_CLASSES, classLabel } from '../../../functions/src/shared/hopeClasses';
 import { cleanClasses, DEFAULT_SS_CLASSES, SS_HEAD_CLASS, SS_HEAD_LABEL, ssClassWithLeader, type SsClass } from '../../../functions/src/shared/sundaySchool';
-import { GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
+import { canKeepAccounts, LIMITED_LABELS, LIMITED_TICKS, GRANTABLE_PERMISSIONS, HELPER_ROLE_ID, TEACHER_ROLE_ID, REVIEWER_ROLE_ID, isDirectorProfile, PERMISSION_LABELS, PETTY_TITLES, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, PRINCIPAL_ROLE_ID, SIGNATORY_ROLE_ID, TEAM_ROLE_ID, TRAINER_ROLE_ID } from '../../../functions/src/shared/permissions';
 import { PasswordInput } from '../../components/PasswordInput';
 import { passwordProblems } from '../../../functions/src/shared/password';
 import { passwordProof } from '../../lib/pettyPin';
@@ -28,6 +28,8 @@ interface FormState {
   allOrgs: boolean;
   orgIds: string[];
   extraPermissions: string[];
+  /** "Freedom Church, limited" jobs (Andy, 2026-11-26): hosts, sunday, prayer. */
+  limitedCan: string[];
   password: string;
   active: boolean;
   pettyTitle: string;
@@ -58,7 +60,7 @@ const ROLE_HINTS: Record<string, string> = {
   helper: ': Freedom Hope Centre only: says when they arrive, marks the children\'s and club registers with big buttons, and sees nothing else',
 };
 
-const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [], hopeClasses: [], ssClass: '' };
+const EMPTY: FormState = { displayName: '', email: '', roleId: 'admin', allOrgs: false, orgIds: [], extraPermissions: [], limitedCan: [], password: '', active: true, pettyTitle: '', phone: '', departments: [], legacyClasses: [], inventory: [], hopeClasses: [], ssClass: '' };
 
 export function UserFormPage() {
   const { uid } = useParams();
@@ -99,7 +101,7 @@ export function UserFormPage() {
       if (u) {
         setForm({
           displayName: u.displayName, email: u.email, roleId: u.roleId, allOrgs: u.allOrgs, orgIds: u.orgIds ?? [],
-          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [], hopeClasses: u.hopeClassIds ?? [], ssClass: u.ssClassId ?? '',
+          extraPermissions: [...new Set((u.extraPermissions ?? []).map((x: string) => (x === 'pettycash.check' ? 'pettycash.approve' : x)))], limitedCan: u.limitedCan ?? [], password: '', active: u.active, pettyTitle: u.pettyTitle ?? '', phone: formatPhone(u.phone) || '', departments: u.trainerCourseIds ?? [], legacyClasses: u.trainerCourseIds ? [] : u.registerClasses ?? [], inventory: u.inventoryCourseIds ?? [], hopeClasses: u.hopeClassIds ?? [], ssClass: u.ssClassId ?? '',
         });
       }
       setLoaded(true);
@@ -126,6 +128,10 @@ export function UserFormPage() {
   // The voucher title is for the petty cash signatories, the pastor included when they sign.
   const showTitle = !teamOnly && (signatory || !!role?.isOwner);
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
+  // "Freedom Church, limited" (Andy, 2026-11-26): for someone whose own work is elsewhere; set by Andy or Doreen.
+  const keeper = canKeepAccounts(me);
+  const limitedShown = keeper && !teamOnly && !form.allOrgs && !form.orgIds.some((id) => organizations.find((o) => o.id === id)?.type === 'church_campus');
+  const toggleLimited = (t: string) => setForm((f) => ({ ...f, limitedCan: f.limitedCan.includes(t) ? f.limitedCan.filter((x) => x !== t) : [...f.limitedCan, t] }));
   const toggle = (k: 'orgIds' | 'extraPermissions', v: string) =>
     setForm((f) => ({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] }));
 
@@ -156,6 +162,8 @@ export function UserFormPage() {
           inventoryDepartments: counts ? form.inventory : [],
           hopeClasses: form.roleId === HELPER_ROLE_ID || form.roleId === TEACHER_ROLE_ID ? form.hopeClasses : [],
           ...(form.roleId === 'ssteacher' ? { ssClass: form.ssClass } : {}),
+          // Only Mr Andrew or Doreen change these; the server checks too.
+          ...(keeper ? { limitedCan: limitedShown ? form.limitedCan : [] } : {}),
         };
       if (isNew) {
         // No email? Their WhatsApp number becomes the sign-in (Andy, 2026-11-23); they sign in with the password alone.
@@ -273,6 +281,16 @@ export function UserFormPage() {
                 <label key={p} className="check">
                   <input type="checkbox" checked={form.extraPermissions.includes(p)} onChange={() => toggle('extraPermissions', p)} />
                   <span>{PERMISSION_LABELS[p]}</span>
+                </label>
+              ))}
+            </fieldset>}
+            {limitedShown && <fieldset className="field">
+              <legend>Freedom Church, limited</legend>
+              <p className="hint">Only these jobs at Freedom Church. Nothing else there opens, even with the ticks above. Only Mr Andrew or Doreen can set this.</p>
+              {LIMITED_TICKS.map((t) => (
+                <label key={t} className="check">
+                  <input type="checkbox" checked={form.limitedCan.includes(t)} onChange={() => toggleLimited(t)} />
+                  <span>{LIMITED_LABELS[t]}</span>
                 </label>
               ))}
             </fieldset>}

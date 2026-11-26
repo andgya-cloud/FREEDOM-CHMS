@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
-import { fromBase64, hostCall, toBase64, useChurch, usePrayerChurch, useTeamManager, useHostSettings, useHosts, useRota } from '../../lib/serviceHosts';
+import { fromBase64, hostCall, toBase64, useJobChurch, useTeamManager, useHostSettings, useHosts, useRota } from '../../lib/serviceHosts';
 import { usePeople } from '../../state/PeopleContext';
 import type { Organization } from '../../state/OrgContext';
 import { downloadRota } from '../../lib/rotaDownload';
@@ -17,9 +17,7 @@ import './serviceHosts.css';
  * the services and requirements document. Andy chooses every host; "Suggest fair turns" only fills in suggestions.
  */
 export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
-  const hostChurch = useChurch();
-  const prayerChurch = usePrayerChurch();
-  const org = team === 'prayer' ? prayerChurch : hostChurch;
+  const org = useJobChurch();
   const manager = useTeamManager(team, org?.id);
   const [msg, setMsg] = useState('');
   const t = TEAM_INFO[team];

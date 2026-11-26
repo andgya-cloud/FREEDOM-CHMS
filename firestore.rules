@@ -203,7 +203,7 @@ service cloud.firestore {
 
     match /organizations/{orgId} {
       // The Sunday prayer tick reaches the church's name and times too (Andy, 2026-11-26).
-      allow get: if canAccessOrg(orgId) || (isActive() && 'prayer.manage' in me().get('extraPermissions', []) && me().get('prayerOrgId', '') == orgId);
+      allow get: if canAccessOrg(orgId) || (isActive() && me().get('limitedOrgId', '') == orgId && me().get('limitedCan', []).size() > 0);
       allow list: if hasAllOrgs();
       // Only someone who sees every organization can add one, so a new campus
       // is never created by a user who would then be locked out of it.
@@ -445,16 +445,18 @@ service cloud.firestore {
       // Everyone at the church sees who hosts each service (names only). The hosts list (phones and emails), the
       // services and the requirements document are for Andy and the leaders he ticks ("rota.manage"). Every
       // change goes through the serviceHosts function; serviceHostSent is the server's own record.
+      // "Freedom Church, limited" (Andy, 2026-11-26): a few church jobs without the church on the account.
+      function limitedTick(orgId, tick) {
+        return isActive() && me().get('limitedOrgId', '') == orgId && tick in me().get('limitedCan', []);
+      }
       function hostManager(orgId) {
-        return canAccessOrg(orgId) && (has('rota.manage') || has('users.manage'));
+        return (canAccessOrg(orgId) && (has('rota.manage') || has('users.manage'))) || limitedTick(orgId, 'hosts');
       }
       function prayerManager(orgId) {
-        return isActive() && ((isAccountKeeper() && canAccessOrg(orgId))
-          || ('prayer.manage' in me().get('extraPermissions', [])
-            && (canAccessOrg(orgId) || me().get('prayerOrgId', '') == orgId)));
+        return (isAccountKeeper() && canAccessOrg(orgId)) || limitedTick(orgId, 'prayer');
       }
       match /serviceRota/{slotId} {
-        allow read: if canAccessOrg(orgId);
+        allow read: if canAccessOrg(orgId) || limitedTick(orgId, 'hosts');
         allow write: if false;
       }
       match /serviceHosts/{hostId} {

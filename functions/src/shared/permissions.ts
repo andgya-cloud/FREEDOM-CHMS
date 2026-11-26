@@ -37,8 +37,6 @@ export const PERMISSIONS = [
   'calendar.manage',
   // Service hosts (Andy, 2026-11-17, 10A): Andy, plus the leaders he ticks, plan who hosts each service
   'rota.manage',
-  // The Sunday prayer schedule (Andy, 2026-11-26, 3A): its own tick, given only by Andy or Doreen
-  'prayer.manage',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -65,7 +63,6 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'exams.manage',
   'calendar.manage',
   'rota.manage',
-  'prayer.manage',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -92,7 +89,6 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'fees.balances': "Each student's fee balance (no payments)",
   'calendar.manage': 'Calendar: add and change events',
   'rota.manage': 'Service hosts: add hosts and plan who hosts each service',
-  'prayer.manage': 'Sunday prayer schedule: add prayer leaders and plan who leads (only Andy or Doreen can give this)',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',
@@ -307,16 +303,33 @@ export function accountPermissions(roleId: string, role: RoleDefinition | undefi
 }
 
 /**
- * Who plans the Sunday prayer schedule (Andy, 2026-11-26, 2A 3A): Andy and Doreen, and whoever they tick "Sunday prayer
- * schedule" (Elizabeth). That tick reaches the church's prayer schedule even without the church on the account
- * (`prayerOrgId`), and nothing else at the church.
+ * "Freedom Church, limited" (Andy, 2026-11-26, 1A-7A): a few church jobs for someone whose own work is elsewhere,
+ * without the church on their account, so their other ticks (Hope's cash, children and so on) never reach the
+ * church. Diana: Service hosts and Sunday numbers. Elizabeth: Sunday prayer. Only Andy or Doreen set it.
  */
-export function isPrayerManager(
-  profile: (AccessProfile & { displayName?: string; extraPermissions?: readonly string[]; prayerOrgId?: string | null }) | null | undefined,
-  orgId?: string,
-): boolean {
+export const LIMITED_TICKS = ['hosts', 'sunday', 'prayer'] as const;
+export type LimitedTick = (typeof LIMITED_TICKS)[number];
+export const LIMITED_LABELS: Record<LimitedTick, string> = {
+  hosts: 'Service hosts: add hosts and plan who hosts each service',
+  sunday: 'Sunday numbers: the counts and who checked in at each service (look only)',
+  prayer: 'Sunday prayer schedule: add prayer leaders and plan who leads',
+};
+export interface LimitedProfile extends AccessProfile { displayName?: string; limitedOrgId?: string | null; limitedCan?: readonly string[] }
+
+/** The limited jobs this account has at that church (none when it has the church in full). */
+export function limitedCan(profile: LimitedProfile | null | undefined, orgId: string | null | undefined, tick: LimitedTick): boolean {
+  return !!profile?.active && !!orgId && profile.limitedOrgId === orgId && (profile.limitedCan ?? []).includes(tick);
+}
+
+/** Who plans the Sunday prayer schedule (Andy, 2026-11-26): Andy and Doreen, and the limited "Sunday prayer" tick (Elizabeth). */
+export function isPrayerManager(profile: LimitedProfile | null | undefined, orgId?: string): boolean {
   if (!profile?.active) return false;
   if (canKeepAccounts(profile)) return !orgId || canAccessOrg(profile, orgId);
-  if (!(profile.extraPermissions ?? []).includes('prayer.manage')) return false;
-  return !orgId || canAccessOrg(profile, orgId) || profile.prayerOrgId === orgId;
+  return orgId ? limitedCan(profile, orgId, 'prayer') : (profile.limitedCan ?? []).includes('prayer') && !!profile.limitedOrgId;
+}
+
+/** Who plans the Service hosts at a church: the church's own "Service hosts" tick (or users.manage), or the limited one (Diana). */
+export function isHostManagerAt(profile: LimitedProfile | null | undefined, orgId: string): boolean {
+  if (!profile?.active) return false;
+  return (canAccessOrg(profile, orgId) && (can(profile, 'rota.manage') || can(profile, 'users.manage'))) || limitedCan(profile, orgId, 'hosts');
 }

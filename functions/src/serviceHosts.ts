@@ -6,7 +6,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getStorage } from 'firebase-admin/storage';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { can, canAccessOrg, isPrayerManager, REVIEWER_ROLE_ID } from './shared/permissions.js';
+import { can, canAccessOrg, isHostManagerAt, isPrayerManager, limitedCan, REVIEWER_ROLE_ID } from './shared/permissions.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { localDateKey } from './shared/datetime.js';
 import { poweredByHtml } from './shared/poweredBy.js';
@@ -142,7 +142,7 @@ async function managersOf(team: Team, orgId: string): Promise<{ name: string; em
   const snap = await db.collection('users').where('active', '==', true).get();
   return snap.docs.map((d) => d.data() as UserProfile)
     .filter((u) => u.roleId !== REVIEWER_ROLE_ID && isEmail(u.email ?? '')
-      && (team === 'prayer' ? isPrayerManager(u, orgId) : canAccessOrg(u, orgId) && isHostManager(u)))
+      && (team === 'prayer' ? isPrayerManager(u, orgId) : isHostManagerAt(u, orgId)))
     .map((u) => ({ name: u.displayName || u.email, email: u.email }));
 }
 
@@ -217,8 +217,8 @@ export const serviceHosts = onCall({ invoker: 'public', memory: '512MiB', timeou
   if (team === 'prayer') {
     if (!isPrayerManager(caller.profile, orgId)) throw new HttpsError('permission-denied', 'Only Mr Andrew, Doreen and the people they choose plan the Sunday prayer schedule.');
   } else {
-    if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this church.');
-    if (!isHostManager(caller.profile) && !(action === 'downloadDoc' && caller.profile.roleId === REVIEWER_ROLE_ID)) {
+    const reviewer = action === 'downloadDoc' && caller.profile.roleId === REVIEWER_ROLE_ID && canAccessOrg(caller.profile, orgId);
+    if (!isHostManagerAt(caller.profile, orgId) && !reviewer) {
       throw new HttpsError('permission-denied', `Only Mr Andrew and the leaders he chooses plan the ${info.title.toLowerCase()} schedule.`);
     }
   }
@@ -456,3 +456,42 @@ export const serviceHostSummary = onSchedule(
   async () => { await sendHostSummary(); },
 );
 
+
+/**
+ * Sunday numbers for the "Freedom Church, limited" tick (Andy, 2026-11-26, 2A 3A): each service of the last eight
+ * weeks with its counts and the names of who checked in, to look at only. Read here so the person never needs the
+ * church's people list.
+ */
+export const sundayNumbers = onCall({ memory: '512MiB', timeoutSeconds: 60 }, async (request) => {
+  const data = (request.data ?? {}) as Record<string, unknown>;
+  const orgId = requireString(data.orgId, 'the church', { max: 80 });
+  const caller = await requireCaller(request);
+  const full = canAccessOrg(caller.profile, orgId) && (can(caller.profile, 'people.read') || can(caller.profile, 'attendance.write'));
+  if (!full && !limitedCan(caller.profile, orgId, 'sunday')) throw new HttpsError('permission-denied', 'Only the people Mr Andrew chooses see the Sunday numbers.');
+  const today = localDateKey(new Date(), TZ);
+  const from = addDays(today, -56);
+  const base = `organizations/${orgId}`;
+  const evSnap = await db.collection(`${base}/events`).where('date', '>=', from).where('date', '<=', today).get();
+  const services = evSnap.docs
+    .map((d) => ({ id: d.id, ...(d.data() as { date: string; type: string; name?: string; programId?: string | null; groupId?: string | null; deletedAt?: unknown; headcounts?: Record<string, number> | null }) }))
+    .filter((e) => e.type === 'service' && !e.programId && !e.groupId && !e.deletedAt)
+    .sort((a, b) => b.date.localeCompare(a.date) || (a.name ?? '').localeCompare(b.name ?? ''));
+  const marks = await Promise.all(services.map((e) => db.collection(`${base}/attendance`).where('eventId', '==', e.id).get()));
+  const ids = [...new Set(marks.flatMap((m) => m.docs.filter((d) => ['present', 'late'].includes(d.get('status')) && !d.get('deletedAt')).map((d) => String(d.get('personId')))))];
+  const names = new Map<string, string>();
+  for (let i = 0; i < ids.length; i += 300) {
+    const refs = ids.slice(i, i + 300).map((id) => db.doc(`${base}/people/${id}`));
+    if (refs.length) for (const p of await db.getAll(...refs)) if (p.exists && !p.get('deletedAt')) names.set(p.id, String(p.get('fullName') ?? ''));
+  }
+  const keys = ['adults', 'teens', 'children', 'youth', 'all', 'firstTimers', 'salvations'];
+  return {
+    services: services.map((e, i) => {
+      const h = e.headcounts ?? {};
+      const counts: Record<string, number> = {};
+      for (const k of keys) if (typeof h[k] === 'number' && h[k]! > 0) counts[k] = h[k]!;
+      const people = marks[i]!.docs.filter((d) => ['present', 'late'].includes(d.get('status')) && !d.get('deletedAt'))
+        .map((d) => names.get(String(d.get('personId'))) ?? '').filter(Boolean).sort((a, b) => a.localeCompare(b));
+      return { id: e.id, date: e.date, name: e.name ?? 'Service', counts, people };
+    }),
+  };
+});

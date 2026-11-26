@@ -31,7 +31,7 @@ function TabLabel({ full, short }: { full: string; short: string }) {
 
 export function AppShell({ children }: { children: ReactNode }) {
   const location = useLocation();
-  const { current } = useOrg();
+  const { current, isLimited, limitedCan } = useOrg();
   const { can, profile } = useAuth();
   // The petty cash signatories see Petty Cash and Settings only; trainers see Exam Records and Settings (Andy, 2026-10-25).
   const trainer = profile?.roleId === TRAINER_ROLE_ID;
@@ -74,7 +74,15 @@ export function AppShell({ children }: { children: ReactNode }) {
   const helper = isHopeHelperRole(profile?.roleId);
   // A class teacher's menu (Andy, 2026-11-22, 10A): Today, Register, Birthdays and the Teachers' room.
   const teacher = profile?.roleId === TEACHER_ROLE_ID;
-  const sendTo = roleRedirect(profile, location.pathname);
+  // "Freedom Church, limited" (Andy, 2026-11-26, 5A): only their jobs there, landing on the first one.
+  const limitedJobs = !isLimited ? [] : [
+    limitedCan.includes('hosts') && { to: '/service-hosts', label: 'Service hosts' },
+    limitedCan.includes('sunday') && { to: '/sunday-numbers', label: 'Sunday' },
+    limitedCan.includes('prayer') && { to: '/prayer-schedule', label: 'Sunday prayer' },
+  ].filter((j): j is { to: string; label: string } => !!j);
+  const limitedOk = limitedJobs.some((j) => location.pathname === j.to || location.pathname.startsWith(`${j.to}/`)) || /^\/(settings|manual|help)(\/|$)/.test(location.pathname);
+  if (isLimited && !limitedOk && limitedJobs[0]) return <Navigate to={limitedJobs[0].to} replace />;
+  const sendTo = isLimited ? null : roleRedirect(profile, location.pathname);
   if (sendTo) return <Navigate to={sendTo} replace />;
   const pettyAllowed = can('pettycash.request') || can('pettycash.check') || can('pettycash.approve') || can('pettycash.authorize') || can('users.manage');
   const givingAllowed = can('gifts.write') || can('finance.reports') || can('giving.person.read');
@@ -200,7 +208,21 @@ export function AppShell({ children }: { children: ReactNode }) {
       </NavLink>
     </nav>
   ) : null;
-  const tabs = ssTabs ?? churchTabs ?? hopeTabs ?? (
+  const limitedTabs = isLimited ? (
+    <nav className="tabbar" aria-label="Main">
+      {limitedJobs.map((j) => (
+        <NavLink key={j.to} to={j.to} className="tab">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d={j.to === '/sunday-numbers' ? 'M9 12l2 2 4-4M5 4h14a1 1 0 0 1 1 1v15a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1ZM8 2v4M16 2v4' : 'M12 5a3 3 0 1 0 0 .01M6 21v-6a6 6 0 0 1 12 0v6'} /></svg>
+          {j.label}
+        </NavLink>
+      ))}
+      <NavLink to="/settings" className="tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /></svg>
+        Settings
+      </NavLink>
+    </nav>
+  ) : null;
+  const tabs = limitedTabs ?? ssTabs ?? churchTabs ?? hopeTabs ?? (
     <nav className={`tabbar${phoneMore ? ' has-more' : ''}${moreOpen ? ' more-open' : ''}`} aria-label="Main">
       {!full && current?.type === 'college' && (
         <NavLink to="/" end className="tab"><AdiaIcon name="today" />Today</NavLink>

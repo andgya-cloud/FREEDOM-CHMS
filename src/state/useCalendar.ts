@@ -5,7 +5,8 @@ import { ESTIMATE } from '../lib/firestoreOptions';
 import { useAuth } from './AuthContext';
 import { usePeople } from './PeopleContext';
 import type { Organization } from './OrgContext';
-import { usePrayerManager, useRota } from '../lib/serviceHosts';
+import { useOrg } from './OrgContext';
+import { useHostManager, usePrayerManager, useRota } from '../lib/serviceHosts';
 import {
   addDays, daysInMonth, occurrences, serviceSlots, weekdayOf, type CalendarEvent, type EventType,
 } from '../../functions/src/shared/calendar';
@@ -114,8 +115,12 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
   const classOrgs = orgs.filter((o) => o.type !== 'college').map((o) => o.id);
   const classes = useClasses(classOrgs, from, to, seesClasses && layers.has('classes'));
   // Each service shows its Service Host (Andy, 2026-11-17, 11A).
-  const church = orgs.find((o) => o.type === 'church_campus');
-  const rota = useRota('host', layers.has('services') && church ? church.id : '', from, to);
+  // A "Freedom Church, limited" job shows its turns too (Andy, 2026-11-26, 6A): Diana sees the host turns, nothing else.
+  const { limitedOrg, limitedCan } = useOrg();
+  const limitedChurch = limitedOrg && (limitedCan.includes('hosts') || limitedCan.includes('prayer')) ? limitedOrg : undefined;
+  const church = orgs.find((o) => o.type === 'church_campus') ?? limitedChurch;
+  const seesHosts = useHostManager(church?.id) || (!!church && orgs.some((o) => o.id === church.id));
+  const rota = useRota('host', layers.has('services') && church && seesHosts ? church.id : '', from, to);
   // Only those who plan Sunday prayer see who leads it (Andy, 2026-11-26, 5A).
   const seesPrayer = usePrayerManager(church?.id);
   const prayer = useRota('prayer', layers.has('services') && church && seesPrayer ? church.id : '', from, to);
