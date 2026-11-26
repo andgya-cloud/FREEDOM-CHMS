@@ -37,6 +37,8 @@ export const PERMISSIONS = [
   'calendar.manage',
   // Service hosts (Andy, 2026-11-17, 10A): Andy, plus the leaders he ticks, plan who hosts each service
   'rota.manage',
+  // The Sunday prayer schedule (Andy, 2026-11-26, 3A): its own tick, given only by Andy or Doreen
+  'prayer.manage',
   // An organization head adds and manages Staff accounts for their own organization only
   'team.manage',
   // Pastor only
@@ -63,6 +65,7 @@ export const GRANTABLE_PERMISSIONS: readonly Permission[] = [
   'exams.manage',
   'calendar.manage',
   'rota.manage',
+  'prayer.manage',
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -88,7 +91,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   'school.manage': 'Students: admission numbers, graduation and certificates',
   'fees.balances': "Each student's fee balance (no payments)",
   'calendar.manage': 'Calendar: add and change events',
-  'rota.manage': 'Service hosts and Sunday prayer: add people and plan the schedules',
+  'rota.manage': 'Service hosts: add hosts and plan who hosts each service',
+  'prayer.manage': 'Sunday prayer schedule: add prayer leaders and plan who leads (only Andy or Doreen can give this)',
   'team.manage': 'Staff accounts for their own organization',
   'users.manage': 'User accounts',
   'audit.read': 'Audit log',
@@ -300,4 +304,19 @@ export function canManageTeamAccount(head: AccessProfile | null | undefined, acc
 export function accountPermissions(roleId: string, role: RoleDefinition | undefined, extraPermissions: readonly string[] = []): Permission[] {
   const all = effectivePermissions(role, extraPermissions);
   return roleId === TRAINER_ROLE_ID ? all.filter((p) => p !== 'people.read') : all;
+}
+
+/**
+ * Who plans the Sunday prayer schedule (Andy, 2026-11-26, 2A 3A): Andy and Doreen, and whoever they tick "Sunday prayer
+ * schedule" (Elizabeth). That tick reaches the church's prayer schedule even without the church on the account
+ * (`prayerOrgId`), and nothing else at the church.
+ */
+export function isPrayerManager(
+  profile: (AccessProfile & { displayName?: string; extraPermissions?: readonly string[]; prayerOrgId?: string | null }) | null | undefined,
+  orgId?: string,
+): boolean {
+  if (!profile?.active) return false;
+  if (canKeepAccounts(profile)) return !orgId || canAccessOrg(profile, orgId);
+  if (!(profile.extraPermissions ?? []).includes('prayer.manage')) return false;
+  return !orgId || canAccessOrg(profile, orgId) || profile.prayerOrgId === orgId;
 }

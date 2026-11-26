@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
-import { fromBase64, hostCall, toBase64, useChurch, useHostManager, useHostSettings, useHosts, useRota } from '../../lib/serviceHosts';
+import { fromBase64, hostCall, toBase64, useChurch, usePrayerChurch, useTeamManager, useHostSettings, useHosts, useRota } from '../../lib/serviceHosts';
 import { usePeople } from '../../state/PeopleContext';
 import type { Organization } from '../../state/OrgContext';
 import { downloadRota } from '../../lib/rotaDownload';
@@ -17,17 +17,19 @@ import './serviceHosts.css';
  * the services and requirements document. Andy chooses every host; "Suggest fair turns" only fills in suggestions.
  */
 export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
-  const org = useChurch();
-  const manager = useHostManager();
+  const hostChurch = useChurch();
+  const prayerChurch = usePrayerChurch();
+  const org = team === 'prayer' ? prayerChurch : hostChurch;
+  const manager = useTeamManager(team, org?.id);
   const [msg, setMsg] = useState('');
   const t = TEAM_INFO[team];
   if (!org) return <div className="page narrow"><h1>{t.title}</h1><p>{t.title} is part of Freedom Church.</p></div>;
-  if (!manager) return <div className="page narrow"><h1>{t.title}</h1><p>Only Mr Andrew and the leaders he chooses plan this schedule.</p></div>;
+  if (!manager) return <div className="page narrow"><h1>{t.title}</h1><p>{team === 'prayer' ? 'Only Mr Andrew, Doreen and the people they choose see the Sunday prayer schedule.' : 'Only Mr Andrew and the leaders he chooses plan this schedule.'}</p></div>;
   return (
     <div className="page narrow sh-page">
       <h1 className="sh-band sh-band-title" style={{ background: t.colour }}>{t.icon} {t.title}</h1>
       <p className="muted">One {t.role} leads each {team === 'prayer' ? 'prayer time' : 'service'}. They get an email at 6 PM a week before (to say Yes or I can't), then 3 days, 2 days and the day before.</p>
-      <DownloadRow org={org} say={setMsg} />
+      <DownloadRow org={org} team={team} say={setMsg} />
       {msg && <p className="notice" role="status" onClick={() => setMsg('')}>{msg}</p>}
       <Schedule team={team} orgId={org.id} serviceTimes={org.serviceTimes} tz={org.timeZone || 'Africa/Nairobi'} say={setMsg} />
       <Hosts team={team} orgId={org.id} say={setMsg} />
@@ -38,16 +40,16 @@ export function ServiceHostsPage({ team = 'host' }: { team?: Team }) {
 
 type Say = (m: string) => void;
 
-/** Download the Service host and Sunday prayer calendar, as PDF or Excel (Andy, 2026-11-17). */
-function DownloadRow({ org, say }: { org: Organization; say: Say }) {
+/** Download this schedule as PDF or Excel (Andy, 2026-11-17; each on its own since 2026-11-26). */
+function DownloadRow({ org, team, say }: { org: Organization; team: Team; say: Say }) {
   const [busy, setBusy] = useState('');
   async function get(kind: 'pdf' | 'xlsx') {
     setBusy(kind);
-    try { await downloadRota(org, kind); } catch (e) { say(friendlyError(e)); } finally { setBusy(''); }
+    try { await downloadRota(org, kind, [team]); } catch (e) { say(friendlyError(e)); } finally { setBusy(''); }
   }
   return (
     <div className="sh-actions">
-      <span className="muted small">Download the Service Hosts and Sunday Prayer calendar:</span>
+      <span className="muted small">Download the {TEAM_INFO[team].title} calendar:</span>
       <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void get('pdf')}>{busy === 'pdf' ? 'Making…' : '⬇ PDF'}</button>
       <button type="button" className="btn btn-small" disabled={!!busy} onClick={() => void get('xlsx')}>{busy === 'xlsx' ? 'Making…' : '⬇ Excel'}</button>
     </div>

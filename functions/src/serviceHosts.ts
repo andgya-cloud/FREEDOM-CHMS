@@ -6,7 +6,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getStorage } from 'firebase-admin/storage';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { can, canAccessOrg, REVIEWER_ROLE_ID } from './shared/permissions.js';
+import { can, canAccessOrg, isPrayerManager, REVIEWER_ROLE_ID } from './shared/permissions.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { localDateKey } from './shared/datetime.js';
 import { poweredByHtml } from './shared/poweredBy.js';
@@ -137,10 +137,12 @@ async function send(org: Org, to: { name: string; email: string }[], subject: st
   return sent;
 }
 
-async function managersOf(orgId: string): Promise<{ name: string; email: string }[]> {
+/** Who hears about a team (Andy, 2026-11-26, 6A): Service hosts to Diana, Andy and Doreen; Sunday prayer to Andy, Doreen and Elizabeth. */
+async function managersOf(team: Team, orgId: string): Promise<{ name: string; email: string }[]> {
   const snap = await db.collection('users').where('active', '==', true).get();
   return snap.docs.map((d) => d.data() as UserProfile)
-    .filter((u) => u.roleId !== REVIEWER_ROLE_ID && canAccessOrg(u, orgId) && isHostManager(u) && isEmail(u.email ?? ''))
+    .filter((u) => u.roleId !== REVIEWER_ROLE_ID && isEmail(u.email ?? '')
+      && (team === 'prayer' ? isPrayerManager(u, orgId) : canAccessOrg(u, orgId) && isHostManager(u)))
     .map((u) => ({ name: u.displayName || u.email, email: u.email }));
 }
 
@@ -193,7 +195,7 @@ export const serviceHosts = onCall({ invoker: 'public', memory: '512MiB', timeou
         const hostName = String(hostSnap.get('name') ?? slot!.hostName);
         const subject = `${hostName} can't lead the ${slot!.serviceName} on ${dayLabel(slot!.date, false)}`;
         const text = `${hostName} said they can't lead the ${slot!.serviceName} on ${dayLabel(slot!.date, false)}${slot!.time ? ` at ${clock(slot!.time)}` : ''}.${reason ? `\nTheir reason: ${reason}` : ''}\n\n${next ? `${next.name} is free that day and has had the fewest turns.` : 'Nobody else is free that day yet.'} Open ${info.title} to choose someone.\n${appUrl()}${info.page}`;
-        await send(org, await managersOf(orgId), subject, text, html(team, org, subject, text, button(`${appUrl()}${info.page}`, 'Choose someone else', '#0b112c')));
+        await send(org, await managersOf(team, orgId), subject, text, html(team, org, subject, text, button(`${appUrl()}${info.page}`, 'Choose someone else', '#0b112c')));
       }
       return { ok: true, answer };
     }
@@ -210,10 +212,15 @@ export const serviceHosts = onCall({ invoker: 'public', memory: '512MiB', timeou
     };
   }
 
-  const caller = await requireCaller(request, undefined, { reviewerOk: action === 'downloadDoc' });
-  if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this church.');
-  if (!isHostManager(caller.profile) && !(action === 'downloadDoc' && caller.profile.roleId === REVIEWER_ROLE_ID)) {
-    throw new HttpsError('permission-denied', `Only Mr Andrew and the leaders he chooses plan the ${info.title.toLowerCase()} schedule.`);
+  const caller = await requireCaller(request, undefined, { reviewerOk: action === 'downloadDoc' && team === 'host' });
+  // Sunday prayer is its own (Andy, 2026-11-26): Andy, Doreen and whoever they tick, even from another organization.
+  if (team === 'prayer') {
+    if (!isPrayerManager(caller.profile, orgId)) throw new HttpsError('permission-denied', 'Only Mr Andrew, Doreen and the people they choose plan the Sunday prayer schedule.');
+  } else {
+    if (!canAccessOrg(caller.profile, orgId)) throw new HttpsError('permission-denied', 'You do not have access to this church.');
+    if (!isHostManager(caller.profile) && !(action === 'downloadDoc' && caller.profile.roleId === REVIEWER_ROLE_ID)) {
+      throw new HttpsError('permission-denied', `Only Mr Andrew and the leaders he chooses plan the ${info.title.toLowerCase()} schedule.`);
+    }
   }
   const org = await loadOrg(orgId);
   if (org.type !== 'church_campus') throw new HttpsError('failed-precondition', `${info.title} is part of the church.`);
@@ -439,7 +446,7 @@ export async function sendHostSummary(now = new Date()): Promise<number> {
     const empty = dates.filter((d) => !(rota.get(d.id)?.status === 'set' && rota.get(d.id)?.answer !== 'no')).length;
     const subject = `${info.roles} for the next 4 weeks${empty ? ` (${empty} still need someone)` : ''}`;
     const text = `Good morning. Here are the ${info.roles} for the coming weeks at ${org.name}:\n\n${lines.join('\n')}\n\nOpen ${info.title}: ${appUrl()}${info.page}`;
-    sent += await send(org, await managersOf(org.id), subject, text, html(team, org, subject, text, button(`${appUrl()}${info.page}`, `Open ${info.title}`, '#0b112c')));
+    sent += await send(org, await managersOf(team, org.id), subject, text, html(team, org, subject, text, button(`${appUrl()}${info.page}`, `Open ${info.title}`, '#0b112c')));
   }
   return sent;
 }

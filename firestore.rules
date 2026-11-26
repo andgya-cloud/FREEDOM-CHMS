@@ -202,7 +202,8 @@ service cloud.firestore {
     }
 
     match /organizations/{orgId} {
-      allow get: if canAccessOrg(orgId);
+      // The Sunday prayer tick reaches the church's name and times too (Andy, 2026-11-26).
+      allow get: if canAccessOrg(orgId) || (isActive() && 'prayer.manage' in me().get('extraPermissions', []) && me().get('prayerOrgId', '') == orgId);
       allow list: if hasAllOrgs();
       // Only someone who sees every organization can add one, so a new campus
       // is never created by a user who would then be locked out of it.
@@ -447,6 +448,11 @@ service cloud.firestore {
       function hostManager(orgId) {
         return canAccessOrg(orgId) && (has('rota.manage') || has('users.manage'));
       }
+      function prayerManager(orgId) {
+        return isActive() && ((isAccountKeeper() && canAccessOrg(orgId))
+          || ('prayer.manage' in me().get('extraPermissions', [])
+            && (canAccessOrg(orgId) || me().get('prayerOrgId', '') == orgId)));
+      }
       match /serviceRota/{slotId} {
         allow read: if canAccessOrg(orgId);
         allow write: if false;
@@ -459,17 +465,19 @@ service cloud.firestore {
         allow read: if hostManager(orgId);
         allow write: if false;
       }
-      // The Sunday prayer schedule (Andy, 2026-11-17) works the same way.
+      // The Sunday prayer schedule (Andy, 2026-11-17) works the same way, but is its own (Andy, 2026-11-26, 2A 3A
+      // 5A): only Andy, Doreen and whoever they tick "Sunday prayer schedule" see it, the tick reaching the church
+      // even when it is not on their account. Nobody else sees who leads prayer.
       match /prayerRota/{slotId} {
-        allow read: if canAccessOrg(orgId);
+        allow read: if prayerManager(orgId);
         allow write: if false;
       }
       match /prayerLeaders/{leaderId} {
-        allow read: if hostManager(orgId);
+        allow read: if prayerManager(orgId);
         allow write: if false;
       }
       match /prayerSettings/{docId} {
-        allow read: if hostManager(orgId);
+        allow read: if prayerManager(orgId);
         allow write: if false;
       }
 

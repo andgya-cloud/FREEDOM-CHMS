@@ -1,6 +1,6 @@
 import { HELPER_ROLE_ID, TEACHER_ROLE_ID, LABTECH_ROLE_ID, LIBRARIAN_ROLE_ID, TRAINER_ROLE_ID } from '../../functions/src/shared/permissions';
 
-export interface RoleProfile { roleId?: string; registerClasses?: unknown[]; inventoryCourseIds?: unknown[] }
+export interface RoleProfile { roleId?: string; registerClasses?: unknown[]; inventoryCourseIds?: unknown[]; extraPermissions?: readonly string[] }
 
 /**
  * Some roles only see a few pages (Andy, 2026-10-25 to 2026-11-04): a trainer their marks sheets, a lab technician
@@ -9,6 +9,8 @@ export interface RoleProfile { roleId?: string; registerClasses?: unknown[]; inv
  */
 export function roleRedirect(profile: RoleProfile | null | undefined, path: string): string | null {
   if (!profile) return null;
+  // The Sunday prayer schedule is open to whoever holds its tick, whatever their role (Andy, 2026-11-26, 3A).
+  if (/^\/prayer-schedule(\/|$)/.test(path) && (profile.extraPermissions ?? []).includes('prayer.manage')) return null;
   const counter = (profile.inventoryCourseIds?.length ?? 0) > 0;
   if (profile.roleId === TRAINER_ROLE_ID) {
     const register = (profile.registerClasses?.length ?? 0) > 0;

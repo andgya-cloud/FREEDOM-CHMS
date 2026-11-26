@@ -32,6 +32,8 @@ export interface Profile {
   hopeClassIds?: string[];
   /** A Sunday school teacher's class (Andy, 2026-11-23, 9A). */
   ssClassId?: string;
+  /** The church whose Sunday prayer schedule this account plans (Andy, 2026-11-26). */
+  prayerOrgId?: string | null;
   ssClassName?: string;
   /** The ADIA departments (programme ids) whose inventory they count (Andy, 2026-10-29). */
   inventoryCourseIds?: string[];

@@ -5,7 +5,7 @@ import { ESTIMATE } from '../lib/firestoreOptions';
 import { useAuth } from './AuthContext';
 import { usePeople } from './PeopleContext';
 import type { Organization } from './OrgContext';
-import { useRota } from '../lib/serviceHosts';
+import { usePrayerManager, useRota } from '../lib/serviceHosts';
 import {
   addDays, daysInMonth, occurrences, serviceSlots, weekdayOf, type CalendarEvent, type EventType,
 } from '../../functions/src/shared/calendar';
@@ -116,7 +116,9 @@ export function useAutoItems(orgs: Organization[], from: string, to: string, lay
   // Each service shows its Service Host (Andy, 2026-11-17, 11A).
   const church = orgs.find((o) => o.type === 'church_campus');
   const rota = useRota('host', layers.has('services') && church ? church.id : '', from, to);
-  const prayer = useRota('prayer', layers.has('services') && church ? church.id : '', from, to);
+  // Only those who plan Sunday prayer see who leads it (Andy, 2026-11-26, 5A).
+  const seesPrayer = usePrayerManager(church?.id);
+  const prayer = useRota('prayer', layers.has('services') && church && seesPrayer ? church.id : '', from, to);
 
   return useMemo(() => {
     const out: CalItem[] = [];

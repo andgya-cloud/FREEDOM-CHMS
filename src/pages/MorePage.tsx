@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../state/AuthContext';
 import { useOrg } from '../state/OrgContext';
-import { USHER_ROLE_ID } from '../../functions/src/shared/permissions';
+import { USHER_ROLE_ID, isPrayerManager } from '../../functions/src/shared/permissions';
 
 /**
  * Freedom Church's "More" (Andy, 2026-11-01, 1A): the places used now and then, so the menu keeps five buttons.
@@ -15,7 +15,7 @@ export function MorePage() {
     { show: current?.type === 'church_campus' && (can('users.manage') || /^dorothymoha(r)?t$/.test((profile?.displayName ?? '').toLowerCase().replace(/[^a-z]/g, ''))), to: '/sunday-school', label: '🧒 Sunday school', detail: 'The classes, each class count and the Sunday school room' },
     { show: current?.type === 'church_campus' && (can('users.manage') || profile?.roleId === 'youth' || /^doreen(mayaka|guya)$/.test((profile?.displayName ?? '').toLowerCase().replace(/[^a-z]/g, ''))), to: '/youth', label: '🔥 Youth', detail: 'The youth count, the youth timetable and the Youth room' },
     { show: current?.type === 'church_campus' && (can('rota.manage') || can('users.manage')), to: '/service-hosts', label: '🎤 Service Hosts', detail: 'Who hosts each service, the hosts list and the requirements document' },
-    { show: current?.type === 'church_campus' && (can('rota.manage') || can('users.manage')), to: '/prayer-schedule', label: '🙏 Sunday Prayer', detail: 'Who leads prayer each Sunday, the prayer leaders and their requirements' },
+    { show: current?.type === 'church_campus' && isPrayerManager(profile, current.id), to: '/prayer-schedule', label: '🙏 Sunday Prayer', detail: 'Who leads prayer each Sunday, the prayer leaders and their requirements' },
     { show: current?.type === 'church_campus', to: '/updates', label: 'Photos and wins', detail: 'Testimonies, events, pastoral care and incidents, as conversations' },
     { show: current?.type === 'church_campus', to: '/conversations', label: 'Private conversations', detail: 'Worries about a member, read only by Andy, Doreen and the leaders' },
     { show: can('pastoral.read') || can('followups.manage') || can('settings.manage'), to: '/notice', label: '✦ Write a notice', detail: 'Type a few lines; the helper writes the WhatsApp group message' },

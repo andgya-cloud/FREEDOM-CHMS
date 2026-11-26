@@ -35,6 +35,7 @@ export function AdiaStaffToday({ org }: { org: Organization }) {
     { to: '/school/petty-cash/new', icon: 'pettyCash', label: 'New requisition', sub: 'Ask for petty cash', show: petty.canRequest },
     { to: '/school/petty-cash', icon: 'pettyCash', label: 'Sign requisitions', sub: 'Approve what is waiting', show: petty.canSign },
     { to: '/school/payroll', icon: 'payroll', label: 'Payroll', sub: 'This month’s pay', show: payroll.any },
+    { to: '/prayer-schedule', icon: 'clock', label: 'Sunday prayer', sub: 'Freedom Church prayer leaders and turns', show: (profile?.extraPermissions ?? []).includes('prayer.manage') },
   ];
   const mine = jobs.filter((j) => j.show);
   return (

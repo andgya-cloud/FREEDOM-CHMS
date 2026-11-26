@@ -5,6 +5,7 @@ import { db, functions } from '../firebase';
 import { useLiveDoc, useLiveQuery } from './useQuery';
 import { useOrg, type Organization } from '../state/OrgContext';
 import { useAuth } from '../state/AuthContext';
+import { isPrayerManager } from '../../functions/src/shared/permissions';
 import { settingsOr, TEAM_INFO, type HostSettings, type RotaSlot, type ServiceHost, type Team } from '../../functions/src/shared/serviceHosts';
 
 /** Every change to Service hosts goes through the serviceHosts function (Andy, 2026-11-17). */
@@ -20,6 +21,31 @@ export function useChurch(): Organization | null {
 export function useHostManager(): boolean {
   const { can } = useAuth();
   return can('rota.manage') || can('users.manage');
+}
+
+/** Sunday prayer is its own (Andy, 2026-11-26): only Andy, Doreen and whoever they tick (Elizabeth). */
+export function usePrayerManager(orgId?: string): boolean {
+  const { profile } = useAuth();
+  return isPrayerManager(profile, orgId);
+}
+
+/** Who plans a team's schedule at a church. */
+export function useTeamManager(team: Team, orgId?: string): boolean {
+  const host = useHostManager();
+  const prayer = usePrayerManager(orgId);
+  return team === 'prayer' ? prayer : host;
+}
+
+/**
+ * The church for the Sunday prayer schedule: the one on the account, or (for a "Sunday prayer schedule" tick from
+ * another organization, such as Elizabeth at ADIA) the church the tick reaches.
+ */
+export function usePrayerChurch(): Organization | null {
+  const church = useChurch();
+  const { profile } = useAuth();
+  const away = !church && profile?.prayerOrgId ? profile.prayerOrgId : '';
+  const { data } = useLiveDoc<Omit<Organization, 'id'>>(() => (away ? doc(db, 'organizations', away) : null), [away]);
+  return church ?? (away && data ? ({ ...data, id: away } as Organization) : null);
 }
 
 export function useHostSettings(team: Team, orgId: string, serviceTimes?: string[], on = true): HostSettings {

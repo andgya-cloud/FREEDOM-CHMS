@@ -17,6 +17,7 @@ beforeEach(async () => {
     const base = { extraPermissions: [], allOrgs: false, active: true, mustChangePassword: false };
     await setDoc(doc(db, 'users/planner'), { ...base, orgIds: ['fcn'], email: 'p@example.org', displayName: 'Planner', roleId: 'admin', permissions: ['people.read', 'rota.manage'] });
     await setDoc(doc(db, 'users/usher'), { ...base, orgIds: ['fcn'], email: 'u@example.org', displayName: 'Usher', roleId: 'admin', permissions: ['people.read'] });
+    await setDoc(doc(db, 'users/elizabeth'), { ...base, orgIds: ['adia'], email: 'e@example.org', displayName: 'Elizabeth Mutuku', roleId: 'admin', permissions: [], extraPermissions: ['prayer.manage'], prayerOrgId: 'fcn' });
     await setDoc(doc(db, 'users/adiaPlanner'), { ...base, orgIds: ['adia'], email: 'a@example.org', displayName: 'ADIA', roleId: 'admin', permissions: ['rota.manage'] });
     await setDoc(doc(db, 'organizations/fcn/serviceHosts/h1'), { name: 'Mary', phone: '0712345678', email: 'm@example.org', deletedAt: null });
     await setDoc(doc(db, 'organizations/fcn/serviceRota/2026-11-22_sun1000'), { date: '2026-11-22', hostName: 'Mary', status: 'set' });
@@ -41,12 +42,19 @@ describe('service hosts', () => {
     await assertFails(getDoc(doc(as('usher'), 'organizations/fcn/serviceHostSettings/main')));
     await assertFails(getDocs(collection(as('adiaPlanner'), 'organizations/fcn/serviceHosts')));
   });
-  it('treats the Sunday prayer schedule the same way', async () => {
-    await assertSucceeds(getDocs(collection(as('usher'), 'organizations/fcn/prayerRota')));
-    await assertSucceeds(getDocs(collection(as('planner'), 'organizations/fcn/prayerLeaders')));
-    await assertFails(getDocs(collection(as('usher'), 'organizations/fcn/prayerLeaders')));
+  it('keeps the Sunday prayer schedule for Andy, Doreen and the prayer tick (Andy, 2026-11-26)', async () => {
+    await assertSucceeds(getDocs(collection(as('keeper'), 'organizations/fcn/prayerRota')));
+    await assertSucceeds(getDocs(collection(as('keeper'), 'organizations/fcn/prayerLeaders')));
+    await assertSucceeds(getDocs(collection(as('elizabeth'), 'organizations/fcn/prayerRota')));
+    await assertSucceeds(getDocs(collection(as('elizabeth'), 'organizations/fcn/prayerLeaders')));
+    await assertSucceeds(getDoc(doc(as('elizabeth'), 'organizations/fcn')));
+    await assertFails(getDocs(collection(as('elizabeth'), 'organizations/fcn/serviceHosts')));
+    await assertFails(getDocs(collection(as('elizabeth'), 'organizations/fcn/people')));
+    await assertFails(getDocs(collection(as('planner'), 'organizations/fcn/prayerLeaders')));
+    await assertFails(getDocs(collection(as('planner'), 'organizations/fcn/prayerRota')));
+    await assertFails(getDocs(collection(as('usher'), 'organizations/fcn/prayerRota')));
     await assertFails(getDoc(doc(as('pastor'), 'organizations/fcn/prayerSent/x')));
-    await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/prayerRota/2026-11-29_sun0900'), { date: '2026-11-29' }));
+    await assertFails(setDoc(doc(as('keeper'), 'organizations/fcn/prayerRota/2026-11-29_sun0900'), { date: '2026-11-29' }));
   });
   it('lets nobody write or read the sent record', async () => {
     await assertFails(setDoc(doc(as('pastor'), 'organizations/fcn/serviceHosts/h2'), { name: 'X' }));

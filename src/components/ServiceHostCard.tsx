@@ -1,18 +1,20 @@
 import { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import type { Organization } from '../state/OrgContext';
-import { useHostManager, useHostSettings, useRota } from '../lib/serviceHosts';
+import { useTeamManager, usePrayerManager, useHostSettings, useRota } from '../lib/serviceHosts';
 import { localDateKey } from '../../functions/src/shared/datetime';
 import { addDays, clock, dayLabel, plannedDates, TEAM_INFO, type RotaSlot, type Team } from '../../functions/src/shared/serviceHosts';
 import '../pages/serviceHosts/serviceHosts.css';
 
 /** The next two weeks of one team's schedule (Service hosts or Sunday prayer), for the church's Today (11A). */
 function useComing(team: Team, org: Organization) {
-  const manager = useHostManager();
+  const manager = useTeamManager(team, org.id);
+  // Who leads prayer is seen only by those who plan it (Andy, 2026-11-26, 5A).
+  const sees = usePrayerManager(org.id) || team === 'host';
   const tz = org.timeZone || 'Africa/Nairobi';
   const today = localDateKey(new Date(), tz);
   const to = addDays(today, 14);
-  const church = org.type === 'church_campus';
+  const church = org.type === 'church_campus' && sees;
   const settings = useHostSettings(team, church ? org.id : '', org.serviceTimes, manager);
   const rota = useRota(team, church ? org.id : '', today, to);
   return useMemo(() => {

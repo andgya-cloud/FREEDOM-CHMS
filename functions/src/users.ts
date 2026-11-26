@@ -166,6 +166,21 @@ async function refreshRosters(orgIds: string[], courseIds: string[]) {
   }
 }
 
+/**
+ * The "Sunday prayer schedule" tick (Andy, 2026-11-26, 3A): only Andy or Doreen give or take it away. It reaches the
+ * church's prayer schedule even when the church is not on the account, so it also records which church.
+ */
+async function prayerAccess(caller: UserProfile, before: readonly string[], after: readonly string[]): Promise<{ prayerOrgId: string | null }> {
+  const had = before.includes('prayer.manage'), has = after.includes('prayer.manage');
+  if (had !== has && !canKeepAccounts(caller)) {
+    throw new HttpsError('permission-denied', 'Only Mr Andrew or Doreen can give or take away the Sunday prayer schedule.');
+  }
+  if (!has) return { prayerOrgId: null };
+  const churches = await db.collection('organizations').where('type', '==', 'church_campus').get();
+  const church = churches.docs.find((o) => o.get('deletedAt') == null);
+  return { prayerOrgId: church?.id ?? null };
+}
+
 /** Pastor (or an organization head, for their own Staff) creates an account with a temporary password. */
 export const createUser = onCall(PASSWORDS, async (request) => {
   const { caller, teamOnly } = await requireAccountManager(request);
@@ -186,6 +201,7 @@ export const createUser = onCall(PASSWORDS, async (request) => {
     throw new HttpsError('permission-denied', OUTSIDE_TEAM);
   }
   if (!allOrgs && orgIds.length === 0) throw new HttpsError('invalid-argument', 'Choose at least one organization.');
+  const prayer = await prayerAccess(caller.profile, [], extraPermissions);
 
   if (await passwordInUse(password, '')) throw new HttpsError('already-exists', 'Someone else already has this password. Please choose a different one.');
   let uid: string;
@@ -213,6 +229,7 @@ export const createUser = onCall(PASSWORDS, async (request) => {
     inventoryCourseIds: await inventoryDepartments(data.inventoryDepartments, orgIds, allOrgs),
     hopeClassIds: hopeClassesFrom(roleId, data.hopeClasses),
     ...(await ssClassFrom(roleId, data.ssClass, orgIds, allOrgs)),
+    ...prayer,
     permissions: accountPermissions(roleId, role, extraPermissions),
     active: true,
     mustChangePassword: true,
@@ -259,6 +276,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
 
   const merged = { ...current, ...next };
   if (teamOnly && !canManageTeamAccount(caller.profile, merged)) throw new HttpsError('permission-denied', OUTSIDE_TEAM);
+  const prayer = await prayerAccess(caller.profile, current.extraPermissions ?? [], merged.extraPermissions ?? []);
   if ((merged.roleId === REVIEWER_ROLE_ID || current.roleId === REVIEWER_ROLE_ID) && !isDirectorProfile(caller.profile)) throw new HttpsError('permission-denied', ONLY_ANDY_REVIEWERS);
   const role = await loadRole(merged.roleId, caller.uid);
   const currentRole = await loadRole(current.roleId);
@@ -305,6 +323,7 @@ export const updateUser = onCall(CALLABLE, async (request) => {
     ...(data.ssClass !== undefined || merged.roleId !== SS_TEACHER_ROLE
       ? await ssClassFrom(merged.roleId, data.ssClass, merged.orgIds, merged.allOrgs)
       : {}),
+    ...prayer,
     permissions: accountPermissions(merged.roleId, role, merged.extraPermissions),
     updatedAt: FieldValue.serverTimestamp(),
     updatedBy: caller.uid,
