@@ -1,0 +1,258 @@
+// Part 1 (Freedom Church) pages added in the November 2026 update (v257 to v301).
+// Each entry says which existing page it goes after (`after`), or that it replaces one (`replace`).
+const role = (name) => (p) => p.getByRole('button', { name }).first();
+const link = (name) => (p) => p.getByRole('link', { name }).first();
+const text = (t) => (p) => p.getByText(t).first();
+const css = (c) => (p) => p.locator(c).first();
+const FILES = `${__dirname}/files`;
+const openFold = (label) => async (p) => { await p.getByText(label).first().click(); await p.waitForTimeout(2500); };
+const toTop = (find, gap = 70) => async (p) => { const l = find(p).first(); if (await l.count()) await l.evaluate((e, g) => { e.scrollIntoView({ block: 'start' }); scrollBy(0, -g); }, gap); await p.waitForTimeout(500); };
+const exact = (t) => (p) => p.getByText(t, { exact: true });
+const upload = (heading, file) => async (p) => {
+  const box = p.getByText(heading, { exact: true }).first().locator('xpath=ancestor::*[self::section or self::details][1]');
+  if (await box.evaluate((e) => e.tagName === 'DETAILS' && !e.open).catch(() => false)) { await box.locator('summary').click(); await p.waitForTimeout(800); }
+  await box.locator('input[type=file]').first().setInputFiles(`${FILES}/${file}`);
+  await p.waitForTimeout(3500);
+  await toTop(exact(heading))(p);
+};
+
+module.exports = [
+  {
+    replace: 'c-visitor',
+    id: 'c-visitor', part: 'church', title: 'Record a visitor (first-timer)',
+    purpose: 'Record a person who came for the first time, so the church can welcome them and follow up.',
+    who: 'Pastor, Admin, Usher, Organization head, Staff', where: 'Today or Service, then Add visitor',
+    before: 'Ask the visitor if they are happy to receive WhatsApp messages from the church.',
+    steps: [
+      'Press **Add visitor** on Today or on the Service page. The **Record a visitor** form opens.',
+      'Type the visitor’s **Name** and **Phone**. Tick **This number is on WhatsApp** if it is.',
+      'Tick **They agreed to receive WhatsApp messages from us** only if they said yes.',
+      'Choose **How they got to know our church**: invited by someone, walked in, social media, online service, an event, or other.',
+      'Write anything else under **Anything else (optional)**, then press **Save**.',
+    ],
+    see: 'The visitor appears under **First-timers this week** on the Service page, and a follow-up is made for the team.',
+    tip: 'Visitors can also fill in their own card on their phone. Press **Show the QR poster** and let them scan it.',
+    shots: [{ device: 'm', path: '/visitors/new', tall: 1300, marks: [null, (p) => p.getByLabel('Name', { exact: true }), text(/They agreed to receive/), text('How they got to know our church'), role(/^save$/i)] }],
+  },
+  {
+    after: 'c-headcount',
+    id: 'c-counters', part: 'church', title: 'Phone counters: who counts what',
+    purpose: 'Give each counter their own link, so they count on their phone and the numbers come in live.',
+    who: 'Pastor, and the leaders Mr Andrew ticks for Service hosts', where: 'Service, then Phone counters',
+    before: 'Choose one person for each number: Adults, Whole Church, First-time visitors and Salvations. Children and Teens come from the Sunday school teachers.',
+    steps: [
+      'Press **Service** in the menu, then open **📱 Phone counters** near the bottom.',
+      'Under each number, type the counter’s **name** and **phone number**, then press **Save**.',
+      'Press **Send link on WhatsApp**. WhatsApp opens with their link ready; press Send.',
+      'If a link was shared by mistake, press **New link** and send the new one. If a counter is away, press **Switch off**.',
+    ],
+    see: 'Each number shows **On** and the counter’s name. During the service, their numbers appear on the Service page as they count.',
+    tip: 'Counters need no password and no app. The link works every Sunday and on special services, so send it only once.',
+    shots: [{ device: 'm', path: '/attendance', prep: async (p) => { await openFold('📱 Phone counters')(p); await toTop(text('📱 Phone counters'), 120)(p); }, tall: 1000,
+      marks: [text('📱 Phone counters'), css('details[open] input'), text(/send link on whatsapp/i), text(/^new link$/i)] }],
+  },
+  {
+    after: 'c-counters',
+    id: 'c-counting', part: 'church', title: 'Count on your phone (for counters)',
+    purpose: 'Count your number during the service from the link the church sent you.',
+    who: 'Counters (no account needed)', where: 'The link in your WhatsApp message',
+    steps: [
+      'Open the link from the church’s WhatsApp message. Your name and the service show at the top.',
+      'Press the big **+** for each person you count. Press **−** if you pressed once too many.',
+      'Or press **Type the number** and type the whole count.',
+      'Press **Reset to 0** only to start again; it asks before it clears.',
+      'When you are done, press **I’ve finished counting**.',
+    ],
+    see: '**Saved ✓** under the buttons, and the office sees your number straight away.',
+    tip: 'If the signal drops, keep counting. The phone keeps your number and sends it when the internet is back.',
+    warn: 'Do not share your link. Anyone with it can change your number.',
+    shots: [{ device: 'm', path: '/count/church/aSzjgkOxVWp9s80yAkDk6Xxt', tall: 950,
+      marks: [text('Thanksgiving Service'), role(/^\+$/), role(/type the number/i), role(/reset to 0/i), role(/finished counting/i)] }],
+  },
+  {
+    after: 'c-classes',
+    id: 'c-f252-checkin', part: 'church', title: 'Freedom 252: open the class check-in',
+    purpose: 'Let students mark themselves present at the online class, with code words that cannot be passed to people who are not there.',
+    who: 'Pastor, Admin, the class leader', where: 'People, Classes and programmes, Freedom 252, Class check-in',
+    before: 'Open this on your own phone or computer just before the class. Keep the screen to yourself.',
+    steps: [
+      'Open **Freedom 252** and press **Class check-in**. Check the topic, then press **Open check-in**.',
+      'Press **Copy check-in link** and paste it in the Google Meet chat.',
+      'Say the **First word** out loud once the class has started. Never type it in the chat.',
+      'At the time shown, say the **Check word**. It comes at a surprise minute between quarter past and half past.',
+      'Fifteen minutes before the end, say the **Last word**.',
+    ],
+    see: 'The number of students in shows at the top right. Each word is only taken for about 10 minutes.',
+    tip: 'Each phone can mark only one person per class, and only three people can check in from one internet connection. Refused tries show on the register under **Class checks**.',
+    shots: [{ device: 'm', path: '/class-qr/church/freedom_252', tall: 1100, prep: async (p) => { await p.getByRole('button', { name: /open check-in/i }).click(); await p.waitForTimeout(3500); },
+      marks: [null, role(/copy check-in link/i), text('First word'), text('Check word'), text('Last word')] }],
+  },
+  {
+    after: 'c-f252-checkin',
+    id: 'c-f252-student', part: 'church', title: 'Freedom 252: how students check in',
+    purpose: 'What a student does on their own phone during the online class.',
+    who: 'Freedom 252 students', where: 'The check-in link in the Google Meet chat',
+    steps: [
+      'Tap the check-in link in the Meet chat.',
+      'Type **Your phone number** and the **Code word** the leader says, then press **Mark me present**.',
+      '**Keep this page open.** When the leader says the **check word**, and later the **last word**, type each one under **Code word** and press **Send the word**.',
+      'Press **See my progress** to see the topics you have covered and your time in class.',
+    ],
+    see: '“All words in. Thank you!” once all three words are in.',
+    tip: 'Use your own phone. A phone that already checked someone in cannot check in a second person in the same class.',
+    warn: 'If you miss the check word or the last word, your mark waits for the leader’s OK.',
+  },
+  {
+    after: 'c-f252-student',
+    id: 'c-f252-register', part: 'church', title: 'Freedom 252: read the register',
+    purpose: 'See who covered each topic, who was there only part of the class, and what needs your OK.',
+    who: 'Pastor, Admin, the class leader', where: 'Freedom 252, then Register',
+    steps: [
+      '**Class checks** lists students who checked in but are not on the Meet list, or who missed a code word. Press **OK, count** if they really were there.',
+      'Refused tries (a second person on one phone, too many on one connection) show with a ⚠️.',
+      'In the grid, a tick means present. **H** was ticked by hand. A number such as **40** is the part of the class they were in (%). **?** waits for your OK.',
+      'The last column is each student’s progress to graduation. Press **PDF** or **Excel** to download the register.',
+    ],
+    see: 'A topic only counts when the student was there for 75% of the class or more.',
+    shots: [{ device: 'm', path: '/programs/church/freedom_252/register', tall: 1300,
+      marks: [text('Class checks'), role(/ok, count/i), text(/A second person tried/), (p) => p.locator('table').first(), role(/^pdf$/i)] }],
+  },
+  {
+    after: 'c-f252-register',
+    id: 'c-f252-meet', part: 'church', title: 'Freedom 252: upload the Google Meet list',
+    purpose: 'Add each student’s time in class from the Meet Attendance list, so the register shows who stayed.',
+    who: 'Pastor, Admin, the class leader', where: 'Freedom 252, Register, Google Meet list',
+    before: 'After the class, save the list from the **Meet Attendance** Chrome extension as Excel or CSV.',
+    steps: [
+      'On the register, open **Google Meet list** and choose **Which class**.',
+      'Press **Choose the Meet file** and pick the file you saved.',
+      'Check **Who it is** for each name in the Meet. Names it knows are matched for you; choose the student, **Not a student (me, a guest)**, or a new student.',
+      'Press **Save the class**.',
+    ],
+    see: 'Students in for 75% or more are counted. Others show their % and the topic stays open for them. Their time in class shows on their progress page.',
+    tip: 'The app remembers each Meet name, such as “Galaxy A14”, so next week it is matched by itself.',
+    shots: [{ device: 'm', path: '/programs/church/freedom_252/register', tall: 1200, prep: upload('Google Meet list', 'Meet-attendance-24-Nov.csv'),
+      marks: [(p) => p.getByText('Google Meet list', { exact: true }), role(/choose the meet file/i), text('Who it is'), role(/save the .* class/i)] }],
+  },
+  {
+    after: 'c-f252-meet',
+    id: 'c-f252-list', part: 'church', title: 'Freedom 252: mark a class from a list',
+    purpose: 'Mark a whole class at once from a list of names, for example a list someone typed or saved as PDF.',
+    who: 'Pastor, Admin, the class leader', where: 'Freedom 252, Register, Mark a class from a list',
+    steps: [
+      'On the register, open **Mark a class from a list** and choose **Which class**.',
+      'Press **Choose the list** and pick the PDF or Excel file of names.',
+      'Check **Who it is** for each name. Names that match one student are filled in; choose the right student where it says **Please check**, or **Leave out**.',
+      'A name that is nobody on the register can be added as **New**.',
+      'Press **Save** to mark them present.',
+    ],
+    see: 'How many were marked present, and anyone who was already marked.',
+    shots: [{ device: 'm', path: '/programs/church/freedom_252/register', tall: 1200, prep: upload('Mark a class from a list', 'Class-list-24-Nov.csv'),
+      marks: [(p) => p.getByText('Mark a class from a list', { exact: true }), role(/choose the list/i), text('Who it is'), text(/^New$/), role(/^save: /i)] }],
+  },
+  {
+    after: 'c-f252-list',
+    id: 'c-hosts', part: 'church', title: 'Service hosts',
+    purpose: 'Plan who hosts each service for the next three months. Hosts are reminded by email and can be sent a WhatsApp message.',
+    who: 'Mr Andrew, Doreen, and the people they tick (Diana)', where: 'More, then Service hosts',
+    before: 'Add your hosts first: under **People**, press **Add a person**, then type the name, phone and email.',
+    steps: [
+      'Press **Suggest fair turns**. Check the suggestions, then press **Use suggestions**. Or choose someone on each date yourself.',
+      'Each date shows the host’s answer: **✓ Accepted**, **Waiting**, or **Can’t come** with their reason.',
+      'Within 7 days of the service, press **WhatsApp** to send the host a reminder from your phone.',
+      'Press **⬇ PDF** or **⬇ Excel** to download the calendar.',
+    ],
+    see: 'Hosts get an email at 6 PM a week before (Yes or I can’t), then 3 days, 2 days and the day before. If a host says no, you get an email to choose someone else.',
+    tip: 'The requirements document goes with every email. Everyone who plans can open it; only Mr Andrew and Doreen replace or remove it.',
+    shots: [{ device: 'm', path: '/service-hosts', tall: 1300,
+      marks: [role(/suggest fair turns/i), text('✓ Accepted'), role(/^whatsapp$/i), role(/pdf/i)] }],
+  },
+  {
+    after: 'c-hosts',
+    id: 'c-prayer', part: 'church', title: 'Sunday prayer schedule',
+    purpose: 'Plan who leads the Sunday prayer time, with the same reminders as the Service hosts.',
+    who: 'Mr Andrew, Doreen and Elizabeth only', where: 'More, then Sunday prayer (Elizabeth: the Sunday prayer button on Today)',
+    steps: [
+      'Add the prayer leaders under **People** with **Add a person**.',
+      'Press **Suggest fair turns** and **Use suggestions**, or choose a leader on each date.',
+      'Watch each date for **✓ Accepted**, **Waiting** or **Can’t come**, and press **WhatsApp** to remind a leader.',
+    ],
+    see: 'Prayer leaders’ names are seen only by Mr Andrew, Doreen and Elizabeth, including on Today and the calendar.',
+    shots: [{ device: 'm', path: '/prayer-schedule', tall: 1100, marks: [null, role(/suggest fair turns/i), text('✓ Accepted')] }],
+  },
+  {
+    after: 'c-prayer',
+    id: 'c-calendar', part: 'church', title: 'The calendar and reminders',
+    purpose: 'See every service, class, birthday and event, add your own events, and get reminders on your phone and by email.',
+    who: 'Everyone', where: 'More, then Calendar (or Open calendar under Coming up on Today)',
+    steps: [
+      'Choose how to look: **Coming up**, **Month**, **Week** or **Day**.',
+      'Press **＋ New event**. Type the **Name**, the day, the time and **Where**. Choose if it **Repeats**.',
+      'Under **More**, you can invite people. They answer **Yes** or **No** on their Today page.',
+      'Press **🔔 Reminders** to choose phone pop-ups and emails before your events.',
+    ],
+    see: 'Sunday services show the Service Host. Freedom 252 classes, birthdays and the petty cash month close are added for you.',
+    tip: 'Press the coloured names (Church, ADIA, Hope) to show or hide each place.',
+    shots: [{ device: 'm', path: '/calendar', tall: 1200, marks: [text(/^Coming up$/), role(/new event/i), null, role(/reminders/i)] }],
+  },
+  {
+    after: 'c-calendar',
+    id: 'c-ss', part: 'church', title: 'Sunday school (Head of Sunday school)',
+    purpose: 'See each class’s count, the lessons for Sunday, and send the teachers their reminders.',
+    who: 'Dorothy (Head of Sunday school), Mr Andrew, Doreen', where: 'More, then Sunday school',
+    steps: [
+      'On a Sunday or special service, **Today** shows each class with its count and who counted.',
+      '**This Sunday** shows each class’s lesson from the timetable.',
+      'Under **WhatsApp reminders for Sunday**, press a teacher’s green button to send their reminder.',
+      'Plan the lessons in the **Teaching timetable** (next page).',
+    ],
+    see: 'The classes add up into **Children** on the Service page, and the Teens class into **Teens**.',
+    tip: 'Dorothy gets a summary by email every Sunday afternoon.',
+    shots: [{ device: 'm', path: '/sunday-school', tall: 1500,
+      marks: [text(/^Today · /), text(/This Sunday · /), text(/WhatsApp reminders for Sunday/), text('📅 Teaching timetable')] }],
+  },
+  {
+    after: 'c-ss',
+    id: 'c-ss-teacher', part: 'church', title: 'Sunday school: count your class (teachers)',
+    purpose: 'Count the children in your class on Sunday and send the class report.',
+    who: 'Sunday school teachers', where: 'Sunday school (it opens by itself when you sign in)',
+    before: 'Mr Andrew gives you a login with your class. You can sign in with your WhatsApp number.',
+    steps: [
+      'Sign in. Your page opens with a greeting and your class.',
+      'On Sunday or a special service, press **+** for each child, or **Type the number**. Press **−** if you pressed once too many.',
+      'After class, fill in the **class report**: who was present, the lesson, a win and anything you need.',
+      'Use the **Sunday school room** for wins, requests and conversations with Dorothy.',
+    ],
+    see: 'Your class count goes straight into the church’s Children number.',
+    shots: [{ device: 'm', path: '/sunday-school', user: 'christine@example.org', tall: 1300, marks: [null, text(/3-5 years/), role(/^\+$/), null] }],
+  },
+  {
+    after: 'c-ss-teacher',
+    id: 'c-ss-timetable', part: 'church', title: 'Sunday school teaching timetable',
+    purpose: 'Plan the theme and lesson for each class every Sunday, up to five years ahead, with the lesson files.',
+    who: 'Dorothy, Mr Andrew and Doreen change it; every teacher can see it', where: 'Sunday school, Teaching timetable',
+    steps: [
+      'Choose the month or year at the top of **Teaching timetable**.',
+      'Tap a Sunday to plan it: the theme, and the lesson for each class. Add the lesson files.',
+      'Press **📅 Add an event on any day** for a weekday event, or **Fill a series** to fill several Sundays at once.',
+      'Press **PDF** or **Excel** to download the timetable.',
+    ],
+    see: 'Each teacher sees their lesson on their own page, and in their Sunday reminder.',
+    shots: [{ device: 'm', path: '/sunday-school', tall: 1300, prep: toTop(text('📅 Teaching timetable')),
+      marks: [text('📅 Teaching timetable'), text(/Not planned yet/), role(/add an event on any day/i), role(/^pdf$/i)] }],
+  },
+  {
+    after: 'c-ss-timetable',
+    id: 'c-youth', part: 'church', title: 'Youth',
+    purpose: 'Count the youth at each meeting, plan the youth timetable and send the meeting reminder.',
+    who: 'Sheila (Youth leader), Mr Andrew, Doreen', where: 'Youth (it opens by itself for Sheila); More, then Youth for others',
+    steps: [
+      'On a meeting day or a Sunday, count with **+**, **−** or **Type the number**.',
+      '**Next meeting** shows the next date on the youth timetable.',
+      'Under **WhatsApp reminder for the next meeting**, press the green button and Send.',
+      'Plan meetings in the youth timetable further down the page.',
+    ],
+    see: 'The Sunday youth count adds into the Sunday total as **Youth**. A summary is emailed every Monday morning.',
+    shots: [{ device: 'm', path: '/youth', tall: 1300, marks: [text(/No youth meeting today|Today ·/), text('🔥 Next meeting'), text(/WhatsApp reminder for the next meeting/), null] }],
+  },
+];

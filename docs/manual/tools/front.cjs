@@ -16,7 +16,8 @@ exports.pages = ({ md, esc, VERSION, DATE, APPV }) => [
     </table>
     <h2>Change history</h2>
     <table class="t"><tr><th style="width:25mm">Version</th><th style="width:35mm">Date</th><th>What changed</th></tr>
-      <tr><td>1.0</td><td>${DATE}</td><td>First edition.</td></tr>
+      <tr><td>1.0</td><td>11 November 2026</td><td>First edition.</td></tr>
+      <tr><td>1.1</td><td>${DATE}</td><td>Part 1 brought up to date: Record a visitor, phone counters, Freedom 252 check-in with code words, the Google Meet list and marking from a list, Service hosts, Sunday prayer, the calendar, Sunday school and Youth. Sign in with a WhatsApp number.</td></tr>
     </table>
     <h2>About the pictures</h2>
     <p>Every picture in this manual comes from a test copy of the app filled with made up people, phone numbers and amounts. None of them are real members, students, children or gifts.</p>
@@ -74,8 +75,11 @@ exports.pages = ({ md, esc, VERSION, DATE, APPV }) => [
       <tr><td>Admin</td><td>People, Sunday services, follow-ups and gifts at the Church</td><td>Getting started, Part 1</td></tr>
       <tr><td>Organization head</td><td>Leads one place and can add staff accounts there. Does not see money</td><td>Getting started, the part for your place</td></tr>
       <tr><td>Staff</td><td>People, attendance and follow-ups in one place. Does not see money</td><td>Getting started, the part for your place</td></tr>
-      <tr><td>Usher</td><td>Sunday check-in, headcount and visitors</td><td>Getting started; in Part 1: Find a person, Add a visitor, Families, Sunday check-in, Headcount</td></tr>
+      <tr><td>Usher</td><td>Sunday check-in, headcount and visitors</td><td>Getting started; in Part 1: Find a person, Record a visitor, Families, Sunday check-in, Headcount</td></tr>
       <tr><td>Finance</td><td>Giving, receipts, statements and petty cash</td><td>Getting started; in Part 1: the Giving pages and Reports; Part 4: Petty cash</td></tr>
+      <tr><td>Sunday school teacher</td><td>Counts their own class and sends the class report. Dorothy, as Head of Sunday school, sees every class</td><td>Getting started; Part 1: the Sunday school pages</td></tr>
+      <tr><td>Youth leader</td><td>Counts the youth, plans the youth timetable and sends the meeting reminder</td><td>Getting started; Part 1: Youth</td></tr>
+      <tr><td>Counter</td><td>Counts one number on Sunday from a link. No account or password</td><td>Part 1: Count on your phone</td></tr>
       <tr><td>Petty cash signatory</td><td>Signs requisitions</td><td>Getting started; Part 4: Petty cash</td></tr>
       <tr><td>Principal</td><td>Students, register, exams and graduation at ADIA</td><td>Getting started; Part 2: ADIA</td></tr>
       <tr><td>Trainer</td><td>Enters exam marks and uses Tutor Files at ADIA</td><td>Getting started; Part 2: Exam marks, Tutor Files</td></tr>

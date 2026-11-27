@@ -9,9 +9,9 @@ const ROOT = '/home/user/manual';
 const APP = '/home/user/freedom-chms/public';
 const MODE = process.argv[2] || 'manual'; // manual | admin | cards
 const OUT = `${ROOT}/out/${{ manual: 'Freedom-ChMS-User-Manual', admin: 'Freedom-ChMS-Administrator-Guide', cards: 'Freedom-ChMS-Quick-Cards' }[MODE]}.pdf`;
-const VERSION = '1.0';
+const VERSION = '1.1';
 const DATE = 'November 2026';
-const APPV = 'v255';
+const APPV = 'v301 (Part 1); Parts 2 to 4 at v255';
 
 const ALL = [...require('./spec-church.cjs'), ...require('./spec-adia.cjs'), ...require('./spec-hope.cjs'), ...require('./spec-shared.cjs')];
 const ADMIN = require('./spec-admin.cjs');
@@ -32,7 +32,7 @@ const PARTS = {
   start: { n: 'Getting started', title: 'Getting started', logo: LOGO, color: '#1f2a5c',
     intro: 'Everything you need on your first day: signing in, finding your way around the screen, putting the app on your phone and getting help.' },
   church: { n: 'Part 1', title: 'Freedom Church Nairobi', logo: CHURCH, color: '#2f6b47',
-    intro: 'People, Sunday services, first-timers and follow-ups, giving and reports for Freedom Church Nairobi.' },
+    intro: 'People, Sunday services and phone counters, first-timers and follow-ups, giving, Freedom 252, Service hosts and Sunday prayer, the calendar, Sunday school and Youth at Freedom Church Nairobi.' },
   adia: { n: 'Part 2', title: 'ADIA Training Centre', logo: ADIA, color: '#1f2a5c',
     intro: 'Students, the class register, fees, exams, graduation, payroll, Tutor Files and inventory at ADIA Training Centre.' },
   hope: { n: 'Part 3', title: 'Freedom Hope Center', logo: HOPE, color: '#038241',
@@ -116,7 +116,9 @@ function topicPage(t) {
   const shots = t.shots || [];
   const wide = shots.some((s) => s.device === 'd');
   const shotHtml = shots.filter((s) => !s.noPrint).slice(0, wide ? 1 : 1).map((s) => {
-    const f = `${ROOT}/shots/j/${s.name || t.id}.jpg`;
+    // Pages not photographed again in this update keep the picture already in the app (public/manual).
+    let f = `${ROOT}/shots/j/${s.name || t.id}.jpg`;
+    if (!fs.existsSync(f)) f = `${APP}/manual/${t.id}.jpg`;
     if (!fs.existsSync(f)) return '';
     return `<div class="shot ${s.device === 'd' ? 'desk' : 'phone'}"><img src="${img(f)}"><div class="cap">${s.device === 'd' ? 'On a computer' : 'On a phone'}</div></div>`;
   }).join('');
@@ -181,7 +183,7 @@ function bodyHtml(pages) {
 }
 
 const footer = `<div style="width:100%;font-family:Inter,sans-serif;font-size:7.5pt;color:#7a838e;padding:0 16mm;display:flex;align-items:center;justify-content:space-between;">
-  <span style="width:60mm">${BOOK} · Version 1.0</span>
+  <span style="width:60mm">${BOOK} · Version ${VERSION}</span>
   <span style="display:flex;align-items:center;gap:1.5mm;"><img src="${LOGO}" style="height:5mm;width:5mm"> Powered by <b style="color:#14213d;margin-left:.8mm">Insight-IQ</b></span>
   <span style="width:60mm;text-align:right">Page <span class="pageNumber"></span></span></div>`;
 

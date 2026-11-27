@@ -14,6 +14,7 @@ async function open({ mobile = false, email = 'pastor@example.org', password = '
   const emailBox = page.locator('input[type=email]');
   if (!(await emailBox.count())) { const t = page.getByRole('button', { name: /email/i }); if (await t.count()) await t.first().click(); }
   if (await page.locator('input[type=email]').count()) await page.locator('input[type=email]').fill(email);
+  else { const box = page.getByLabel(/email or whatsapp/i); if (await box.count()) await box.first().fill(email); }
   await page.locator('input[type=password]').fill(password);
   await page.locator('button[type=submit]').click();
   await page.waitForTimeout(4000);

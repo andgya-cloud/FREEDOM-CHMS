@@ -23,11 +23,13 @@ const topics = TOPICS.map((t) => {
   const shot = shots.find((s) => s.device === 'm') || shots[0];
   const name = shot ? shot.name || t.id : null;
   if (name && fs.existsSync(`${SHOTS}/${name}.png`)) jobs.push([`${SHOTS}/${name}.png`, `${outImg}/${t.id}.jpg`, shot.device === 'd' ? 900 : 520]);
+  // A page not photographed again keeps the picture it already has.
+  const kept = name && !fs.existsSync(`${SHOTS}/${name}.png`) && fs.existsSync(`${outImg}/${t.id}.jpg`);
   const path = (t.shots || []).find((s) => s.path && !s.signedOut)?.path;
   return {
     id: t.id, part: t.part, title: t.title, purpose: t.purpose, who: t.who, where: t.where,
     ...(t.before && { before: t.before }), steps: t.steps, ...(t.see && { see: t.see }), ...(t.tip && { tip: t.tip }), ...(t.warn && { warn: t.warn }),
-    ...(name && jobs.some((j) => j[1].endsWith(`/${t.id}.jpg`)) && { img: `/manual/${t.id}.jpg`, wide: shot.device === 'd' }),
+    ...(name && (kept || jobs.some((j) => j[1].endsWith(`/${t.id}.jpg`))) && { img: `/manual/${t.id}.jpg`, wide: shot.device === 'd' }),
     ...(path && { path: pattern(path) }),
   };
 });
@@ -41,9 +43,9 @@ for src, dst, w in json.load(open('/tmp/manual-img-jobs.json')):
     im.save(dst, 'JPEG', quality=72, optimize=True, progressive=True)
 `], { stdio: 'inherit' });
 
-const pages = front.pages({ md: (s) => s, esc: (s) => s, VERSION: '1.0', DATE: 'November 2026', APPV: 'v256' });
+const pages = front.pages({ md: (s) => s, esc: (s) => s, VERSION: '1.1', DATE: 'November 2026', APPV: 'v301' });
 const roleHtml = pages.find((p) => p.id === 'roles').html;
-const ROLE_IDS = { Pastor: 'pastor', Admin: 'admin', 'Organization head': 'head', Staff: 'staff', Usher: 'usher', Finance: 'finance', 'Petty cash signatory': 'signatory', Principal: 'principal', Trainer: 'trainer', 'Lab technician': 'labtech', 'Hope helper': 'helper', Reviewer: 'reviewer' };
+const ROLE_IDS = { Pastor: 'pastor', Admin: 'admin', 'Organization head': 'head', Staff: 'staff', Usher: 'usher', Finance: 'finance', 'Petty cash signatory': 'signatory', Principal: 'principal', Trainer: 'trainer', 'Lab technician': 'labtech', 'Hope helper': 'helper', Reviewer: 'reviewer', 'Sunday school teacher': 'ssteacher', 'Youth leader': 'youth', Counter: 'counter' };
 const roles = rows(roleHtml).map(([role, does, read]) => {
   const card = back.CARDS.find((c) => c.role === role) || {};
   return { roleId: ROLE_IDS[role], role, does, read, menu: card.menu, jobs: (card.jobs || []).map((j) => (j === 'g-screen' ? 'g-screen' : j)), remember: card.remember || [] };
@@ -64,10 +66,10 @@ export type ManualPartKey = 'start' | 'church' | 'adia' | 'hope' | 'shared' | 'a
 export interface ManualTopic { id: string; part: ManualPartKey; title: string; purpose: string; who: string; where: string; before?: string; steps: string[]; see?: string; tip?: string; warn?: string; img?: string; wide?: boolean; path?: string }
 export interface ManualRole { roleId: string; role: string; does: string; read: string; menu?: string; jobs: string[]; remember: string[] }
 
-export const MANUAL_VERSION = '1.0, November 2026';
+export const MANUAL_VERSION = '1.1, November 2026';
 export const MANUAL_PARTS: Record<ManualPartKey, { n: string; title: string; color: string; intro: string }> = ${JSON.stringify({
   start: { n: 'Getting started', title: 'Getting started', color: '#1f2a5c', intro: 'Signing in, finding your way around the screen, putting the app on your phone and getting help.' },
-  church: { n: 'Part 1', title: 'Freedom Church Nairobi', color: '#2f6b47', intro: 'People, Sunday services, first-timers and follow-ups, giving and reports.' },
+  church: { n: 'Part 1', title: 'Freedom Church Nairobi', color: '#2f6b47', intro: 'People, Sunday services and phone counters, first-timers, giving, Freedom 252, Service hosts and Sunday prayer, the calendar, Sunday school and Youth.' },
   adia: { n: 'Part 2', title: 'ADIA Training Centre', color: '#1f2a5c', intro: 'Students, the register, fees, exams, graduation, payroll, Tutor Files and inventory.' },
   hope: { n: 'Part 3', title: 'Freedom Hope Center', color: '#038241', intro: 'Children, Saturday registers and gate sign-in, clubs, parents, sponsors and reports.' },
   shared: { n: 'Part 4', title: 'Shared by all three', color: '#7a5a12', intro: 'Petty cash, signing, bank and financial statements, and the AI helps.' },

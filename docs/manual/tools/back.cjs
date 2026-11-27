@@ -88,6 +88,9 @@ exports.index = (topics, pages) => {
     'c-headcount': ['Attendance (church)'], 'c-checkin': ['Check-in (church)'], 'a-register': ['Attendance (ADIA)'], 'a-exams': ['CAT', 'Marks'], 'a-results': ['Certificates', 'Result slips'],
     'h-register': ['Attendance (Hope)'], 'h-gate': ['Gate', 'Card scan'], 's-new': ['Requisition'], 's-pin': ['PIN'], 's-finance': ['Bank statement', 'Close the month'],
     'g-ask': ['Help'], 'g-install': ['Offline', 'Dark screen', 'Install'], 'g-signin': ['Password'], 'c-family': ['Wedding anniversary'], 'c-celebrate': ['Birthday card'],
+    'c-counters': ['Counters', 'Phone counters'], 'c-counting': ['Counting link'], 'c-f252-checkin': ['Code words', 'Google Meet', 'Online class'], 'c-f252-meet': ['Meet Attendance', 'Time in class'],
+    'c-f252-list': ['Class list'], 'c-hosts': ['Service hosts', 'Requirements document'], 'c-prayer': ['Prayer leaders'], 'c-calendar': ['Events', 'Reminders', 'Invitations'],
+    'c-ss': ['Sunday school', 'Dorothy'], 'c-ss-teacher': ['Class count', 'Class report'], 'c-ss-timetable': ['Lessons', 'Timetable (Sunday school)'], 'c-youth': ['Youth', 'Sheila'],
   };
   const rows = [];
   for (const t of topics) { rows.push([t.title, t.id]); for (const w of extra[t.id] || []) rows.push([w, t.id]); }
@@ -105,6 +108,9 @@ exports.CARDS = [
   { role: 'Staff', color: '#2f6b47', menu: 'The menu of your place', jobs: ['c-find', 'c-visitor', 'c-checkin', 'c-reach'], remember: ['Money pages are closed to your role.', 'Ask Just ask Andy when you are not sure.'] },
   { role: 'Usher', color: '#2f6b47', menu: 'People · Service · More', jobs: ['c-visitor', 'c-checkin', 'c-headcount', 'c-family'], remember: ['Ask each visitor before ticking They agreed for WhatsApp.', 'Press Whole family to check a family in at once.', 'Send the numbers to leaders after the service.'] },
   { role: 'Finance', color: '#2f6b47', menu: 'Giving · Petty Cash · More', jobs: ['c-dayGiving', 'c-gift', 'c-paybill', 'c-unassigned', 's-report'], remember: ['Every gift gets a receipt.', 'Upload the Paybill statement instead of typing M-Pesa gifts.', 'Upload the bank statement so requisitions can be approved.'] },
+  { role: 'Sunday school teacher', color: '#2f6b47', menu: 'Sunday school · Settings', jobs: ['g-signin', 'c-ss-teacher', 'c-ss-timetable'], remember: ['Count your class on Sunday with + or Type the number.', 'Send the class report after class.', 'Your lesson for Sunday is on your page and in your reminder.'] },
+  { role: 'Youth leader', color: '#2f6b47', menu: 'Youth · Settings', jobs: ['g-signin', 'c-youth'], remember: ['Count on every meeting day and on Sunday.', 'Send the WhatsApp reminder before each meeting.'] },
+  { role: 'Counter', color: '#2f6b47', menu: 'No menu: just your link', jobs: ['c-counting'], remember: ['Open the same link every Sunday.', 'Press I’ve finished counting at the end.', 'Never share your link.'] },
   { role: 'Petty cash signatory', color: '#7a5a12', menu: 'Petty Cash', jobs: ['s-petty', 's-sign', 's-pin'], remember: ['Any two signers approve; nobody signs twice.', 'Never sign a requisition you asked for.', 'KES 10,000 or more also needs Mr Andrew.'] },
   { role: 'Principal', color: '#1f2a5c', menu: 'Today · Register · School · More', jobs: ['a-register', 'a-find', 'a-add', 'a-results', 'a-depts'], remember: ['You see each student’s fee balance, not the invoices.', 'Approve mark sheets before printing result slips.'] },
   { role: 'Trainer', color: '#1f2a5c', menu: 'Today · Exam Records · Tutor Files', jobs: ['a-exams', 'a-tutor'], remember: ['Marks save as you leave each box.', 'Type ABS for absent and EX for exempt.', 'A sent paper is locked; ask the principal to unlock it.'] },

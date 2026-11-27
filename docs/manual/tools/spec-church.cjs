@@ -11,17 +11,18 @@ module.exports = [
   // ---------- Getting started ----------
   {
     id: 'g-signin', part: 'start', title: 'Sign in',
-    purpose: 'Open Freedom ChMS and sign in with the password Mr Andrew gave you.',
+    purpose: 'Open Freedom ChMS and sign in with the login Mr Andrew gave you.',
     who: 'Everyone', where: 'freedom-chms.web.app on your phone or computer',
     before: 'You need the password from Mr Andrew or Doreen. Never share it with anyone.',
     steps: [
       'Open your phone or computer browser (Chrome or Safari) and go to **freedom-chms.web.app**.',
+      'Type your email, or your WhatsApp number if Mr Andrew made your login with it, in **Email or WhatsApp number**.',
       'Type your password in the **Password** box.',
       'Press **Sign in**. The app opens on your **Today** page.',
     ],
     see: 'Your own Today page, with a greeting and your name.',
     tip: 'If the app says the password is not known, check that Caps Lock is off. If it still fails, ask Mr Andrew to reset it.',
-    shots: [{ device: 'm', path: '/', signedOut: true, marks: [null, css('input[type=password]'), css('button[type=submit]')] }],
+    shots: [{ device: 'm', path: '/', signedOut: true, marks: [null, (p) => p.getByLabel(/email or whatsapp/i), css('input[type=password]'), css('button[type=submit]')] }],
   },
   {
     id: 'g-screen', part: 'start', title: 'Find your way around',
@@ -388,3 +389,14 @@ module.exports = [
     shots: [{ device: 'm', path: '/notice', marks: [null, css('textarea'), role(/write it for me/i)] }],
   },
 ];
+
+// The November 2026 update (spec-church-new.cjs): replace changed pages and put the new ones in place.
+{
+  const list = module.exports;
+  for (const t of require('./spec-church-new.cjs')) {
+    const { after, replace, ...topic } = t;
+    if (replace) { const i = list.findIndex((x) => x.id === replace); list.splice(i, 1, topic); continue; }
+    const i = list.findIndex((x) => x.id === after);
+    list.splice(i < 0 ? list.length : i + 1, 0, topic);
+  }
+}
