@@ -6,7 +6,7 @@ import { onSchedule } from 'firebase-functions/v2/scheduler';
 import { getStorage } from 'firebase-admin/storage';
 import nodemailer, { type Transporter } from 'nodemailer';
 import { db, FieldValue, requireCaller, requireString, writeAudit, type UserProfile } from './common.js';
-import { can, canAccessOrg, isHostManagerAt, isPrayerManager, limitedCan, REVIEWER_ROLE_ID } from './shared/permissions.js';
+import { can, canAccessOrg, canKeepAccounts, isHostManagerAt, isPrayerManager, limitedCan, REVIEWER_ROLE_ID } from './shared/permissions.js';
 import { letterheadFor } from './shared/pettyVoucher.js';
 import { localDateKey } from './shared/datetime.js';
 import { poweredByHtml } from './shared/poweredBy.js';
@@ -277,6 +277,11 @@ export const serviceHosts = onCall({ invoker: 'public', memory: '512MiB', timeou
     await settingsRef(team, orgId).set({ services, specials: cleanSpecials(data.specials), updatedAt: FieldValue.serverTimestamp(), updatedBy: caller.uid }, { merge: true });
     await audit(settingsRef(team, orgId).path, `${info.title} services changed`);
     return { ok: true };
+  }
+
+  // Only Mr Andrew and Doreen put up, replace or remove the requirements document (Andy, 2026-11-27).
+  if ((action === 'uploadDoc' || action === 'removeDoc') && !canKeepAccounts(caller.profile)) {
+    throw new HttpsError('permission-denied', 'Only Mr Andrew or Doreen can replace or remove the requirements document.');
   }
 
   if (action === 'uploadDoc') {

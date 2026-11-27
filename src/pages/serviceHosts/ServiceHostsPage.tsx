@@ -3,6 +3,8 @@ import { friendlyError } from '../../lib/errors';
 import { downloadFile } from '../../lib/givingPdf';
 import { fromBase64, hostCall, toBase64, useJobChurch, useTeamManager, useHostSettings, useHosts, useRota } from '../../lib/serviceHosts';
 import { usePeople } from '../../state/PeopleContext';
+import { useAuth } from '../../state/AuthContext';
+import { canKeepAccounts } from '../../../functions/src/shared/permissions';
 import type { Organization } from '../../state/OrgContext';
 import { downloadRota } from '../../lib/rotaDownload';
 import { localDateKey } from '../../../functions/src/shared/datetime';
@@ -250,6 +252,9 @@ function SettingsFold({ team, orgId, serviceTimes, say }: { team: Team; orgId: s
 function DocBox({ team, orgId, doc, say }: { team: Team; orgId: string; doc: HostSettings['doc']; say: Say }) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
+  // Only Mr Andrew and Doreen put up, replace or remove the document; everyone else only opens it (Andy, 2026-11-27).
+  const { profile } = useAuth();
+  const keeper = canKeepAccounts(profile);
   async function upload(file: File | undefined) {
     if (!file) return;
     if (file.size > DOC_MAX_BYTES) { say('The document must be smaller than 6 MB.'); return; }
@@ -266,12 +271,12 @@ function DocBox({ team, orgId, doc, say }: { team: Team; orgId: string; doc: Hos
     <div className="sh-doc">
       <h3>Requirements document</h3>
       <p className="muted small">Sent with the welcome email and every reminder.</p>
-      {doc ? <p>📄 <strong>{doc.name}</strong> <span className="muted small">· {Math.max(1, Math.round(doc.size / 1024))} KB</span></p> : <p className="notice-warn notice">No document yet. Upload your {TEAM_INFO[team].role} requirements (PDF or Word).</p>}
+      {doc ? <p>📄 <strong>{doc.name}</strong> <span className="muted small">· {Math.max(1, Math.round(doc.size / 1024))} KB</span></p> : <p className="notice-warn notice">{keeper ? `No document yet. Upload your ${TEAM_INFO[team].role} requirements (PDF or Word).` : 'No document yet. Mr Andrew or Doreen will put it here.'}</p>}
       <input ref={input} type="file" hidden accept=".pdf,.doc,.docx,.odt,.txt" onChange={(e) => void upload(e.target.files?.[0])} />
       <div className="sh-actions">
-        <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => input.current?.click()}>{busy ? 'Please wait…' : doc ? 'Replace' : 'Upload document'}</button>
+        {keeper && <button type="button" className="btn btn-primary btn-small" disabled={busy} onClick={() => input.current?.click()}>{busy ? 'Please wait…' : doc ? 'Replace' : 'Upload document'}</button>}
         {doc && <button type="button" className="btn btn-small" disabled={busy} onClick={() => void view()}>Open</button>}
-        {doc && <button type="button" className="btn btn-small" disabled={busy} onClick={() => { if (window.confirm('Remove the requirements document?')) void hostCall({ team, orgId, action: 'removeDoc' }).catch((e) => say(friendlyError(e))); }}>Remove</button>}
+        {doc && keeper && <button type="button" className="btn btn-small" disabled={busy} onClick={() => { if (window.confirm('Remove the requirements document?')) void hostCall({ team, orgId, action: 'removeDoc' }).catch((e) => say(friendlyError(e))); }}>Remove</button>}
       </div>
     </div>
   );
